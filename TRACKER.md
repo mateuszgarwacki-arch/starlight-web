@@ -64,12 +64,18 @@
 - [x] Unit column removed (absorbed into description/finish)
 - [x] Work Orders link card with WO count
 
-### Phase 4: Work Orders & BOM 🔨 NEXT
-- [ ] WO list page showing activity labels, status badges, estimated hours
-- [ ] Expandable rows with inline BOM
-- [ ] Material catalogue search with auto-fill
-- [ ] "Release as Ready" button
-- [ ] Freelancer assignment dropdown
+### Phase 4: Work Orders & BOM ✅
+- [x] WO list page with activity labels, phase pills, status badges, estimated hours
+- [x] Expandable rows with inline BOM (qty, unit cost, total, needs-ordering)
+- [x] Material catalogue search with auto-fill + custom entry
+- [x] Release as Ready button + WO delete/void with reason
+- [x] Freelancer assignment dropdown (planned lead)
+- [x] Linked Job Items shown in expanded WO
+- [x] Complexity/finish moved to WO level (editable), read-only on scope
+- [x] Scope Item delete/cancel with reason
+- [x] Scope Items list polished (quote line text, WO progress, value)
+- [x] Work Orders tab on Job view (all WOs, phase-ordered)
+- [x] Cancelled scopes excluded from auto-complete
 - [ ] Traveller PDF with QR code
 
 ### Phase 5: Freelancer Mobile ⬜ (enable RLS first!)
