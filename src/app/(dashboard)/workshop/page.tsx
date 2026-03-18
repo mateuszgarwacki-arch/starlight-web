@@ -299,12 +299,32 @@ export default function WorkshopPage() {
         </div>
       </div>
 
-      {/* WO List */}
-      <div className="space-y-2">
+      {/* WO List — grouped by scope item */}
+      <div className="space-y-4">
         {filtered.length === 0 ? (
           <div className="card px-6 py-12 text-center text-gray-400 text-sm">No work orders match your filters</div>
         ) : (
-          filtered.map(wo => {
+          Object.entries(
+            filtered.reduce((groups: Record<string, typeof filtered>, wo) => {
+              const key = wo.scope_item_id + "";
+              if (!groups[key]) groups[key] = [];
+              groups[key].push(wo);
+              return groups;
+            }, {})
+          ).map(([scopeKey, scopeWOs]) => {
+            scopeWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+            const first = scopeWOs[0];
+            const doneCount = scopeWOs.filter(w => w.status === "Complete").length;
+            return (
+              <div key={scopeKey}>
+                <div className="flex items-center gap-3 mb-1.5 px-1">
+                  <p className="text-xs font-semibold text-gray-500 truncate">{first.scope_name}</p>
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{first.job_number}</span>
+                  <span className="text-[10px] text-gray-400">{doneCount}/{scopeWOs.length} steps done</span>
+                  {first.event_date && <DaysRemainingBadge eventDate={first.event_date} />}
+                </div>
+                <div className="card overflow-hidden divide-y divide-gray-100">
+                  {scopeWOs.map((wo, woIdx) => {
             const isExpanded = expandedWO === wo.work_order_id;
             return (
               <div key={wo.work_order_id} className="card overflow-hidden">
@@ -316,22 +336,19 @@ export default function WorkshopPage() {
                   <div className="text-gray-300">
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </div>
-                  <div className="flex flex-col items-center w-14 shrink-0">
-                    <span className="text-xs font-semibold text-navy">
-                      {wo.wo_sequence || "?"}/{wo.scope_total_wos}
-                    </span>
-                    {wo.prev_wo_status !== null ? (
-                      <span className={"text-[9px] " + (
-                        wo.prev_wo_status === "Complete" ? "text-starlight-green" :
-                        wo.prev_wo_status === "In-Progress" ? "text-starlight-blue" :
-                        "text-gray-400"
-                      )}>
-                        prev: {wo.prev_wo_status === "Complete" ? "done" :
-                               wo.prev_wo_status === "In-Progress" ? "active" : "waiting"}
-                      </span>
-                    ) : wo.wo_sequence === 1 ? (
-                      <span className="text-[9px] text-gray-300">first</span>
-                    ) : null}
+                  <div className="flex items-center gap-1.5 w-16 shrink-0">
+                    <div className={"w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 " + (
+                      wo.status === "Complete" ? "bg-starlight-green" :
+                      wo.status === "In-Progress" ? "bg-starlight-blue" :
+                      wo.status === "Voided" ? "bg-gray-300" :
+                      woIdx === 0 || (woIdx > 0 && scopeWOs[woIdx - 1].status === "Complete") ? "bg-starlight-amber" :
+                      "bg-gray-300"
+                    )}>
+                      {woIdx + 1}
+                    </div>
+                    {woIdx < scopeWOs.length - 1 && (
+                      <div className={"w-3 h-0.5 " + (wo.status === "Complete" ? "bg-starlight-green" : "bg-gray-200")} />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -441,6 +458,10 @@ export default function WorkshopPage() {
                     )}
                   </div>
                 )}
+              </div>
+                  );
+                })}
+                </div>
               </div>
             );
           })
