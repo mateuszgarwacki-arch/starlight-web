@@ -65,21 +65,55 @@
 - [x] Work Orders link card with WO count
 
 ### Phase 4: Work Orders & BOM ✅
-- [x] WO list page with activity labels, phase pills, status badges, estimated hours
+- [x] WO list page with activity labels, status badges, estimated hours
 - [x] Expandable rows with inline BOM (qty, unit cost, total, needs-ordering)
 - [x] Material catalogue search with auto-fill + custom entry
 - [x] Release as Ready button + WO delete/void with reason
 - [x] Freelancer assignment dropdown (planned lead)
-- [x] Linked Job Items shown in expanded WO
+- [x] Linked Job Items shown in expanded WO (qty, description, type, finish)
 - [x] Complexity/finish moved to WO level (editable), read-only on scope
 - [x] Scope Item delete/cancel with reason
 - [x] Scope Items list polished (quote line text, WO progress, value)
-- [x] Work Orders tab on Job view (all WOs, phase-ordered)
+- [x] Work Orders tab on Job view (all WOs across scope items)
 - [x] Cancelled scopes excluded from auto-complete
+- [x] WO sequence system (wo_sequence column, step indicators, reorder arrows)
+- [x] Step progress display: "Step 2/3 - prev: done" replaces phase pills
 - [ ] Traveller PDF with QR code
 
-### Phase 5: Freelancer Mobile ⬜ (enable RLS first!)
-### Phase 6: Cost Visibility ⬜
+### Phase 5: Freelancer Mobile ✅
+- [x] RLS enabled on all 22 tables (PM/Foreman/Freelancer policies)
+- [x] Supabase Auth for freelancers (phone@starlight.local + PIN)
+- [x] API route /api/auth/freelancer-sync (create/update auth users)
+- [x] Mobile layout with bottom tab bar (Tasks, Photos, Me)
+- [x] Mobile login page (phone + PIN)
+- [x] Task list with MY TASKS / ALL TASKS toggle, phase-ordered cards
+- [x] WO detail with START, JOIN, LOG HOURS (bottom sheet), MARK COMPLETE (camera)
+- [x] Site Photos placeholder page
+- [x] Profile page with sign out
+- [x] Crew page: full CRUD, visible PINs, PIN management dialog
+- [x] WhatsApp onboarding message generator (copy to clipboard)
+- [x] Boolean handling fix (isTruthy supports real booleans globally)
+
+### Phase 5.5: Workshop & Scheduling ✅
+- [x] Workshop view (Zone 2): all WOs across jobs, grouped by scope item
+- [x] Coloured step circles (green=done, blue=active, amber=next, grey=waiting)
+- [x] Time entries expandable per WO (person, hours, rate, cost, flags)
+- [x] Status/job/search filters with counts
+- [x] Active workers banner
+- [x] Crew booking calendar: week grid, click to book, job link optional
+- [x] Booking dialog with job picker, notes, remove booking
+- [x] Booking status colours (amber=booked, green=confirmed, red=declined)
+- [x] Mobile /m/me: upcoming bookings with Accept/Decline buttons
+
+### Phase 6: Cost Visibility & Review ✅
+- [x] Review page with 4 tabs: Job Costs, Time Entries, Flags, Estimate Accuracy
+- [x] Summary strip: total quote value, actual cost, margin, unread flags
+- [x] Job costs: expandable per job with scope item cost breakdown
+- [x] Time entries table: person, WO, timestamps, hours, rate, cost, flag notes
+- [x] Flags tab: dedicated view of flagged time entries
+- [x] Estimate accuracy: estimated vs actual hours, variance, accuracy percentage
+- [x] Colour-coded accuracy (green <=110%, amber <=150%, red >150%)
+
 ### Phase 7: Capacity & Materials ⬜
 ### Phase 8: Polish & Handover ⬜
 
