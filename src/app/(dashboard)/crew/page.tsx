@@ -7,8 +7,9 @@ import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import {
   Users, Plus, Key, Pencil, X, Check, Smartphone,
-  UserCheck, UserX, Copy, Eye, EyeOff,
+  UserCheck, UserX, Copy, Eye, EyeOff, Calendar,
 } from "lucide-react";
+import { BookingCalendar } from "@/components/booking-calendar";
 
 interface FreelancerRow extends Freelancer {
   _editing?: boolean;
@@ -264,6 +265,22 @@ export default function CrewPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Booking Calendar */}
+      <div className="card px-5 py-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="h-5 w-5 text-navy" />
+          <h2 className="text-lg font-semibold text-navy">Schedule</h2>
+        </div>
+        <BookingCalendar
+          crew={filtered.map(f => ({
+            freelancer_id: f.freelancer_id,
+            freelancer_name: f.freelancer_name || "",
+            speciality: f.speciality || null,
+            day_rate: f.day_rate || null,
+          }))}
+        />
       </div>
 
       {/* PIN Dialog */}
