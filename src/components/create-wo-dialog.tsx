@@ -44,7 +44,7 @@ export function CreateWODialog({
       .from("tbl_master_lookups")
       .select("lookup_id, lookup_value, phase_number")
       .eq("category", "ACTIVITY")
-      .eq("active", "true")
+      .eq("active", true)
       .order("phase_number")
       .then(({ data }) => {
         if (data) setAllActivities(data);

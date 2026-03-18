@@ -150,8 +150,8 @@ export default function CrewPage() {
     if (editingId) {
       await supabase.from("tbl_freelancers").update(data).eq("freelancer_id", editingId);
     } else {
-      data.active = "true";
-      data.system_access = "true";
+      data.active = true;
+      data.system_access = true;
       data.created_at = new Date().toISOString();
       await supabase.from("tbl_freelancers").insert(data);
     }
@@ -159,10 +159,10 @@ export default function CrewPage() {
     loadCrew();
   };
 
-  const toggleActive = async (id: number, current: string | null) => {
-    const newVal = isTruthy(current) ? "false" : "true";
+  const toggleActive = async (id: number, current: string | boolean | null) => {
+    const newVal = isTruthy(current) ? false : true;
     await supabase.from("tbl_freelancers").update({ active: newVal }).eq("freelancer_id", id);
-    setCrew((prev) => prev.map((f) => f.freelancer_id === id ? { ...f, active: newVal } : f));
+    setCrew((prev) => prev.map((f) => f.freelancer_id === id ? { ...f, active: newVal as any } : f));
   };
 
   const copyToClipboard = (text: string) => {

@@ -259,7 +259,9 @@ export interface AppUser {
 }
 
 // Utility: check if a Supabase text boolean is truthy
-export function isTruthy(val: string | null | undefined): boolean {
+// Handles both string "true" (ODBC legacy) and real booleans
+export function isTruthy(val: string | boolean | null | undefined): boolean {
+  if (typeof val === "boolean") return val;
   return val === "true" || val === "True" || val === "-1";
 }
 // Add these to the BOTTOM of your existing src/lib/types.ts file

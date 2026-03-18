@@ -29,7 +29,7 @@ export function LookupCombo({
       .from("tbl_master_lookups")
       .select("*")
       .eq("category", category)
-      .eq("active", "true")
+      .eq("active", true)
       .order("display_order")
       .then(({ data }) => {
         if (data) setOptions(data);

@@ -55,7 +55,7 @@ export default function ScopeDetailPage() {
   const loadData = useCallback(async () => {
     const [scopeRes, catRes, woRes] = await Promise.all([
       supabase.from("qry_scope_breakdown").select("*").eq("scope_item_id", scopeId).single(),
-      supabase.from("tbl_scope_item_categories").select("category_id, category_name").eq("active", "true").order("category_name"),
+      supabase.from("tbl_scope_item_categories").select("category_id, category_name").eq("active", true).order("category_name"),
       supabase.from("tbl_work_orders").select("work_order_id", { count: "exact" }).eq("scope_item_id", scopeId),
     ]);
 

@@ -104,12 +104,12 @@ export default function ScopeWorkOrdersPage() {
       supabase
         .from("tbl_freelancers")
         .select("*")
-        .eq("active", "true")
+        .eq("active", true)
         .order("freelancer_name"),
       supabase
         .from("tbl_materials")
         .select("material_id, material_name, unit, current_unit_cost, material_category")
-        .eq("active", "true")
+        .eq("active", true)
         .order("material_name"),
     ]);
 
