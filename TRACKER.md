@@ -3,99 +3,78 @@
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — 21 tables, 21+ views, fully migrated from Access.
+**Backend:** Supabase (PostgreSQL) — 23 tables, 22+ views, fully migrated from Access.
 **Frontend:** Next.js 14+ / React / Tailwind CSS / shadcn/ui patterns.
-**Hosting:** Vercel (hobby tier).
-**Auth:** Supabase Auth (email+password for PM, PIN for freelancers TBD).
-
-## Architecture Reference
-
-See `Starlight_Web_Architecture_v1.docx` in project knowledge for full architecture plan including:
-- Technology stack decisions and rejected alternatives
-- All route mappings (Access form → web page)
-- Component breakdown per form
-- Supabase view usage map
-- 8-phase build plan
-- Risk mitigations
-
-## Supabase Connection
-
-- **21 tables** (tbl_*) — fully migrated from Access, live data
-- **21+ views** (qry_*) — cost visibility stack, dashboard feeds, operational views
-- Access remains connected via ODBC — both read/write the same database
-- Booleans stored as TEXT ('true'/'false') due to ODBC driver — use `isTruthy()` helper
-
-## Colour System
-
-| Token | Hex | Usage |
-|-------|-----|-------|
-| navy | #1A1A2E | Sidebar, headings |
-| red | #C0392B | Primary actions, urgent |
-| blue | #2980B9 | In-Progress status |
-| green | #27AE60 | Complete status |
-| amber | #F39C12 | Warnings, On-Hold |
-| bg | #F4F5F7 | Main background |
-| white | #FFFFFF | Cards, inputs |
-
-Phase pills: Phase 1=#3498DB, Phase 2=#9B59B6, Phase 3=#E67E22, Phase 4=#E91E63, Phase 5=#1ABC9C
+**Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
+**Auth:** Supabase Auth (email+password for PM). RLS disabled — enable before Phase 5.
+**Git:** github.com/mateuszgarwacki-arch/starlight-web
+**Deploy:** `vercel --prod` from CLI (not GitHub auto-deploy)
 
 ## Build Status
 
-### Phase 0: Foundation ✅ DEPLOYED
+### Phase 0: Foundation ✅
 - [x] Next.js project with Tailwind + TypeScript
 - [x] Supabase client (browser + server)
-- [x] Auth middleware (simplified — allows all routes for now)
-- [x] Login page (Supabase Auth email+password)
-- [x] Sidebar navigation with all zone routes
-- [x] Dashboard layout shell
-- [x] TypeScript types for all 21 tables + key views
-- [x] Utility functions (formatCurrency, formatDate, daysRemaining, statusClass, isTruthy)
-- [x] Shared components: StatusBadge, DaysRemainingBadge, PhasePill
-- [x] Deployed to Vercel
+- [x] Login page, auth middleware
+- [x] Sidebar navigation, dashboard layout
+- [x] TypeScript types, utility functions, shared components
 
-### Phase 1: Dashboard ✅ DEPLOYED
-- [x] Quick stats cards (active jobs, active WOs, items to order, outstanding hours)
-- [x] Job cards with progress bars and traffic light indicators
-- [x] Manpower demand table by department
-- [x] Procurement actions alert
-- [x] Live data from qry_dash_upcoming_jobs, qry_manpower_demand, qry_procurement_needed
+### Phase 1: Dashboard ✅
+- [x] Quick stats cards, job cards with progress bars
+- [x] Manpower demand table, procurement alerts
+- [x] Live data from Supabase views
 
-### Phase 2: Jobs & Quote Lines 🔨 IN PROGRESS
-- [x] Jobs list page with search and status table
+### Phase 2: Jobs & Quote Lines ✅
+- [x] Jobs list with search
 - [x] Job detail page with quote lines table
-- [x] Amber highlighting on uninterpreted workshop lines
-- [ ] Inline category dropdown editing on quote lines
-- [ ] Interpretation toggle (click to mark complete)
-- [ ] PM notes editing on quote lines
-- [ ] [+ Create Scope Item] button from quote line
-- [ ] Create Scope Item dialog
-- [ ] Quote value summary bar (total, interpreted, remaining)
-- [ ] Navigation to scope detail page
+- [x] Inline category dropdown editing
+- [x] Interpretation toggle checkboxes
+- [x] PM notes inline editing
+- [x] [+] Create Scope Item dialog
+- [x] Scope Items tab with navigation
+- [x] Quote summary bar (total, interpreted, remaining)
+- [x] Scope detail page with editable header fields
 
-### Phase 3: Scope Breakdown ⬜ NOT STARTED
-- [ ] Scope item detail page with editable header fields
+### Category Redesign ✅
+- [x] tbl_contractors table in Supabase
+- [x] tbl_quote_line_contractors link table
+- [x] qry_quote_lines_with_contractors view
+- [x] CATEGORY_CONFIG object — single source of truth for category behaviour
+- [x] Context-sensitive actions per category (scope/contractor/stock pick)
+- [x] ContractorPicker component (inline below description)
+- [x] Contractors management page (full CRUD)
+- [x] Stock Pick purple tag
+- [x] Amber only on scope-ready categories
+- [x] "Hire" merged into Subcontracted, duplicate Install removed
+- [x] Lookup cleanup (Stock Pick, Subcontracted Partial, Shared Departments added)
+
+### Phase 3: Scope Breakdown 🔨 NEXT
+- [x] Scope item detail page with editable header
 - [ ] Prompt engine panel (category → suggested components)
-- [ ] Job items table with stock search
+- [ ] Job items table with stock search, inline editing
 - [ ] Checkbox selection + Create WO dialog
 - [ ] Coverage indicator per job item
+- [ ] Navigation to Work Orders
 
 ### Phase 4: Work Orders & BOM ⬜ NOT STARTED
-- [ ] Work orders page with phase ordering
-- [ ] Expandable rows with inline BOM
-- [ ] Material catalogue search
-- [ ] Release as Ready button
-- [ ] Traveller PDF with QR code
-
-### Phase 5: Freelancer Mobile ⬜ NOT STARTED
-- [ ] PIN login
-- [ ] Task list (MY TASKS / ALL TASKS)
-- [ ] Start / Join / Log Hours / Complete flows
-- [ ] Camera for completion photos
-- [ ] QR scanner
-
+### Phase 5: Freelancer Mobile ⬜ NOT STARTED (enable RLS first!)
 ### Phase 6: Cost Visibility ⬜ NOT STARTED
 ### Phase 7: Capacity & Materials ⬜ NOT STARTED
 ### Phase 8: Polish & Handover ⬜ NOT STARTED
+
+## Category Behaviour Matrix
+
+| Category | Amber | Done ✓ | [+] Scope | Contractor | Stock Tag |
+|----------|-------|--------|-----------|------------|-----------|
+| Workshop / Workshop Build | Yes | Yes | Yes | No | No |
+| Stock-and-Hire | Yes | Yes | Yes | No | No |
+| Stock Pick | No | Yes | No | No | Yes |
+| Subcontracted | No | Yes | No | Yes | No |
+| Subcontracted (Partial) | Yes | Yes | Yes | Yes | No |
+| Install | No | Yes | No | No | No |
+| Provisional | No | Yes | No | No | No |
+| Shared Departments | Yes | Yes | Yes | No | No |
+| Production/Lighting/Sound/etc | No | No | No | No | No |
 
 ## Key Files
 
@@ -104,41 +83,31 @@ Phase pills: Phase 1=#3498DB, Phase 2=#9B59B6, Phase 3=#E67E22, Phase 4=#E91E63,
 | `src/lib/types.ts` | TypeScript interfaces for all tables and views |
 | `src/lib/utils.ts` | Helpers: cn(), formatCurrency(), formatDate(), statusClass() |
 | `src/lib/supabase-browser.ts` | Browser-side Supabase client |
-| `src/lib/supabase-server.ts` | Server-side Supabase client (simplified) |
-| `src/middleware.ts` | Auth middleware (currently passthrough) |
-| `src/components/sidebar.tsx` | Main navigation |
+| `src/components/sidebar.tsx` | Main navigation (includes Contractors link) |
 | `src/components/ui/badges.tsx` | StatusBadge, DaysRemainingBadge, PhasePill |
-| `src/app/(dashboard)/layout.tsx` | Dashboard shell with sidebar |
+| `src/components/ui/lookup-combo.tsx` | Reusable dropdown bound to tbl_master_lookups |
+| `src/components/create-scope-dialog.tsx` | Modal for creating scope items from quote lines |
+| `src/components/contractor-picker.tsx` | Inline contractor assignment on subcontracted lines |
 | `src/app/(dashboard)/page.tsx` | Main dashboard |
 | `src/app/(dashboard)/jobs/page.tsx` | Jobs list |
-| `src/app/(dashboard)/jobs/[id]/page.tsx` | Job detail with quote lines |
-| `TRACKER.md` | This file |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Job detail with category-sensitive quote lines |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Scope item detail |
+| `src/app/(dashboard)/contractors/page.tsx` | Contractors CRUD |
+
+## Database Tables (23)
+
+### Original (migrated from Access)
+tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
+
+### Added by web app
+tbl_contractors, tbl_quote_line_contractors
 
 ## Conventions
 
 - All pages are client components ("use client") reading Supabase directly
 - Supabase views (qry_*) handle all joins — frontend never joins tables
 - Boolean fields from Supabase come as strings: use `isTruthy()` to check
-- Tailwind for all styling — no CSS modules, no styled-components
-- shadcn/ui patterns for complex components (dialogs, dropdowns, tables)
-- Git commit per phase completion
-
-## Supabase Views Used
-
-| View | Pages Using It |
-|------|---------------|
-| qry_dash_upcoming_jobs | Dashboard |
-| qry_manpower_demand | Dashboard, Capacity |
-| qry_procurement_needed | Dashboard |
-| qry_scope_context | Work Orders header |
-| qry_scope_breakdown | Scope detail page |
-| qry_wo_phase_ordered | Work Orders list |
-| qry_materials_list | Materials page |
-| qry_quote_scopes | Job detail (scope tab) |
-| qry_job_cost_summary | Cost review |
-| qry_scopeitem_cost_summary | Cost drill-down |
-| qry_wo_cost_summary | WO detail |
-| qry_estimate_vs_actual | Cost analysis |
-| qry_jobitems_withcoverage | Scope breakdown |
-| qry_job_execution_list | Workshop view |
-| qry_today_roster | Dashboard |
+- CATEGORY_CONFIG in job detail page is the single source of truth for category behaviour
+- Tailwind for all styling, no CSS modules
+- Git commit per phase, deploy via `vercel --prod`
+- RLS disabled on all tables — must enable before freelancer access (Phase 5)
