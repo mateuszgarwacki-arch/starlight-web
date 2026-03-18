@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate } from "@/lib/utils";
 import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { PromptPanel } from "@/components/prompt-panel";
 import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
-import { ArrowLeft, Hammer, ChevronRight } from "lucide-react";
+import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 interface ScopeDetail {
@@ -48,6 +48,9 @@ export default function ScopeDetailPage() {
   const [showWODialog, setShowWODialog] = useState(false);
   const [woCount, setWoCount] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const router = useRouter();
 
   const loadData = useCallback(async () => {
     const [scopeRes, catRes, woRes] = await Promise.all([
@@ -96,6 +99,31 @@ export default function ScopeDetailPage() {
     loadData();
   };
 
+  const deleteScope = async () => {
+    if (!confirm("Delete this scope item? This cannot be undone.")) return;
+    // Delete linked WOs, job items, junction records first
+    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id").eq("scope_item_id", scopeId);
+    if (wos && wos.length > 0) {
+      const woIds = wos.map((w: any) => w.work_order_id);
+      await supabase.from("tbl_wo_activities").delete().in("work_order_id", woIds);
+      await supabase.from("tbl_wo_bom").delete().in("work_order_id", woIds);
+      await supabase.from("tbl_jobitem_workorder").delete().in("work_order_id", woIds);
+      await supabase.from("tbl_work_orders").delete().eq("scope_item_id", scopeId);
+    }
+    await supabase.from("tbl_job_items").delete().eq("scope_item_id", scopeId);
+    await supabase.from("tbl_scope_items").delete().eq("scope_item_id", scopeId);
+    router.push("/jobs/" + jobId);
+  };
+
+  const cancelScope = async (reason: string) => {
+    await supabase.from("tbl_scope_items")
+      .update({ status: "Cancelled-Cost-Retained", cancellation_reason: reason })
+      .eq("scope_item_id", scopeId);
+    setScope((prev) => prev ? { ...prev, status: "Cancelled-Cost-Retained" } : null);
+    setShowCancelDialog(false);
+    setCancelReason("");
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">
@@ -135,7 +163,27 @@ export default function ScopeDetailPage() {
               <p className="text-sm text-gray-400 mt-1">{scope.job_name}</p>
             )}
           </div>
-          <StatusBadge status={scope.status} />
+          <div className="flex items-center gap-2">
+              <StatusBadge status={scope.status} />
+              {scope.status === "Provisional" && woCount === 0 && (
+                <button
+                  onClick={deleteScope}
+                  className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete scope item"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+              {scope.status !== "Completed" && scope.status !== "Cancelled-Cost-Retained" && (
+                <button
+                  onClick={() => setShowCancelDialog(true)}
+                  className="p-1.5 text-gray-300 hover:text-starlight-amber hover:bg-amber-50 rounded-lg transition-colors"
+                  title="Cancel (retain costs)"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                </button>
+              )}
+            </div>
         </div>
 
         {/* Editable fields */}
@@ -166,21 +214,15 @@ export default function ScopeDetailPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Complexity</label>
-            <LookupCombo
-              category="COMPLEXITY"
-              value={scope.complexity_construction}
-              onChange={(val) => updateField("complexity_construction", val)}
-              className="w-full"
-            />
+            <p className="text-sm text-navy px-2 py-1.5">
+              {scope.complexity_construction || <span className="text-gray-300 italic">Set on WOs</span>}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Finish</label>
-            <LookupCombo
-              category="FINISH_RELATIVE"
-              value={scope.finish_relative}
-              onChange={(val) => updateField("finish_relative", val)}
-              className="w-full"
-            />
+            <p className="text-sm text-navy px-2 py-1.5">
+              {scope.finish_relative || <span className="text-gray-300 italic">Set on WOs</span>}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Event Zone</label>
@@ -262,12 +304,54 @@ export default function ScopeDetailPage() {
         </div>
       </div>
 
+      {/* Cancel Dialog */}
+      {showCancelDialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-navy">Cancel Scope Item</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Completed WO costs will be retained. This cannot be undone.
+              </p>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason *</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Why is this being cancelled..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowCancelDialog(false); setCancelReason(""); }}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => cancelReason.trim() && cancelScope(cancelReason.trim())}
+                disabled={!cancelReason.trim()}
+                className="px-4 py-2 bg-starlight-amber text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+              >
+                Cancel Scope Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WO Dialog */}
       {showWODialog && (
         <CreateWODialog
           jobId={jobId}
           scopeItemId={scopeId}
           selectedItemIds={selectedItemIds}
+          defaultComplexity={scope?.complexity_construction}
+          defaultFinish={scope?.finish_relative}
           onClose={() => setShowWODialog(false)}
           onCreated={handleWOCreated}
         />

@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
+import { DaysRemainingBadge, StatusBadge, PhasePill } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
@@ -107,7 +107,8 @@ export default function JobDetailPage() {
   const [scopes, setScopes] = useState<ScopeItem[]>([]);
   const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"lines" | "scopes">("lines");
+  const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
+  const [woData, setWoData] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(null);
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
@@ -125,6 +126,57 @@ export default function JobDetailPage() {
     if (quotesRes.data) setQuotes(quotesRes.data);
     if (linesRes.data) setLines(linesRes.data);
     if (scopesRes.data) setScopes(scopesRes.data);
+
+    // Load WO data with activity labels
+    const { data: wos } = await supabase
+      .from("qry_wo_phase_ordered")
+      .select("*")
+      .eq("job_id", jobId);
+
+    if (wos && wos.length > 0) {
+      // Enrich with activity junction labels + scope names
+      const woIds = wos.map((w: any) => w.work_order_id);
+      const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
+
+      const [actRes, lookupRes] = await Promise.all([
+        supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
+        supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").eq("category", "ACTIVITY"),
+      ]);
+
+      const lkMap: Record<number, { v: string; p: number | null }> = {};
+      (lookupRes.data || []).forEach((l: any) => { lkMap[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
+
+      const actByWO: Record<number, any[]> = {};
+      (actRes.data || []).forEach((a: any) => {
+        if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = [];
+        actByWO[a.work_order_id].push(a);
+      });
+
+      const scopeMap: Record<number, string> = {};
+      if (scopesRes.data) {
+        scopesRes.data.forEach((s: any) => {
+          const line = linesRes.data?.find((l: any) => l.quote_line_id === s.quote_line_id);
+          scopeMap[s.scope_item_id] = line?.line_text?.substring(0, 60) || s.item_name || "Scope #" + s.scope_item_id;
+        });
+      }
+
+      setWoData(wos.map((wo: any) => {
+        const acts = actByWO[wo.work_order_id];
+        let label = "No Activity";
+        let phase: number | null = null;
+        if (acts && acts.length > 0) {
+          acts.sort((a: any, b: any) => a.sequence - b.sequence);
+          label = acts.map((a: any) => lkMap[a.activity_id]?.v || "?").join(" + ");
+          phase = lkMap[acts[0].activity_id]?.p ?? null;
+        } else if (wo.activity_verb && lkMap[wo.activity_verb]) {
+          label = lkMap[wo.activity_verb].v;
+          phase = lkMap[wo.activity_verb].p;
+        }
+        return { ...wo, activity_label: label, phase_number: phase, scope_name: scopeMap[wo.scope_item_id] || "—" };
+      }));
+    } else {
+      setWoData([]);
+    }
 
     if (contractorRes.data) {
       const map: Record<number, ContractorInfo> = {};
@@ -151,7 +203,7 @@ export default function JobDetailPage() {
   // ================================================================
   function isAutoComplete(line: QuoteLine): boolean {
     const config = getCategoryConfig(line.category);
-    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
+    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
     const hasContractor = !!contractorMap[line.quote_line_id];
 
     switch (config.autoComplete) {
@@ -267,7 +319,7 @@ export default function JobDetailPage() {
     const isAutoCompleted = isAutoComplete(line);
     const isManuallyDone = isTruthy(line.interpretation_complete);
     const isUninterpreted = config.showAmber && !lineIsDone;
-    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
+    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
     const contractorInfo = contractorMap[line.quote_line_id];
 
     return (
@@ -509,6 +561,16 @@ export default function JobDetailPage() {
         >
           Scope Items ({scopes.length})
         </button>
+        <button
+          onClick={() => setActiveTab("wo")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === "wo"
+              ? "border-starlight-red text-navy"
+              : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          Work Orders ({woData.length})
+        </button>
       </div>
 
       {/* TAB: Quote Lines */}
@@ -606,32 +668,82 @@ export default function JobDetailPage() {
               No scope items yet. Create one from the Quote Lines tab.
             </div>
           ) : (
-            scopes.map((scope) => (
+            scopes.map((scope) => {
+              const scopeLine = lines.find((l) => l.quote_line_id === scope.quote_line_id);
+              const scopeTitle = scopeLine?.line_text?.substring(0, 100) || scope.item_name || "(unnamed)";
+              const scopeWOs = woData.filter((w: any) => w.scope_item_id === scope.scope_item_id);
+              const woComplete = scopeWOs.filter((w: any) => w.status === "Complete").length;
+
+              return (
+                <Link
+                  key={scope.scope_item_id}
+                  href={`/jobs/${jobId}/scope/${scope.scope_item_id}`}
+                  className="card px-5 py-4 flex items-center gap-4 hover:shadow-md transition-shadow block"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="font-medium text-navy truncate">
+                        {scopeTitle}
+                      </h3>
+                      <StatusBadge status={scope.status} />
+                      {isTruthy(scope.is_general) && (
+                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                          General
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-4 mt-1.5 text-xs text-gray-400">
+                      {scope.event_zone && <span>{scope.event_zone}</span>}
+                      {scope.complexity_construction && (
+                        <span>Complexity: {scope.complexity_construction}</span>
+                      )}
+                      {scopeWOs.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Hammer className="h-3 w-3" />
+                          {woComplete}/{scopeWOs.length} WOs
+                        </span>
+                      )}
+                      {scopeLine?.line_value && (
+                        <span className="font-mono">{formatCurrency(scopeLine.line_value)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-300 shrink-0" />
+                </Link>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* TAB: Work Orders (all across scope items) */}
+      {activeTab === "wo" && (
+        <div className="space-y-2">
+          {woData.length === 0 ? (
+            <div className="card px-6 py-10 text-center text-gray-400 text-sm">
+              No work orders yet. Create them from within Scope Items.
+            </div>
+          ) : (
+            woData.map((wo: any) => (
               <Link
-                key={scope.scope_item_id}
-                href={`/jobs/${jobId}/scope/${scope.scope_item_id}`}
-                className="card px-5 py-4 flex items-center justify-between hover:shadow-md transition-shadow block"
+                key={wo.work_order_id}
+                href={`/jobs/${jobId}/scope/${wo.scope_item_id}/wo`}
+                className="card px-5 py-3.5 flex items-center gap-4 hover:shadow-md transition-shadow block"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-medium text-navy">
-                      {scope.item_name || "(unnamed)"}
-                    </h3>
-                    <StatusBadge status={scope.status} />
-                    {isTruthy(scope.is_general) && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
-                        General
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                    {scope.event_zone && <span>Zone: {scope.event_zone}</span>}
-                    {scope.complexity_construction && (
-                      <span>Complexity: {scope.complexity_construction}</span>
-                    )}
-                  </div>
+                <PhasePill phase={wo.phase_number} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                    {wo.scope_name}
+                    {wo.description ? ` — ${wo.description}` : ""}
+                  </p>
                 </div>
-                <ChevronRight className="h-5 w-5 text-gray-300 shrink-0" />
+                <div className="text-right w-14 shrink-0">
+                  <p className="text-sm font-mono text-navy">
+                    {wo.estimated_duration_hrs != null ? `${wo.estimated_duration_hrs}h` : "—"}
+                  </p>
+                </div>
+                <StatusBadge status={wo.status} />
               </Link>
             ))
           )}

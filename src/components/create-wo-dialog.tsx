@@ -14,6 +14,8 @@ interface CreateWODialogProps {
   jobId: number;
   scopeItemId: number;
   selectedItemIds: number[];
+  defaultComplexity?: string | null;
+  defaultFinish?: string | null;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -22,6 +24,8 @@ export function CreateWODialog({
   jobId,
   scopeItemId,
   selectedItemIds,
+  defaultComplexity,
+  defaultFinish,
   onClose,
   onCreated,
 }: CreateWODialogProps) {
@@ -30,6 +34,8 @@ export function CreateWODialog({
   const [chosenActivities, setChosenActivities] = useState<Activity[]>([]);
   const [description, setDescription] = useState("");
   const [estimatedHrs, setEstimatedHrs] = useState("");
+  const [complexity, setComplexity] = useState(defaultComplexity || "");
+  const [finish, setFinish] = useState(defaultFinish || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +90,8 @@ export function CreateWODialog({
         activity_verb: chosenActivities[0].lookup_id,
         description: description.trim() || null,
         estimated_duration_hrs: estimatedHrs ? parseFloat(estimatedHrs) : null,
+        complexity_construction: complexity || null,
+        finish_relative: finish || null,
         status: "Not-Started",
       })
       .select("work_order_id")
@@ -249,6 +257,35 @@ export function CreateWODialog({
               placeholder="e.g. 4"
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Complexity</label>
+              <select
+                value={complexity}
+                onChange={(e) => setComplexity(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              >
+                <option value="">Select...</option>
+                <option value="1 - Straightforward">1 - Straightforward</option>
+                <option value="2 - Skilled">2 - Skilled</option>
+                <option value="3 - Bespoke/Artistic">3 - Bespoke/Artistic</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Finish</label>
+              <select
+                value={finish}
+                onChange={(e) => setFinish(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              >
+                <option value="">Select...</option>
+                <option value="Harder-than-construction-warrants">Harder than warrants</option>
+                <option value="Neutral">Neutral</option>
+                <option value="Suits-the-form">Suits the form</option>
+              </select>
+            </div>
           </div>
 
           {error && (
