@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --navy: #1A1A2E;
+    --red: #C0392B;
+    --blue: #2980B9;
+    --green: #27AE60;
+    --amber: #F39C12;
+    --bg: #F4F5F7;
+  }
+
+  body {
+    @apply bg-starlight-bg text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  /* Status badge variants */
+  .badge-not-started { @apply bg-gray-100 text-gray-600; }
+  .badge-ready { @apply bg-white text-gray-800 border border-gray-300; }
+  .badge-in-progress { @apply bg-starlight-blue/10 text-starlight-blue; }
+  .badge-complete { @apply bg-starlight-green/10 text-starlight-green; }
+  .badge-on-hold { @apply bg-starlight-amber/10 text-starlight-amber; }
+  .badge-voided { @apply bg-gray-100 text-gray-400 line-through; }
+
+  /* Card base */
+  .card {
+    @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+  }
+
+  /* Amber highlight for uninterpreted quote lines */
+  .row-amber {
+    @apply bg-amber-50 border-l-4 border-l-starlight-amber;
+  }
+}
