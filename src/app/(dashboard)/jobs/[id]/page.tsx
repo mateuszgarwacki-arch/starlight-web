@@ -7,10 +7,44 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight } from "lucide-react";
+import { ContractorPicker } from "@/components/contractor-picker";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
+
+// Category behaviour configuration — single source of truth
+const CATEGORY_CONFIG: Record<string, {
+  canCreateScope: boolean;
+  showAmber: boolean;
+  showContractor: boolean;
+  showStockTag: boolean;
+  showDoneCheckbox: boolean;
+}> = {
+  "Workshop":                  { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Workshop Build":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Stock-and-Hire":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Stock Pick":                { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: true,  showDoneCheckbox: true },
+  "Subcontracted":             { canCreateScope: false, showAmber: false, showContractor: true,  showStockTag: false, showDoneCheckbox: true },
+  "Subcontracted (Partial)":   { canCreateScope: true,  showAmber: true,  showContractor: true,  showStockTag: false, showDoneCheckbox: true },
+  "Install":                   { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Provisional":               { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Shared Departments":        { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
+};
+
+const DEFAULT_CONFIG = { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: false };
+
+function getCategoryConfig(category: string | null) {
+  return CATEGORY_CONFIG[category || ""] || DEFAULT_CONFIG;
+}
+
+// Contractor data per quote line (loaded from view)
+interface ContractorInfo {
+  contractor_id: number | null;
+  contractor_name: string | null;
+  contractor_quote_value: number | null;
+  contractor_description: string | null;
+}
 
 export default function JobDetailPage() {
   const params = useParams();
@@ -22,27 +56,42 @@ export default function JobDetailPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [scopes, setScopes] = useState<ScopeItem[]>([]);
+  const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"lines" | "scopes">("lines");
-
-  // Dialog state
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
-
-  // Track which cells are saving
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
-    const [jobRes, quotesRes, linesRes, scopesRes] = await Promise.all([
+    const [jobRes, quotesRes, linesRes, scopesRes, contractorRes] = await Promise.all([
       supabase.from("tbl_production_plan").select("*").eq("job_id", jobId).single(),
       supabase.from("tbl_quotes").select("*").eq("job_id", jobId),
       supabase.from("tbl_quote_lines").select("*").eq("job_id", jobId).order("import_sequence"),
       supabase.from("tbl_scope_items").select("*").eq("job_id", jobId).order("created_at"),
+      supabase.from("qry_quote_lines_with_contractors").select("quote_line_id, contractor_id, contractor_name, contractor_quote_value, contractor_description").eq("job_id", jobId),
     ]);
 
     if (jobRes.data) setJob(jobRes.data);
     if (quotesRes.data) setQuotes(quotesRes.data);
     if (linesRes.data) setLines(linesRes.data);
     if (scopesRes.data) setScopes(scopesRes.data);
+
+    // Build contractor lookup map
+    if (contractorRes.data) {
+      const map: Record<number, ContractorInfo> = {};
+      contractorRes.data.forEach((row: any) => {
+        if (row.contractor_id) {
+          map[row.quote_line_id] = {
+            contractor_id: row.contractor_id,
+            contractor_name: row.contractor_name,
+            contractor_quote_value: row.contractor_quote_value,
+            contractor_description: row.contractor_description,
+          };
+        }
+      });
+      setContractorMap(map);
+    }
+
     setLoading(false);
   }, [jobId]);
 
@@ -51,12 +100,7 @@ export default function JobDetailPage() {
   }, [loadData]);
 
   // ---- INLINE UPDATE HANDLERS ----
-
-  const updateLine = async (
-    lineId: number,
-    field: string,
-    value: string | null
-  ) => {
+  const updateLine = async (lineId: number, field: string, value: string | null) => {
     const cellKey = `${lineId}-${field}`;
     setSavingCells((prev) => new Set(prev).add(cellKey));
 
@@ -65,11 +109,8 @@ export default function JobDetailPage() {
       .update({ [field]: value })
       .eq("quote_line_id", lineId);
 
-    // Optimistic update
     setLines((prev) =>
-      prev.map((l) =>
-        l.quote_line_id === lineId ? { ...l, [field]: value } : l
-      )
+      prev.map((l) => (l.quote_line_id === lineId ? { ...l, [field]: value } : l))
     );
 
     setSavingCells((prev) => {
@@ -84,23 +125,14 @@ export default function JobDetailPage() {
     await updateLine(line.quote_line_id, "interpretation_complete", newVal);
   };
 
-  // ---- SCOPE CREATION ----
-
   const handleScopeCreated = (scopeItemId: number) => {
     setScopeDialogLine(null);
-    loadData(); // Refresh all data
-    // Navigate to scope detail
+    loadData();
     router.push(`/jobs/${jobId}/scope/${scopeItemId}`);
   };
 
   // ---- COMPUTED VALUES ----
-
-  // Lines that CAN have scope items created (get [+] button and amber highlight)
-  const scopeReadyCategories = ["Workshop Build", "Workshop", "Stock-and-Hire"];
-  // All workshop-related categories (get the Done checkbox)
-  const workshopCategories = ["Workshop Build", "Workshop", "Stock-and-Hire", "Provisional"];
-  const workshopLines = lines.filter((l) => workshopCategories.includes(l.category || ""));
-  const scopeReadyLines = lines.filter((l) => scopeReadyCategories.includes(l.category || ""));
+  const scopeReadyLines = lines.filter((l) => getCategoryConfig(l.category).canCreateScope);
   const uninterpretedCount = scopeReadyLines.filter((l) => !isTruthy(l.interpretation_complete)).length;
   const totalValue = lines.reduce((s, l) => s + (l.line_value || 0), 0);
   const interpretedValue = scopeReadyLines
@@ -224,13 +256,11 @@ export default function JobDetailPage() {
               </thead>
               <tbody>
                 {lines.map((line) => {
-                  const isWorkshop = workshopCategories.includes(line.category || "");
-                  const isScopeReady = scopeReadyCategories.includes(line.category || "");
+                  const config = getCategoryConfig(line.category);
                   const isInterpreted = isTruthy(line.interpretation_complete);
-                  const isUninterpreted = isScopeReady && !isInterpreted;
-                  const hasScope = scopes.some(
-                    (s) => s.quote_line_id === line.quote_line_id
-                  );
+                  const isUninterpreted = config.showAmber && !isInterpreted;
+                  const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
+                  const contractorInfo = contractorMap[line.quote_line_id];
 
                   return (
                     <tr
@@ -238,7 +268,7 @@ export default function JobDetailPage() {
                       className={`border-t border-gray-100 transition-colors ${
                         isUninterpreted
                           ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
-                          : isInterpreted && isScopeReady
+                          : isInterpreted && config.canCreateScope
                           ? "bg-green-50/30"
                           : ""
                       }`}
@@ -253,13 +283,13 @@ export default function JobDetailPage() {
                         {line.event_zone}
                       </td>
 
-                      {/* Description — clickable to expand */}
-                      <td className="px-3 py-2.5 text-gray-700">
-                        <p className="text-sm leading-relaxed">
+                      {/* Description + PM note + contractor info */}
+                      <td className="px-3 py-2.5">
+                        <p className="text-sm text-gray-700 leading-relaxed">
                           {(line.line_text || "").substring(0, 150)}
                           {(line.line_text || "").length > 150 ? "..." : ""}
                         </p>
-                        {/* PM note inline edit */}
+                        {/* PM note */}
                         <input
                           type="text"
                           value={line.pm_note || ""}
@@ -273,15 +303,33 @@ export default function JobDetailPage() {
                             )
                           }
                           onBlur={(e) =>
-                            updateLine(
-                              line.quote_line_id,
-                              "pm_note",
-                              e.target.value || null
-                            )
+                            updateLine(line.quote_line_id, "pm_note", e.target.value || null)
                           }
                           placeholder="PM note..."
                           className="mt-1 w-full px-2 py-1 text-xs border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none bg-transparent text-gray-500 placeholder:text-gray-300"
                         />
+                        {/* Contractor picker — inline below description */}
+                        {config.showContractor && (
+                          <div className="mt-1.5">
+                            <ContractorPicker
+                              quoteLineId={line.quote_line_id}
+                              currentContractorId={contractorInfo?.contractor_id || null}
+                              currentContractorName={contractorInfo?.contractor_name || null}
+                              currentQuoteValue={contractorInfo?.contractor_quote_value || null}
+                              currentDescription={contractorInfo?.contractor_description || null}
+                              onUpdate={loadData}
+                            />
+                          </div>
+                        )}
+                        {/* Stock Pick tag */}
+                        {config.showStockTag && (
+                          <div className="mt-1.5">
+                            <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
+                              <Package className="h-3 w-3" />
+                              Stock Pick
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Category dropdown */}
@@ -289,9 +337,7 @@ export default function JobDetailPage() {
                         <LookupCombo
                           category="QUOTE_LINE_CATEGORY"
                           value={line.category}
-                          onChange={(val) =>
-                            updateLine(line.quote_line_id, "category", val)
-                          }
+                          onChange={(val) => updateLine(line.quote_line_id, "category", val)}
                           className="w-full text-xs"
                         />
                       </td>
@@ -303,7 +349,7 @@ export default function JobDetailPage() {
 
                       {/* Interpretation toggle */}
                       <td className="px-3 py-2.5 text-center">
-                        {isWorkshop ? (
+                        {config.showDoneCheckbox ? (
                           <button
                             onClick={() => toggleInterpretation(line)}
                             className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
@@ -315,13 +361,13 @@ export default function JobDetailPage() {
                             {isInterpreted && <Check className="h-3.5 w-3.5" />}
                           </button>
                         ) : (
-                          <span className="text-gray-300">—</span>
+                          <span className="text-gray-300">&mdash;</span>
                         )}
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions — context sensitive */}
                       <td className="px-3 py-2.5">
-                        {isScopeReady && !hasScope && (
+                        {config.canCreateScope && !hasScope && (
                           <button
                             onClick={() => setScopeDialogLine(line)}
                             title="Create Scope Item from this line"
@@ -384,11 +430,6 @@ export default function JobDetailPage() {
                       <span>Finish: {scope.finish_relative}</span>
                     )}
                   </div>
-                  {scope.description && (
-                    <p className="text-sm text-gray-500 mt-1">
-                      {scope.description.substring(0, 100)}
-                    </p>
-                  )}
                 </div>
                 <ChevronRight className="h-5 w-5 text-gray-300 shrink-0" />
               </Link>

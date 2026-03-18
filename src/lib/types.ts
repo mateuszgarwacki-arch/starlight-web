@@ -262,3 +262,34 @@ export interface AppUser {
 export function isTruthy(val: string | null | undefined): boolean {
   return val === "true" || val === "True" || val === "-1";
 }
+// Add these to the BOTTOM of your existing src/lib/types.ts file
+// (don't replace the whole file — just append these)
+
+export interface Contractor {
+  contractor_id: number;
+  company_name: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  speciality: string | null;
+  notes: string | null;
+  active: boolean | null;
+  created_at: string | null;
+}
+
+export interface QuoteLineContractor {
+  id: number;
+  quote_line_id: number | null;
+  contractor_id: number | null;
+  contractor_quote_value: number | null;
+  description: string | null;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface QuoteLineWithContractor extends QuoteLine {
+  contractor_id: number | null;
+  contractor_quote_value: number | null;
+  contractor_description: string | null;
+  contractor_name: string | null;
+}

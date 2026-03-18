@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   LogOut,
   Star,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/review", label: "Review", icon: AlertTriangle, zone: 3 },
   { href: "/capacity", label: "Capacity", icon: Users, zone: 1 },
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
+  { href: "/contractors", label: "Contractors", icon: Building2, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
 ];
 
