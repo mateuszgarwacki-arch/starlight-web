@@ -41,7 +41,7 @@ export function LookupCombo({
       value={value || ""}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
+      className={`px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400 min-w-[180px] ${className}`}
     >
       <option value="">{placeholder}</option>
       {options.map((opt) => (

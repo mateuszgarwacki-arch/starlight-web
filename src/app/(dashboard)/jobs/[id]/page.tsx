@@ -95,11 +95,15 @@ export default function JobDetailPage() {
 
   // ---- COMPUTED VALUES ----
 
-  const workshopCategories = ["Workshop Build", "Stock-and-Hire", "Provisional"];
+  // Lines that CAN have scope items created (get [+] button and amber highlight)
+  const scopeReadyCategories = ["Workshop Build", "Workshop", "Stock-and-Hire"];
+  // All workshop-related categories (get the Done checkbox)
+  const workshopCategories = ["Workshop Build", "Workshop", "Stock-and-Hire", "Provisional"];
   const workshopLines = lines.filter((l) => workshopCategories.includes(l.category || ""));
-  const uninterpretedCount = workshopLines.filter((l) => !isTruthy(l.interpretation_complete)).length;
+  const scopeReadyLines = lines.filter((l) => scopeReadyCategories.includes(l.category || ""));
+  const uninterpretedCount = scopeReadyLines.filter((l) => !isTruthy(l.interpretation_complete)).length;
   const totalValue = lines.reduce((s, l) => s + (l.line_value || 0), 0);
-  const interpretedValue = workshopLines
+  const interpretedValue = scopeReadyLines
     .filter((l) => isTruthy(l.interpretation_complete))
     .reduce((s, l) => s + (l.line_value || 0), 0);
 
@@ -155,9 +159,9 @@ export default function JobDetailPage() {
           <p className="text-lg font-semibold text-navy">{formatCurrency(totalValue)}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Workshop Lines</p>
+          <p className="text-xs text-gray-400">Scope-Ready Lines</p>
           <p className="text-lg font-semibold text-navy">
-            {workshopLines.length - uninterpretedCount}/{workshopLines.length}
+            {scopeReadyLines.length - uninterpretedCount}/{scopeReadyLines.length}
             <span className="text-xs font-normal text-gray-400 ml-1">interpreted</span>
           </p>
         </div>
@@ -212,7 +216,7 @@ export default function JobDetailPage() {
                   <th className="px-3 py-2.5 font-medium text-gray-500 w-12">#</th>
                   <th className="px-3 py-2.5 font-medium text-gray-500 w-20">Zone</th>
                   <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-40">Category</th>
+                  <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
                   <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
                   <th className="px-3 py-2.5 font-medium text-gray-500 w-20 text-center">Done</th>
                   <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
@@ -221,8 +225,9 @@ export default function JobDetailPage() {
               <tbody>
                 {lines.map((line) => {
                   const isWorkshop = workshopCategories.includes(line.category || "");
+                  const isScopeReady = scopeReadyCategories.includes(line.category || "");
                   const isInterpreted = isTruthy(line.interpretation_complete);
-                  const isUninterpreted = isWorkshop && !isInterpreted;
+                  const isUninterpreted = isScopeReady && !isInterpreted;
                   const hasScope = scopes.some(
                     (s) => s.quote_line_id === line.quote_line_id
                   );
@@ -233,7 +238,7 @@ export default function JobDetailPage() {
                       className={`border-t border-gray-100 transition-colors ${
                         isUninterpreted
                           ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
-                          : isInterpreted && isWorkshop
+                          : isInterpreted && isScopeReady
                           ? "bg-green-50/30"
                           : ""
                       }`}
@@ -316,7 +321,7 @@ export default function JobDetailPage() {
 
                       {/* Actions */}
                       <td className="px-3 py-2.5">
-                        {isWorkshop && !hasScope && (
+                        {isScopeReady && !hasScope && (
                           <button
                             onClick={() => setScopeDialogLine(line)}
                             title="Create Scope Item from this line"
@@ -326,12 +331,13 @@ export default function JobDetailPage() {
                           </button>
                         )}
                         {hasScope && (
-                          <span
-                            title="Scope item created"
-                            className="inline-flex items-center text-starlight-green"
+                          <a
+                            href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
+                            title="Open scope item"
+                            className="inline-flex items-center text-starlight-green hover:text-green-700 transition-colors"
                           >
                             <FileText className="h-4 w-4" />
-                          </span>
+                          </a>
                         )}
                       </td>
                     </tr>
