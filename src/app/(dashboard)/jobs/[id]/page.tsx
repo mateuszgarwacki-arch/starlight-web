@@ -8,37 +8,83 @@ import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
-// Category behaviour configuration — single source of truth
+// ================================================================
+// CATEGORY CONFIG — single source of truth
+// ================================================================
 const CATEGORY_CONFIG: Record<string, {
   canCreateScope: boolean;
   showAmber: boolean;
   showContractor: boolean;
   showStockTag: boolean;
   showDoneCheckbox: boolean;
+  // What counts as "done" for auto-tick
+  autoComplete: "scope" | "contractor" | "scope+contractor" | "manual" | "never";
 }> = {
-  "Workshop":                  { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
-  "Workshop Build":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
-  "Stock-and-Hire":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
-  "Stock Pick":                { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: true,  showDoneCheckbox: true },
-  "Subcontracted":             { canCreateScope: false, showAmber: false, showContractor: true,  showStockTag: false, showDoneCheckbox: true },
-  "Subcontracted (Partial)":   { canCreateScope: true,  showAmber: true,  showContractor: true,  showStockTag: false, showDoneCheckbox: true },
-  "Install":                   { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true },
-  "Provisional":               { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true },
-  "Shared Departments":        { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true },
+  "Workshop":                  { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
+  "Workshop Build":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
+  "Stock-and-Hire":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
+  "Stock Pick":                { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: true,  showDoneCheckbox: true,  autoComplete: "manual" },
+  "Subcontracted":             { canCreateScope: false, showAmber: false, showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "contractor" },
+  "Subcontracted (Partial)":   { canCreateScope: true,  showAmber: true,  showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope+contractor" },
+  "Install":                   { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "manual" },
+  "Provisional":               { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "never" },
+  "Shared Departments":        { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
 };
 
-const DEFAULT_CONFIG = { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: false };
+const DEFAULT_CONFIG = {
+  canCreateScope: false, showAmber: false, showContractor: false,
+  showStockTag: false, showDoneCheckbox: false, autoComplete: "manual" as const,
+};
 
 function getCategoryConfig(category: string | null) {
   return CATEGORY_CONFIG[category || ""] || DEFAULT_CONFIG;
 }
 
-// Contractor data per quote line (loaded from view)
+// ================================================================
+// FILTER DEFINITIONS
+// ================================================================
+type FilterKey = "workshop" | "provisional" | "subcontracted" | "done" | "zone";
+
+interface FilterDef {
+  key: FilterKey;
+  label: string;
+  filter: (line: QuoteLine, scopes: ScopeItem[], contractorMap: Record<number, any>) => boolean;
+  color: string;
+}
+
+const FILTERS: FilterDef[] = [
+  {
+    key: "workshop",
+    label: "Workshop",
+    filter: (l) => ["Workshop", "Workshop Build", "Stock-and-Hire", "Shared Departments"].includes(l.category || ""),
+    color: "bg-starlight-amber/10 text-starlight-amber border-starlight-amber/30",
+  },
+  {
+    key: "provisional",
+    label: "Provisional",
+    filter: (l) => l.category === "Provisional",
+    color: "bg-gray-100 text-gray-600 border-gray-200",
+  },
+  {
+    key: "subcontracted",
+    label: "Subcontracted",
+    filter: (l) => ["Subcontracted", "Subcontracted (Partial)"].includes(l.category || ""),
+    color: "bg-starlight-blue/10 text-starlight-blue border-starlight-blue/30",
+  },
+  {
+    key: "done",
+    label: "Done",
+    filter: (l) => isTruthy(l.interpretation_complete),
+    color: "bg-starlight-green/10 text-starlight-green border-starlight-green/30",
+  },
+];
+
+// Contractor info type
 interface ContractorInfo {
   contractor_id: number | null;
   contractor_name: string | null;
@@ -46,6 +92,9 @@ interface ContractorInfo {
   contractor_description: string | null;
 }
 
+// ================================================================
+// COMPONENT
+// ================================================================
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,6 +108,7 @@ export default function JobDetailPage() {
   const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"lines" | "scopes">("lines");
+  const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(null);
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
 
@@ -76,7 +126,6 @@ export default function JobDetailPage() {
     if (linesRes.data) setLines(linesRes.data);
     if (scopesRes.data) setScopes(scopesRes.data);
 
-    // Build contractor lookup map
     if (contractorRes.data) {
       const map: Record<number, ContractorInfo> = {};
       contractorRes.data.forEach((row: any) => {
@@ -95,11 +144,34 @@ export default function JobDetailPage() {
     setLoading(false);
   }, [jobId]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // ---- INLINE UPDATE HANDLERS ----
+  // ================================================================
+  // AUTO-TICK LOGIC — check if a line should be auto-completed
+  // ================================================================
+  function isAutoComplete(line: QuoteLine): boolean {
+    const config = getCategoryConfig(line.category);
+    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
+    const hasContractor = !!contractorMap[line.quote_line_id];
+
+    switch (config.autoComplete) {
+      case "scope": return hasScope;
+      case "contractor": return hasContractor;
+      case "scope+contractor": return hasScope && hasContractor;
+      case "manual": return false; // only manual tick
+      case "never": return false;
+      default: return false;
+    }
+  }
+
+  // Derived "done" status: manual tick OR auto-complete
+  function isDone(line: QuoteLine): boolean {
+    return isTruthy(line.interpretation_complete) || isAutoComplete(line);
+  }
+
+  // ================================================================
+  // UPDATE HANDLERS
+  // ================================================================
   const updateLine = async (lineId: number, field: string, value: string | null) => {
     const cellKey = `${lineId}-${field}`;
     setSavingCells((prev) => new Set(prev).add(cellKey));
@@ -131,13 +203,48 @@ export default function JobDetailPage() {
     router.push(`/jobs/${jobId}/scope/${scopeItemId}`);
   };
 
-  // ---- COMPUTED VALUES ----
+  // ================================================================
+  // COMPUTED VALUES
+  // ================================================================
   const scopeReadyLines = lines.filter((l) => getCategoryConfig(l.category).canCreateScope);
-  const uninterpretedCount = scopeReadyLines.filter((l) => !isTruthy(l.interpretation_complete)).length;
+  const doneCount = lines.filter((l) => isDone(l)).length;
+  const needsActionCount = lines.filter((l) => {
+    const config = getCategoryConfig(l.category);
+    return (config.showAmber || config.showContractor) && !isDone(l);
+  }).length;
   const totalValue = lines.reduce((s, l) => s + (l.line_value || 0), 0);
-  const interpretedValue = scopeReadyLines
-    .filter((l) => isTruthy(l.interpretation_complete))
-    .reduce((s, l) => s + (l.line_value || 0), 0);
+  const doneValue = lines.filter((l) => isDone(l)).reduce((s, l) => s + (l.line_value || 0), 0);
+
+  // Apply active filter
+  const filteredLines = (() => {
+    if (!activeFilter) return lines;
+    if (activeFilter === "zone") return lines; // zone uses grouping, not filtering
+    if (activeFilter === "done") return lines.filter((l) => isDone(l));
+    const filterDef = FILTERS.find((f) => f.key === activeFilter);
+    if (!filterDef) return lines;
+    return lines.filter((l) => filterDef.filter(l, scopes, contractorMap));
+  })();
+
+  // For zone view, group by event_zone
+  const zoneGroups = (() => {
+    if (activeFilter !== "zone") return null;
+    const groups: Record<string, QuoteLine[]> = {};
+    lines.forEach((l) => {
+      const zone = l.event_zone || "No Zone";
+      if (!groups[zone]) groups[zone] = [];
+      groups[zone].push(l);
+    });
+    return groups;
+  })();
+
+  // Filter counts
+  const filterCounts = {
+    workshop: lines.filter((l) => FILTERS[0].filter(l, scopes, contractorMap)).length,
+    provisional: lines.filter((l) => FILTERS[1].filter(l, scopes, contractorMap)).length,
+    subcontracted: lines.filter((l) => FILTERS[2].filter(l, scopes, contractorMap)).length,
+    done: doneCount,
+    zone: new Set(lines.map((l) => l.event_zone || "No Zone")).size,
+  };
 
   if (loading) {
     return (
@@ -151,6 +258,172 @@ export default function JobDetailPage() {
     return <div className="text-center py-12 text-gray-400">Job not found</div>;
   }
 
+  // ================================================================
+  // RENDER A SINGLE QUOTE LINE ROW
+  // ================================================================
+  function renderLineRow(line: QuoteLine) {
+    const config = getCategoryConfig(line.category);
+    const lineIsDone = isDone(line);
+    const isAutoCompleted = isAutoComplete(line);
+    const isManuallyDone = isTruthy(line.interpretation_complete);
+    const isUninterpreted = config.showAmber && !lineIsDone;
+    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
+    const contractorInfo = contractorMap[line.quote_line_id];
+
+    return (
+      <tr
+        key={line.quote_line_id}
+        className={`border-t border-gray-100 transition-colors ${
+          isUninterpreted
+            ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
+            : lineIsDone
+            ? "bg-green-50/20"
+            : ""
+        }`}
+      >
+        {/* Line number */}
+        <td className="px-3 py-2.5 font-mono text-xs text-gray-400">
+          {line.line_number}
+        </td>
+
+        {/* Zone */}
+        <td className="px-3 py-2.5 text-xs text-gray-500">
+          {line.event_zone}
+        </td>
+
+        {/* Description + PM note + contractor/stock */}
+        <td className="px-3 py-2.5">
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {(line.line_text || "").substring(0, 150)}
+            {(line.line_text || "").length > 150 ? "..." : ""}
+          </p>
+          <input
+            type="text"
+            value={line.pm_note || ""}
+            onChange={(e) =>
+              setLines((prev) =>
+                prev.map((l) =>
+                  l.quote_line_id === line.quote_line_id
+                    ? { ...l, pm_note: e.target.value }
+                    : l
+                )
+              )
+            }
+            onBlur={(e) =>
+              updateLine(line.quote_line_id, "pm_note", e.target.value || null)
+            }
+            placeholder="PM note..."
+            className="mt-1 w-full px-2 py-1 text-xs border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none bg-transparent text-gray-500 placeholder:text-gray-300"
+          />
+          {config.showContractor && (
+            <div className="mt-1.5">
+              <ContractorPicker
+                quoteLineId={line.quote_line_id}
+                currentContractorId={contractorInfo?.contractor_id || null}
+                currentContractorName={contractorInfo?.contractor_name || null}
+                currentQuoteValue={contractorInfo?.contractor_quote_value || null}
+                currentDescription={contractorInfo?.contractor_description || null}
+                onUpdate={loadData}
+              />
+            </div>
+          )}
+          {config.showStockTag && (
+            <div className="mt-1.5">
+              <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
+                <Package className="h-3 w-3" />
+                Stock Pick
+              </span>
+            </div>
+          )}
+        </td>
+
+        {/* Category dropdown */}
+        <td className="px-3 py-2.5">
+          <LookupCombo
+            category="QUOTE_LINE_CATEGORY"
+            value={line.category}
+            onChange={(val) => updateLine(line.quote_line_id, "category", val)}
+            className="w-full text-xs"
+          />
+        </td>
+
+        {/* Value */}
+        <td className="px-3 py-2.5 text-right font-medium text-gray-700">
+          {formatCurrency(line.line_value)}
+        </td>
+
+        {/* Done — hybrid: shows auto-tick state + manual override */}
+        <td className="px-3 py-2.5 text-center">
+          {config.showDoneCheckbox ? (
+            <button
+              onClick={() => toggleInterpretation(line)}
+              title={
+                isAutoCompleted && !isManuallyDone
+                  ? "Auto-completed (click to manually override)"
+                  : isManuallyDone
+                  ? "Manually marked done (click to undo)"
+                  : "Mark as done"
+              }
+              className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
+                lineIsDone
+                  ? isAutoCompleted && !isManuallyDone
+                    ? "bg-starlight-green/60 border-starlight-green/60 text-white"
+                    : "bg-starlight-green border-starlight-green text-white"
+                  : "border-gray-300 hover:border-starlight-amber"
+              }`}
+            >
+              {lineIsDone && <Check className="h-3.5 w-3.5" />}
+            </button>
+          ) : (
+            <span className="text-gray-300">&mdash;</span>
+          )}
+        </td>
+
+        {/* Actions */}
+        <td className="px-3 py-2.5">
+          {config.canCreateScope && !hasScope && (
+            <button
+              onClick={() => setScopeDialogLine(line)}
+              title="Create Scope Item from this line"
+              className="p-1.5 text-starlight-red hover:bg-red-50 rounded-md transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
+          {hasScope && (
+            <a
+              href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
+              title="Open scope item"
+              className="inline-flex items-center text-starlight-green hover:text-green-700 transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+            </a>
+          )}
+        </td>
+      </tr>
+    );
+  }
+
+  // ================================================================
+  // TABLE HEADER
+  // ================================================================
+  const tableHead = (
+    <thead>
+      <tr className="bg-starlight-bg text-left">
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-12">#</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-24">Zone</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Done</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
+      </tr>
+    </thead>
+  );
+
+  // ================================================================
+  // MAIN RENDER
+  // ================================================================
   return (
     <div className="space-y-5">
       {/* Back link */}
@@ -180,7 +453,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Quote summary bar */}
+      {/* Summary bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card px-4 py-3">
           <p className="text-xs text-gray-400">Total Lines</p>
@@ -191,30 +464,30 @@ export default function JobDetailPage() {
           <p className="text-lg font-semibold text-navy">{formatCurrency(totalValue)}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Scope-Ready Lines</p>
+          <p className="text-xs text-gray-400">Interpreted</p>
           <p className="text-lg font-semibold text-navy">
-            {scopeReadyLines.length - uninterpretedCount}/{scopeReadyLines.length}
-            <span className="text-xs font-normal text-gray-400 ml-1">interpreted</span>
+            {doneCount}/{lines.length}
+            <span className="text-xs font-normal text-gray-400 ml-1">lines done</span>
           </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Scope Value Covered</p>
-          <p className="text-lg font-semibold text-navy">{formatCurrency(interpretedValue)}</p>
+          <p className="text-xs text-gray-400">Value Covered</p>
+          <p className="text-lg font-semibold text-navy">{formatCurrency(doneValue)}</p>
         </div>
       </div>
 
-      {/* Uninterpreted alert */}
-      {uninterpretedCount > 0 && (
+      {/* Needs action alert */}
+      {needsActionCount > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-starlight-amber animate-pulse" />
           <p className="text-sm text-amber-800">
-            <span className="font-semibold">{uninterpretedCount}</span> workshop
-            lines awaiting scope interpretation
+            <span className="font-semibold">{needsActionCount}</span> lines need
+            attention (scope, contractor, or decision required)
           </p>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Main tabs: Quote Lines / Scope Items */}
       <div className="flex gap-1 border-b border-gray-200">
         <button
           onClick={() => setActiveTab("lines")}
@@ -240,158 +513,88 @@ export default function JobDetailPage() {
 
       {/* TAB: Quote Lines */}
       {activeTab === "lines" && (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-starlight-bg text-left">
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-12">#</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-20">Zone</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-20 text-center">Done</th>
-                  <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line) => {
-                  const config = getCategoryConfig(line.category);
-                  const isInterpreted = isTruthy(line.interpretation_complete);
-                  const isUninterpreted = config.showAmber && !isInterpreted;
-                  const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id);
-                  const contractorInfo = contractorMap[line.quote_line_id];
-
-                  return (
-                    <tr
-                      key={line.quote_line_id}
-                      className={`border-t border-gray-100 transition-colors ${
-                        isUninterpreted
-                          ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
-                          : isInterpreted && config.canCreateScope
-                          ? "bg-green-50/30"
-                          : ""
-                      }`}
-                    >
-                      {/* Line number */}
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-400">
-                        {line.line_number}
-                      </td>
-
-                      {/* Zone */}
-                      <td className="px-3 py-2.5 text-xs text-gray-500">
-                        {line.event_zone}
-                      </td>
-
-                      {/* Description + PM note + contractor info */}
-                      <td className="px-3 py-2.5">
-                        <p className="text-sm text-gray-700 leading-relaxed">
-                          {(line.line_text || "").substring(0, 150)}
-                          {(line.line_text || "").length > 150 ? "..." : ""}
-                        </p>
-                        {/* PM note */}
-                        <input
-                          type="text"
-                          value={line.pm_note || ""}
-                          onChange={(e) =>
-                            setLines((prev) =>
-                              prev.map((l) =>
-                                l.quote_line_id === line.quote_line_id
-                                  ? { ...l, pm_note: e.target.value }
-                                  : l
-                              )
-                            )
-                          }
-                          onBlur={(e) =>
-                            updateLine(line.quote_line_id, "pm_note", e.target.value || null)
-                          }
-                          placeholder="PM note..."
-                          className="mt-1 w-full px-2 py-1 text-xs border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none bg-transparent text-gray-500 placeholder:text-gray-300"
-                        />
-                        {/* Contractor picker — inline below description */}
-                        {config.showContractor && (
-                          <div className="mt-1.5">
-                            <ContractorPicker
-                              quoteLineId={line.quote_line_id}
-                              currentContractorId={contractorInfo?.contractor_id || null}
-                              currentContractorName={contractorInfo?.contractor_name || null}
-                              currentQuoteValue={contractorInfo?.contractor_quote_value || null}
-                              currentDescription={contractorInfo?.contractor_description || null}
-                              onUpdate={loadData}
-                            />
-                          </div>
-                        )}
-                        {/* Stock Pick tag */}
-                        {config.showStockTag && (
-                          <div className="mt-1.5">
-                            <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
-                              <Package className="h-3 w-3" />
-                              Stock Pick
-                            </span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Category dropdown */}
-                      <td className="px-3 py-2.5">
-                        <LookupCombo
-                          category="QUOTE_LINE_CATEGORY"
-                          value={line.category}
-                          onChange={(val) => updateLine(line.quote_line_id, "category", val)}
-                          className="w-full text-xs"
-                        />
-                      </td>
-
-                      {/* Value */}
-                      <td className="px-3 py-2.5 text-right font-medium text-gray-700">
-                        {formatCurrency(line.line_value)}
-                      </td>
-
-                      {/* Interpretation toggle */}
-                      <td className="px-3 py-2.5 text-center">
-                        {config.showDoneCheckbox ? (
-                          <button
-                            onClick={() => toggleInterpretation(line)}
-                            className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
-                              isInterpreted
-                                ? "bg-starlight-green border-starlight-green text-white"
-                                : "border-gray-300 hover:border-starlight-amber"
-                            }`}
-                          >
-                            {isInterpreted && <Check className="h-3.5 w-3.5" />}
-                          </button>
-                        ) : (
-                          <span className="text-gray-300">&mdash;</span>
-                        )}
-                      </td>
-
-                      {/* Actions — context sensitive */}
-                      <td className="px-3 py-2.5">
-                        {config.canCreateScope && !hasScope && (
-                          <button
-                            onClick={() => setScopeDialogLine(line)}
-                            title="Create Scope Item from this line"
-                            className="p-1.5 text-starlight-red hover:bg-red-50 rounded-md transition-colors"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        )}
-                        {hasScope && (
-                          <a
-                            href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
-                            title="Open scope item"
-                            className="inline-flex items-center text-starlight-green hover:text-green-700 transition-colors"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="space-y-3">
+          {/* Filter pills */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <button
+              onClick={() => setActiveFilter(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                activeFilter === null
+                  ? "bg-navy text-white border-navy"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              All ({lines.length})
+            </button>
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setActiveFilter(activeFilter === f.key ? null : f.key)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  activeFilter === f.key
+                    ? f.color + " border-current"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                }`}
+              >
+                {f.label} ({filterCounts[f.key]})
+              </button>
+            ))}
+            <button
+              onClick={() => setActiveFilter(activeFilter === "zone" ? null : "zone")}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                activeFilter === "zone"
+                  ? "bg-navy/10 text-navy border-navy/30"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              By Zone ({filterCounts.zone})
+            </button>
           </div>
+
+          {/* Table — zone grouped or flat */}
+          {activeFilter === "zone" && zoneGroups ? (
+            // ZONE GROUPED VIEW
+            <div className="space-y-4">
+              {Object.entries(zoneGroups).map(([zone, zoneLines]) => (
+                <div key={zone}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-semibold text-navy">{zone}</h3>
+                    <span className="text-xs text-gray-400">
+                      ({zoneLines.length} lines &middot; {formatCurrency(zoneLines.reduce((s, l) => s + (l.line_value || 0), 0))})
+                    </span>
+                  </div>
+                  <div className="card overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        {tableHead}
+                        <tbody>{zoneLines.map(renderLineRow)}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // FLAT VIEW (with or without filter)
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  {tableHead}
+                  <tbody>
+                    {filteredLines.map(renderLineRow)}
+                    {filteredLines.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
+                          No lines match this filter
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -425,9 +628,6 @@ export default function JobDetailPage() {
                     {scope.event_zone && <span>Zone: {scope.event_zone}</span>}
                     {scope.complexity_construction && (
                       <span>Complexity: {scope.complexity_construction}</span>
-                    )}
-                    {scope.finish_relative && (
-                      <span>Finish: {scope.finish_relative}</span>
                     )}
                   </div>
                 </div>

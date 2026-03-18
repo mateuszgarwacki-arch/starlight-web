@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate } from "@/lib/utils";
 import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
-import { ArrowLeft } from "lucide-react";
+import { PromptPanel } from "@/components/prompt-panel";
+import { JobItemsTable } from "@/components/job-items-table";
+import { CreateWODialog } from "@/components/create-wo-dialog";
+import { ArrowLeft, Hammer, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 interface ScopeDetail {
@@ -21,11 +24,15 @@ interface ScopeDetail {
   category_id: number | null;
   is_general: string | null;
   quote_line_id: number | null;
-  // From the view join
   line_text?: string | null;
   line_value?: number | null;
   job_name?: string | null;
   job_number?: string | null;
+}
+
+interface ScopeCategory {
+  category_id: number;
+  category_name: string | null;
 }
 
 export default function ScopeDetailPage() {
@@ -35,40 +42,58 @@ export default function ScopeDetailPage() {
   const supabase = createClient();
 
   const [scope, setScope] = useState<ScopeDetail | null>(null);
+  const [categories, setCategories] = useState<ScopeCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [showWODialog, setShowWODialog] = useState(false);
+  const [woCount, setWoCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    async function load() {
-      // Try view first (has joined data), fall back to table
-      const { data } = await supabase
-        .from("qry_scope_breakdown")
-        .select("*")
-        .eq("scope_item_id", scopeId)
-        .single();
+  const loadData = useCallback(async () => {
+    const [scopeRes, catRes, woRes] = await Promise.all([
+      supabase.from("qry_scope_breakdown").select("*").eq("scope_item_id", scopeId).single(),
+      supabase.from("tbl_scope_item_categories").select("category_id, category_name").eq("active", "true").order("category_name"),
+      supabase.from("tbl_work_orders").select("work_order_id", { count: "exact" }).eq("scope_item_id", scopeId),
+    ]);
 
-      if (data) {
-        setScope(data);
-      } else {
-        // Fallback to raw table
-        const { data: raw } = await supabase
-          .from("tbl_scope_items")
-          .select("*")
-          .eq("scope_item_id", scopeId)
-          .single();
-        if (raw) setScope(raw);
-      }
-      setLoading(false);
+    if (scopeRes.data) {
+      setScope(scopeRes.data);
+    } else {
+      const { data: raw } = await supabase.from("tbl_scope_items").select("*").eq("scope_item_id", scopeId).single();
+      if (raw) setScope(raw);
     }
-    load();
+    if (catRes.data) setCategories(catRes.data);
+    if (woRes.count !== null) setWoCount(woRes.count);
+    setLoading(false);
   }, [scopeId]);
 
-  const updateField = async (field: string, value: string | null) => {
-    await supabase
-      .from("tbl_scope_items")
-      .update({ [field]: value })
-      .eq("scope_item_id", scopeId);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
+  const updateField = async (field: string, value: string | number | null) => {
+    await supabase.from("tbl_scope_items").update({ [field]: value }).eq("scope_item_id", scopeId);
     setScope((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
+  const handleAddFromPrompt = async (description: string, itemType: string) => {
+    await supabase.from("tbl_job_items").insert({
+      job_id: jobId,
+      scope_item_id: scopeId,
+      description,
+      item_type: itemType,
+      kit_list_exported: "false",
+      temp_selected: "false",
+      created_at: new Date().toISOString(),
+    });
+    setRefreshKey((k) => k + 1);
+  };
+
+  const handleWOCreated = () => {
+    setShowWODialog(false);
+    setSelectedItemIds([]);
+    setRefreshKey((k) => k + 1);
+    loadData();
   };
 
   if (loading) {
@@ -97,31 +122,26 @@ export default function ScopeDetailPage() {
       {/* Scope header card */}
       <div className="card px-6 py-5">
         <div className="flex items-start justify-between mb-4">
-          <div>
+          <div className="flex-1">
             <p className="text-xs text-gray-400 font-mono">
-              {scope.job_number} &gt; Scope Item #{scope.scope_item_id}
+              {scope.job_number} &gt; Scope #{scope.scope_item_id}
             </p>
-            <input
-              type="text"
-              value={scope.item_name || ""}
-              onChange={(e) =>
-                setScope((prev) =>
-                  prev ? { ...prev, item_name: e.target.value } : null
-                )
-              }
-              onBlur={(e) => updateField("item_name", e.target.value || null)}
-              className="text-xl font-bold text-navy mt-1 bg-transparent border-0 border-b-2 border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none w-full"
-            />
+            <h1 className="text-xl font-bold text-navy mt-1">
+              {scope.line_text
+                ? (scope.line_text).substring(0, 100)
+                : scope.item_name || `Scope Item #${scope.scope_item_id}`}
+            </h1>
+            {scope.job_name && (
+              <p className="text-sm text-gray-400 mt-1">{scope.job_name}</p>
+            )}
           </div>
           <StatusBadge status={scope.status} />
         </div>
 
         {/* Editable fields */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Status
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Status</label>
             <LookupCombo
               category="SCOPE_STATUS"
               value={scope.status}
@@ -130,9 +150,22 @@ export default function ScopeDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Complexity
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>
+            <select
+              value={scope.category_id || ""}
+              onChange={(e) => updateField("category_id", e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue min-w-[120px]"
+            >
+              <option value="">Select...</option>
+              {categories.map((cat) => (
+                <option key={cat.category_id} value={cat.category_id}>
+                  {cat.category_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Complexity</label>
             <LookupCombo
               category="COMPLEXITY"
               value={scope.complexity_construction}
@@ -141,9 +174,7 @@ export default function ScopeDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Finish
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Finish</label>
             <LookupCombo
               category="FINISH_RELATIVE"
               value={scope.finish_relative}
@@ -152,16 +183,12 @@ export default function ScopeDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Event Zone
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Event Zone</label>
             <input
               type="text"
               value={scope.event_zone || ""}
               onChange={(e) =>
-                setScope((prev) =>
-                  prev ? { ...prev, event_zone: e.target.value } : null
-                )
+                setScope((prev) => (prev ? { ...prev, event_zone: e.target.value } : null))
               }
               onBlur={(e) => updateField("event_zone", e.target.value || null)}
               className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
@@ -170,58 +197,81 @@ export default function ScopeDetailPage() {
         </div>
 
         {/* Description */}
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-400 mb-1">
-            Description
-          </label>
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
           <textarea
             value={scope.description || ""}
             onChange={(e) =>
-              setScope((prev) =>
-                prev ? { ...prev, description: e.target.value } : null
-              )
+              setScope((prev) => (prev ? { ...prev, description: e.target.value } : null))
             }
             onBlur={(e) => updateField("description", e.target.value || null)}
-            rows={3}
+            rows={2}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             placeholder="Describe the scope item..."
           />
         </div>
 
-        {/* Quote line context */}
-        {scope.line_text && (
-          <div className="mt-4 bg-starlight-bg rounded-lg px-4 py-3">
-            <p className="text-xs text-gray-400 mb-1">From quote line:</p>
-            <p className="text-sm text-gray-600">{scope.line_text}</p>
-          </div>
-        )}
       </div>
 
-      {/* Placeholder sections for Phase 3 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Job Items — Phase 3 */}
-        <div className="lg:col-span-2">
-          <div className="card px-5 py-8 text-center">
-            <p className="text-gray-400 text-sm">Job Items & Prompt Engine</p>
-            <p className="text-gray-300 text-xs mt-1">
-              Phase 3: Stock search, item grid, WO creation
-            </p>
-          </div>
-        </div>
+      {/* Main content: prompt engine + job items + WO link */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        {/* Left: Prompt Engine */}
+        <div className="lg:col-span-1">
+          <PromptPanel
+            categoryId={scope.category_id}
+            onAddItem={handleAddFromPrompt}
+          />
 
-        {/* Work Orders link */}
-        <div>
+          {/* Work Orders link card */}
           <Link
             href={`/jobs/${jobId}/scope/${scopeId}/wo`}
-            className="card px-5 py-8 text-center hover:shadow-md transition-shadow block"
+            className="card px-4 py-4 mt-4 flex items-center justify-between hover:shadow-md transition-shadow block"
           >
-            <p className="text-navy font-medium text-sm">Work Orders &gt;&gt;</p>
-            <p className="text-gray-400 text-xs mt-1">
-              View and manage work orders
-            </p>
+            <div className="flex items-center gap-2">
+              <Hammer className="h-4 w-4 text-navy" />
+              <div>
+                <p className="text-sm font-medium text-navy">Work Orders</p>
+                <p className="text-xs text-gray-400">{woCount} WOs</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
           </Link>
         </div>
+
+        {/* Right: Job Items table */}
+        <div className="lg:col-span-3">
+          <JobItemsTable
+            key={refreshKey}
+            jobId={jobId}
+            scopeItemId={scopeId}
+            onSelectionChange={setSelectedItemIds}
+          />
+
+          {/* Create WO button — appears when items selected */}
+          {selectedItemIds.length > 0 && (
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => setShowWODialog(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Hammer className="h-4 w-4" />
+                Create Work Order from {selectedItemIds.length} Item{selectedItemIds.length > 1 ? "s" : ""}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* WO Dialog */}
+      {showWODialog && (
+        <CreateWODialog
+          jobId={jobId}
+          scopeItemId={scopeId}
+          selectedItemIds={selectedItemIds}
+          onClose={() => setShowWODialog(false)}
+          onCreated={handleWOCreated}
+        />
+      )}
     </div>
   );
 }

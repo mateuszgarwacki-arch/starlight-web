@@ -24,7 +24,10 @@ export function CreateScopeDialog({
   onCreated,
 }: CreateScopeDialogProps) {
   const supabase = createClient();
-  const [itemName, setItemName] = useState("");
+  const [itemName, setItemName] = useState(
+    // Auto-populate from quote line - first 80 chars, clean up
+    (quoteLine.line_text || "").substring(0, 80).split("\n")[0].trim()
+  );
   const [complexity, setComplexity] = useState("");
   const [finishRelative, setFinishRelative] = useState("");
   const [saving, setSaving] = useState(false);
@@ -106,7 +109,7 @@ export function CreateScopeDialog({
         <div className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">
-              Scope Item Name *
+              Scope Item Name <span className="text-gray-400 font-normal">(edit if needed)</span>
             </label>
             <input
               type="text"
