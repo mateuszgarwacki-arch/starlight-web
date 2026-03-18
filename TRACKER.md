@@ -157,21 +157,37 @@ tbl_contractors, tbl_quote_line_contractors, tbl_wo_activities
 | `src/app/(dashboard)/jobs/page.tsx` | Jobs list |
 | `src/app/(dashboard)/jobs/[id]/page.tsx` | Job detail with filter tabs and quote lines |
 | `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Scope breakdown |
-| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Work orders (Phase 4 stub) |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Work orders with BOM, step indicators, reorder |
 | `src/app/(dashboard)/contractors/page.tsx` | Contractors CRUD |
+| `src/app/(dashboard)/workshop/page.tsx` | Workshop view - all WOs grouped by scope |
+| `src/app/(dashboard)/review/page.tsx` | Cost visibility, time entries, flags, accuracy |
+| `src/app/(dashboard)/crew/page.tsx` | Crew management, PINs, booking calendar |
+| `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
+| `src/app/m/login/page.tsx` | Freelancer PIN login |
+| `src/app/m/page.tsx` | Mobile task list |
+| `src/app/m/wo/[woId]/page.tsx` | Mobile WO detail - START/JOIN/LOG/COMPLETE |
+| `src/app/m/me/page.tsx` | Mobile profile + booking accept/decline |
+| `src/app/m/photos/page.tsx` | Site photos placeholder |
+| `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
+| `src/lib/supabase-admin.ts` | Server-side Supabase client (service role) |
+| `src/components/booking-calendar.tsx` | Week grid booking calendar |
 
 ## Conventions
 
 - All pages are "use client" components reading Supabase directly from browser
 - Supabase views (qry_*) handle all joins — frontend never joins tables
-- Boolean fields from Supabase come as strings: use `isTruthy()` to check
+- Boolean fields: `isTruthy()` handles both real booleans and string "true" (ODBC legacy)
+- Supabase queries use `.eq("active", true)` (real boolean, not string)
+- RLS enabled on all 22 tables — PM/Foreman/Freelancer policies active
+- Freelancer auth: phone@starlight.local + PIN via Supabase Auth
+- WO sequence: wo_sequence column drives step ordering, reorderable by PM
+- Complexity/finish live on WOs (primary), read-only on scope items
 - CATEGORY_CONFIG in job detail page is single source of truth for category behaviour
 - Activity verbs now under category "ACTIVITY" (was "ACTIVITY_VERB")
 - Multi-activity WOs: tbl_wo_activities junction, display as "CUT + COVER"
 - Auto-expanding textareas for description and finish fields
 - Filter pills on quote lines: Workshop, Provisional, Subcontracted, Done, By Zone
 - Git commit per phase, deploy via `vercel --prod`
-- RLS disabled on all tables — enable before Phase 5
 
 ## Deployment Cheat Sheet
 
@@ -190,6 +206,24 @@ git push
 
 ## Next Session Pickup
 
-Start with: "I'm ready for Phase 4: Work Orders & BOM"
+Phases 0-6 complete. Remaining work:
 
-The stub page is at `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx`. It needs to become a full WO list with expandable BOM rows, material search, status management, and traveller print. The `qry_wo_phase_ordered` and `qry_wo_with_activities` views are already built and available.
+### Outstanding SQL
+- Run Phase5_Schedule_Extend.sql (corrected version without policies) — adds status, job_id, notes, created_at to tbl_freelancer_schedule
+
+### Phase 7: Capacity & Materials
+- Capacity/manpower page (from qry_manpower_demand)
+- Materials catalogue management page
+- Cross-job conflict detection
+
+### Phase 8: Polish & Handover
+- Traveller PDF with QR code (Phase 4 leftover)
+- Loading states, error handling
+- Supabase storage bucket for completion photos
+- Dashboard polish (procurement actions, flags count)
+- Mobile: site photos page (currently placeholder)
+
+### Known bugs/improvements to address
+- WO coverage indicator doesn't refresh after deleting a WO (needs page reload)
+- Workshop view: could add real-time Supabase subscription for live updates
+- Review page: time entries need WO activity labels enriched (currently shows description only)
