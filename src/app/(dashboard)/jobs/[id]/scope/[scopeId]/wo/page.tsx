@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { WoBom, Freelancer, ScopeContext } from "@/lib/types";
-import { StatusBadge, DaysRemainingBadge, PhasePill } from "@/components/ui/badges";
+import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   ArrowLeft,
   ChevronDown,
@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   X,
   Link2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -40,6 +42,7 @@ interface WORow {
   void_reason: string | null;
   complexity_construction: string | null;
   finish_relative: string | null;
+  wo_sequence: number | null;
   sort_phase: number;
   // Enriched client-side
   activity_label?: string;
@@ -286,6 +289,31 @@ export default function ScopeWorkOrdersPage() {
     }
   };
 
+  const reorderWO = async (woId: number, direction: -1 | 1) => {
+    const sorted = [...workOrders].sort((a, b) => (a.wo_sequence || 0) - (b.wo_sequence || 0));
+    const idx = sorted.findIndex(w => w.work_order_id === woId);
+    const swapIdx = idx + direction;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    
+    const current = sorted[idx];
+    const swap = sorted[swapIdx];
+    const currentSeq = current.wo_sequence || idx + 1;
+    const swapSeq = swap.wo_sequence || swapIdx + 1;
+
+    // Swap sequences in DB
+    await Promise.all([
+      supabase.from("tbl_work_orders").update({ wo_sequence: swapSeq }).eq("work_order_id", current.work_order_id),
+      supabase.from("tbl_work_orders").update({ wo_sequence: currentSeq }).eq("work_order_id", swap.work_order_id),
+    ]);
+
+    // Update local state
+    setWorkOrders(prev => prev.map(w => {
+      if (w.work_order_id === current.work_order_id) return { ...w, wo_sequence: swapSeq };
+      if (w.work_order_id === swap.work_order_id) return { ...w, wo_sequence: currentSeq };
+      return w;
+    }));
+  };
+
   const voidWO = async (woId: number, reason: string) => {
     await supabase
       .from("tbl_work_orders")
@@ -507,7 +535,7 @@ export default function ScopeWorkOrdersPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {workOrders.map((wo) => {
+          {[...workOrders].sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999)).map((wo, woIdx, sortedArr) => {
             const isExpanded = expandedWO === wo.work_order_id;
 
             return (
@@ -526,15 +554,22 @@ export default function ScopeWorkOrdersPage() {
                     )}
                   </div>
 
-                  {/* Phase pill */}
-                  <PhasePill phase={wo.phase_number ?? null} />
-
-                  {/* Complexity hint */}
-                  {(wo.complexity_construction || wo.finish_relative) && (
-                    <span className="text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      {wo.complexity_construction || "—"}/{wo.finish_relative ? wo.finish_relative.replace("Harder-than-construction-warrants", "Harder").replace("Suits-the-form", "Suits") : "—"}
-                    </span>
-                  )}
+                  {/* Step indicator */}
+                  <div className="flex flex-col items-center w-14 shrink-0">
+                    <span className="text-xs font-semibold text-navy">{woIdx + 1}/{sortedArr.length}</span>
+                    {woIdx > 0 && (
+                      <span className={"text-[9px] " + (
+                        sortedArr[woIdx - 1].status === "Complete" ? "text-starlight-green" :
+                        sortedArr[woIdx - 1].status === "In-Progress" ? "text-starlight-blue" :
+                        "text-gray-400"
+                      )}>
+                        prev: {sortedArr[woIdx - 1].status === "Complete" ? "done" :
+                               sortedArr[woIdx - 1].status === "In-Progress" ? "active" :
+                               "waiting"}
+                      </span>
+                    )}
+                    {woIdx === 0 && <span className="text-[9px] text-gray-300">first</span>}
+                  </div>
 
                   {/* Activity label + description */}
                   <div className="flex-1 min-w-0">
@@ -612,7 +647,27 @@ export default function ScopeWorkOrdersPage() {
                 {isExpanded && (
                   <div className="border-t border-gray-100 bg-gray-50/30">
                     {/* Editable WO fields */}
-                    <div className="px-5 py-3 grid grid-cols-2 md:grid-cols-6 gap-3 border-b border-gray-100">
+                    <div className="px-5 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-medium text-gray-500">Step {woIdx + 1} of {sortedArr.length}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); reorderWO(wo.work_order_id, -1); }}
+                          disabled={woIdx === 0}
+                          className="p-1 rounded text-gray-400 hover:text-navy hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          title="Move up"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); reorderWO(wo.work_order_id, 1); }}
+                          disabled={woIdx === sortedArr.length - 1}
+                          className="p-1 rounded text-gray-400 hover:text-navy hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          title="Move down"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div>
                         <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
                           Description
@@ -722,6 +777,7 @@ export default function ScopeWorkOrdersPage() {
                       </div>
                     </div>
 
+                    </div>
                     {/* Linked Job Items */}
                     {linkedItems.length > 0 && (
                       <div className="px-5 py-3 border-b border-gray-100">

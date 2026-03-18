@@ -81,6 +81,17 @@ export function CreateWODialog({
     setSaving(true);
     setError(null);
 
+    // Get next sequence number for this scope item
+    const { data: existingWOs } = await supabase
+      .from("tbl_work_orders")
+      .select("wo_sequence")
+      .eq("scope_item_id", scopeItemId)
+      .not("status", "eq", "Voided")
+      .order("wo_sequence", { ascending: false })
+      .limit(1);
+    const nextSeq = (existingWOs && existingWOs.length > 0 && existingWOs[0].wo_sequence)
+      ? existingWOs[0].wo_sequence + 1 : 1;
+
     // 1. Create Work Order (activity_verb = first activity for backwards compat)
     const { data: wo, error: woError } = await supabase
       .from("tbl_work_orders")
@@ -92,6 +103,7 @@ export function CreateWODialog({
         estimated_duration_hrs: estimatedHrs ? parseFloat(estimatedHrs) : null,
         complexity_construction: complexity || null,
         finish_relative: finish || null,
+        wo_sequence: nextSeq,
         status: "Not-Started",
       })
       .select("work_order_id")

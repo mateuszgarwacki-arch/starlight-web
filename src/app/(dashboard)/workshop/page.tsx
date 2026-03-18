@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
-import { StatusBadge, DaysRemainingBadge, PhasePill } from "@/components/ui/badges";
+import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Hammer, Clock, Users, ChevronDown, ChevronRight,
   Filter, Search, RefreshCw,
@@ -23,6 +23,9 @@ interface WorkshopWO {
   planned_lead_id: number | null;
   activity_label: string;
   phase_number: number | null;
+  wo_sequence: number | null;
+  scope_total_wos: number;
+  prev_wo_status: string | null;
   scope_name: string;
   job_name: string;
   job_number: string;
@@ -132,12 +135,28 @@ export default function WorkshopPage() {
         job_number: job.number,
         event_date: job.date,
         lead_name: wo.planned_lead_id ? fMap[wo.planned_lead_id] || null : null,
+        wo_sequence: wo.wo_sequence,
+        scope_total_wos: 0,
+        prev_wo_status: null,
         total_logged_hrs: totalHrs,
         active_workers: activeWorkers,
         entry_count: entries.length,
       };
     });
 
+    // Compute per-scope step info
+    const wosByScope: Record<number, WorkshopWO[]> = {};
+    enriched.forEach(w => {
+      if (!wosByScope[w.scope_item_id]) wosByScope[w.scope_item_id] = [];
+      wosByScope[w.scope_item_id].push(w);
+    });
+    Object.values(wosByScope).forEach(scopeWOs => {
+      scopeWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+      scopeWOs.forEach((w, idx) => {
+        w.scope_total_wos = scopeWOs.length;
+        w.prev_wo_status = idx > 0 ? scopeWOs[idx - 1].status : null;
+      });
+    });
     enriched.sort((a, b) => (a.phase_number || 999) - (b.phase_number || 999));
     setWos(enriched);
     setLoading(false);
@@ -297,12 +316,23 @@ export default function WorkshopPage() {
                   <div className="text-gray-300">
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </div>
-                  <PhasePill phase={wo.phase_number} />
-                  {(wo.complexity_construction || wo.finish_relative) && (
-                    <span className="text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      {wo.complexity_construction || "—"}/{wo.finish_relative ? wo.finish_relative.replace("Harder-than-construction-warrants", "Harder").replace("Suits-the-form", "Suits") : "—"}
+                  <div className="flex flex-col items-center w-14 shrink-0">
+                    <span className="text-xs font-semibold text-navy">
+                      {wo.wo_sequence || "?"}/{wo.scope_total_wos}
                     </span>
-                  )}
+                    {wo.prev_wo_status !== null ? (
+                      <span className={"text-[9px] " + (
+                        wo.prev_wo_status === "Complete" ? "text-starlight-green" :
+                        wo.prev_wo_status === "In-Progress" ? "text-starlight-blue" :
+                        "text-gray-400"
+                      )}>
+                        prev: {wo.prev_wo_status === "Complete" ? "done" :
+                               wo.prev_wo_status === "In-Progress" ? "active" : "waiting"}
+                      </span>
+                    ) : wo.wo_sequence === 1 ? (
+                      <span className="text-[9px] text-gray-300">first</span>
+                    ) : null}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { DaysRemainingBadge, StatusBadge, PhasePill } from "@/components/ui/badges";
+import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
@@ -160,7 +160,7 @@ export default function JobDetailPage() {
         });
       }
 
-      setWoData(wos.map((wo: any) => {
+      const woEnriched = wos.map((wo: any) => {
         const acts = actByWO[wo.work_order_id];
         let label = "No Activity";
         let phase: number | null = null;
@@ -172,8 +172,22 @@ export default function JobDetailPage() {
           label = lkMap[wo.activity_verb].v;
           phase = lkMap[wo.activity_verb].p;
         }
-        return { ...wo, activity_label: label, phase_number: phase, scope_name: scopeMap[wo.scope_item_id] || "—" };
-      }));
+        return { ...wo, activity_label: label, phase_number: phase, wo_sequence: wo.wo_sequence, scope_name: scopeMap[wo.scope_item_id] || "—", scope_total_wos: 0, prev_wo_status: null as string | null };
+      });
+      // Compute per-scope step info
+      const wsByScope: Record<number, any[]> = {};
+      woEnriched.forEach((w: any) => {
+        if (!wsByScope[w.scope_item_id]) wsByScope[w.scope_item_id] = [];
+        wsByScope[w.scope_item_id].push(w);
+      });
+      Object.values(wsByScope).forEach((sWOs: any[]) => {
+        sWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+        sWOs.forEach((w, idx) => {
+          w.scope_total_wos = sWOs.length;
+          w.prev_wo_status = idx > 0 ? sWOs[idx - 1].status : null;
+        });
+      });
+      setWoData(woEnriched);
     } else {
       setWoData([]);
     }
@@ -730,7 +744,20 @@ export default function JobDetailPage() {
                 href={`/jobs/${jobId}/scope/${wo.scope_item_id}/wo`}
                 className="card px-5 py-3.5 flex items-center gap-4 hover:shadow-md transition-shadow block"
               >
-                <PhasePill phase={wo.phase_number} />
+                <div className="flex flex-col items-center w-12 shrink-0">
+                  <span className="text-xs font-semibold text-navy">{wo.wo_sequence || "?"}/{wo.scope_total_wos}</span>
+                  {wo.prev_wo_status !== null ? (
+                    <span className={"text-[9px] " + (
+                      wo.prev_wo_status === "Complete" ? "text-starlight-green" :
+                      wo.prev_wo_status === "In-Progress" ? "text-starlight-blue" : "text-gray-400"
+                    )}>
+                      {wo.prev_wo_status === "Complete" ? "prev: done" :
+                       wo.prev_wo_status === "In-Progress" ? "prev: active" : "prev: wait"}
+                    </span>
+                  ) : wo.wo_sequence === 1 ? (
+                    <span className="text-[9px] text-gray-300">first</span>
+                  ) : null}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">
