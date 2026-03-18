@@ -1,13 +1,420 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase-browser";
+import { formatDate, formatCurrency } from "@/lib/utils";
+import { isTruthy } from "@/lib/types";
+import { StatusBadge, DaysRemainingBadge, PhasePill } from "@/components/ui/badges";
+import {
+  Hammer, Clock, Users, ChevronDown, ChevronRight,
+  Filter, Search, RefreshCw,
+} from "lucide-react";
+import Link from "next/link";
+
+interface WorkshopWO {
+  work_order_id: number;
+  job_id: number;
+  scope_item_id: number;
+  description: string | null;
+  estimated_duration_hrs: number | null;
+  status: string;
+  complexity_construction: string | null;
+  finish_relative: string | null;
+  planned_lead_id: number | null;
+  activity_label: string;
+  phase_number: number | null;
+  scope_name: string;
+  job_name: string;
+  job_number: string;
+  event_date: string | null;
+  lead_name: string | null;
+  total_logged_hrs: number;
+  active_workers: { name: string; since: string }[];
+  entry_count: number;
+}
+
+type FilterStatus = "all" | "Not-Started" | "Ready" | "In-Progress" | "Complete" | "On-Hold";
+
 export default function WorkshopPage() {
+  const supabase = createClient();
+  const [wos, setWos] = useState<WorkshopWO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedWO, setExpandedWO] = useState<number | null>(null);
+  const [expandedEntries, setExpandedEntries] = useState<any[]>([]);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [filterJob, setFilterJob] = useState<string>("all");
+  const [searchText, setSearchText] = useState("");
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    const { data: woData } = await supabase
+      .from("tbl_work_orders")
+      .select("*")
+      .not("status", "eq", "Voided");
+
+    if (!woData || woData.length === 0) { setWos([]); setLoading(false); return; }
+
+    const woIds = woData.map((w: any) => w.work_order_id);
+    const scopeIds = [...new Set(woData.map((w: any) => w.scope_item_id).filter(Boolean))];
+    const jobIds = [...new Set(woData.map((w: any) => w.job_id).filter(Boolean))];
+
+    const [actRes, scopeRes, jobRes, timeRes, flRes] = await Promise.all([
+      supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
+      supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
+      supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", jobIds),
+      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, flag_note").in("work_order_id", woIds),
+      supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name"),
+    ]);
+
+    const allActIds = [...new Set([
+      ...(actRes.data || []).map((a: any) => a.activity_id),
+      ...woData.map((w: any) => w.activity_verb).filter(Boolean),
+    ])];
+    const { data: lookups } = allActIds.length > 0
+      ? await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").in("lookup_id", allActIds)
+      : { data: [] };
+
+    const lk: Record<number, { v: string; p: number | null }> = {};
+    (lookups || []).forEach((l: any) => { lk[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
+    const actByWO: Record<number, any[]> = {};
+    (actRes.data || []).forEach((a: any) => {
+      if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = [];
+      actByWO[a.work_order_id].push(a);
+    });
+
+    const scopeMap: Record<number, string> = {};
+    (scopeRes.data || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name || "Scope #" + s.scope_item_id; });
+    const jobMap: Record<number, { name: string; number: string; date: string | null }> = {};
+    (jobRes.data || []).forEach((j: any) => { jobMap[j.job_id] = { name: j.job_name, number: j.job_number, date: j.event_date }; });
+    const fMap: Record<number, string> = {};
+    (flRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
+
+    const timeByWO: Record<number, any[]> = {};
+    (timeRes.data || []).forEach((t: any) => {
+      if (!timeByWO[t.work_order_id]) timeByWO[t.work_order_id] = [];
+      timeByWO[t.work_order_id].push(t);
+    });
+
+    const enriched: WorkshopWO[] = woData.map((wo: any) => {
+      const acts = actByWO[wo.work_order_id];
+      let label = "No Activity"; let phase: number | null = null;
+      if (acts && acts.length > 0) {
+        acts.sort((a: any, b: any) => a.sequence - b.sequence);
+        label = acts.map((a: any) => lk[a.activity_id]?.v || "?").join(" + ");
+        phase = lk[acts[0].activity_id]?.p ?? null;
+      } else if (wo.activity_verb && lk[wo.activity_verb]) {
+        label = lk[wo.activity_verb].v; phase = lk[wo.activity_verb].p;
+      }
+      const job = jobMap[wo.job_id] || { name: "—", number: "—", date: null };
+      const entries = timeByWO[wo.work_order_id] || [];
+      const totalHrs = entries.reduce((s: number, e: any) => s + (e.actual_hours || 0), 0);
+      const activeWorkers = entries
+        .filter((e: any) => !e.system_end_timestamp)
+        .map((e: any) => ({
+          name: fMap[e.freelancer_id] || "Unknown",
+          since: new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+        }));
+
+      return {
+        work_order_id: wo.work_order_id,
+        job_id: wo.job_id,
+        scope_item_id: wo.scope_item_id,
+        description: wo.description,
+        estimated_duration_hrs: wo.estimated_duration_hrs,
+        status: wo.status,
+        complexity_construction: wo.complexity_construction,
+        finish_relative: wo.finish_relative,
+        planned_lead_id: wo.planned_lead_id,
+        activity_label: label,
+        phase_number: phase,
+        scope_name: scopeMap[wo.scope_item_id] || "—",
+        job_name: job.name,
+        job_number: job.number,
+        event_date: job.date,
+        lead_name: wo.planned_lead_id ? fMap[wo.planned_lead_id] || null : null,
+        total_logged_hrs: totalHrs,
+        active_workers: activeWorkers,
+        entry_count: entries.length,
+      };
+    });
+
+    enriched.sort((a, b) => (a.phase_number || 999) - (b.phase_number || 999));
+    setWos(enriched);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Expand to show time entries
+  const toggleExpand = async (woId: number) => {
+    if (expandedWO === woId) {
+      setExpandedWO(null);
+      setExpandedEntries([]);
+      return;
+    }
+    setExpandedWO(woId);
+    const { data } = await supabase
+      .from("tbl_wo_time_entries")
+      .select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, applied_hourly_rate, entry_cost, flag_note")
+      .eq("work_order_id", woId)
+      .order("system_start_timestamp");
+    // Enrich with names
+    const fIds = [...new Set((data || []).map((e: any) => e.freelancer_id))];
+    const { data: frs } = fIds.length > 0
+      ? await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds)
+      : { data: [] };
+    const nm: Record<number, string> = {};
+    (frs || []).forEach((f: any) => { nm[f.freelancer_id] = f.freelancer_name; });
+    setExpandedEntries((data || []).map((e: any) => ({ ...e, name: nm[e.freelancer_id] || "Unknown" })));
+  };
+
+  // Filtering
+  const jobs = [...new Set(wos.map(w => w.job_number))].sort();
+  const filtered = wos.filter(w => {
+    if (filterStatus !== "all" && w.status !== filterStatus) return false;
+    if (filterJob !== "all" && w.job_number !== filterJob) return false;
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      if (!w.activity_label.toLowerCase().includes(s) && !w.scope_name.toLowerCase().includes(s) && !(w.description || "").toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
+
+  // Stats
+  const stats = {
+    total: wos.length,
+    notStarted: wos.filter(w => w.status === "Not-Started").length,
+    ready: wos.filter(w => w.status === "Ready").length,
+    inProgress: wos.filter(w => w.status === "In-Progress").length,
+    complete: wos.filter(w => w.status === "Complete").length,
+    onHold: wos.filter(w => w.status === "On-Hold").length,
+    totalEstHrs: wos.reduce((s, w) => s + (w.estimated_duration_hrs || 0), 0),
+    totalLoggedHrs: wos.reduce((s, w) => s + w.total_logged_hrs, 0),
+    activeWorkerCount: new Set(wos.flatMap(w => w.active_workers.map(a => a.name))).size,
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading workshop...</div>;
+  }
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-navy">Workshop</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Zone 2: All active work orders across jobs, phase-ordered</p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-navy">Workshop</h1>
+          <p className="text-sm text-gray-400 mt-0.5">All work orders across all active jobs</p>
+        </div>
+        <button onClick={loadAll} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+          <RefreshCw className="h-4 w-4" /> Refresh
+        </button>
       </div>
-      <div className="card px-6 py-12 text-center">
-        <p className="text-gray-400 text-sm">Coming in Phase 4</p>
-        <p className="text-gray-300 text-xs mt-1">Cross-job work order view with traveller print</p>
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">Total WOs</p>
+          <p className="text-lg font-semibold text-navy">{stats.total}</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">In Progress</p>
+          <p className="text-lg font-semibold text-starlight-blue">{stats.inProgress}</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">Ready</p>
+          <p className="text-lg font-semibold text-navy">{stats.ready}</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">Est. Hours</p>
+          <p className="text-lg font-semibold text-navy">{stats.totalEstHrs}h</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">Logged Hours</p>
+          <p className="text-lg font-semibold text-starlight-green">{Math.round(stats.totalLoggedHrs * 10) / 10}h</p>
+        </div>
+      </div>
+
+      {/* Active workers banner */}
+      {stats.activeWorkerCount > 0 && (
+        <div className="bg-starlight-blue/5 border border-starlight-blue/20 rounded-lg px-4 py-3 flex items-center gap-3">
+          <Users className="h-4 w-4 text-starlight-blue" />
+          <p className="text-sm text-starlight-blue">
+            <span className="font-semibold">{stats.activeWorkerCount}</span> {stats.activeWorkerCount === 1 ? "person" : "people"} currently working
+          </p>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-gray-400" />
+          {(["all", "Not-Started", "Ready", "In-Progress", "Complete", "On-Hold"] as FilterStatus[]).map(s => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={"px-3 py-1 rounded-full text-xs font-medium border transition-colors " + (
+                filterStatus === s ? "bg-navy text-white border-navy" : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              )}
+            >
+              {s === "all" ? `All (${stats.total})` : `${s} (${wos.filter(w => w.status === s).length})`}
+            </button>
+          ))}
+        </div>
+        <select
+          value={filterJob}
+          onChange={(e) => setFilterJob(e.target.value)}
+          className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+        >
+          <option value="all">All Jobs</option>
+          {jobs.map(j => <option key={j} value={j}>{j}</option>)}
+        </select>
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search activities, scope items..."
+            className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+          />
+        </div>
+      </div>
+
+      {/* WO List */}
+      <div className="space-y-2">
+        {filtered.length === 0 ? (
+          <div className="card px-6 py-12 text-center text-gray-400 text-sm">No work orders match your filters</div>
+        ) : (
+          filtered.map(wo => {
+            const isExpanded = expandedWO === wo.work_order_id;
+            return (
+              <div key={wo.work_order_id} className="card overflow-hidden">
+                {/* Row */}
+                <div
+                  className="px-5 py-3.5 flex items-center gap-3 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  onClick={() => toggleExpand(wo.work_order_id)}
+                >
+                  <div className="text-gray-300">
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </div>
+                  <PhasePill phase={wo.phase_number} />
+                  {(wo.complexity_construction || wo.finish_relative) && (
+                    <span className="text-[10px] text-gray-400 font-mono whitespace-nowrap">
+                      {wo.complexity_construction || "—"}/{wo.finish_relative ? wo.finish_relative.replace("Harder-than-construction-warrants", "Harder").replace("Suits-the-form", "Suits") : "—"}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
+                      <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{wo.job_number}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 truncate mt-0.5">
+                      {wo.scope_name}{wo.description ? ` — ${wo.description}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Hours: est vs logged */}
+                  <div className="text-right w-20 shrink-0">
+                    <p className="text-sm font-mono text-navy">
+                      {wo.total_logged_hrs > 0 ? `${Math.round(wo.total_logged_hrs * 10) / 10}h` : "—"}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {wo.estimated_duration_hrs ? `of ${wo.estimated_duration_hrs}h est.` : "no est."}
+                    </p>
+                  </div>
+                  {/* Active workers indicator */}
+                  <div className="w-24 shrink-0 text-right">
+                    {wo.active_workers.length > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-starlight-blue">
+                        <Users className="h-3 w-3" />
+                        {wo.active_workers.map(w => w.name.split(" ")[0]).join(", ")}
+                      </span>
+                    ) : wo.lead_name ? (
+                      <p className="text-xs text-gray-400 truncate">{wo.lead_name}</p>
+                    ) : (
+                      <p className="text-xs text-gray-300 italic">Unassigned</p>
+                    )}
+                  </div>
+                  <div className="w-24 shrink-0 text-right">
+                    <StatusBadge status={wo.status} />
+                  </div>
+                  <DaysRemainingBadge eventDate={wo.event_date} />
+                </div>
+
+                {/* Expanded: Time entries */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50/30 px-5 py-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Time Entries</h3>
+                      <Link
+                        href={`/jobs/${wo.job_id}/scope/${wo.scope_item_id}/wo`}
+                        className="text-xs text-starlight-blue hover:text-blue-700 font-medium"
+                      >
+                        Open in Work Orders →
+                      </Link>
+                    </div>
+                    {expandedEntries.length === 0 ? (
+                      <p className="text-xs text-gray-300 py-2">No time entries yet</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                              <th className="text-left py-1.5 pr-3 font-medium">Person</th>
+                              <th className="text-left py-1.5 px-2 font-medium">Started</th>
+                              <th className="text-left py-1.5 px-2 font-medium">Ended</th>
+                              <th className="text-right py-1.5 px-2 font-medium">Hours</th>
+                              <th className="text-right py-1.5 px-2 font-medium">Rate</th>
+                              <th className="text-right py-1.5 px-2 font-medium">Cost</th>
+                              <th className="text-left py-1.5 px-2 font-medium">Flag</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {expandedEntries.map((e: any) => (
+                              <tr key={e.entry_id} className={"border-b border-gray-100 last:border-0 " + (!e.system_end_timestamp ? "bg-starlight-blue/5" : "")}>
+                                <td className="py-1.5 pr-3 text-sm text-navy font-medium">
+                                  {e.name}
+                                  {!e.system_end_timestamp && <span className="ml-1.5 text-[10px] text-starlight-blue font-normal">(active)</span>}
+                                </td>
+                                <td className="py-1.5 px-2 text-xs text-gray-500 font-mono">
+                                  {new Date(e.system_start_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                </td>
+                                <td className="py-1.5 px-2 text-xs text-gray-500 font-mono">
+                                  {e.system_end_timestamp
+                                    ? new Date(e.system_end_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+                                    : "—"}
+                                </td>
+                                <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.actual_hours ? `${e.actual_hours}h` : "—"}</td>
+                                <td className="py-1.5 px-2 text-right text-xs font-mono text-gray-500">{e.applied_hourly_rate ? formatCurrency(e.applied_hourly_rate) : "—"}</td>
+                                <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.entry_cost ? formatCurrency(e.entry_cost) : "—"}</td>
+                                <td className="py-1.5 px-2 text-xs text-starlight-amber max-w-[200px] truncate">{e.flag_note || ""}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          {expandedEntries.some((e: any) => e.system_end_timestamp) && (
+                            <tfoot>
+                              <tr className="border-t border-gray-200">
+                                <td colSpan={3} className="py-2 text-right text-xs font-medium text-gray-500">Total</td>
+                                <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">
+                                  {Math.round(expandedEntries.reduce((s: number, e: any) => s + (e.actual_hours || 0), 0) * 10) / 10}h
+                                </td>
+                                <td className="py-2 px-2"></td>
+                                <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">
+                                  {formatCurrency(expandedEntries.reduce((s: number, e: any) => s + (e.entry_cost || 0), 0))}
+                                </td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
