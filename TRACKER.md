@@ -3,162 +3,89 @@
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — 24 tables, 23+ views, fully migrated from Access.
+**Backend:** Supabase (PostgreSQL) — 27 tables, 24+ views, fully migrated from Access.
 **Frontend:** Next.js 14+ / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
-**Auth:** Supabase Auth (email+password for PM). RLS disabled — enable before Phase 5.
+**Auth:** Supabase Auth (email+password for PM). RLS enabled on all tables.
 **Git:** github.com/mateuszgarwacki-arch/starlight-web
-**Deploy:** `vercel --prod` from CLI
+**Deploy:** `vercel --prod` from CLI (use cmd shell, not powershell)
 
 ## Build Status
 
 ### Phase 0: Foundation ✅
-- [x] Next.js project with Tailwind + TypeScript
-- [x] Supabase client (browser + server)
-- [x] Login page, auth middleware
-- [x] Sidebar navigation, dashboard layout
-- [x] TypeScript types, utility functions, shared components
-
 ### Phase 1: Dashboard ✅
-- [x] Quick stats cards, job cards with progress bars
-- [x] Manpower demand table, procurement alerts
-- [x] Live data from Supabase views
-
 ### Phase 2: Jobs & Quote Lines ✅
-- [x] Jobs list with search
-- [x] Job detail with editable quote lines
-- [x] Inline category dropdown editing
-- [x] Interpretation toggle (hybrid auto-tick)
-- [x] PM notes inline editing
-- [x] Create Scope Item dialog (auto-populates name from quote line)
-- [x] Scope Items tab with navigation
-- [x] Quote summary bar
-- [x] Filter pills: All, Workshop, Provisional, Subcontracted, Done, By Zone
-- [x] Zone-grouped view with subtotals
-
 ### Category Redesign ✅
-- [x] tbl_contractors + tbl_quote_line_contractors tables
-- [x] qry_quote_lines_with_contractors view
-- [x] CATEGORY_CONFIG object — single source of truth for per-category behaviour
-- [x] Context-sensitive actions (scope/contractor/stock pick per category)
-- [x] ContractorPicker component inline on subcontracted lines
-- [x] Contractors management page (full CRUD)
-- [x] Stock Pick purple tag
-- [x] Hybrid auto-tick: auto-completes when required action done, manual override allowed
-- [x] "Hire" merged into Subcontracted, duplicate Install removed
-- [x] Provisional cannot have scope items (enforced)
-
 ### Phase 3: Scope Breakdown ✅
-- [x] Scope detail page — title from quote line text (no separate name field)
-- [x] Editable header: status, category, complexity, finish, event zone, description
-- [x] Prompt engine panel (category → suggested components, +/× per suggestion)
-- [x] Job items table: inline editing, auto-expanding description + finish textareas
-- [x] Stock search dropdown on job items
-- [x] Checkbox selection → Create Work Order dialog
-- [x] Multi-activity WOs: pick multiple activities, reorder, displays as "CUT + COVER"
-- [x] tbl_wo_activities junction table in Supabase
-- [x] qry_wo_with_activities + updated qry_wo_phase_ordered views
-- [x] ACTIVITY_VERB renamed to ACTIVITY in master lookups
-- [x] Coverage indicator per job item when WO linked
-- [x] Finish field: wider, amber warning on empty Stock-Needs-Work items
-- [x] Unit column removed (absorbed into description/finish)
-- [x] Work Orders link card with WO count
-
-### Phase 4: Work Orders & BOM ✅
-- [x] WO list page with activity labels, status badges, estimated hours
-- [x] Expandable rows with inline BOM (qty, unit cost, total, needs-ordering)
-- [x] Material catalogue search with auto-fill + custom entry
-- [x] Release as Ready button + WO delete/void with reason
-- [x] Freelancer assignment dropdown (planned lead)
-- [x] Linked Job Items shown in expanded WO (qty, description, type, finish)
-- [x] Complexity/finish moved to WO level (editable), read-only on scope
-- [x] Scope Item delete/cancel with reason
-- [x] Scope Items list polished (quote line text, WO progress, value)
-- [x] Work Orders tab on Job view (all WOs across scope items)
-- [x] Cancelled scopes excluded from auto-complete
-- [x] WO sequence system (wo_sequence column, step indicators, reorder arrows)
-- [x] Step progress display: "Step 2/3 - prev: done" replaces phase pills
-- [ ] Traveller PDF with QR code
-
+### Phase 4: Work Orders & BOM ✅ (Traveller PDF still outstanding)
 ### Phase 5: Freelancer Mobile ✅
-- [x] RLS enabled on all 22 tables (PM/Foreman/Freelancer policies)
-- [x] Supabase Auth for freelancers (phone@starlight.local + PIN)
-- [x] API route /api/auth/freelancer-sync (create/update auth users)
-- [x] Mobile layout with bottom tab bar (Tasks, Photos, Me)
-- [x] Mobile login page (phone + PIN)
-- [x] Task list with MY TASKS / ALL TASKS toggle, phase-ordered cards
-- [x] WO detail with START, JOIN, LOG HOURS (bottom sheet), MARK COMPLETE (camera)
-- [x] Site Photos placeholder page
-- [x] Profile page with sign out
-- [x] Crew page: full CRUD, visible PINs, PIN management dialog
-- [x] WhatsApp onboarding message generator (copy to clipboard)
-- [x] Boolean handling fix (isTruthy supports real booleans globally)
-
 ### Phase 5.5: Workshop & Scheduling ✅
-- [x] Workshop view (Zone 2): all WOs across jobs, grouped by scope item
-- [x] Coloured step circles (green=done, blue=active, amber=next, grey=waiting)
-- [x] Time entries expandable per WO (person, hours, rate, cost, flags)
-- [x] Status/job/search filters with counts
-- [x] Active workers banner
-- [x] Crew booking calendar: week grid, click to book, job link optional
-- [x] Booking dialog with job picker, notes, remove booking
-- [x] Booking status colours (amber=booked, green=confirmed, red=declined)
-- [x] Mobile /m/me: upcoming bookings with Accept/Decline buttons
-
 ### Phase 6: Cost Visibility & Review ✅
-- [x] Review page with 4 tabs: Job Costs, Time Entries, Flags, Estimate Accuracy
-- [x] Summary strip: total quote value, actual cost, margin, unread flags
-- [x] Job costs: expandable per job with scope item cost breakdown
-- [x] Time entries table: person, WO, timestamps, hours, rate, cost, flag notes
-- [x] Flags tab: dedicated view of flagged time entries
-- [x] Estimate accuracy: estimated vs actual hours, variance, accuracy percentage
-- [x] Colour-coded accuracy (green <=110%, amber <=150%, red >150%)
 
 ### Phase 7: Capacity & Materials ✅
 - [x] Materials catalogue page: full CRUD (add/edit/deactivate)
-- [x] Category filtering pills (from tbl_master_lookups MATERIAL_CATEGORY)
-- [x] Search by name, supplier, notes
-- [x] Show/hide inactive materials toggle
+- [x] Category filtering pills, search, show/hide inactive
 - [x] Contextual fields: standard_length for Timber/Metal/Fabric, standard_sheet_size for Sheet
 - [x] Spec fields (spec_val_1/2/3, spec_text_1/2, paint_finish) in add/edit dialog
-- [x] Price History tab: material selector, price entry table sorted by effective_date
-- [x] Add Price form with source (Quote/Invoice/Estimate), supplier, effective date
-- [x] Auto-update current_unit_cost when latest price added
-- [x] CURRENT badge on most recent price entry
-- [x] Quick-link from catalogue row to price history (clock icon)
+- [x] Price History tab: material selector, price entry table, auto-update current_unit_cost
+- [x] CURRENT badge on most recent price, clock icon quick-link to price history
 - [x] Capacity planning page: demand vs supply overview
 - [x] Summary cards: estimated total, hours logged, remaining, booked (4 wks), gap analysis
 - [x] Gap indicator: green (surplus), amber (tight), red (shortfall)
 - [x] Cross-job conflict detection (same person booked to different jobs same day)
-- [x] Conflict warning banner with person, date, and conflicting job names
 - [x] Per-job demand breakdown: expandable rows with WO-level detail
-- [x] Progress bars per job (WOs complete / total)
-- [x] Crew availability table: days booked, hours booked, jobs assigned (next 4 weeks)
-- [x] Conflict indicator (triangle icon) on crew rows with cross-job conflicts
+- [x] Crew availability table with conflict indicators
 - [x] Link to Crew Calendar from capacity page
+
+### Invoice Processing System ✅ (NEW)
+- [x] `/invoices` page: upload PDF/image, Claude AI extracts line items
+- [x] API route `/api/extract-invoice` calls Anthropic API with invoice document
+- [x] Auto-match extracted lines against material aliases (high confidence) then fuzzy name match (medium)
+- [x] Material search dropdown per line with "Create New Material" option
+- [x] New material creation inline: internal name + alias auto-saved from invoice description
+- [x] Supplier dropdown (from tbl_suppliers) with inline "+ Add Supplier" dialog
+- [x] VAT handling: manual toggle + smart auto-detection (if lines × 1.2 ≈ total, show amber confirmation)
+- [x] Total verification: green check when line sum matches invoice total, red with difference
+- [x] Per-line job override: each line can override the invoice-level job assignment
+- [x] Side-by-side invoice preview (PDF rendered full-width, no thumbnail nav pane)
+- [x] Edit existing invoices: pencil icon reopens in edit mode with all lines loaded
+- [x] Duplicate detection: warns if invoice number already exists, offers to edit instead
+- [x] Delete invoices with confirmation
+- [x] Expandable rows in invoice list showing line items (view-only)
+- [x] On confirm: updates material price + supplier, saves alias for future auto-matching
+- [x] Invoice file temporarily stored in file_data column for review, discardable after
+
+### Suppliers System ✅ (NEW)
+- [x] `/suppliers` page: full CRUD with company details, contact, payment terms, account #
+- [x] Expandable rows with two tabs: Orders (invoice history) and Materials (linked materials)
+- [x] Summary stats per supplier: invoice count, total spend, last order date, material count
+- [x] qry_supplier_summary view for aggregated data
+- [x] Contractors merged into Suppliers (single entity for all external companies)
+- [x] Contractor picker component updated to read from tbl_suppliers
+- [x] Contractors page deleted, sidebar updated
+
+### Dashboard Polish ✅
+- [x] 5 stat cards: Active Jobs, Active WOs, Items to Order, Unread Flags, Outstanding Hours
+- [x] All stat cards clickable with links to relevant pages
+- [x] Flags card deep-links to /review?tab=flags
+- [x] Review page reads ?tab= URL param to open correct tab
+- [x] Active Workers banner: shows who's currently clocked in with pulsing indicators
+- [x] Procurement Actions panel: actual BOM items table (material, qty, job) not just count
+- [x] Freelancer Flags panel: enriched with context (person, WO description, job, scope item)
+- [x] Recent Invoices panel: last 5 processed invoices
+- [x] Manpower Demand table: cleaned up columns
+- [x] Deleted jobs filtered from dashboard
+- [x] Empty jobs (no WOs, no scope) filtered from dashboard
 
 ### Phase 8: Polish & Handover ⬜
 
-## Category Behaviour Matrix
-
-| Category | Amber | Done | Auto-Complete When | [+] Scope | Contractor | Stock Tag |
-|----------|-------|------|-------------------|-----------|------------|-----------|
-| Workshop / Workshop Build | Yes | Yes | Scope created | Yes | No | No |
-| Stock-and-Hire | Yes | Yes | Scope created | Yes | No | No |
-| Stock Pick | No | Yes | Manual only | No | No | Yes |
-| Subcontracted | No | Yes | Contractor assigned | No | Yes | No |
-| Subcontracted (Partial) | Yes | Yes | Scope + contractor | Yes | Yes | No |
-| Install | No | Yes | Manual only | No | No | No |
-| Provisional | No | Yes | Never (recategorise first) | No | No | No |
-| Shared Departments | Yes | Yes | Scope created | Yes | No | No |
-
-## Database Tables (24)
+## Database Tables (27)
 
 ### Migrated from Access (21)
 tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
 
-### Added by web app (3)
-tbl_contractors, tbl_quote_line_contractors, tbl_wo_activities
+### Added by web app (6)
+tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines
 
 ## Key Files
 
@@ -167,81 +94,91 @@ tbl_contractors, tbl_quote_line_contractors, tbl_wo_activities
 | `src/lib/types.ts` | TypeScript interfaces for all tables and views |
 | `src/lib/utils.ts` | Helpers: cn(), formatCurrency(), formatDate(), statusClass(), isTruthy() |
 | `src/lib/supabase-browser.ts` | Browser-side Supabase client |
-| `src/components/sidebar.tsx` | Main navigation (includes Contractors) |
+| `src/lib/supabase-admin.ts` | Server-side Supabase client (service role) |
+| `src/components/sidebar.tsx` | Main navigation |
 | `src/components/ui/badges.tsx` | StatusBadge, DaysRemainingBadge, PhasePill |
 | `src/components/ui/lookup-combo.tsx` | Reusable dropdown bound to tbl_master_lookups |
-| `src/components/create-scope-dialog.tsx` | Modal for scope creation (auto-populates name) |
-| `src/components/contractor-picker.tsx` | Inline contractor assignment |
+| `src/components/create-scope-dialog.tsx` | Modal for scope creation |
+| `src/components/contractor-picker.tsx` | Inline supplier assignment (reads tbl_suppliers) |
 | `src/components/prompt-panel.tsx` | Category-driven component suggestions |
 | `src/components/job-items-table.tsx` | Job items grid with stock search, inline editing |
 | `src/components/create-wo-dialog.tsx` | Multi-activity WO creation dialog |
-| `src/app/(dashboard)/page.tsx` | Main dashboard |
+| `src/components/booking-calendar.tsx` | Week grid booking calendar |
+| `src/app/(dashboard)/page.tsx` | Main dashboard with stats, procurement, flags, workers |
 | `src/app/(dashboard)/jobs/page.tsx` | Jobs list |
-| `src/app/(dashboard)/jobs/[id]/page.tsx` | Job detail with filter tabs and quote lines |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Job detail with quote lines, filter tabs |
 | `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Scope breakdown |
-| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Work orders with BOM, step indicators, reorder |
-| `src/app/(dashboard)/contractors/page.tsx` | Contractors CRUD |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Work orders with BOM |
 | `src/app/(dashboard)/workshop/page.tsx` | Workshop view - all WOs grouped by scope |
 | `src/app/(dashboard)/review/page.tsx` | Cost visibility, time entries, flags, accuracy |
 | `src/app/(dashboard)/crew/page.tsx` | Crew management, PINs, booking calendar |
+| `src/app/(dashboard)/materials/page.tsx` | Materials catalogue, category filters, price history |
+| `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, conflicts |
+| `src/app/(dashboard)/invoices/page.tsx` | Invoice upload, AI extraction, material matching |
+| `src/app/(dashboard)/suppliers/page.tsx` | Suppliers CRUD, order history, materials tabs |
+| `src/app/api/extract-invoice/route.ts` | API: Claude-powered invoice PDF/image extraction |
+| `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
 | `src/app/m/login/page.tsx` | Freelancer PIN login |
 | `src/app/m/page.tsx` | Mobile task list |
 | `src/app/m/wo/[woId]/page.tsx` | Mobile WO detail - START/JOIN/LOG/COMPLETE |
 | `src/app/m/me/page.tsx` | Mobile profile + booking accept/decline |
 | `src/app/m/photos/page.tsx` | Site photos placeholder |
-| `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
-| `src/lib/supabase-admin.ts` | Server-side Supabase client (service role) |
-| `src/components/booking-calendar.tsx` | Week grid booking calendar |
-| `src/app/(dashboard)/materials/page.tsx` | Materials catalogue CRUD, category filters, price history |
-| `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, gap analysis, conflicts |
 
 ## Conventions
 
 - All pages are "use client" components reading Supabase directly from browser
 - Supabase views (qry_*) handle all joins — frontend never joins tables
 - Boolean fields: `isTruthy()` handles both real booleans and string "true" (ODBC legacy)
-- Supabase queries use `.eq("active", true)` (real boolean, not string)
-- RLS enabled on all 22 tables — PM/Foreman/Freelancer policies active
+- RLS enabled on all tables — PM/Foreman/Freelancer policies active
 - Freelancer auth: phone@starlight.local + PIN via Supabase Auth
 - WO sequence: wo_sequence column drives step ordering, reorderable by PM
 - Complexity/finish live on WOs (primary), read-only on scope items
 - CATEGORY_CONFIG in job detail page is single source of truth for category behaviour
-- Activity verbs now under category "ACTIVITY" (was "ACTIVITY_VERB")
+- Activity verbs under category "ACTIVITY" in master lookups
 - Multi-activity WOs: tbl_wo_activities junction, display as "CUT + COVER"
-- Auto-expanding textareas for description and finish fields
-- Filter pills on quote lines: Workshop, Provisional, Subcontracted, Done, By Zone
-- Git commit per phase, deploy via `vercel --prod`
+- Contractors merged into Suppliers — tbl_contractors deprecated, tbl_suppliers is canonical
+- Invoice processing: Claude API extracts lines, aliases auto-build over time
+- Deploy via cmd shell (not powershell — vercel script blocked by execution policy)
+- File deployment: Desktop Commander write_file with mode 'rewrite' then 'append' chunks (~300 lines each)
 
 ## Deployment Cheat Sheet
 
 ```bash
-# Copy a downloaded file into the project
-copy C:\Users\mateusz.garwacki\Downloads\FILENAME.tsx "src\path\to\file.tsx"
-
-# Deploy
+# From cmd (not powershell)
+cd /d C:\Users\mateusz.garwacki\Downloads\starlight-web
+git add -A
+git commit -m "Description-with-hyphens-no-spaces"
+git push origin main
 vercel --prod
-
-# Commit
-git add .
-git commit -m "Description"
-git push
 ```
+
+## Environment Variables (Vercel)
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| NEXT_PUBLIC_SUPABASE_URL | Supabase project URL | Yes |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | Supabase anon key | Yes |
+| SUPABASE_SERVICE_ROLE_KEY | Server-side admin access | Yes |
+| ANTHROPIC_API_KEY | Invoice AI extraction | For invoice upload feature |
 
 ## Next Session Pickup
 
-Phases 0-7 complete. Phase 8 (Polish & Handover) remaining.
+Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish. Remaining:
 
 ### Phase 8: Polish & Handover
-- Traveller PDF with QR code (Phase 4 leftover)
-- Loading states, error handling
+- Traveller PDF with QR code (Phase 4 leftover — biggest remaining item)
+- Material reconciliation on Review page (purchased via invoices vs used in BOM per job)
+- Loading states, error handling, toast notifications
 - Supabase storage bucket for completion photos
-- Dashboard polish (procurement actions, flags count)
 - Mobile: site photos page (currently placeholder)
-- Materials: dynamic spec field labels driven by tbl_material_spec_defs (deferred — generic labels work for now)
+- Materials: dynamic spec field labels from tbl_material_spec_defs (deferred)
 
-### Known bugs/improvements to address
+### Known bugs/improvements
 - WO coverage indicator doesn't refresh after deleting a WO (needs page reload)
 - Workshop view: could add real-time Supabase subscription for live updates
-- Review page: time entries need WO activity labels enriched (currently shows description only)
-- Capacity page: could add per-phase breakdown (requires activity verb → phase join on WOs)
+- Review page: time entries show WO description only, not activity verb label
+- Capacity page: could add per-phase breakdown (activity verb → phase join)
+- Invoice page: could add "Create Supplier" inline from extracted name (+ button exists, basic name only — could pre-fill contact from invoice)
+- Suppliers: could add search/filter on invoice lines tab
+- Dashboard: "Active Jobs" count in stat card includes jobs with scope but no WOs — consider refining filter
