@@ -39,6 +39,8 @@ export default function InvoicesPage() {
   const [showNewMaterial, setShowNewMaterial] = useState(false);
   const [newMatLine, setNewMatLine] = useState<number | null>(null);
   const [newMatForm, setNewMatForm] = useState({ name: "", category: "", unit: "" });
+  const [showNewSupplier, setShowNewSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -97,6 +99,17 @@ export default function InvoicesPage() {
   const confirmMatch = (idx: number) => { const updated = [...lines]; updated[idx] = { ...updated[idx], match_status: "confirmed" }; setLines(updated); };
   const skipLine = (idx: number) => { const updated = [...lines]; updated[idx] = { ...updated[idx], match_status: "skipped" }; setLines(updated); };
   const removeLine = (idx: number) => { setLines(lines.filter((_, i) => i !== idx)); };
+
+  const createSupplierInline = async () => {
+    const name = newSupplierName.trim() || invoiceForm.supplier.trim();
+    if (!name) return; setSaving(true);
+    const { data } = await supabase.from("tbl_suppliers").insert({ supplier_name: name, active: true }).select("supplier_id, supplier_name").single();
+    if (data) {
+      setSuppliers([...suppliers, data].sort((a, b) => a.supplier_name.localeCompare(b.supplier_name)));
+      setInvoiceForm({ ...invoiceForm, supplier_id: String(data.supplier_id), supplier: data.supplier_name });
+    }
+    setSaving(false); setShowNewSupplier(false); setNewSupplierName("");
+  };
 
   const openNewMaterial = (lineIdx: number) => { setNewMatLine(lineIdx); setNewMatForm({ name: "", category: "", unit: lines[lineIdx]?.unit || "Each" }); setShowNewMaterial(true); setSearchingLine(null); };
   const saveNewMaterial = async () => {
@@ -204,12 +217,15 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] font-medium text-gray-500 mb-1">Supplier *</label>
+                <div className="flex gap-2">
                 <select value={invoiceForm.supplier_id} onChange={(e) => { const sup = suppliers.find((s) => s.supplier_id === Number(e.target.value)); setInvoiceForm({ ...invoiceForm, supplier_id: e.target.value, supplier: sup?.supplier_name || invoiceForm.supplier }); }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                   <option value="">Select supplier...</option>
                   {suppliers.map((s) => (<option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>))}
                 </select>
-                {!invoiceForm.supplier_id && invoiceForm.supplier && (<p className="text-[10px] text-starlight-amber mt-1">Extracted: &quot;{invoiceForm.supplier}&quot; — select from list or add in Suppliers page</p>)}
+                <button onClick={() => { setNewSupplierName(invoiceForm.supplier || ""); setShowNewSupplier(true); }} className="px-2.5 py-2 border border-gray-200 rounded-lg text-gray-400 hover:text-starlight-blue hover:border-starlight-blue transition-colors" title="Add new supplier"><Plus className="h-4 w-4" /></button>
+                </div>
+                {!invoiceForm.supplier_id && invoiceForm.supplier && (<p className="text-[10px] text-starlight-amber mt-1">Extracted: &quot;{invoiceForm.supplier}&quot; — select or add new</p>)}
               </div>
               <div><label className="block text-[10px] font-medium text-gray-500 mb-1">Invoice #</label><input type="text" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="INV-001" /></div>
             </div>
@@ -291,12 +307,38 @@ export default function InvoicesPage() {
             <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between shrink-0"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button></div>
             <div className="flex-1 min-h-0">
               {fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full h-full object-contain" />) :
-               fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
+               fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}#navpanes=0&view=FitH`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
                (<p className="p-4 text-sm text-gray-400">Preview not available</p>)}
             </div>
           </div>
         )}
       </div>
+
+      {/* New Supplier Dialog */}
+      {showNewSupplier && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-navy">Add Supplier</h3>
+              <button onClick={() => setShowNewSupplier(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Company Name *</label>
+              <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                placeholder="e.g. Volund Timber Ltd" autoFocus />
+              <p className="text-[10px] text-gray-400 mt-2">You can add contact details later in the Suppliers page.</p>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setShowNewSupplier(false)} className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button onClick={createSupplierInline} disabled={saving || !newSupplierName.trim()}
+                className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {saving ? "Adding..." : "Add & Select"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Material Dialog */}
       {showNewMaterial && (
