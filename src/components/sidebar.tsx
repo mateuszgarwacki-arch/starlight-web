@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   LogOut,
   Star,
-  Building2,
   FileText,
   Truck,
 } from "lucide-react";
@@ -31,7 +30,6 @@ const navItems = [
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
   { href: "/invoices", label: "Invoices", icon: FileText, zone: 1 },
   { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
-  { href: "/contractors", label: "Contractors", icon: Building2, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
 ];
 
