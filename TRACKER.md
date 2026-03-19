@@ -122,6 +122,9 @@ tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contr
 | `src/app/api/onedrive/download/route.ts` | API: get download URLs from OneDrive |
 | `src/lib/microsoft-graph.ts` | Microsoft Graph client: auth, upload, download, sharing |
 | `src/lib/onedrive-client.ts` | Browser-side OneDrive upload/download helper |
+| `src/components/wo-documents-panel.tsx` | WO file management: drawings, references, cut lists, models |
+| `src/components/cutlist-extractor.tsx` | AI cut list extraction + BOM import with material summary |
+| `src/app/api/extract-cutlist/route.ts` | API: Claude-powered cut list CSV/PDF extraction |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
 | `src/app/m/login/page.tsx` | Freelancer PIN login |
 | `src/app/m/page.tsx` | Mobile task list |
@@ -175,21 +178,29 @@ vercel --prod
 Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 partial. Remaining:
 
 ### Phase 8: Polish & Handover
-- Traveller PDF with QR code (Phase 4 leftover — biggest remaining item, parked until WO workflow finalised)
-- OneDrive photo storage integration (awaiting Azure AD credentials from sysadmin — MICROSOFT_TENANT_ID, CLIENT_ID, CLIENT_SECRET)
+- Traveller PDF with QR code (parked until WO workflow finalised)
+- Three.js 3D model viewer inline (Phase C — upload works, viewer is placeholder)
+- Freelancer mobile document view (Phase D — drawings/models visible to freelancers)
 - Loading states, error handling, toast notifications
 - Materials: dynamic spec field labels from tbl_material_spec_defs (deferred)
 - Job templating / clone from previous build (Tier 3 feature — discussed, not started)
 
-### Completed this session
+### Completed this session (19 Mar 2026)
 - [x] Material reconciliation tab on Review page (BOM planned vs invoice actual, per-job expandable)
 - [x] Quote Line Margin Analysis panel on Job detail page (quoted vs actual per line, margin %)
-- [x] Mobile site photos page (lists Workshop Complete items, camera + waiver — upload parked for OneDrive)
-- [x] 4 new Supabase views: qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin (SQL needs running)
-- [x] Fix: WO coverage indicator refreshes when returning from WO page (window focus listener)
-- [x] Fix: Review page time entries now show activity verb labels ("CUT + COVER — description") + scope name + job number
-- [x] Fix: Dashboard Active Jobs count only includes jobs with at least one WO
-- [x] Fix: Capacity page expanded WO details now show activity verb labels
+- [x] Mobile site photos page (lists Workshop Complete items, camera + waiver)
+- [x] 4 new Supabase views: qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin
+- [x] Fix: WO coverage indicator refreshes on window focus
+- [x] Fix: Review page time entries show activity verb labels + scope + job
+- [x] Fix: Dashboard Active Jobs only counts jobs with WOs
+- [x] Fix: Capacity page shows activity verb labels in expanded WO detail
+- [x] OneDrive integration: Microsoft Graph API, SharePoint document library, structured folders
+- [x] Photo upload from mobile (WO completion + scope site photos) to OneDrive
+- [x] Fix: mobile bottom sheet z-index overlap with tab bar
+- [x] WO Documents panel: drawings, references, cut lists, 3D models — upload to OneDrive
+- [x] Cut List AI extraction: OpenCutList CSV support, material matching, sheet/length optimisation
+- [x] Two-layer cut list view: material summary (BOM) + parts list (reference)
+- [x] BOM auto-refresh after cut list import
 
 ### OneDrive Integration ✅
 - [x] Microsoft Graph client library (src/lib/microsoft-graph.ts): token caching, upload, download, sharing links
@@ -205,8 +216,21 @@ Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 pa
 - Subfolders: Workshop/WO-Photos/, Workshop/Scope-Photos/ (auto-created on first upload)
 - Future: Workshop/Models/, Workshop/Drawings/
 
-### SQL pending
-- phase8_views.sql — 4 views for material reconciliation + quote margin. Downloaded from Claude, needs running in Supabase SQL Editor.
+### WO Documents & Cut List Extraction ✅ (NEW)
+- [x] tbl_wo_documents table (cut_list, drawing, reference, model types)
+- [x] WODocumentsPanel component: upload, preview, download, delete per doc type
+- [x] Drawings: thumbnail grid with lightbox preview, multi-upload
+- [x] References: same as drawings, separate category
+- [x] Cut Lists: upload CSV/PDF, AI extraction via Claude API
+- [x] Cut list extraction: reads OpenCutList CSV, understands naming conventions (2x1=timber, MDF18=sheet etc.)
+- [x] Material summary: groups parts by material, calculates sheets/lengths needed with waste %
+- [x] Two-layer view: "Materials to Order" (goes to BOM) + expandable parts list (reference)
+- [x] Catalogue context: sends materials database to Claude for better matching
+- [x] Add to BOM: creates one line per material type (not per part), auto-matches catalogue, notes include parts list
+- [x] BOM auto-refresh after cut list import (async callback)
+- [x] 3D Models: upload .glb/.gltf, placeholder viewer (Phase C: Three.js), download link
+- [x] OneDrive folder structure: Workshop/{job}/Drawings/, References/, Cut-Lists/, Models/
+- [x] Descriptive filenames with activity + scope name prefix
 
 ### Known bugs/improvements (remaining)
 - Workshop view: could add real-time Supabase subscription for live updates
