@@ -1,0 +1,463 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase-browser";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  ShoppingCart, Package, Check, ChevronDown, ChevronRight,
+  Truck, Calendar, Clock, Search, Filter, X,
+} from "lucide-react";
+
+interface ProcItem {
+  bom_id: number;
+  work_order_id: number;
+  job_id: number;
+  material_id: number | null;
+  material_category: number | null;
+  item_description: string;
+  quantity: number | null;
+  unit: string | null;
+  unit_cost: number | null;
+  supplier: string | null;
+  notes: string | null;
+  material_name: string;
+  category_name: string | null;
+  job_number: string | null;
+  job_name: string | null;
+  event_date: string | null;
+  wo_description: string | null;
+  scope_name: string | null;
+  standard_length: number | null;
+  standard_sheet_size: string | null;
+}
+
+interface OrderedItem {
+  bom_id: number;
+  work_order_id: number;
+  job_id: number;
+  material_id: number | null;
+  item_description: string;
+  quantity: number | null;
+  unit: string | null;
+  unit_cost: number | null;
+  supplier: string | null;
+  ordered_at: string;
+  expected_delivery: string | null;
+  notes: string | null;
+  material_name: string;
+  job_number: string | null;
+  job_name: string | null;
+  wo_description: string | null;
+  scope_name: string | null;
+  ordered_by_name: string | null;
+}
+
+interface MaterialGroup {
+  key: string;
+  material_name: string;
+  category_name: string | null;
+  unit: string | null;
+  total_qty: number;
+  standard_length: number | null;
+  standard_sheet_size: string | null;
+  items: ProcItem[];
+  expanded: boolean;
+}
+
+export default function OrdersPage() {
+  const supabase = createClient();
+  const [outstanding, setOutstanding] = useState<ProcItem[]>([]);
+  const [recentOrders, setRecentOrders] = useState<OrderedItem[]>([]);
+  const [groups, setGroups] = useState<MaterialGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showMarkDialog, setShowMarkDialog] = useState(false);
+  const [markSupplier, setMarkSupplier] = useState("");
+  const [markDelivery, setMarkDelivery] = useState("");
+  const [markNotes, setMarkNotes] = useState("");
+  const [acting, setActing] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<"outstanding" | "ordered">("outstanding");
+
+  const loadData = useCallback(async () => {
+    const [procRes, orderedRes, suppRes] = await Promise.all([
+      supabase.from("qry_procurement_needed").select("*"),
+      supabase.from("qry_recent_orders").select("*").limit(50),
+      supabase.from("tbl_suppliers").select("supplier_id, company_name").eq("active", true).order("company_name"),
+    ]);
+
+    const items = procRes.data || [];
+    setOutstanding(items);
+    setRecentOrders(orderedRes.data || []);
+    setSuppliers(suppRes.data || []);
+
+    // Group by material name
+    const groupMap = new Map<string, MaterialGroup>();
+    items.forEach(item => {
+      const key = item.material_name || item.item_description || "Unknown";
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          key,
+          material_name: key,
+          category_name: item.category_name,
+          unit: item.unit,
+          total_qty: 0,
+          standard_length: item.standard_length,
+          standard_sheet_size: item.standard_sheet_size,
+          items: [],
+          expanded: false,
+        });
+      }
+      const g = groupMap.get(key)!;
+      g.total_qty += item.quantity || 0;
+      g.items.push(item);
+    });
+
+    setGroups(Array.from(groupMap.values()).sort((a, b) => a.material_name.localeCompare(b.material_name)));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const toggleGroup = (key: string) => {
+    setGroups(prev => prev.map(g => g.key === key ? { ...g, expanded: !g.expanded } : g));
+  };
+
+  const toggleSelectAll = (group: MaterialGroup) => {
+    const allSelected = group.items.every(i => selected.has(i.bom_id));
+    const next = new Set(selected);
+    group.items.forEach(i => {
+      if (allSelected) next.delete(i.bom_id); else next.add(i.bom_id);
+    });
+    setSelected(next);
+  };
+
+  const toggleItem = (bomId: number) => {
+    const next = new Set(selected);
+    if (next.has(bomId)) next.delete(bomId); else next.add(bomId);
+    setSelected(next);
+  };
+
+  const handleMarkOrdered = async () => {
+    if (selected.size === 0) return;
+    setActing(true);
+    const now = new Date().toISOString();
+    const { data: { user } } = await supabase.auth.getUser();
+    const freelancerId = user?.user_metadata?.freelancer_id || null;
+
+    const updates: Record<string, any> = {
+      ordered_at: now,
+      ordered_by: freelancerId,
+    };
+    if (markSupplier) updates.supplier = markSupplier;
+    if (markDelivery) updates.expected_delivery = markDelivery;
+    if (markNotes) updates.notes = markNotes;
+
+    await supabase.from("tbl_wo_bom")
+      .update(updates)
+      .in("bom_id", Array.from(selected));
+
+    setSelected(new Set());
+    setShowMarkDialog(false);
+    setMarkSupplier("");
+    setMarkDelivery("");
+    setMarkNotes("");
+    setActing(false);
+    await loadData();
+  };
+
+  const filteredGroups = filter
+    ? groups.filter(g => g.material_name.toLowerCase().includes(filter.toLowerCase()))
+    : groups;
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-gray-400 text-sm">Loading procurement...</div></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-navy">Orders</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Procurement management — what needs buying, what&apos;s been ordered</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <button
+              onClick={() => setShowMarkDialog(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-green text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+            >
+              <Check className="h-4 w-4" /> Mark {selected.size} Ordered
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card px-4 py-3">
+          <p className="text-2xl font-semibold text-navy">{outstanding.length}</p>
+          <p className="text-xs text-gray-500">Items to order</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-2xl font-semibold text-navy">{groups.length}</p>
+          <p className="text-xs text-gray-500">Unique materials</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-2xl font-semibold text-navy">
+            {formatCurrency(outstanding.reduce((s, i) => s + (i.quantity || 0) * (i.unit_cost || 0), 0))}
+          </p>
+          <p className="text-xs text-gray-500">Est. total cost</p>
+        </div>
+
+        <div className="card px-4 py-3">
+          <p className="text-2xl font-semibold text-navy">
+            {new Set(outstanding.map(i => i.job_number).filter(Boolean)).size}
+          </p>
+          <p className="text-xs text-gray-500">Jobs affected</p>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setTab("outstanding")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            tab === "outstanding" ? "border-starlight-red text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          <Package className="h-3.5 w-3.5 inline mr-1.5" />
+          Outstanding ({outstanding.length})
+        </button>
+        <button
+          onClick={() => setTab("ordered")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            tab === "ordered" ? "border-starlight-green text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          <Truck className="h-3.5 w-3.5 inline mr-1.5" />
+          Recently Ordered ({recentOrders.length})
+        </button>
+      </div>
+
+      {/* OUTSTANDING TAB */}
+      {tab === "outstanding" && (
+        <div className="space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Filter by material name..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+            />
+            {filter && (
+              <button onClick={() => setFilter("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {filteredGroups.length === 0 ? (
+            <div className="card px-5 py-10 text-center">
+              <Package className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">{filter ? "No materials match your filter" : "Nothing to order — all BOM items are covered"}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredGroups.map(group => {
+                const allSelected = group.items.every(i => selected.has(i.bom_id));
+                const someSelected = group.items.some(i => selected.has(i.bom_id));
+                const estCost = group.items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_cost || 0), 0);
+
+                return (
+                  <div key={group.key} className="card overflow-hidden">
+                    {/* Group header */}
+                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                        onChange={() => toggleSelectAll(group)}
+                        className="h-4 w-4 rounded border-gray-300 text-starlight-blue focus:ring-starlight-blue/50"
+                      />
+                      <button onClick={() => toggleGroup(group.key)} className="flex items-center gap-2 flex-1 text-left">
+                        {group.expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+                        <span className="font-medium text-navy text-sm">{group.material_name}</span>
+                        {group.category_name && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{group.category_name}</span>}
+                      </button>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
+                        <span className="font-mono font-medium text-navy">{group.total_qty} {group.unit || ""}</span>
+                        {group.standard_sheet_size && <span className="text-gray-400">{group.standard_sheet_size}</span>}
+                        {group.standard_length && <span className="text-gray-400">{group.standard_length}m std</span>}
+                        {estCost > 0 && <span className="text-gray-400">{formatCurrency(estCost)}</span>}
+                        <span className="text-gray-400">{group.items.length} {group.items.length === 1 ? "WO" : "WOs"}</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail rows */}
+                    {group.expanded && (
+                      <div className="border-t border-gray-100 bg-gray-50/30">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                              <th className="pl-11 pr-2 py-2 font-medium w-8"></th>
+                              <th className="px-2 py-2 font-medium">Work Order</th>
+                              <th className="px-2 py-2 font-medium">Scope Item</th>
+                              <th className="px-2 py-2 font-medium">Job</th>
+                              <th className="px-2 py-2 font-medium text-right">Qty</th>
+                              <th className="px-2 py-2 font-medium text-right">Unit Cost</th>
+                              <th className="px-2 py-2 font-medium">Supplier</th>
+                              <th className="px-2 py-2 font-medium">Notes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.items.map(item => (
+                              <tr key={item.bom_id} className="border-t border-gray-100/50 hover:bg-white/50">
+                                <td className="pl-11 pr-2 py-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected.has(item.bom_id)}
+                                    onChange={() => toggleItem(item.bom_id)}
+                                    className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-blue focus:ring-starlight-blue/50"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 text-navy">{item.wo_description || "—"}</td>
+                                <td className="px-2 py-2 text-gray-600">{item.scope_name || "—"}</td>
+                                <td className="px-2 py-2 text-gray-500 font-mono">{item.job_number || "—"}</td>
+                                <td className="px-2 py-2 text-right font-mono text-navy">{item.quantity || "—"} {item.unit || ""}</td>
+
+                                <td className="px-2 py-2 text-right text-gray-500">{item.unit_cost ? formatCurrency(item.unit_cost) : "—"}</td>
+                                <td className="px-2 py-2 text-gray-500">{item.supplier || "—"}</td>
+                                <td className="px-2 py-2 text-gray-400 truncate max-w-[150px]">{item.notes || ""}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ORDERED TAB */}
+      {tab === "ordered" && (
+        <div>
+          {recentOrders.length === 0 ? (
+            <div className="card px-5 py-10 text-center">
+              <Truck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No recent orders recorded</p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                    <th className="px-4 py-2 font-medium">Material</th>
+                    <th className="px-4 py-2 font-medium text-right">Qty</th>
+                    <th className="px-4 py-2 font-medium">Supplier</th>
+                    <th className="px-4 py-2 font-medium">Job</th>
+                    <th className="px-4 py-2 font-medium">Work Order</th>
+                    <th className="px-4 py-2 font-medium">Ordered</th>
+                    <th className="px-4 py-2 font-medium">Expected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOrders.map(o => (
+                    <tr key={o.bom_id} className="border-t border-gray-100 hover:bg-gray-50/50">
+                      <td className="px-4 py-2.5 font-medium text-navy">{o.material_name}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-600">{o.quantity || "—"} {o.unit || ""}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{o.supplier || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono">{o.job_number || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-500 truncate max-w-[180px]">{o.wo_description || "—"}</td>
+
+                      <td className="px-4 py-2.5 text-gray-500">{formatDate(o.ordered_at)}</td>
+                      <td className="px-4 py-2.5">
+                        {o.expected_delivery ? (
+                          <span className="text-gray-600">{formatDate(o.expected_delivery)}</span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+
+      {/* MARK ORDERED DIALOG */}
+      {showMarkDialog && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-navy">Mark as Ordered</h2>
+            <p className="text-sm text-gray-500">{selected.size} item{selected.size !== 1 ? "s" : ""} selected</p>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Supplier</label>
+              <select
+                value={markSupplier}
+                onChange={(e) => setMarkSupplier(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+              >
+                <option value="">— Select supplier —</option>
+                {suppliers.map((s: any) => (
+                  <option key={s.supplier_id} value={s.company_name}>{s.company_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Expected Delivery</label>
+              <input
+                type="date"
+                value={markDelivery}
+                onChange={(e) => setMarkDelivery(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Notes (optional)</label>
+              <input
+                type="text"
+                value={markNotes}
+                onChange={(e) => setMarkNotes(e.target.value)}
+                placeholder="e.g. Amazon order #12345, arriving Thursday"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setShowMarkDialog(false); setMarkSupplier(""); setMarkDelivery(""); setMarkNotes(""); }}
+                className="flex-1 px-4 py-2.5 text-gray-600 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkOrdered}
+                disabled={acting}
+                className="flex-1 px-4 py-2.5 bg-starlight-green text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                {acting ? "Saving..." : "Confirm Ordered"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

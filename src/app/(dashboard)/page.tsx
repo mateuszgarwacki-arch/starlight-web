@@ -140,7 +140,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Active Jobs" value={jobs.length} icon={Briefcase} color="text-starlight-blue" href="/jobs" />
         <StatCard label="Active Work Orders" value={activeWos} icon={ClipboardList} color="text-starlight-amber" href="/workshop" />
-        <StatCard label="Items to Order" value={procurement.length} icon={Package} color={procurement.length > 0 ? "text-starlight-red" : "text-gray-400"} />
+        <StatCard label="Items to Order" value={procurement.length} icon={Package} color={procurement.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/orders" />
         <StatCard label="Unread Flags" value={flags.length} icon={Flag} color={flags.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/review?tab=flags" />
         <StatCard label="Outstanding Hours" value={`${Math.round(totalHrs)}h`} icon={Users} color="text-starlight-green" href="/capacity" />
       </div>
@@ -178,14 +178,14 @@ export default function DashboardPage() {
                   <tbody>
                     {procurement.map((p: any, idx: number) => (
                       <tr key={idx} className="border-t border-gray-100">
-                        <td className="px-4 py-2 font-medium text-navy">{p.material || p.item_description || "—"}</td>
+                        <td className="px-4 py-2 font-medium text-navy">{p.material_name || p.item_description || "—"}</td>
                         <td className="px-4 py-2 text-right font-mono text-gray-600">{p.quantity || "—"} {p.unit || ""}</td>
-                        <td className="px-4 py-2 text-gray-500">{p.job_number || p.job_name || "—"}</td>
+                        <td className="px-4 py-2 text-gray-500">{p.job_number || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {procurement.length >= 15 && <div className="px-4 py-2 text-[10px] text-gray-400 text-center border-t border-gray-100">Showing first 15 — view all in Workshop</div>}
+                {procurement.length >= 15 && <div className="px-4 py-2 text-[10px] text-gray-400 text-center border-t border-gray-100">Showing first 15 — <Link href="/orders" className="text-starlight-blue hover:underline">View all orders</Link></div>}
               </div>
             )}
           </div>
