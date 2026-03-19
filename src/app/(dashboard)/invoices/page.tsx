@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import {
   FileText, Upload, Search, Check, X, Plus, RefreshCw,
-  AlertTriangle, Zap, Package, Pencil, Eye, ChevronDown,
+  AlertTriangle, Zap, Package, Pencil, Eye, ChevronDown, ChevronRight,
 } from "lucide-react";
 
 interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_data: string | null; file_type: string | null; }
@@ -41,6 +41,8 @@ export default function InvoicesPage() {
   const [newMatForm, setNewMatForm] = useState({ name: "", category: "", unit: "" });
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [expandedInvId, setExpandedInvId] = useState<number | null>(null);
+  const [previewLines, setPreviewLines] = useState<any[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -55,6 +57,14 @@ export default function InvoicesPage() {
     setSuppliers(supRes.data || []); setAliases(aliasRes.data || []); setLoading(false);
   }, []);
   useEffect(() => { loadData(); }, [loadData]);
+
+  const toggleExpandInvoice = async (invId: number) => {
+    if (expandedInvId === invId) { setExpandedInvId(null); setPreviewLines([]); return; }
+    setExpandedInvId(invId);
+    const { data } = await supabase.from("tbl_invoice_lines").select("*").eq("invoice_id", invId).order("line_number");
+    const enriched = (data || []).map((l: any) => { const mat = materials.find((m) => m.material_id === l.material_id); return { ...l, material_name: mat?.material_name }; });
+    setPreviewLines(enriched);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -190,21 +200,57 @@ export default function InvoicesPage() {
       <div className="card overflow-hidden">
         {invoices.length === 0 ? (<div className="px-6 py-12 text-center"><FileText className="h-10 w-10 text-gray-300 mx-auto" /><p className="text-sm text-gray-400 mt-3">No invoices processed yet</p></div>) : (
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider"><th className="px-4 py-2 font-medium">Supplier</th><th className="px-4 py-2 font-medium">Invoice #</th><th className="px-4 py-2 font-medium">Date</th><th className="px-4 py-2 font-medium text-right">Total</th><th className="px-4 py-2 font-medium">Job</th><th className="px-4 py-2 font-medium">Status</th><th className="px-4 py-2 font-medium w-16"></th></tr></thead>
-          <tbody>{invoices.map((inv) => { const job = jobs.find((j: any) => j.job_id === inv.job_id); return (
-            <tr key={inv.invoice_id} className="border-t border-gray-100 hover:bg-gray-50">
-              <td className="px-4 py-2.5 font-medium text-navy">{inv.supplier}</td>
+          <tbody>{invoices.map((inv) => { const job = jobs.find((j: any) => j.job_id === inv.job_id); const isExp = expandedInvId === inv.invoice_id; return (<>
+            <tr key={inv.invoice_id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpandInvoice(inv.invoice_id)}>
+              <td className="px-4 py-2.5 font-medium text-navy">
+                <div className="flex items-center gap-2">
+                  {isExp ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                  {inv.supplier}
+                </div>
+              </td>
               <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">{inv.invoice_number || "—"}</td>
               <td className="px-4 py-2.5 text-gray-500 text-xs">{inv.invoice_date ? formatDate(inv.invoice_date) : "—"}</td>
               <td className="px-4 py-2.5 text-right font-mono text-navy">{inv.total_value ? formatCurrency(inv.total_value) : "—"}</td>
               <td className="px-4 py-2.5 text-xs text-gray-500">{job ? (job.job_number || job.job_name) : "—"}</td>
               <td className="px-4 py-2.5"><span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-gray-100 text-gray-500")}>{inv.status}</span></td>
-              <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-1">
-                          <button onClick={() => openEditInvoice(inv)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
-                          <button onClick={async () => { if (window.confirm(`Delete invoice ${inv.invoice_number || inv.supplier}? This cannot be undone.`)) { await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id); await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id); loadData(); } }} className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>
-                          </div>
-                        </td>
-            </tr>); })}</tbody></table></div>)}
+              <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => openEditInvoice(inv)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={async () => { if (window.confirm(`Delete invoice ${inv.invoice_number || inv.supplier}?`)) { await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id); await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id); loadData(); } }} className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              </td>
+            </tr>
+            {isExp && (
+              <tr key={`${inv.invoice_id}-detail`}><td colSpan={7} className="px-0 py-0 bg-gray-50/50">
+                <div className="px-8 py-3">
+                  {previewLines.length === 0 ? <p className="text-xs text-gray-400 py-2">No line items</p> : (
+                    <table className="w-full text-xs">
+                      <thead><tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                        <th className="py-1 font-medium w-8">#</th>
+                        <th className="py-1 font-medium">Description</th>
+                        <th className="py-1 font-medium">Material</th>
+                        <th className="py-1 font-medium text-right">Qty</th>
+                        <th className="py-1 font-medium">Unit</th>
+                        <th className="py-1 font-medium text-right">Cost</th>
+                        <th className="py-1 font-medium text-right">Total</th>
+                      </tr></thead>
+                      <tbody>{previewLines.map((l: any) => (
+                        <tr key={l.line_id || l.line_number} className="border-t border-gray-100">
+                          <td className="py-1.5 text-gray-400 font-mono">{l.line_number}</td>
+                          <td className="py-1.5 text-gray-600 max-w-[300px] truncate">{l.raw_description}</td>
+                          <td className="py-1.5">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-gray-300">—</span>}</td>
+                          <td className="py-1.5 text-right font-mono text-gray-600">{l.quantity || "—"}</td>
+                          <td className="py-1.5 text-gray-500">{l.unit || "—"}</td>
+                          <td className="py-1.5 text-right font-mono text-gray-600">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
+                          <td className="py-1.5 text-right font-mono text-navy font-medium">{l.line_total ? formatCurrency(l.line_total) : "—"}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  )}
+                </div>
+              </td></tr>
+            )}
+          </>); })}</tbody></table></div>)}
       </div>
     </div>); }
 
