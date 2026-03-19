@@ -74,6 +74,13 @@ export default function ScopeDetailPage() {
     loadData();
   }, [loadData]);
 
+  // Refresh coverage when returning from WO page
+  useEffect(() => {
+    const onFocus = () => { setRefreshKey((k) => k + 1); loadData(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadData]);
+
   const updateField = async (field: string, value: string | number | null) => {
     await supabase.from("tbl_scope_items").update({ [field]: value }).eq("scope_item_id", scopeId);
     setScope((prev) => (prev ? { ...prev, [field]: value } : null));

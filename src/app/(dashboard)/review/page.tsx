@@ -131,21 +131,53 @@ export default function ReviewPage() {
     if (timeRes.data && timeRes.data.length > 0) {
       const fIds = [...new Set(timeRes.data.map((t: any) => t.freelancer_id))];
       const woIds = [...new Set(timeRes.data.map((t: any) => t.work_order_id))];
-      const [fRes, woRes] = await Promise.all([
+      const [fRes, woRes, actRes] = await Promise.all([
         supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds),
         supabase.from("tbl_work_orders").select("work_order_id, scope_item_id, job_id, description").in("work_order_id", woIds),
+        supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       ]);
       const fMap: Record<number, string> = {};
       (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
       const woMap: Record<number, any> = {};
       (woRes.data || []).forEach((w: any) => { woMap[w.work_order_id] = w; });
-      const enriched = timeRes.data.map((t: any) => ({
-        ...t,
-        freelancer_name: fMap[t.freelancer_id] || "Unknown",
-        activity_label: woMap[t.work_order_id]?.description || "—",
-        scope_name: "—",
-        job_number: "—",
-      }));
+
+      // Build activity labels: "CUT + COVER" style
+      const allActIds = [...new Set((actRes.data || []).map((a: any) => a.activity_id))];
+      const { data: lookups } = allActIds.length > 0
+        ? await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", allActIds)
+        : { data: [] };
+      const lkMap: Record<number, string> = {};
+      (lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = l.lookup_value; });
+
+      const woActLabel: Record<number, string> = {};
+      (actRes.data || []).forEach((a: any) => {
+        const label = lkMap[a.activity_id] || "?";
+        woActLabel[a.work_order_id] = woActLabel[a.work_order_id] ? woActLabel[a.work_order_id] + " + " + label : label;
+      });
+
+      // Scope names and job numbers
+      const scopeIds = [...new Set(Object.values(woMap).map((w: any) => w.scope_item_id).filter(Boolean))];
+      const jobIds = [...new Set(Object.values(woMap).map((w: any) => w.job_id).filter(Boolean))];
+      const [scRes, jbRes] = await Promise.all([
+        scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+        jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
+      ]);
+      const scMap: Record<number, string> = {};
+      ((scRes as any).data || []).forEach((s: any) => { scMap[s.scope_item_id] = s.item_name; });
+      const jbMap: Record<number, string> = {};
+      ((jbRes as any).data || []).forEach((j: any) => { jbMap[j.job_id] = j.job_number; });
+
+      const enriched = timeRes.data.map((t: any) => {
+        const wo = woMap[t.work_order_id];
+        const actLabel = woActLabel[t.work_order_id] || wo?.description || "—";
+        return {
+          ...t,
+          freelancer_name: fMap[t.freelancer_id] || "Unknown",
+          activity_label: actLabel + (wo?.description ? " — " + wo.description : ""),
+          scope_name: wo ? scMap[wo.scope_item_id] || "—" : "—",
+          job_number: wo ? jbMap[wo.job_id] || "—" : "—",
+        };
+      });
       setTimeEntries(enriched);
       setFlags(enriched.filter((t: any) => t.flag_note));
     }
