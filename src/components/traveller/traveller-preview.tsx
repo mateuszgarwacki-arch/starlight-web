@@ -279,7 +279,7 @@ export function TravellerPreview({
               const references = data.docs.filter((d) => d.doc_type === "reference");
               const cutLists = data.docs.filter((d) => d.doc_type === "cut_list");
 
-              {/* Pack mode divider page */}
+              // Pack mode divider page
               if (mode === "pack" && woIdx > 0) {
                 pageNum++;
                 pages.push(
@@ -299,7 +299,7 @@ export function TravellerPreview({
                 );
               }
 
-              {/* Task brief page */}
+              // Task brief page
               pageNum++;
               pages.push(
                 <TravellerPage key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr} daysRemaining={daysUntilEvent}>
@@ -307,7 +307,7 @@ export function TravellerPreview({
                 </TravellerPage>
               );
 
-              {/* Cut list page */}
+              // Cut list page
               if (cutLists.length > 0) {
                 pageNum++;
                 pages.push(
@@ -317,7 +317,7 @@ export function TravellerPreview({
                 );
               }
 
-              {/* Drawing pages */}
+              // Drawing pages
               for (const drawing of drawings) {
                 pageNum++;
                 pages.push(
@@ -327,7 +327,7 @@ export function TravellerPreview({
                 );
               }
 
-              {/* Reference pages */}
+              // Reference pages
               for (const ref of references) {
                 pageNum++;
                 pages.push(
