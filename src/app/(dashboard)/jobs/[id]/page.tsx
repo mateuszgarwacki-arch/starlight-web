@@ -8,6 +8,7 @@ import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
+import { QuoteMarginPanel } from "@/components/quote-margin-panel";
 import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
@@ -552,6 +553,9 @@ export default function JobDetailPage() {
           </p>
         </div>
       )}
+
+      {/* Quote Line Margin Analysis */}
+      <QuoteMarginPanel jobId={jobId} />
 
       {/* Main tabs: Quote Lines / Scope Items */}
       <div className="flex gap-1 border-b border-gray-200">
