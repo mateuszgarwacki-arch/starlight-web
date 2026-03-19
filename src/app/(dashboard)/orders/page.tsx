@@ -93,7 +93,7 @@ export default function OrdersPage() {
     const items = procRes.data || [];
     setOutstanding(items);
     setRecentOrders(orderedRes.data || []);
-    setSuppliers((suppRes.data || []).filter((s: any) => s.active === true || s.active === "true" || s.active === "-1"));
+    setSuppliers((suppRes.data || []).filter((s: any) => s.active !== false && s.active !== "false" && s.active !== "0"));
 
     // Group by material name
     const groupMap = new Map<string, MaterialGroup>();
