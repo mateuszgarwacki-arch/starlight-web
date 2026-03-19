@@ -34,7 +34,7 @@ interface DocsPanelProps {
   scopeName?: string;
   activityLabel?: string;
   readOnly?: boolean;
-  onBomChanged?: () => void;
+  onBomChanged?: () => Promise<void> | void;
 }
 
 const DOC_TYPE_CONFIG: Record<string, { label: string; icon: typeof FileText; color: string; accept: string; folder: string }> = {
@@ -230,7 +230,7 @@ export function WODocumentsPanel({
                                     mimeType={doc.mime_type}
                                     extractionStatus={doc.extraction_status}
                                     extractedData={doc.extracted_data}
-                                    onUpdate={() => { loadDocs(); if (onBomChanged) onBomChanged(); }}
+                                    onUpdate={async () => { await loadDocs(); if (onBomChanged) await onBomChanged(); }}
                                   />
                                 )}
                               </div>

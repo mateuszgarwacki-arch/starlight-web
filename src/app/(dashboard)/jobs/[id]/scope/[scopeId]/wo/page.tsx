@@ -961,7 +961,7 @@ export default function ScopeWorkOrdersPage() {
                       scopeName={scope?.item_name || ""}
                       activityLabel={wo.activity_label || ""}
                       readOnly={wo.status === "Voided" || wo.status === "Complete"}
-                      onBomChanged={() => loadBOM(wo.work_order_id)}
+                      onBomChanged={async () => { await loadBOM(wo.work_order_id); }}
                     />
                   </div>
                 )}

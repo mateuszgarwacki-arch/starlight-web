@@ -16,8 +16,17 @@ interface ExtractedLine {
   quantity: number;
   unit: string;
   notes: string | null;
-  sheet_count?: number | null;
-  standard_length_count?: number | null;
+}
+
+interface MaterialSummary {
+  material: string;
+  material_category: string;
+  total_parts: number;
+  sheets_needed?: number;
+  lengths_needed?: number;
+  standard_sheet_size?: string;
+  standard_length_mm?: number;
+  waste_pct?: number;
   _selected?: boolean;
 }
 
@@ -40,12 +49,14 @@ export function CutListExtractor({
   const supabase = createClient();
   const [extracting, setExtracting] = useState(false);
   const [status, setStatus] = useState(initialStatus || "pending");
-  const [lines, setLines] = useState<ExtractedLine[]>(
-    extractedData?.lines?.map((l: any) => ({ ...l, _selected: true })) || []
+  const [parts, setParts] = useState<ExtractedLine[]>(extractedData?.lines || []);
+  const [matSummary, setMatSummary] = useState<MaterialSummary[]>(
+    (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }))
   );
   const [summary, setSummary] = useState<any>(extractedData?.summary || null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showParts, setShowParts] = useState(false);
 
   const handleExtract = async () => {
     if (!onedrivePath) return;
@@ -53,7 +64,6 @@ export function CutListExtractor({
     setError(null);
 
     try {
-      // Load materials catalogue for context
       const { data: materials } = await supabase
         .from("tbl_materials")
         .select("material_id, material_name, unit, current_unit_cost, standard_length, standard_sheet_size, spec_val_1, spec_val_2, spec_val_3")
@@ -61,7 +71,7 @@ export function CutListExtractor({
 
       const matContext = (materials || []).map(m => {
         const specs = [m.spec_val_1, m.spec_val_2, m.spec_val_3].filter(Boolean);
-        return `${m.material_name} (unit: ${m.unit}, ${m.standard_length ? 'std length: ' + m.standard_length + 'mm' : ''}${m.standard_sheet_size ? 'std sheet: ' + m.standard_sheet_size : ''} ${specs.length ? 'specs: ' + specs.join('x') + 'mm' : ''})`;
+        return `${m.material_name} (unit: ${m.unit}${m.standard_length ? ', std length: ' + m.standard_length + 'mm' : ''}${m.standard_sheet_size ? ', std sheet: ' + m.standard_sheet_size : ''} ${specs.length ? 'dims: ' + specs.join('x') + 'mm' : ''})`;
       }).join('\n');
 
       let body: any = { file_name: fileName, materials_context: matContext };
@@ -96,32 +106,24 @@ export function CutListExtractor({
       }
 
       const data = await extractRes.json();
-      const extractedLines = (data.lines || []).map((l: any) => ({ ...l, _selected: true }));
-      setLines(extractedLines);
+      setParts(data.lines || []);
+      setMatSummary((data.material_summary || []).map((m: any) => ({ ...m, _selected: true })));
       setSummary(data.summary || null);
       setStatus("extracted");
 
       await supabase.from("tbl_wo_documents").update({
-        extraction_status: "extracted",
-        extracted_data: data,
+        extraction_status: "extracted", extracted_data: data,
       }).eq("doc_id", docId);
-
-    } catch (err: any) {
-      setError(err.message);
-    }
+    } catch (err: any) { setError(err.message); }
     setExtracting(false);
   };
 
-  const toggleLine = (idx: number) => {
-    setLines(prev => prev.map((l, i) => i === idx ? { ...l, _selected: !l._selected } : l));
-  };
-  const toggleAll = () => {
-    const allSelected = lines.every(l => l._selected);
-    setLines(prev => prev.map(l => ({ ...l, _selected: !allSelected })));
+  const toggleMat = (idx: number) => {
+    setMatSummary(prev => prev.map((m, i) => i === idx ? { ...m, _selected: !m._selected } : m));
   };
 
   const addToBom = async () => {
-    const selected = lines.filter(l => l._selected);
+    const selected = matSummary.filter(m => m._selected);
     if (selected.length === 0) return;
     setAdding(true);
 
@@ -133,50 +135,35 @@ export function CutListExtractor({
 
     const { data: materials } = await supabase
       .from("tbl_materials")
-      .select("material_id, material_name, unit, current_unit_cost, material_category, standard_length, standard_sheet_size")
+      .select("material_id, material_name, unit, current_unit_cost, material_category")
       .eq("active", true);
 
-    for (const line of selected) {
-      // Smart material matching: try exact name, then fuzzy
-      const matLower = (line.material || "").toLowerCase();
-      const descLower = (line.description || "").toLowerCase();
+    for (const mat of selected) {
+      const matLower = (mat.material || "").toLowerCase();
       let matched = (materials || []).find(m => (m.material_name || "").toLowerCase() === matLower);
       if (!matched) matched = (materials || []).find(m => matLower.includes((m.material_name || "").toLowerCase()) || (m.material_name || "").toLowerCase().includes(matLower));
-      if (!matched) matched = (materials || []).find(m => descLower.includes((m.material_name || "").toLowerCase()));
 
-      let desc = line.description || line.material || "Unknown";
-      if (line.length_mm || line.width_mm) {
-        const dims = [line.length_mm, line.width_mm, line.thickness_mm].filter(Boolean).join(" x ");
-        desc += ` (${dims}mm)`;
-      }
+      const qty = mat.sheets_needed || mat.lengths_needed || 1;
+      const unit = mat.sheets_needed ? "Sheet" : mat.lengths_needed ? "Length" : (matched?.unit || "Each");
+      const catKey = (mat.material_category || "other").toLowerCase();
 
-      // Smart quantity: use sheet_count or standard_length_count if provided by AI
-      let qty = line.quantity || 1;
-      let unit = matched?.unit || line.unit || "Each";
-      let notes = line.notes || null;
+      // Build description with context
+      const partsForMat = parts.filter(p => (p.material || "").toLowerCase() === matLower);
+      const partsNote = partsForMat.length > 0
+        ? `${partsForMat.length} parts (${partsForMat.map(p => `${p.description} ${p.length_mm || ''}x${p.width_mm || ''}`).join(', ').substring(0, 150)})`
+        : "";
 
-      if (line.sheet_count && line.sheet_count > 0) {
-        notes = `${qty} parts cut from ${line.sheet_count} standard sheet${line.sheet_count > 1 ? 's' : ''}. ${notes || ''}`.trim();
-        qty = line.sheet_count;
-        unit = "Sheet";
-      } else if (line.standard_length_count && line.standard_length_count > 0) {
-        notes = `${qty} pieces cut from ${line.standard_length_count} standard length${line.standard_length_count > 1 ? 's' : ''}. ${notes || ''}`.trim();
-        qty = line.standard_length_count;
-        unit = "Length";
-      }
-
-      const catKey = (line.material_category || "other").toLowerCase();
       await supabase.from("tbl_wo_bom").insert({
         work_order_id: workOrderId,
         job_id: jobId,
         material_id: matched?.material_id || null,
         material_category: matched?.material_category || catMap[catKey] || null,
-        item_description: desc,
+        item_description: mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : mat.standard_length_mm ? ` (${mat.standard_length_mm}mm lengths)` : ""),
         quantity: qty,
         unit: unit,
         unit_cost: matched?.current_unit_cost || null,
         needs_ordering: matched ? "false" : "true",
-        notes: notes,
+        notes: partsNote || null,
       });
     }
 
@@ -186,10 +173,10 @@ export function CutListExtractor({
     onUpdate();
   };
 
-  const selectedCount = lines.filter(l => l._selected).length;
+  const selectedCount = matSummary.filter(m => m._selected).length;
 
-  // PENDING — show extract button
-  if (status === "pending" && lines.length === 0) {
+  // PENDING
+  if (status === "pending" && parts.length === 0) {
     return (
       <div className="mt-2 p-3 bg-starlight-amber/5 border border-starlight-amber/20 rounded-lg">
         <div className="flex items-center justify-between">
@@ -214,60 +201,85 @@ export function CutListExtractor({
       <div className="mt-2 p-2 bg-starlight-green/5 border border-starlight-green/20 rounded-lg">
         <div className="flex items-center gap-2">
           <Check className="h-3.5 w-3.5 text-starlight-green" />
-          <span className="text-[10px] text-starlight-green font-medium">{extractedData?.lines?.length || lines.length} lines added to BOM</span>
+          <span className="text-[10px] text-starlight-green font-medium">
+            {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} added to BOM ({parts.length} parts extracted)
+          </span>
         </div>
       </div>
     );
   }
 
-  // EXTRACTED — show review table
-  if (lines.length > 0) {
+  // EXTRACTED — show material summary (what to order) + expandable parts list
+  if (matSummary.length > 0) {
     return (
       <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
         {summary && (
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">{summary.total_parts} parts · {summary.material_types?.join(", ") || "mixed"} · {summary.source_format || ""}</span>
-            <button onClick={toggleAll} className="text-[10px] text-starlight-blue font-medium">{lines.every(l => l._selected) ? "Deselect All" : "Select All"}</button>
+            <span className="text-[10px] text-gray-500">{summary.total_parts} parts → {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} to order</span>
           </div>
         )}
-        <div className="overflow-x-auto max-h-64 overflow-y-auto">
-          <table className="w-full text-[11px]">
-            <thead className="sticky top-0 bg-white">
-              <tr className="text-[9px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
-                <th className="px-2 py-1.5 text-center w-8"></th>
-                <th className="px-2 py-1.5 text-left">Description</th>
-                <th className="px-2 py-1.5 text-left">Material</th>
-                <th className="px-2 py-1.5 text-right">L mm</th>
-                <th className="px-2 py-1.5 text-right">W mm</th>
-                <th className="px-2 py-1.5 text-right">T mm</th>
-                <th className="px-2 py-1.5 text-right">Qty</th>
-                <th className="px-2 py-1.5 text-left">Cat</th>
-                {lines.some(l => l.sheet_count || l.standard_length_count) && <th className="px-2 py-1.5 text-right">Std</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, idx) => (
-                <tr key={idx} className={"border-b border-gray-50 " + (line._selected ? "" : "opacity-40")}>
-                  <td className="px-2 py-1 text-center"><input type="checkbox" checked={!!line._selected} onChange={() => toggleLine(idx)} className="h-3 w-3 rounded border-gray-300" /></td>
-                  <td className="px-2 py-1 text-navy font-medium max-w-[160px] truncate" title={line.description}>{line.description}</td>
-                  <td className="px-2 py-1 text-gray-500 max-w-[120px] truncate" title={line.material}>{line.material}</td>
-                  <td className="px-2 py-1 text-right font-mono text-gray-600">{line.length_mm || "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono text-gray-600">{line.width_mm || "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono text-gray-600">{line.thickness_mm || "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono text-navy font-medium">{line.quantity}</td>
-                  <td className="px-2 py-1 text-gray-400">{line.material_category}</td>
-                  {lines.some(l => l.sheet_count || l.standard_length_count) && (
-                    <td className="px-2 py-1 text-right font-mono text-starlight-blue font-medium">
-                      {line.sheet_count ? `${line.sheet_count} sht` : line.standard_length_count ? `${line.standard_length_count} len` : "—"}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        {/* Material summary — what to add to BOM */}
+        <div className="px-3 py-2">
+          <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Materials to Order</p>
+          <div className="space-y-1.5">
+            {matSummary.map((mat, idx) => (
+              <div key={idx} className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-gray-50 opacity-50")}>
+                <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-gray-300" />
+                <span className="text-xs text-navy font-medium flex-1">{mat.material}</span>
+                {mat.sheets_needed && (
+                  <span className="text-xs font-mono text-starlight-blue font-medium">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
+                )}
+                {mat.lengths_needed && (
+                  <span className="text-xs font-mono text-starlight-blue font-medium">{mat.lengths_needed} length{mat.lengths_needed > 1 ? "s" : ""}</span>
+                )}
+                <span className="text-[10px] text-gray-400">{mat.total_parts} parts</span>
+                {mat.waste_pct != null && (
+                  <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-gray-400")}>{mat.waste_pct}% waste</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
+
+        {/* Expandable parts list — reference */}
+        <div className="border-t border-gray-100">
+          <button onClick={() => setShowParts(!showParts)} className="w-full px-3 py-1.5 text-left text-[10px] text-gray-400 hover:text-gray-600">
+            {showParts ? "▾" : "▸"} {parts.length} individual parts (reference)
+          </button>
+          {showParts && (
+            <div className="overflow-x-auto max-h-48 overflow-y-auto border-t border-gray-50">
+              <table className="w-full text-[10px]">
+                <thead className="sticky top-0 bg-white">
+                  <tr className="text-[9px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                    <th className="px-2 py-1 text-left">Part</th>
+                    <th className="px-2 py-1 text-left">Material</th>
+                    <th className="px-2 py-1 text-right">L</th>
+                    <th className="px-2 py-1 text-right">W</th>
+                    <th className="px-2 py-1 text-right">T</th>
+                    <th className="px-2 py-1 text-right">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parts.map((p, idx) => (
+                    <tr key={idx} className="border-b border-gray-50">
+                      <td className="px-2 py-0.5 text-navy">{p.description}</td>
+                      <td className="px-2 py-0.5 text-gray-500">{p.material}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.length_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.width_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.thickness_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-navy">{p.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Add to BOM button */}
         <div className="px-3 py-2 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <span className="text-[10px] text-gray-400">{selectedCount} of {lines.length} selected</span>
+          <span className="text-[10px] text-gray-400">{selectedCount} material{selectedCount !== 1 ? "s" : ""} selected</span>
           <button onClick={addToBom} disabled={selectedCount === 0 || adding}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-green text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
             {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
