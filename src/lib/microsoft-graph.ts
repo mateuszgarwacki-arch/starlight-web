@@ -69,7 +69,7 @@ function getDrivePath(): string {
 export async function uploadFile(
   folderPath: string,
   fileName: string,
-  fileBuffer: ArrayBuffer | Buffer,
+  fileBuffer: ArrayBuffer,
   contentType: string
 ): Promise<{ id: string; webUrl: string; downloadUrl: string }> {
   const token = await getGraphToken();
@@ -80,7 +80,7 @@ export async function uploadFile(
   const res = await fetch(url, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": contentType },
-    body: fileBuffer,
+    body: new Uint8Array(fileBuffer),
   });
 
   if (!res.ok) {
