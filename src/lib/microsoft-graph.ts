@@ -59,11 +59,13 @@ export async function getGraphToken(): Promise<string> {
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
 function getDrivePath(): string {
-  const driveUser = process.env.MICROSOFT_DRIVE_USER;
+  const driveId = process.env.MICROSOFT_DRIVE_ID;
+  if (driveId) return `drives/${driveId}`;
   const driveSite = process.env.MICROSOFT_DRIVE_SITE;
   if (driveSite) return `sites/${driveSite}/drive`;
+  const driveUser = process.env.MICROSOFT_DRIVE_USER;
   if (driveUser) return `users/${driveUser}/drive`;
-  throw new Error("Set MICROSOFT_DRIVE_USER (email) or MICROSOFT_DRIVE_SITE (SharePoint site ID) in Vercel.");
+  throw new Error("Set MICROSOFT_DRIVE_ID, MICROSOFT_DRIVE_SITE, or MICROSOFT_DRIVE_USER in Vercel.");
 }
 
 export async function uploadFile(

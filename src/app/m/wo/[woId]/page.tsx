@@ -219,7 +219,7 @@ export default function MobileWODetail() {
       try {
         const ext = photoFile.name.split(".").pop() || "jpg";
         const fileName = `wo-${woId}-${Date.now()}.${ext}`;
-        const result = await uploadToOneDrive(photoFile, "Starlight/WO-Photos", fileName);
+        const result = await uploadToOneDrive(photoFile, "Workshop/WO-Photos", fileName);
         photoPath = result.path;
       } catch (err: any) {
         alert("Photo upload failed: " + (err.message || "Check OneDrive configuration."));

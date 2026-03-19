@@ -70,7 +70,7 @@ export default function MobilePhotosPage() {
     setPhotoPreview({ id: scopeId, url: URL.createObjectURL(file) });
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `scope-${scopeId}-${Date.now()}.${ext}`;
-    const folder = "Starlight/Scope-Photos";
+    const folder = "Workshop/Scope-Photos";
 
     try {
       const result = await uploadToOneDrive(file, folder, fileName);
