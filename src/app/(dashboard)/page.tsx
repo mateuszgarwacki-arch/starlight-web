@@ -66,11 +66,41 @@ export default function DashboardPage() {
         supabase.from("tbl_invoices").select("invoice_id, supplier, invoice_number, invoice_date, total_value, status").eq("status", "Processed").order("uploaded_at", { ascending: false }).limit(5),
       ]);
 
-      if (jobsRes.data) setJobs(jobsRes.data);
+      if (jobsRes.data) setJobs(jobsRes.data.filter((j: any) => (j.total_wos || 0) > 0 || j.scope_prog !== "0/0"));
       if (manpowerRes.data) setManpower(manpowerRes.data);
       setProcurement(procRes.data || []);
-      setFlags(flagsRes.data || []);
       setRecentInvoices(invoiceRes.data || []);
+
+      // Enrich flags with context
+      const rawFlags = flagsRes.data || [];
+      if (rawFlags.length > 0) {
+        const woIds = [...new Set(rawFlags.map((f: any) => f.work_order_id))];
+        const fIds = [...new Set(rawFlags.map((f: any) => f.freelancer_id))];
+        const [woRes, fRes] = await Promise.all([
+          supabase.from("tbl_work_orders").select("work_order_id, job_id, scope_item_id, description").in("work_order_id", woIds),
+          supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds),
+        ]);
+        const woMap: Record<number, any> = {};
+        (woRes.data || []).forEach((w: any) => { woMap[w.work_order_id] = w; });
+        const fMap: Record<number, string> = {};
+        (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
+        // Get job + scope names
+        const jobIds = [...new Set(Object.values(woMap).map((w: any) => w.job_id).filter(Boolean))];
+        const scopeIds = [...new Set(Object.values(woMap).map((w: any) => w.scope_item_id).filter(Boolean))];
+        const [jobNamesRes, scopeNamesRes] = await Promise.all([
+          jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds) : { data: [] },
+          scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+        ]);
+        const jobNameMap: Record<number, any> = {};
+        (jobNamesRes.data || []).forEach((j: any) => { jobNameMap[j.job_id] = j; });
+        const scopeNameMap: Record<number, string> = {};
+        (scopeNamesRes.data || []).forEach((s: any) => { scopeNameMap[s.scope_item_id] = s.item_name; });
+        setFlags(rawFlags.map((f: any) => {
+          const wo = woMap[f.work_order_id] || {};
+          const job = jobNameMap[wo.job_id] || {};
+          return { ...f, freelancer_name: fMap[f.freelancer_id] || "Unknown", wo_description: wo.description || "", job_name: job.job_name || "", job_number: job.job_number || "", scope_name: scopeNameMap[wo.scope_item_id] || "" };
+        }));
+      }
 
       // Get currently active workers (open time entries)
       const { data: openEntries } = await supabase.from("tbl_wo_time_entries")
@@ -107,7 +137,7 @@ export default function DashboardPage() {
         <StatCard label="Active Jobs" value={jobs.length} icon={Briefcase} color="text-starlight-blue" href="/jobs" />
         <StatCard label="Active Work Orders" value={activeWos} icon={ClipboardList} color="text-starlight-amber" href="/workshop" />
         <StatCard label="Items to Order" value={procurement.length} icon={Package} color={procurement.length > 0 ? "text-starlight-red" : "text-gray-400"} />
-        <StatCard label="Unread Flags" value={flags.length} icon={Flag} color={flags.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/review" />
+        <StatCard label="Unread Flags" value={flags.length} icon={Flag} color={flags.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/review?tab=flags" />
         <StatCard label="Outstanding Hours" value={`${Math.round(totalHrs)}h`} icon={Users} color="text-starlight-green" href="/capacity" />
       </div>
 
@@ -169,10 +199,16 @@ export default function DashboardPage() {
                   <div key={f.entry_id} className="px-4 py-3">
                     <div className="flex items-start gap-2">
                       <Flag className="h-3.5 w-3.5 text-starlight-amber mt-0.5 shrink-0" />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs text-gray-700 line-clamp-2">{f.flag_note}</p>
                         <p className="text-[10px] text-gray-400 mt-1">
-                          WO #{f.work_order_id} · {f.actual_hours ? `${f.actual_hours}h` : ""} {f.entry_cost ? `· ${formatCurrency(f.entry_cost)}` : ""}
+                          <span className="font-medium text-navy">{f.freelancer_name}</span>
+                          {f.wo_description && <> · <span className="text-gray-500">{f.wo_description}</span></>}
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          {f.job_name && <><span>{f.job_number || f.job_name}</span> · </>}
+                          {f.scope_name && <><span>{f.scope_name}</span> · </>}
+                          {f.actual_hours ? `${f.actual_hours}h` : ""} {f.entry_cost ? `· ${formatCurrency(f.entry_cost)}` : ""}
                         </p>
                       </div>
                     </div>

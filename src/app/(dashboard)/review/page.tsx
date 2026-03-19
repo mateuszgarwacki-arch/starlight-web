@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
@@ -55,7 +56,9 @@ type TabKey = "costs" | "time" | "flags" | "accuracy";
 
 export default function ReviewPage() {
   const supabase = createClient();
-  const [tab, setTab] = useState<TabKey>("costs");
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as TabKey) || "costs";
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [jobCosts, setJobCosts] = useState<JobCost[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntryRow[]>([]);
   const [flags, setFlags] = useState<TimeEntryRow[]>([]);
