@@ -309,7 +309,6 @@ export default function MaterialsPage() {
           <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
-          </button>
           <button
             onClick={openAddDialog}
             className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
