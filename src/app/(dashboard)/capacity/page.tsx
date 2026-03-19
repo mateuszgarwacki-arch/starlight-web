@@ -234,10 +234,25 @@ export default function CapacityPage() {
       (leads || []).forEach((l: any) => { leadMap[l.freelancer_id] = l.freelancer_name; });
     }
 
+    // Get activity labels for WOs
+    const { data: actData } = await supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence");
+    const allActIds = [...new Set((actData || []).map((a: any) => a.activity_id))];
+    let lkMap: Record<number, string> = {};
+    if (allActIds.length > 0) {
+      const { data: lookups } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", allActIds);
+      (lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = l.lookup_value; });
+    }
+    const woActLabel: Record<number, string> = {};
+    (actData || []).forEach((a: any) => {
+      const label = lkMap[a.activity_id] || "?";
+      woActLabel[a.work_order_id] = woActLabel[a.work_order_id] ? woActLabel[a.work_order_id] + " + " + label : label;
+    });
+
     setWoDetails(wos.map((w: any) => ({
       ...w, scope_name: scopeMap[w.scope_item_id] || "—",
       actual_hours: timeMap[w.work_order_id] || 0,
       lead_name: w.planned_lead_id ? leadMap[w.planned_lead_id] || "—" : "Unassigned",
+      activity_label: woActLabel[w.work_order_id] || "",
     })));
   };
 
@@ -412,7 +427,11 @@ export default function CapacityPage() {
                                 return (
                                   <tr key={w.work_order_id} className="border-t border-gray-100">
                                     <td className="px-5 py-2 text-navy font-medium max-w-[150px] truncate">{w.scope_name}</td>
-                                    <td className="px-3 py-2 text-gray-600 max-w-[200px] truncate">{w.description || "—"}</td>
+                                    <td className="px-3 py-2 text-gray-600 max-w-[200px] truncate">
+                                      {w.activity_label && <span className="text-navy font-medium">{w.activity_label}</span>}
+                                      {w.activity_label && w.description && <span className="text-gray-400"> — </span>}
+                                      {w.description || (!w.activity_label ? "—" : "")}
+                                    </td>
                                     <td className="px-3 py-2">
                                       <span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + statusColor(w.status)}>{w.status}</span>
                                     </td>

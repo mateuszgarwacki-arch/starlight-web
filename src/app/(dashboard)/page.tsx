@@ -67,9 +67,9 @@ export default function DashboardPage() {
         supabase.from("tbl_production_plan").select("job_id, job_status"),
       ]);
 
-      // Filter out deleted jobs
+      // Filter out deleted jobs and empty jobs
       const deletedJobIds = new Set((jobStatusRes.data || []).filter((j: any) => j.job_status === "Deleted").map((j: any) => j.job_id));
-      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id) && ((j.total_wos || 0) > 0 || j.scope_prog !== "0/0"));
+      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id) && (j.total_wos || 0) > 0);
       if (activeJobs) setJobs(activeJobs);
       if (manpowerRes.data) setManpower(manpowerRes.data);
       setProcurement(procRes.data || []);
