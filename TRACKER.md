@@ -79,13 +79,13 @@
 
 ### Phase 8: Polish & Handover ⬜
 
-## Database Tables (27)
+## Database Tables (28)
 
 ### Migrated from Access (21)
 tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
 
-### Added by web app (6)
-tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines
+### Added by web app (7)
+tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents
 
 ## Key Files
 
@@ -236,3 +236,63 @@ Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 pa
 - Workshop view: could add real-time Supabase subscription for live updates
 - Invoice page: could add "Create Supplier" inline from extracted name (+ button exists, basic name only — could pre-fill contact from invoice)
 - Suppliers: could add search/filter on invoice lines tab
+
+## Build Progress Log
+
+### Session 1 (17 Mar 2026) — Foundation + Dashboard + Jobs
+14 commits. Phases 0-6 shipped. RLS on 22 tables. Mobile interface with PIN auth. Workshop view, crew calendar, cost review.
+
+### Session 2 (18 Mar 2026) — Phase 7 + Invoices + Suppliers + Polish
+Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Deployment guide created.
+
+### Session 3 (19 Mar 2026) — Phase 8 Partial: OneDrive + Documents + Cut Lists
+16 commits, 15 features. Material reconciliation + quote margin analysis. OneDrive integration via Microsoft Graph API. WO documents panel (drawings, references, cut lists, models). Cut list AI extraction with OpenCutList support. 4 bug fixes. Azure AD app registration configured.
+
+## Lessons Learned & Execution Rules
+
+### Deployment
+- **cmd shell only** for `git commit` and `vercel --prod` — PowerShell blocks vercel via execution policy, and spaces in commit messages break
+- **PowerShell or Desktop Commander:create_directory** for creating dirs — cmd `mkdir` fails on paths with parentheses (Next.js App Router uses them)
+- **Commit messages use hyphens** not spaces: `"Phase-8-material-recon"` — quoting doesn't work reliably across shells
+- **Chunk file writes ~300 lines** via Desktop Commander write_file. First chunk: mode 'rewrite', subsequent: mode 'append'. Check boundaries for duplicate closing tags.
+- **Can clone repo in container** (github.com/mateuszgarwacki-arch/starlight-web is public) — useful for reading code, but can't push from container. Build in container, deploy via Desktop Commander write_file.
+- **Deploy cycle**: edit on local via Desktop Commander → `git add -A && git commit && git push && vercel --prod` all in one cmd command
+- **Vercel env vars via pipe** add trailing newlines — use interactive `vercel env add` with interact_with_process for clean values
+
+### SQL & Database
+- **ALTER TABLE before CREATE VIEW** — PostgreSQL validates view columns at creation time
+- **DROP VIEW IF EXISTS before CREATE VIEW** — `CREATE OR REPLACE VIEW` can't change column list
+- **RLS policies**: wrap in `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;` to avoid re-run errors
+- **Boolean handling**: always use `isTruthy()` — Supabase returns real booleans but ODBC legacy left string "true"/"false" in some columns
+- **Run SQL before deploying UI** that depends on new views/tables — UI will show empty but won't error
+
+### Next.js / React
+- **useSearchParams requires Suspense in Next.js 16** — use `window.location.search` in useEffect instead
+- **State doesn't refresh when navigating back** — Next.js preserves page state. Use window `focus` event listener to refetch data when returning from sub-pages.
+- **Bottom sheets need z-[60]** or higher to clear the mobile tab bar (z-50). Add `pb-10` padding so buttons aren't hidden behind safe area.
+- **Async callbacks between components**: when child component changes data that parent displays, the callback must be `async` and `await` the parent's reload function. Otherwise the parent fetches stale data.
+- **File inputs need ref reset** after upload: `fileRef.current.value = ""` — otherwise same file can't be re-selected
+
+### OneDrive / Microsoft Graph
+- **Client credentials flow** (app-only auth) needs `Sites.ReadWrite.All` application permission + admin consent to access SharePoint
+- **Admin consent is a separate step** — adding the permission in Azure AD isn't enough. Must click "Grant admin consent" button. Token will have `roles: "none"` until consented.
+- **Decode JWT payload** to check actual permissions: `JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())` → check `roles` array
+- **Permission propagation** can take up to 15 minutes after admin consent
+- **Drive ID not Site ID**: for direct file operations use `drives/{driveId}` not `sites/{siteId}/drive`. Get drive ID from the site's drives list.
+- **"Workshop" was a folder not a site** — resolve sharing links via `/v1.0/shares/{encodedUrl}/driveItem` to find parent drive and path
+- **Buffer type fails in fetch body** — use `new Uint8Array(arrayBuffer)` for TypeScript compatibility
+- **Structured folder naming**: `Workshop/{jobNumber} - {jobName}/{docType}/` — sanitise names (no special chars, hyphens for spaces)
+
+### AI Extraction (Claude API)
+- **Send materials catalogue as context** to the extraction prompt — dramatically improves matching accuracy
+- **Workshop naming conventions must be in the prompt**: "2x1" = 2x1 PAR Softwood (44x19mm), "MDF18" = 18mm MDF, "ply18" = 18mm Plywood
+- **Cut list → BOM should be material summary, not individual parts**: 3 pieces of 600x300 MDF = 1 standard sheet to order. Parts list is reference, material summary is what goes to BOM.
+- **Two-layer extraction view**: "Materials to Order" (actionable, goes to BOM) + "Individual Parts" (reference, expandable)
+- **Local CSV parse first**: if headers are obvious, skip AI. If ambiguous columns, use AI. Saves API cost.
+
+### UX Patterns
+- **State changes must be visible immediately** — don't make users refresh. Use local state (`useState`) to track status transitions (pending → extracted → confirmed), then sync to database in background.
+- **Callbacks must refresh the specific section that changed** — when cut list adds BOM items, refresh the BOM table, not the whole page. Pass specific reload function as callback, not a general "refresh everything".
+- **Upload → extract → review → confirm** flow must work without any page navigation. Each step updates in-place.
+- **Lightbox for images, download for documents** — don't try to render PDFs inline on mobile
+- **z-index layering**: tab bar=50, bottom sheets=60, lightbox/modals=70
