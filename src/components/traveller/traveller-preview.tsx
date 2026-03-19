@@ -6,7 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import {
-  Printer, X, FileText, Package, AlertTriangle,
+  Printer, X, FileText, Package,
 } from "lucide-react";
 
 // ============================================================
@@ -152,7 +152,7 @@ export function TravellerPreview({
         if (doc.onedrive_path) {
           try {
             docUrls[doc.doc_id] = await getOneDriveUrl(doc.onedrive_path);
-          } catch {
+          } catch (_e) {
             docUrls[doc.doc_id] = "";
           }
         }
