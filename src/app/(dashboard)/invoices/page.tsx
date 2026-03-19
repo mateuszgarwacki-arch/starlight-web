@@ -147,6 +147,8 @@ export default function InvoicesPage() {
   const lineSum = lines.reduce((s, l) => s + (l.line_total || 0), 0);
   const invoiceTotal = invoiceForm.total_value ? Number(invoiceForm.total_value) : 0;
   const totalMatch = invoiceTotal > 0 ? Math.abs(lineSum - invoiceTotal) < 0.02 : true;
+  const vatDetected = invoiceTotal > 0 && !totalMatch && Math.abs(lineSum * 1.2 - invoiceTotal) < 1.0;
+  const netFromGross = vatDetected ? Math.round(invoiceTotal / 1.2 * 100) / 100 : null;
 
   if (loading) { return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading invoices...</div>; }
 
@@ -194,7 +196,7 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      <div className={fileData && showPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : ""}>
+      <div className={fileData && showPreview ? "grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5" : ""}>
         <div className="space-y-5">
           {/* Invoice header */}
           <div className="card px-5 py-4">
@@ -219,7 +221,17 @@ export default function InvoicesPage() {
             <div className="flex items-center gap-4 mt-3">
               <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none"><input type="checkbox" checked={invoiceForm.includes_vat} onChange={(e) => applyVatToggle(e.target.checked)} className="rounded border-gray-300" /> Prices include VAT (strip 20%)</label>
               <div className="flex-1" />
-              {invoiceTotal > 0 && (<div className={"text-xs font-mono px-3 py-1 rounded-lg " + (totalMatch ? "bg-starlight-green/10 text-starlight-green" : "bg-starlight-red/10 text-starlight-red")}>Lines: {formatCurrency(lineSum)} {totalMatch ? "✓" : `(diff: ${formatCurrency(Math.abs(lineSum - invoiceTotal))})`}</div>)}
+              {invoiceTotal > 0 && (
+                <div className="flex items-center gap-2">
+                  {totalMatch ? (
+                    <div className="text-xs font-mono px-3 py-1 rounded-lg bg-starlight-green/10 text-starlight-green">Lines: {formatCurrency(lineSum)} ✓</div>
+                  ) : vatDetected ? (
+                    <div className="text-xs font-mono px-3 py-1 rounded-lg bg-starlight-amber/10 text-starlight-amber">Lines: {formatCurrency(lineSum)} net · Invoice total {formatCurrency(invoiceTotal)} incl. VAT ✓</div>
+                  ) : (
+                    <div className="text-xs font-mono px-3 py-1 rounded-lg bg-starlight-red/10 text-starlight-red">Lines: {formatCurrency(lineSum)} (diff: {formatCurrency(Math.abs(lineSum - invoiceTotal))})</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
