@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, getOneDriveUrl, jobFolder } from "@/lib/onedrive-client";
 import { CutListExtractor } from "@/components/cutlist-extractor";
+import { ModelViewer } from "@/components/model-viewer";
 import {
   FileText, Image, Box, Upload, Trash2, Download,
   ChevronDown, ChevronRight, Eye, Plus, Loader2,
@@ -262,18 +263,9 @@ export function WODocumentsPanel({
         </div>
       )}
 
-      {/* 3D Model viewer — Phase C will replace with Three.js */}
+      {/* 3D Model viewer — Three.js with OrbitControls */}
       {showModelViewer && (
-        <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4" onClick={() => setShowModelViewer(null)}>
-          <div className="bg-white rounded-xl p-8 max-w-md text-center" onClick={e => e.stopPropagation()}>
-            <Box className="h-12 w-12 text-starlight-red mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-navy">3D Model Viewer</h3>
-            <p className="text-sm text-gray-400 mt-1">{previewName}</p>
-            <p className="text-xs text-gray-400 mt-3">Interactive Three.js viewer coming next phase</p>
-            <button onClick={() => { window.open(showModelViewer, "_blank"); }} className="mt-4 px-4 py-2 bg-starlight-blue text-white text-sm rounded-lg">Download Model</button>
-            <button onClick={() => setShowModelViewer(null)} className="mt-2 block w-full text-sm text-gray-500">Close</button>
-          </div>
-        </div>
+        <ModelViewer url={showModelViewer} fileName={previewName} onClose={() => setShowModelViewer(null)} />
       )}
     </>
   );

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
+import { MobileWODocs } from "@/components/mobile-wo-docs";
 import Link from "next/link";
 
 interface WODetail {
@@ -379,6 +380,9 @@ export default function MobileWODetail() {
           ))}
         </div>
       )}
+
+      {/* Documents — drawings, references, 3D models, cut lists */}
+      <MobileWODocs workOrderId={woId} />
 
       {/* ============ LOG HOURS BOTTOM SHEET ============ */}
       {showLogSheet && (
