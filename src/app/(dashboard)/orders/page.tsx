@@ -87,14 +87,13 @@ export default function OrdersPage() {
     const [procRes, orderedRes, suppRes] = await Promise.all([
       supabase.from("qry_procurement_needed").select("*"),
       supabase.from("qry_recent_orders").select("*").limit(50),
-      supabase.from("tbl_suppliers").select("supplier_id, company_name").order("company_name"),
+      supabase.from("tbl_suppliers").select("supplier_id, supplier_name").order("supplier_name"),
     ]);
 
     const items = procRes.data || [];
     setOutstanding(items);
     setRecentOrders(orderedRes.data || []);
     setSuppliers(suppRes.data || []);
-    console.log("SUPPLIERS DEBUG:", JSON.stringify(suppRes));
 
     // Group by material name
     const groupMap = new Map<string, MaterialGroup>();
@@ -147,12 +146,12 @@ export default function OrdersPage() {
     if (!newSupplierName.trim()) return;
     setAddingSupplier(true);
     const { data, error } = await supabase.from("tbl_suppliers")
-      .insert({ company_name: newSupplierName.trim(), active: true })
-      .select("supplier_id, company_name, active")
+      .insert({ supplier_name: newSupplierName.trim(), active: true })
+      .select("supplier_id, supplier_name, active")
       .single();
     if (data) {
-      setSuppliers(prev => [...prev, data].sort((a, b) => (a.company_name || "").localeCompare(b.company_name || "")));
-      setMarkSupplier(data.company_name);
+      setSuppliers(prev => [...prev, data].sort((a, b) => (a.supplier_name || "").localeCompare(b.supplier_name || "")));
+      setMarkSupplier(data.supplier_name);
     }
     setNewSupplierName("");
     setShowAddSupplier(false);
@@ -435,7 +434,7 @@ export default function OrdersPage() {
                   >
                     <option value="">— Select supplier —</option>
                     {suppliers.map((s: any) => (
-                      <option key={s.supplier_id} value={s.company_name}>{s.company_name}</option>
+                      <option key={s.supplier_id} value={s.supplier_name}>{s.supplier_name}</option>
                     ))}
                   </select>
                   <button
