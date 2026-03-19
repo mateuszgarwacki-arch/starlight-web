@@ -82,6 +82,8 @@ export default function OrdersPage() {
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
   const [addingSupplier, setAddingSupplier] = useState(false);
+  const [recentSuppliers, setRecentSuppliers] = useState<string[]>([]);
+  const [lastSupplier, setLastSupplier] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const [procRes, orderedRes, suppRes] = await Promise.all([
@@ -140,6 +142,36 @@ export default function OrdersPage() {
     const next = new Set(selected);
     if (next.has(bomId)) next.delete(bomId); else next.add(bomId);
     setSelected(next);
+  };
+
+  const openMarkDialog = async () => {
+    setShowMarkDialog(true);
+    // Look up supplier history for selected materials
+    const selectedItems = outstanding.filter(i => selected.has(i.bom_id));
+    const materialIds = [...new Set(selectedItems.map(i => i.material_id).filter(Boolean))] as number[];
+    if (materialIds.length > 0) {
+      const { data: history } = await supabase
+        .from("tbl_wo_bom")
+        .select("supplier, ordered_at")
+        .in("material_id", materialIds)
+        .not("ordered_at", "is", null)
+        .not("supplier", "is", null)
+        .order("ordered_at", { ascending: false })
+        .limit(20);
+      if (history && history.length > 0) {
+        const last = history[0].supplier;
+        setLastSupplier(last);
+        const uniqueSuppliers = [...new Set(history.map((h: any) => h.supplier).filter(Boolean))] as string[];
+        setRecentSuppliers(uniqueSuppliers);
+        setMarkSupplier(last); // Pre-select last used
+      } else {
+        setLastSupplier(null);
+        setRecentSuppliers([]);
+      }
+    } else {
+      setLastSupplier(null);
+      setRecentSuppliers([]);
+    }
   };
 
   const handleAddSupplier = async () => {
@@ -205,7 +237,7 @@ export default function OrdersPage() {
         <div className="flex items-center gap-2">
           {selected.size > 0 && (
             <button
-              onClick={() => setShowMarkDialog(true)}
+              onClick={openMarkDialog}
               className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-green text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
             >
               <Check className="h-4 w-4" /> Mark {selected.size} Ordered
@@ -433,8 +465,16 @@ export default function OrdersPage() {
                     className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
                   >
                     <option value="">— Select supplier —</option>
-                    {suppliers.map((s: any) => (
-                      <option key={s.supplier_id} value={s.supplier_name}>{s.supplier_name}</option>
+                    {lastSupplier && <option value={lastSupplier}>★ {lastSupplier} (last used)</option>}
+                    {recentSuppliers.filter(s => s !== lastSupplier).map(s => (
+                      <option key={`recent-${s}`} value={s}>↻ {s}</option>
+                    ))}
+                    {recentSuppliers.length > 0 && <option disabled>─────────────</option>}
+                    {suppliers
+                      .filter((s: any) => !recentSuppliers.includes(s.supplier_name))
+                      .map((s: any) => (
+                        <option key={s.supplier_id} value={s.supplier_name}>{s.supplier_name}</option>
+                    ))}
                     ))}
                   </select>
                   <button
@@ -500,7 +540,7 @@ export default function OrdersPage() {
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => { setShowMarkDialog(false); setMarkSupplier(""); setMarkDelivery(""); setMarkNotes(""); }}
+                onClick={() => { setShowMarkDialog(false); setMarkSupplier(""); setMarkDelivery(""); setMarkNotes(""); setLastSupplier(null); setRecentSuppliers([]); }}
                 className="flex-1 px-4 py-2.5 text-gray-600 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
               >
                 Cancel
