@@ -196,7 +196,7 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      <div className={fileData && showPreview ? "grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5" : ""}>
+      <div className={fileData && showPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : ""}>
         <div className="space-y-5">
           {/* Invoice header */}
           <div className="card px-5 py-4">
@@ -287,11 +287,11 @@ export default function InvoicesPage() {
 
         {/* RIGHT: Invoice preview */}
         {fileData && showPreview && (
-          <div className="card overflow-hidden sticky top-4">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button></div>
-            <div className="max-h-[80vh] overflow-auto">
-              {fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full" />) :
-               fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}`} className="w-full h-[75vh]" title="Invoice PDF" />) :
+          <div className="card overflow-hidden sticky top-4 flex flex-col" style={{ maxHeight: "90vh" }}>
+            <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between shrink-0"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button></div>
+            <div className="flex-1 min-h-0">
+              {fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full h-full object-contain" />) :
+               fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
                (<p className="p-4 text-sm text-gray-400">Preview not available</p>)}
             </div>
           </div>
