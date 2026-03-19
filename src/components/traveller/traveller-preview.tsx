@@ -24,8 +24,8 @@ interface TravellerWO {
   status: string | null;
   wo_sequence: number | null;
   activity_label: string;
-  phase_number: number | null;
-  lead_name: string | null;
+  phase_number?: number | null;
+  lead_name?: string | null;
   traveller_printed_at?: string | null;
 }
 
