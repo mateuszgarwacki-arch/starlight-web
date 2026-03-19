@@ -164,21 +164,29 @@ vercel --prod
 
 ## Next Session Pickup
 
-Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish. Remaining:
+Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 partial. Remaining:
 
 ### Phase 8: Polish & Handover
-- Traveller PDF with QR code (Phase 4 leftover — biggest remaining item)
-- Material reconciliation on Review page (purchased via invoices vs used in BOM per job)
+- Traveller PDF with QR code (Phase 4 leftover — biggest remaining item, parked until WO workflow finalised)
+- OneDrive photo storage integration (awaiting Azure AD credentials from sysadmin — MICROSOFT_TENANT_ID, CLIENT_ID, CLIENT_SECRET)
 - Loading states, error handling, toast notifications
-- Supabase storage bucket for completion photos
-- Mobile: site photos page (currently placeholder)
 - Materials: dynamic spec field labels from tbl_material_spec_defs (deferred)
+- Job templating / clone from previous build (Tier 3 feature — discussed, not started)
 
-### Known bugs/improvements
-- WO coverage indicator doesn't refresh after deleting a WO (needs page reload)
+### Completed this session
+- [x] Material reconciliation tab on Review page (BOM planned vs invoice actual, per-job expandable)
+- [x] Quote Line Margin Analysis panel on Job detail page (quoted vs actual per line, margin %)
+- [x] Mobile site photos page (lists Workshop Complete items, camera + waiver — upload parked for OneDrive)
+- [x] 4 new Supabase views: qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin (SQL needs running)
+- [x] Fix: WO coverage indicator refreshes when returning from WO page (window focus listener)
+- [x] Fix: Review page time entries now show activity verb labels ("CUT + COVER — description") + scope name + job number
+- [x] Fix: Dashboard Active Jobs count only includes jobs with at least one WO
+- [x] Fix: Capacity page expanded WO details now show activity verb labels
+
+### SQL pending
+- phase8_views.sql — 4 views for material reconciliation + quote margin. Downloaded from Claude, needs running in Supabase SQL Editor.
+
+### Known bugs/improvements (remaining)
 - Workshop view: could add real-time Supabase subscription for live updates
-- Review page: time entries show WO description only, not activity verb label
-- Capacity page: could add per-phase breakdown (activity verb → phase join)
 - Invoice page: could add "Create Supplier" inline from extracted name (+ button exists, basic name only — could pre-fill contact from invoice)
 - Suppliers: could add search/filter on invoice lines tab
-- Dashboard: "Active Jobs" count in stat card includes jobs with scope but no WOs — consider refining filter
