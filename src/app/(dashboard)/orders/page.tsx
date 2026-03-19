@@ -475,7 +475,6 @@ export default function OrdersPage() {
                       .map((s: any) => (
                         <option key={s.supplier_id} value={s.supplier_name}>{s.supplier_name}</option>
                     ))}
-                    ))}
                   </select>
                   <button
                     onClick={() => setShowAddSupplier(true)}
