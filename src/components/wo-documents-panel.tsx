@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, getOneDriveUrl, jobFolder } from "@/lib/onedrive-client";
+import { CutListExtractor } from "@/components/cutlist-extractor";
 import {
   FileText, Image, Box, Upload, Trash2, Download,
   ChevronDown, ChevronRight, Eye, Plus, Loader2,
@@ -21,6 +22,7 @@ interface WODoc {
   sort_order: number;
   uploaded_at: string;
   extraction_status: string | null;
+  extracted_data: any;
 }
 
 interface DocsPanelProps {
@@ -199,22 +201,37 @@ export function WODocumentsPanel({
                                 )}
                               </div>
                             ) : (
-                              <div key={doc.doc_id} className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-gray-50 group">
-                                <Icon className={`h-3.5 w-3.5 ${config.color} shrink-0`} />
-                                <span className="text-xs text-navy flex-1 truncate">{doc.caption || doc.file_name}</span>
-                                {doc.doc_type === "cut_list" && doc.extraction_status && (
-                                  <span className={"text-[10px] px-1.5 py-0.5 rounded-full font-medium " + (
-                                    doc.extraction_status === "confirmed" ? "bg-starlight-green/10 text-starlight-green" :
-                                    doc.extraction_status === "extracted" ? "bg-starlight-blue/10 text-starlight-blue" :
-                                    doc.extraction_status === "pending" ? "bg-starlight-amber/10 text-starlight-amber" :
-                                    "bg-red-50 text-starlight-red"
-                                  )}>{doc.extraction_status}</span>
-                                )}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  {doc.doc_type === "model" && <button onClick={() => openPreview(doc)} className="p-1 text-gray-400 hover:text-navy" title="View 3D model"><Eye className="h-3.5 w-3.5" /></button>}
-                                  <button onClick={() => downloadDoc(doc)} className="p-1 text-gray-400 hover:text-navy" title="Download"><Download className="h-3.5 w-3.5" /></button>
-                                  {!readOnly && <button onClick={() => deleteDoc(doc.doc_id)} className="p-1 text-gray-400 hover:text-starlight-red" title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>}
+                              <div key={doc.doc_id}>
+                                <div className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-gray-50 group">
+                                  <Icon className={`h-3.5 w-3.5 ${config.color} shrink-0`} />
+                                  <span className="text-xs text-navy flex-1 truncate">{doc.caption || doc.file_name}</span>
+                                  {doc.doc_type === "cut_list" && doc.extraction_status && (
+                                    <span className={"text-[10px] px-1.5 py-0.5 rounded-full font-medium " + (
+                                      doc.extraction_status === "confirmed" ? "bg-starlight-green/10 text-starlight-green" :
+                                      doc.extraction_status === "extracted" ? "bg-starlight-blue/10 text-starlight-blue" :
+                                      doc.extraction_status === "pending" ? "bg-starlight-amber/10 text-starlight-amber" :
+                                      "bg-red-50 text-starlight-red"
+                                    )}>{doc.extraction_status}</span>
+                                  )}
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {doc.doc_type === "model" && <button onClick={() => openPreview(doc)} className="p-1 text-gray-400 hover:text-navy" title="View 3D model"><Eye className="h-3.5 w-3.5" /></button>}
+                                    <button onClick={() => downloadDoc(doc)} className="p-1 text-gray-400 hover:text-navy" title="Download"><Download className="h-3.5 w-3.5" /></button>
+                                    {!readOnly && <button onClick={() => deleteDoc(doc.doc_id)} className="p-1 text-gray-400 hover:text-starlight-red" title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>}
+                                  </div>
                                 </div>
+                                {doc.doc_type === "cut_list" && workOrderId && (
+                                  <CutListExtractor
+                                    docId={doc.doc_id}
+                                    workOrderId={workOrderId}
+                                    jobId={jobId}
+                                    onedrivePath={doc.onedrive_path}
+                                    fileName={doc.file_name}
+                                    mimeType={doc.mime_type}
+                                    extractionStatus={doc.extraction_status}
+                                    extractedData={doc.extracted_data}
+                                    onUpdate={loadDocs}
+                                  />
+                                )}
                               </div>
                             )
                           ))}
