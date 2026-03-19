@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { uploadToOneDrive } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
 import Link from "next/link";
 
@@ -215,10 +216,16 @@ export default function MobileWODetail() {
     // Upload photo if taken
     let photoPath = null;
     if (photoFile) {
-      const ext = photoFile.name.split(".").pop() || "jpg";
-      const filePath = "wo-completion/" + woId + "-" + Date.now() + "." + ext;
-      await supabase.storage.from("starlight-photos").upload(filePath, photoFile);
-      photoPath = filePath;
+      try {
+        const ext = photoFile.name.split(".").pop() || "jpg";
+        const fileName = `wo-${woId}-${Date.now()}.${ext}`;
+        const result = await uploadToOneDrive(photoFile, "Starlight/WO-Photos", fileName);
+        photoPath = result.path;
+      } catch (err: any) {
+        alert("Photo upload failed: " + (err.message || "Check OneDrive configuration."));
+        setActing(false);
+        return;
+      }
     }
 
     await supabase.from("tbl_work_orders").update({

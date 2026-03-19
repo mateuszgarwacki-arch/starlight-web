@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { uploadToOneDrive } from "@/lib/onedrive-client";
 import { Camera, Check, AlertTriangle, RefreshCw } from "lucide-react";
 
 interface ScopePhotoItem {
@@ -68,20 +69,21 @@ export default function MobilePhotosPage() {
     setUploading(scopeId);
     setPhotoPreview({ id: scopeId, url: URL.createObjectURL(file) });
     const ext = file.name.split(".").pop() || "jpg";
-    const filePath = `scope-completion/${scopeId}-${Date.now()}.${ext}`;
-    const { error: uploadErr } = await supabase.storage
-      .from("starlight-photos")
-      .upload(filePath, file, { contentType: file.type });
-    if (uploadErr) {
-      alert("Photo storage not configured yet. Your sysadmin is setting up OneDrive access — photos will be available soon.");
+    const fileName = `scope-${scopeId}-${Date.now()}.${ext}`;
+    const folder = "Starlight/Scope-Photos";
+
+    try {
+      const result = await uploadToOneDrive(file, folder, fileName);
+      await supabase.from("tbl_scope_items").update({
+        completion_photo_path: result.path,
+        status: "Completed",
+      }).eq("scope_item_id", scopeId);
+    } catch (err: any) {
+      alert("Upload failed: " + (err.message || "Unknown error. Check OneDrive configuration."));
       setUploading(null);
       setPhotoPreview(null);
       return;
     }
-    await supabase.from("tbl_scope_items").update({
-      completion_photo_path: filePath,
-      status: "Completed",
-    }).eq("scope_item_id", scopeId);
     setUploading(null);
     setPhotoPreview(null);
     await loadItems();
