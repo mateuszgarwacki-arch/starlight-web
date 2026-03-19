@@ -7,96 +7,111 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { file_data, media_type, csv_text, file_name } = body;
+  const { file_data, media_type, csv_text, file_name, materials_context } = body;
 
-  // Two paths: raw CSV text (parsed client-side) or PDF/image (needs AI vision)
   const isCSV = !!csv_text;
-  const isPdf = media_type === "application/pdf";
-  const isImage = media_type?.startsWith("image/");
-
   if (!isCSV && !file_data) {
     return NextResponse.json({ error: "Missing file_data or csv_text" }, { status: 400 });
   }
 
-  const prompt = `You are extracting a cut list / bill of materials from a workshop document.
-This is from OpenCutList (SketchUp plugin) or a similar cut list tool used in scenic/event fabrication.
+  const isPdf = media_type === "application/pdf";
+  const isImage = media_type?.startsWith("image/");
 
-Extract every material line. Return ONLY valid JSON with no preamble or markdown:
+  const materialsSection = materials_context
+    ? `\n\nMATERIALS CATALOGUE (use these to match and identify materials):\n${materials_context}\n`
+    : "";
+
+  const prompt = `You are extracting a cut list from an OpenCutList CSV export or similar workshop document for a scenic/event fabrication company.
+
+NAMING CONVENTIONS USED IN THIS WORKSHOP:
+- Part names often use material prefixes: "2x1_upright" means a 2x1 PAR Softwood part called "upright"
+- "2x1" = 2x1 PAR Softwood (cross-section 44mm x 19mm, any length). Match to "2x1 PAR Softwood" in catalogue.
+- "MDF18" or "mdf18" prefix = 18mm MDF sheet material. Match to "18mm MDF" in catalogue.
+- "ply18" or "ply_" prefix = 18mm Plywood. "ply12" = 12mm Plywood. Match accordingly.
+- "bendy_ply" = flexible/bending plywood (usually 5mm or 3mm)
+- Numbers in prefixes usually indicate thickness in mm for sheet goods, or cross-section for timber
+- The part description IS the item name. The material must be INFERRED from the prefix and dimensions.
+${materialsSection}
+CRITICAL RULES FOR SHEET GOODS AND TIMBER:
+1. For SHEET materials (Plywood, MDF, acrylic etc.):
+   - Standard sheet size is 2440mm x 1220mm unless catalogue says otherwise
+   - Calculate how many standard sheets are needed to cut ALL parts of this material
+   - Use simple nesting: fit parts on sheets by area with 10% waste factor
+   - Return "sheet_count" = number of standard sheets to ORDER
+   
+2. For TIMBER (PAR, CLS, battens etc.):
+   - Standard length is 4800mm (or as specified in catalogue)
+   - Calculate how many standard lengths are needed to cut all pieces
+   - Simple linear: total cut length / standard length, rounded up, +10% waste
+   - Return "standard_length_count" = number of standard lengths to ORDER
+
+3. Group parts by material type — all "mdf18" parts share the same standard sheets
+
+Return ONLY valid JSON:
 
 {
   "lines": [
     {
       "line_number": 1,
-      "description": "Full part name/description as written",
-      "material": "Material type (e.g. 18mm Birch Ply, 2x1 PAR Softwood, 6mm MDF)",
+      "description": "The part name exactly as written in the cut list",
+      "material": "The matched material from catalogue, or best guess (e.g. '18mm MDF', '2x1 PAR Softwood')",
       "material_category": "Timber|Sheet|Metal|Fabric|Hardware|Other",
       "length_mm": 1200,
       "width_mm": 600,
       "thickness_mm": 18,
       "quantity": 2,
       "unit": "Each|Sheet|Metre|Length",
-      "notes": "Any grain direction, edge banding, or special notes"
+      "notes": "Any grain, edge banding, or special notes",
+      "sheet_count": null,
+      "standard_length_count": null
+    }
+  ],
+  "material_summary": [
+    {
+      "material": "18mm MDF",
+      "total_parts": 3,
+      "total_area_sqm": 0.54,
+      "standard_sheet_size": "2440x1220",
+      "sheets_needed": 1,
+      "waste_pct": 63
     }
   ],
   "summary": {
     "total_parts": 12,
-    "material_types": ["18mm Birch Ply", "2x1 PAR Softwood"],
-    "source_format": "OpenCutList CSV|Custom CSV|PDF Cut List|Unknown"
+    "material_types": ["18mm MDF", "2x1 PAR Softwood"],
+    "source_format": "OpenCutList CSV"
   }
 }
 
-RULES:
-- Every distinct part gets its own line
-- If quantity > 1, keep as one line with the quantity (don't repeat)
-- Dimensions should be in millimetres. Convert from inches/cm if needed.
-- For timber: length is along the grain. Width and thickness describe the cross section.
-- For sheet goods: length and width are the cut size. Thickness is the sheet thickness.
-- Material category must be one of: Timber, Sheet, Metal, Fabric, Hardware, Other
-- If a column meaning is ambiguous, use the most likely interpretation
-- Preserve the original description/name exactly as written
-- If dimensions are missing, set to null (don't guess)`;
+IMPORTANT:
+- sheet_count and standard_length_count go on the FIRST line of each material group only
+- Other lines of the same material get null for these fields
+- Every part gets its own line with full dimensions
+- If you can't determine the material, set material_category to "Other"`;
 
   try {
     let messages: any[];
 
     if (isCSV) {
-      // CSV text - send as plain text to Claude
-      messages = [{
-        role: "user",
-        content: `Here is a cut list CSV file (${file_name || "cutlist.csv"}):\n\n${csv_text}\n\n${prompt}`
-      }];
+      messages = [{ role: "user", content: `Cut list file (${file_name || "cutlist.csv"}):\n\n${csv_text}\n\n${prompt}` }];
     } else if (isPdf) {
-      messages = [{
-        role: "user",
-        content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: file_data } },
-          { type: "text", text: prompt }
-        ]
-      }];
+      messages = [{ role: "user", content: [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: file_data } },
+        { type: "text", text: prompt }
+      ]}];
     } else if (isImage) {
-      messages = [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type, data: file_data } },
-          { type: "text", text: prompt }
-        ]
-      }];
+      messages = [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type, data: file_data } },
+        { type: "text", text: prompt }
+      ]}];
     } else {
       return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        messages,
-      }),
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages }),
     });
 
     if (!response.ok) {
@@ -109,9 +124,7 @@ RULES:
     const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
     let parsed;
-    try {
-      parsed = JSON.parse(clean);
-    } catch {
+    try { parsed = JSON.parse(clean); } catch {
       return NextResponse.json({ error: "Failed to parse AI response", raw: clean }, { status: 500 });
     }
 
