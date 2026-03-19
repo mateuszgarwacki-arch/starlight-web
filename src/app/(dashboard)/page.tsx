@@ -58,15 +58,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [jobsRes, manpowerRes, procRes, flagsRes, invoiceRes] = await Promise.all([
+      const [jobsRes, manpowerRes, procRes, flagsRes, invoiceRes, jobStatusRes] = await Promise.all([
         supabase.from("qry_dash_upcoming_jobs").select("*"),
         supabase.from("qry_manpower_demand").select("*"),
         supabase.from("qry_procurement_needed").select("*").limit(15),
         supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, flag_note, actual_hours, entry_cost, system_start_timestamp").not("flag_note", "is", null).order("system_start_timestamp", { ascending: false }).limit(10),
         supabase.from("tbl_invoices").select("invoice_id, supplier, invoice_number, invoice_date, total_value, status").eq("status", "Processed").order("uploaded_at", { ascending: false }).limit(5),
+        supabase.from("tbl_production_plan").select("job_id, job_status"),
       ]);
 
-      if (jobsRes.data) setJobs(jobsRes.data.filter((j: any) => (j.total_wos || 0) > 0 || j.scope_prog !== "0/0"));
+      // Filter out deleted jobs
+      const deletedJobIds = new Set((jobStatusRes.data || []).filter((j: any) => j.job_status === "Deleted").map((j: any) => j.job_id));
+      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id) && ((j.total_wos || 0) > 0 || j.scope_prog !== "0/0"));
+      if (activeJobs) setJobs(activeJobs);
       if (manpowerRes.data) setManpower(manpowerRes.data);
       setProcurement(procRes.data || []);
       setRecentInvoices(invoiceRes.data || []);
