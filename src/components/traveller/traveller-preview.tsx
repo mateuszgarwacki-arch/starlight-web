@@ -44,6 +44,8 @@ interface TravellerDoc {
   file_name: string;
   onedrive_path: string | null;
   caption: string | null;
+  extracted_data: any;
+  extraction_status: string | null;
 }
 
 interface TravellerLinkedItem {
@@ -123,7 +125,7 @@ export function TravellerPreview({
           .order("bom_id"),
         supabase
           .from("tbl_wo_documents")
-          .select("doc_id, doc_type, file_name, onedrive_path, caption, sort_order")
+          .select("doc_id, doc_type, file_name, onedrive_path, caption, sort_order, extracted_data, extraction_status")
           .eq("work_order_id", wo.work_order_id)
           .order("sort_order"),
         supabase
@@ -609,16 +611,82 @@ function CutListContent({ cutLists }: { cutLists: TravellerDoc[] }) {
   return (
     <div>
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Cut list</h3>
-      {cutLists.map((cl) => (
-        <div key={cl.doc_id} className="mb-4">
-          <p className="text-xs font-medium text-gray-700 mb-1">{cl.file_name}</p>
-          {cl.caption && <p className="text-xs text-gray-400 mb-2">{cl.caption}</p>}
-          <div className="text-xs text-gray-400 italic bg-gray-50 px-4 py-8 rounded text-center border border-gray-200">
-            Cut list data from extracted parts.<br />
-            Refer to original file if printed version is unclear.
+      {cutLists.map((cl) => {
+        const data = cl.extracted_data;
+        const parts = data?.parts || [];
+        const materials = data?.materials || [];
+        const hasData = parts.length > 0 || materials.length > 0;
+
+        return (
+          <div key={cl.doc_id} className="mb-4">
+            <p className="text-xs font-medium text-gray-700 mb-2">{cl.file_name}</p>
+
+            {hasData && materials.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Material summary</p>
+                <table className="w-full text-xs mb-3">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="text-left py-1 px-2 font-semibold text-gray-600">Material</th>
+                      <th className="text-right py-1 px-2 font-semibold text-gray-600 w-16">Parts</th>
+                      <th className="text-right py-1 px-2 font-semibold text-gray-600 w-20">Sheets</th>
+                      <th className="text-right py-1 px-2 font-semibold text-gray-600 w-20">Lengths</th>
+                      <th className="text-right py-1 px-2 font-semibold text-gray-600 w-16">Waste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materials.map((m: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-1 px-2 text-gray-800">{m.material}</td>
+                        <td className="py-1 px-2 text-right text-gray-800">{m.total_parts}</td>
+                        <td className="py-1 px-2 text-right text-gray-600">{m.sheets_needed ?? "—"}</td>
+                        <td className="py-1 px-2 text-right text-gray-600">{m.lengths_needed ?? "—"}</td>
+                        <td className="py-1 px-2 text-right text-gray-500">{m.waste_pct != null ? `${Math.round(m.waste_pct)}%` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {hasData && parts.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Individual parts ({parts.length})</p>
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="text-left py-0.5 px-1.5 font-semibold text-gray-600">#</th>
+                      <th className="text-left py-0.5 px-1.5 font-semibold text-gray-600">Description</th>
+                      <th className="text-left py-0.5 px-1.5 font-semibold text-gray-600">Material</th>
+                      <th className="text-right py-0.5 px-1.5 font-semibold text-gray-600">L</th>
+                      <th className="text-right py-0.5 px-1.5 font-semibold text-gray-600">W</th>
+                      <th className="text-right py-0.5 px-1.5 font-semibold text-gray-600">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parts.map((p: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-50">
+                        <td className="py-0.5 px-1.5 text-gray-400">{p.line_number || i + 1}</td>
+                        <td className="py-0.5 px-1.5 text-gray-800">{p.description || "—"}</td>
+                        <td className="py-0.5 px-1.5 text-gray-600">{p.material || "—"}</td>
+                        <td className="py-0.5 px-1.5 text-right text-gray-700">{p.length_mm ?? "—"}</td>
+                        <td className="py-0.5 px-1.5 text-right text-gray-700">{p.width_mm ?? "—"}</td>
+                        <td className="py-0.5 px-1.5 text-right text-gray-800">{p.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {!hasData && (
+              <div className="text-xs text-gray-400 italic bg-gray-50 px-4 py-6 rounded text-center border border-gray-200">
+                Cut list data not extracted. Refer to original file.
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
