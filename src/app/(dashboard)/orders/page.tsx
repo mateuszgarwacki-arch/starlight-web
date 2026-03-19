@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   ShoppingCart, Package, Check, ChevronDown, ChevronRight,
-  Truck, Calendar, Clock, Search, Filter, X,
+  Truck, Calendar, Clock, Search, Filter, X, Plus,
 } from "lucide-react";
 
 interface ProcItem {
@@ -79,18 +79,21 @@ export default function OrdersPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [filter, setFilter] = useState("");
   const [tab, setTab] = useState<"outstanding" | "ordered">("outstanding");
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [addingSupplier, setAddingSupplier] = useState(false);
 
   const loadData = useCallback(async () => {
     const [procRes, orderedRes, suppRes] = await Promise.all([
       supabase.from("qry_procurement_needed").select("*"),
       supabase.from("qry_recent_orders").select("*").limit(50),
-      supabase.from("tbl_suppliers").select("supplier_id, company_name").eq("active", true).order("company_name"),
+      supabase.from("tbl_suppliers").select("supplier_id, company_name, active").order("company_name"),
     ]);
 
     const items = procRes.data || [];
     setOutstanding(items);
     setRecentOrders(orderedRes.data || []);
-    setSuppliers(suppRes.data || []);
+    setSuppliers((suppRes.data || []).filter((s: any) => s.active === true || s.active === "true" || s.active === "-1"));
 
     // Group by material name
     const groupMap = new Map<string, MaterialGroup>();
@@ -137,6 +140,22 @@ export default function OrdersPage() {
     const next = new Set(selected);
     if (next.has(bomId)) next.delete(bomId); else next.add(bomId);
     setSelected(next);
+  };
+
+  const handleAddSupplier = async () => {
+    if (!newSupplierName.trim()) return;
+    setAddingSupplier(true);
+    const { data, error } = await supabase.from("tbl_suppliers")
+      .insert({ company_name: newSupplierName.trim(), active: true })
+      .select("supplier_id, company_name, active")
+      .single();
+    if (data) {
+      setSuppliers(prev => [...prev, data].sort((a, b) => (a.company_name || "").localeCompare(b.company_name || "")));
+      setMarkSupplier(data.company_name);
+    }
+    setNewSupplierName("");
+    setShowAddSupplier(false);
+    setAddingSupplier(false);
   };
 
   const handleMarkOrdered = async () => {
@@ -406,16 +425,55 @@ export default function OrdersPage() {
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Supplier</label>
-              <select
-                value={markSupplier}
-                onChange={(e) => setMarkSupplier(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
-              >
-                <option value="">— Select supplier —</option>
-                {suppliers.map((s: any) => (
-                  <option key={s.supplier_id} value={s.company_name}>{s.company_name}</option>
-                ))}
-              </select>
+              {!showAddSupplier ? (
+                <div className="flex gap-2">
+                  <select
+                    value={markSupplier}
+                    onChange={(e) => setMarkSupplier(e.target.value)}
+                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                  >
+                    <option value="">— Select supplier —</option>
+                    {suppliers.map((s: any) => (
+                      <option key={s.supplier_id} value={s.company_name}>{s.company_name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setShowAddSupplier(true)}
+                    className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-500 hover:text-navy hover:border-starlight-blue transition-colors shrink-0"
+                    title="Add new supplier"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSupplierName}
+                    onChange={(e) => setNewSupplierName(e.target.value)}
+                    placeholder="New supplier name..."
+                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddSupplier(); if (e.key === "Escape") { setShowAddSupplier(false); setNewSupplierName(""); } }}
+                  />
+                  <button
+                    onClick={handleAddSupplier}
+                    disabled={!newSupplierName.trim() || addingSupplier}
+                    className="px-3 py-2.5 bg-starlight-blue text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    {addingSupplier ? "..." : "Add"}
+                  </button>
+                  <button
+                    onClick={() => { setShowAddSupplier(false); setNewSupplierName(""); }}
+                    className="px-2.5 py-2.5 text-gray-400 hover:text-navy transition-colors shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              {suppliers.length === 0 && !showAddSupplier && (
+                <p className="text-[10px] text-gray-400 mt-1">No suppliers yet — click + to add one</p>
+              )}
             </div>
 
             <div>
