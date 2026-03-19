@@ -168,7 +168,7 @@ vercel --prod
 | MICROSOFT_TENANT_ID | Azure AD tenant ID | For OneDrive integration |
 | MICROSOFT_CLIENT_ID | Azure AD app client ID | For OneDrive integration |
 | MICROSOFT_CLIENT_SECRET | Azure AD app secret | For OneDrive integration |
-| MICROSOFT_DRIVE_SITE | SharePoint site ID | Pending sysadmin permission |
+| MICROSOFT_DRIVE_ID | SharePoint document library drive ID | For OneDrive file storage |
 
 ## Next Session Pickup
 
@@ -191,18 +191,19 @@ Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 pa
 - [x] Fix: Dashboard Active Jobs count only includes jobs with at least one WO
 - [x] Fix: Capacity page expanded WO details now show activity verb labels
 
-### OneDrive Integration (IN PROGRESS)
+### OneDrive Integration ✅
 - [x] Microsoft Graph client library (src/lib/microsoft-graph.ts): token caching, upload, download, sharing links
 - [x] Client-side helper (src/lib/onedrive-client.ts): uploadToOneDrive(), getOneDriveUrl()
 - [x] API route: /api/onedrive/upload (auth-gated, multipart form)
 - [x] API route: /api/onedrive/download (auth-gated, path-based)
-- [x] Mobile WO completion uses OneDrive upload (src/app/m/wo/[woId]/page.tsx)
-- [x] Mobile site photos uses OneDrive upload (src/app/m/photos/page.tsx)
-- [x] Vercel env vars set: MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET
-- [ ] BLOCKED: Sysadmin needs to add `Sites.ReadWrite.All` application permission + admin consent in Azure AD
-- [ ] Once unblocked: run test script to get SharePoint site ID, set MICROSOFT_DRIVE_SITE env var
-- Folder structure: Starlight/WO-Photos/, Starlight/Scope-Photos/, later Starlight/Models/, Starlight/Drawings/
-- SharePoint site: starlightdesign.sharepoint.com (specific site TBD after permission grant)
+- [x] Mobile WO completion uses OneDrive upload
+- [x] Mobile site photos uses OneDrive upload
+- [x] Vercel env vars set: MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_DRIVE_ID
+- [x] Azure AD app has Sites.ReadWrite.All permission with admin consent
+- [x] Upload tested and confirmed working to SharePoint
+- Target: Starlight Design Team Site root → /Shared Documents/Workshop/
+- Subfolders: Workshop/WO-Photos/, Workshop/Scope-Photos/ (auto-created on first upload)
+- Future: Workshop/Models/, Workshop/Drawings/
 
 ### SQL pending
 - phase8_views.sql — 4 views for material reconciliation + quote margin. Downloaded from Claude, needs running in Supabase SQL Editor.
