@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { uploadToOneDrive } from "@/lib/onedrive-client";
+import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
 import Link from "next/link";
 
@@ -218,8 +218,9 @@ export default function MobileWODetail() {
     if (photoFile) {
       try {
         const ext = photoFile.name.split(".").pop() || "jpg";
-        const fileName = `wo-${woId}-${Date.now()}.${ext}`;
-        const result = await uploadToOneDrive(photoFile, "Workshop/WO-Photos", fileName);
+        const folder = `${jobFolder(wo?.job_number || "unknown", wo?.job_name || "unknown")}/WO-Photos`;
+        const fileName = woPhotoName(wo?.activity_label || "WO", wo?.scope_name || `scope`, ext) .replace(`.${ext}`, `-${woId}.${ext}`);
+        const result = await uploadToOneDrive(photoFile, folder, fileName);
         photoPath = result.path;
       } catch (err: any) {
         alert("Photo upload failed: " + (err.message || "Check OneDrive configuration."));

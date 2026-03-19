@@ -1,5 +1,47 @@
 import { createClient } from "@/lib/supabase-browser";
 
+/** Sanitise a string for use in file/folder names */
+function sanitiseName(name: string, maxLen = 80): string {
+  return name
+    .replace(/[<>:"/\\|?*]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .substring(0, maxLen) || "unnamed";
+}
+
+/** Format today's date as YYYY-MM-DD */
+function todayStr(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
+ * Build the OneDrive folder path for a job.
+ * e.g. "Workshop/13725 - Grosvenor Hotel Wedding"
+ */
+export function jobFolder(jobNumber: string, jobName: string): string {
+  const folder = sanitiseName(`${jobNumber} - ${jobName}`);
+  return `Workshop/${folder}`;
+}
+
+/**
+ * Build a WO photo filename with context.
+ * e.g. "CUT+COVER-Bar-Carcass-2026-03-19.jpg"
+ */
+export function woPhotoName(activityLabel: string, scopeName: string, ext = "jpg"): string {
+  const activity = sanitiseName(activityLabel, 30);
+  const scope = sanitiseName(scopeName, 40);
+  return `${activity}-${scope}-${todayStr()}.${ext}`;
+}
+
+/**
+ * Build a scope completion photo filename.
+ * e.g. "12ft-Circular-Bar-Campsite.jpg"
+ */
+export function scopePhotoName(scopeName: string, ext = "jpg"): string {
+  return `${sanitiseName(scopeName, 70)}.${ext}`;
+}
+
 export async function uploadToOneDrive(
   file: File,
   folder: string,

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { uploadToOneDrive } from "@/lib/onedrive-client";
+import { uploadToOneDrive, jobFolder, scopePhotoName } from "@/lib/onedrive-client";
 import { Camera, Check, AlertTriangle, RefreshCw } from "lucide-react";
 
 interface ScopePhotoItem {
@@ -68,9 +68,12 @@ export default function MobilePhotosPage() {
     if (!file) return;
     setUploading(scopeId);
     setPhotoPreview({ id: scopeId, url: URL.createObjectURL(file) });
+
+    // Find the item to get job context
+    const item = items.find(i => i.scope_item_id === scopeId);
     const ext = file.name.split(".").pop() || "jpg";
-    const fileName = `scope-${scopeId}-${Date.now()}.${ext}`;
-    const folder = "Workshop/Scope-Photos";
+    const folder = `${jobFolder(item?.job_number || "unknown", item?.job_name || "unknown")}/Scope-Photos`;
+    const fileName = scopePhotoName(item?.item_name || `scope-${scopeId}`, ext);
 
     try {
       const result = await uploadToOneDrive(file, folder, fileName);
