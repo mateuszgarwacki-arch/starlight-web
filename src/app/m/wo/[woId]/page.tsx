@@ -382,8 +382,8 @@ export default function MobileWODetail() {
 
       {/* ============ LOG HOURS BOTTOM SHEET ============ */}
       {showLogSheet && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center">
-          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 space-y-4 animate-slide-up">
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
+          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4 animate-slide-up">
             <h2 className="text-lg font-bold text-navy">Log My Hours</h2>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Actual Hours *</label>
@@ -429,8 +429,8 @@ export default function MobileWODetail() {
 
       {/* ============ MARK COMPLETE SHEET ============ */}
       {showComplete && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center">
-          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
+          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4">
             <h2 className="text-lg font-bold text-navy">Mark Complete</h2>
             <p className="text-sm text-gray-500">Take a completion photo of the finished work.</p>
 
