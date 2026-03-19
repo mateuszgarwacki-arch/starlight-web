@@ -178,15 +178,75 @@ vercel --prod
 
 ## Next Session Pickup
 
-Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 partial. Remaining:
+Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 mostly done. Remaining:
 
 ### Phase 8: Polish & Handover
-- Traveller PDF with QR code (parked until WO workflow finalised)
-- ~~Three.js 3D model viewer inline (Phase C — upload works, viewer is placeholder)~~ ✅ DONE
-- ~~Freelancer mobile document view (Phase D — drawings/models visible to freelancers)~~ ✅ DONE
+- **Traveller PDF with QR code** — NEXT PRIORITY. Mateusz will provide full spec. Chelsea In Bloom job (13794) being built out with WOs, drawings, and models as the test case.
+- ~~Three.js 3D model viewer inline (Phase C)~~ ✅ DONE
+- ~~Freelancer mobile document view (Phase D)~~ ✅ DONE
+- ~~Orders page — procurement management~~ ✅ DONE
+- ~~Editable job header~~ ✅ DONE
 - Loading states, error handling, toast notifications
 - Materials: dynamic spec field labels from tbl_material_spec_defs (deferred)
 - Job templating / clone from previous build (Tier 3 feature — discussed, not started)
+- Create job from UI (currently requires SQL insert — needed before go-live)
+
+### Completed Session 4 (19 Mar 2026 — afternoon)
+- [x] Three.js 3D model viewer: GLB/GLTF with OrbitControls, studio lighting, auto-fit, fullscreen, reset
+- [x] Mobile document view: drawings (thumbnail grid + lightbox), 3D models (inline viewer), cut lists (download)
+- [x] Orders page (/orders): outstanding items grouped by material, mark-as-ordered workflow, recently ordered tab
+- [x] Smart supplier dropdown: last-used supplier first, order history per material, divider, then alphabetical rest
+- [x] Dashboard fix: procurement panel columns (material_name not company_name), stat card links to /orders
+- [x] Sidebar: Orders link between Materials and Invoices
+- [x] Editable job header: click-to-edit job name, client, event date, location with pencil icon on hover
+- [x] 2 new Supabase views: qry_procurement_needed (replaced with joins), qry_recent_orders
+- [x] New column: tbl_wo_bom.expected_delivery (DATE)
+- [x] Bug fix: supplier column name (supplier_name not company_name throughout)
+- [x] Bug fix: boolean filter logic — exclude false, don't require true (handles null = active)
+- [x] Chelsea In Bloom job (13794) created in Supabase — Mateusz building out WOs manually
+
+### SQL that needs running (if not already done)
+```sql
+-- Add expected_delivery column to BOM
+ALTER TABLE tbl_wo_bom ADD COLUMN IF NOT EXISTS expected_delivery DATE;
+
+-- Replace procurement view with proper joins  
+DROP VIEW IF EXISTS qry_procurement_needed;
+CREATE VIEW qry_procurement_needed AS
+SELECT b.bom_id, b.work_order_id, b.job_id, b.material_id, b.material_category,
+  b.item_description, b.stock_reference, b.quantity, b.unit, b.unit_cost,
+  b.actual_unit_cost, b.supplier, b.needs_ordering, b.ordered_at, b.ordered_by,
+  b.expected_delivery, b.notes,
+  COALESCE(m.material_name, b.item_description) AS material_name,
+  m.standard_length, m.standard_sheet_size,
+  j.job_number, j.job_name, j.event_date,
+  w.description AS wo_description, w.scope_item_id,
+  s.item_name AS scope_name, mc.lookup_value AS category_name
+FROM tbl_wo_bom b
+LEFT JOIN tbl_materials m ON m.material_id = b.material_id
+LEFT JOIN tbl_production_plan j ON j.job_id = b.job_id
+LEFT JOIN tbl_work_orders w ON w.work_order_id = b.work_order_id
+LEFT JOIN tbl_scope_items s ON s.scope_item_id = w.scope_item_id
+LEFT JOIN tbl_master_lookups mc ON mc.lookup_id = b.material_category
+WHERE b.needs_ordering = true AND b.ordered_at IS NULL;
+
+-- Create recent orders view
+DROP VIEW IF EXISTS qry_recent_orders;
+CREATE VIEW qry_recent_orders AS
+SELECT b.bom_id, b.work_order_id, b.job_id, b.material_id, b.material_category,
+  b.item_description, b.quantity, b.unit, b.unit_cost, b.actual_unit_cost,
+  b.supplier, b.ordered_at, b.ordered_by, b.expected_delivery, b.notes,
+  COALESCE(m.material_name, b.item_description) AS material_name,
+  j.job_number, j.job_name, w.description AS wo_description,
+  s.item_name AS scope_name, f.freelancer_name AS ordered_by_name
+FROM tbl_wo_bom b
+LEFT JOIN tbl_materials m ON m.material_id = b.material_id
+LEFT JOIN tbl_production_plan j ON j.job_id = b.job_id
+LEFT JOIN tbl_work_orders w ON w.work_order_id = b.work_order_id
+LEFT JOIN tbl_scope_items s ON s.scope_item_id = w.scope_item_id
+LEFT JOIN tbl_freelancers f ON f.freelancer_id = b.ordered_by
+WHERE b.ordered_at IS NOT NULL ORDER BY b.ordered_at DESC;
+```
 
 ### Completed this session (19 Mar 2026)
 - [x] Material reconciliation tab on Review page (BOM planned vs invoice actual, per-job expandable)
@@ -251,8 +311,8 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 ### Session 3 (19 Mar 2026) — Phase 8 Partial: OneDrive + Documents + Cut Lists
 16 commits, 15 features. Material reconciliation + quote margin analysis. OneDrive integration via Microsoft Graph API. WO documents panel (drawings, references, cut lists, models). Cut list AI extraction with OpenCutList support. 4 bug fixes. Azure AD app registration configured.
 
-### Session 4 (19 Mar 2026) — Phase 8C+D: 3D Model Viewer + Mobile Documents + Orders Page
-3 commits. Three.js GLB/GLTF viewer with OrbitControls replacing placeholder modal. Studio lighting, auto-fit, fullscreen toggle, reset view. Freelancer mobile document view: drawings (thumbnail grid + lightbox), references, 3D models (inline viewer), cut lists (download). Dynamic import of Three.js to avoid SSR issues. Orders page: procurement management with material grouping, mark-as-ordered workflow, recently ordered tab. Dashboard fix: procurement panel column names, stat card links to /orders. New sidebar item: Orders (between Materials and Invoices). 2 new Supabase views: qry_procurement_needed (replaced with joins), qry_recent_orders. New column: tbl_wo_bom.expected_delivery.
+### Session 4 (19 Mar 2026) — Phase 8C+D: 3D Viewer + Mobile Docs + Orders + Job Editing
+8 commits. Three.js GLB/GLTF viewer replacing placeholder. Mobile document view for freelancers. Orders page with material grouping, mark-ordered workflow, smart supplier dropdown (last-used first). Dashboard procurement fix. Editable job header (click-to-edit). Supplier column name fix (supplier_name not company_name). Boolean filter fix (exclude false, don't require true).
 
 ## Lessons Learned & Execution Rules
 
@@ -304,3 +364,8 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - **Upload → extract → review → confirm** flow must work without any page navigation. Each step updates in-place.
 - **Lightbox for images, download for documents** — don't try to render PDFs inline on mobile
 - **z-index layering**: tab bar=50, bottom sheets=60, lightbox/modals=70
+
+### Naming & Schema
+- **tbl_suppliers uses `supplier_name`** not `company_name` — established when contractors merged into suppliers (Session 2). Always check the actual interface/types before referencing columns.
+- **Boolean filter logic: exclude false, don't require true** — `active` column may be null (never set), true, "true", or "-1" depending on data source (ODBC, web app, manual SQL). Filter as `!== false && !== "false"` to treat null as active by default.
+- **Smart supplier dropdown pattern**: query order history for the selected material_id to find last-used supplier. Pre-select it and show at top with ★ prefix. Other historical suppliers show with ↻ prefix. Divider line, then alphabetical rest. Builds intelligence over time with zero configuration.
