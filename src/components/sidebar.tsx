@@ -16,6 +16,7 @@ import {
   Star,
   Building2,
   FileText,
+  Truck,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/capacity", label: "Capacity", icon: Users, zone: 1 },
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
   { href: "/invoices", label: "Invoices", icon: FileText, zone: 1 },
+  { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
   { href: "/contractors", label: "Contractors", icon: Building2, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
 ];
