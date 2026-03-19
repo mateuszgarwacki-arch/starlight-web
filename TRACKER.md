@@ -114,7 +114,29 @@
 - [x] Estimate accuracy: estimated vs actual hours, variance, accuracy percentage
 - [x] Colour-coded accuracy (green <=110%, amber <=150%, red >150%)
 
-### Phase 7: Capacity & Materials ⬜
+### Phase 7: Capacity & Materials ✅
+- [x] Materials catalogue page: full CRUD (add/edit/deactivate)
+- [x] Category filtering pills (from tbl_master_lookups MATERIAL_CATEGORY)
+- [x] Search by name, supplier, notes
+- [x] Show/hide inactive materials toggle
+- [x] Contextual fields: standard_length for Timber/Metal/Fabric, standard_sheet_size for Sheet
+- [x] Spec fields (spec_val_1/2/3, spec_text_1/2, paint_finish) in add/edit dialog
+- [x] Price History tab: material selector, price entry table sorted by effective_date
+- [x] Add Price form with source (Quote/Invoice/Estimate), supplier, effective date
+- [x] Auto-update current_unit_cost when latest price added
+- [x] CURRENT badge on most recent price entry
+- [x] Quick-link from catalogue row to price history (clock icon)
+- [x] Capacity planning page: demand vs supply overview
+- [x] Summary cards: estimated total, hours logged, remaining, booked (4 wks), gap analysis
+- [x] Gap indicator: green (surplus), amber (tight), red (shortfall)
+- [x] Cross-job conflict detection (same person booked to different jobs same day)
+- [x] Conflict warning banner with person, date, and conflicting job names
+- [x] Per-job demand breakdown: expandable rows with WO-level detail
+- [x] Progress bars per job (WOs complete / total)
+- [x] Crew availability table: days booked, hours booked, jobs assigned (next 4 weeks)
+- [x] Conflict indicator (triangle icon) on crew rows with cross-job conflicts
+- [x] Link to Crew Calendar from capacity page
+
 ### Phase 8: Polish & Handover ⬜
 
 ## Category Behaviour Matrix
@@ -171,6 +193,8 @@ tbl_contractors, tbl_quote_line_contractors, tbl_wo_activities
 | `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
 | `src/lib/supabase-admin.ts` | Server-side Supabase client (service role) |
 | `src/components/booking-calendar.tsx` | Week grid booking calendar |
+| `src/app/(dashboard)/materials/page.tsx` | Materials catalogue CRUD, category filters, price history |
+| `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, gap analysis, conflicts |
 
 ## Conventions
 
@@ -206,15 +230,7 @@ git push
 
 ## Next Session Pickup
 
-Phases 0-6 complete. Remaining work:
-
-### Outstanding SQL
-- Run Phase5_Schedule_Extend.sql (corrected version without policies) — adds status, job_id, notes, created_at to tbl_freelancer_schedule
-
-### Phase 7: Capacity & Materials
-- Capacity/manpower page (from qry_manpower_demand)
-- Materials catalogue management page
-- Cross-job conflict detection
+Phases 0-7 complete. Phase 8 (Polish & Handover) remaining.
 
 ### Phase 8: Polish & Handover
 - Traveller PDF with QR code (Phase 4 leftover)
@@ -222,8 +238,10 @@ Phases 0-6 complete. Remaining work:
 - Supabase storage bucket for completion photos
 - Dashboard polish (procurement actions, flags count)
 - Mobile: site photos page (currently placeholder)
+- Materials: dynamic spec field labels driven by tbl_material_spec_defs (deferred — generic labels work for now)
 
 ### Known bugs/improvements to address
 - WO coverage indicator doesn't refresh after deleting a WO (needs page reload)
 - Workshop view: could add real-time Supabase subscription for live updates
 - Review page: time entries need WO activity labels enriched (currently shows description only)
+- Capacity page: could add per-phase breakdown (requires activity verb → phase join on WOs)
