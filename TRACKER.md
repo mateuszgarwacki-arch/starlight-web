@@ -123,6 +123,8 @@ tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contr
 | `src/lib/microsoft-graph.ts` | Microsoft Graph client: auth, upload, download, sharing |
 | `src/lib/onedrive-client.ts` | Browser-side OneDrive upload/download helper |
 | `src/components/wo-documents-panel.tsx` | WO file management: drawings, references, cut lists, models |
+| `src/components/model-viewer.tsx` | Three.js GLB/GLTF viewer with OrbitControls, studio lighting, auto-fit |
+| `src/components/mobile-wo-docs.tsx` | Mobile read-only document view: thumbnails, lightbox, 3D viewer |
 | `src/components/cutlist-extractor.tsx` | AI cut list extraction + BOM import with material summary |
 | `src/app/api/extract-cutlist/route.ts` | API: Claude-powered cut list CSV/PDF extraction |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
@@ -179,8 +181,8 @@ Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 pa
 
 ### Phase 8: Polish & Handover
 - Traveller PDF with QR code (parked until WO workflow finalised)
-- Three.js 3D model viewer inline (Phase C — upload works, viewer is placeholder)
-- Freelancer mobile document view (Phase D — drawings/models visible to freelancers)
+- ~~Three.js 3D model viewer inline (Phase C — upload works, viewer is placeholder)~~ ✅ DONE
+- ~~Freelancer mobile document view (Phase D — drawings/models visible to freelancers)~~ ✅ DONE
 - Loading states, error handling, toast notifications
 - Materials: dynamic spec field labels from tbl_material_spec_defs (deferred)
 - Job templating / clone from previous build (Tier 3 feature — discussed, not started)
@@ -248,6 +250,9 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 ### Session 3 (19 Mar 2026) — Phase 8 Partial: OneDrive + Documents + Cut Lists
 16 commits, 15 features. Material reconciliation + quote margin analysis. OneDrive integration via Microsoft Graph API. WO documents panel (drawings, references, cut lists, models). Cut list AI extraction with OpenCutList support. 4 bug fixes. Azure AD app registration configured.
 
+### Session 4 (19 Mar 2026) — Phase 8C+D: 3D Model Viewer + Mobile Documents
+1 commit. Three.js GLB/GLTF viewer with OrbitControls replacing placeholder modal. Studio lighting, auto-fit, fullscreen toggle, reset view. Freelancer mobile document view: drawings (thumbnail grid + lightbox), references, 3D models (inline viewer), cut lists (download). Dynamic import of Three.js to avoid SSR issues.
+
 ## Lessons Learned & Execution Rules
 
 ### Deployment
@@ -272,6 +277,8 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - **Bottom sheets need z-[60]** or higher to clear the mobile tab bar (z-50). Add `pb-10` padding so buttons aren't hidden behind safe area.
 - **Async callbacks between components**: when child component changes data that parent displays, the callback must be `async` and `await` the parent's reload function. Otherwise the parent fetches stale data.
 - **File inputs need ref reset** after upload: `fileRef.current.value = ""` — otherwise same file can't be re-selected
+- **Three.js must be dynamically imported** in Next.js — `await import("three")` inside useCallback to avoid SSR. OrbitControls and GLTFLoader from `three/examples/jsm/`. Cleanup must dispose renderer, controls, and cancel animation frame.
+- **`@types/three` goes in devDependencies** — not needed at runtime
 
 ### OneDrive / Microsoft Graph
 - **Client credentials flow** (app-only auth) needs `Sites.ReadWrite.All` application permission + admin consent to access SharePoint
