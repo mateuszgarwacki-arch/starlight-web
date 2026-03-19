@@ -118,6 +118,10 @@ tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contr
 | `src/app/(dashboard)/suppliers/page.tsx` | Suppliers CRUD, order history, materials tabs |
 | `src/app/api/extract-invoice/route.ts` | API: Claude-powered invoice PDF/image extraction |
 | `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
+| `src/app/api/onedrive/upload/route.ts` | API: upload files to OneDrive via Graph API |
+| `src/app/api/onedrive/download/route.ts` | API: get download URLs from OneDrive |
+| `src/lib/microsoft-graph.ts` | Microsoft Graph client: auth, upload, download, sharing |
+| `src/lib/onedrive-client.ts` | Browser-side OneDrive upload/download helper |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
 | `src/app/m/login/page.tsx` | Freelancer PIN login |
 | `src/app/m/page.tsx` | Mobile task list |
@@ -161,6 +165,10 @@ vercel --prod
 | NEXT_PUBLIC_SUPABASE_ANON_KEY | Supabase anon key | Yes |
 | SUPABASE_SERVICE_ROLE_KEY | Server-side admin access | Yes |
 | ANTHROPIC_API_KEY | Invoice AI extraction | For invoice upload feature |
+| MICROSOFT_TENANT_ID | Azure AD tenant ID | For OneDrive integration |
+| MICROSOFT_CLIENT_ID | Azure AD app client ID | For OneDrive integration |
+| MICROSOFT_CLIENT_SECRET | Azure AD app secret | For OneDrive integration |
+| MICROSOFT_DRIVE_SITE | SharePoint site ID | Pending sysadmin permission |
 
 ## Next Session Pickup
 
@@ -182,6 +190,19 @@ Phases 0-7 complete + Invoice system + Suppliers + Dashboard polish + Phase 8 pa
 - [x] Fix: Review page time entries now show activity verb labels ("CUT + COVER — description") + scope name + job number
 - [x] Fix: Dashboard Active Jobs count only includes jobs with at least one WO
 - [x] Fix: Capacity page expanded WO details now show activity verb labels
+
+### OneDrive Integration (IN PROGRESS)
+- [x] Microsoft Graph client library (src/lib/microsoft-graph.ts): token caching, upload, download, sharing links
+- [x] Client-side helper (src/lib/onedrive-client.ts): uploadToOneDrive(), getOneDriveUrl()
+- [x] API route: /api/onedrive/upload (auth-gated, multipart form)
+- [x] API route: /api/onedrive/download (auth-gated, path-based)
+- [x] Mobile WO completion uses OneDrive upload (src/app/m/wo/[woId]/page.tsx)
+- [x] Mobile site photos uses OneDrive upload (src/app/m/photos/page.tsx)
+- [x] Vercel env vars set: MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET
+- [ ] BLOCKED: Sysadmin needs to add `Sites.ReadWrite.All` application permission + admin consent in Azure AD
+- [ ] Once unblocked: run test script to get SharePoint site ID, set MICROSOFT_DRIVE_SITE env var
+- Folder structure: Starlight/WO-Photos/, Starlight/Scope-Photos/, later Starlight/Models/, Starlight/Drawings/
+- SharePoint site: starlightdesign.sharepoint.com (specific site TBD after permission grant)
 
 ### SQL pending
 - phase8_views.sql — 4 views for material reconciliation + quote margin. Downloaded from Claude, needs running in Supabase SQL Editor.
