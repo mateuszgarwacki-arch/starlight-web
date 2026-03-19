@@ -116,6 +116,7 @@ tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contr
 | `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, conflicts |
 | `src/app/(dashboard)/invoices/page.tsx` | Invoice upload, AI extraction, material matching |
 | `src/app/(dashboard)/suppliers/page.tsx` | Suppliers CRUD, order history, materials tabs |
+| `src/app/(dashboard)/orders/page.tsx` | Procurement management: outstanding items grouped by material, mark ordered, recent orders |
 | `src/app/api/extract-invoice/route.ts` | API: Claude-powered invoice PDF/image extraction |
 | `src/app/api/auth/freelancer-sync/route.ts` | API: create/update freelancer auth accounts |
 | `src/app/api/onedrive/upload/route.ts` | API: upload files to OneDrive via Graph API |
@@ -250,8 +251,8 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 ### Session 3 (19 Mar 2026) — Phase 8 Partial: OneDrive + Documents + Cut Lists
 16 commits, 15 features. Material reconciliation + quote margin analysis. OneDrive integration via Microsoft Graph API. WO documents panel (drawings, references, cut lists, models). Cut list AI extraction with OpenCutList support. 4 bug fixes. Azure AD app registration configured.
 
-### Session 4 (19 Mar 2026) — Phase 8C+D: 3D Model Viewer + Mobile Documents
-1 commit. Three.js GLB/GLTF viewer with OrbitControls replacing placeholder modal. Studio lighting, auto-fit, fullscreen toggle, reset view. Freelancer mobile document view: drawings (thumbnail grid + lightbox), references, 3D models (inline viewer), cut lists (download). Dynamic import of Three.js to avoid SSR issues.
+### Session 4 (19 Mar 2026) — Phase 8C+D: 3D Model Viewer + Mobile Documents + Orders Page
+3 commits. Three.js GLB/GLTF viewer with OrbitControls replacing placeholder modal. Studio lighting, auto-fit, fullscreen toggle, reset view. Freelancer mobile document view: drawings (thumbnail grid + lightbox), references, 3D models (inline viewer), cut lists (download). Dynamic import of Three.js to avoid SSR issues. Orders page: procurement management with material grouping, mark-as-ordered workflow, recently ordered tab. Dashboard fix: procurement panel column names, stat card links to /orders. New sidebar item: Orders (between Materials and Invoices). 2 new Supabase views: qry_procurement_needed (replaced with joins), qry_recent_orders. New column: tbl_wo_bom.expected_delivery.
 
 ## Lessons Learned & Execution Rules
 
