@@ -87,13 +87,14 @@ export default function OrdersPage() {
     const [procRes, orderedRes, suppRes] = await Promise.all([
       supabase.from("qry_procurement_needed").select("*"),
       supabase.from("qry_recent_orders").select("*").limit(50),
-      supabase.from("tbl_suppliers").select("supplier_id, company_name, active").order("company_name"),
+      supabase.from("tbl_suppliers").select("supplier_id, company_name").order("company_name"),
     ]);
 
     const items = procRes.data || [];
     setOutstanding(items);
     setRecentOrders(orderedRes.data || []);
-    setSuppliers((suppRes.data || []).filter((s: any) => s.active !== false && s.active !== "false" && s.active !== "0"));
+    setSuppliers(suppRes.data || []);
+    console.log("SUPPLIERS DEBUG:", JSON.stringify(suppRes));
 
     // Group by material name
     const groupMap = new Map<string, MaterialGroup>();
