@@ -69,6 +69,12 @@ export default function InvoicesPage() {
         if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Extraction failed"); }
         const data = await res.json();
         const matchedSupplier = suppliers.find((s) => (s.supplier_name || "").toLowerCase() === (data.supplier || "").toLowerCase() || (data.supplier || "").toLowerCase().includes((s.supplier_name || "").toLowerCase()));
+        // Check for duplicate invoice
+        const existingInv = invoices.find((i) => i.invoice_number && data.invoice_number && i.invoice_number.toLowerCase() === data.invoice_number.toLowerCase());
+        if (existingInv) {
+          const confirmed = window.confirm(`Invoice ${data.invoice_number} already exists (from ${existingInv.supplier}, ${existingInv.invoice_date ? formatDate(existingInv.invoice_date) : "no date"}). Open it for editing instead?`);
+          if (confirmed) { setExtracting(false); openEditInvoice(existingInv); return; }
+        }
         setInvoiceForm({ supplier: data.supplier || "", supplier_id: matchedSupplier ? String(matchedSupplier.supplier_id) : "", invoice_number: data.invoice_number || "", invoice_date: data.invoice_date || "", total_value: data.total ? String(data.total) : "", job_id: "", notes: "", includes_vat: false });
         const matchedLines: InvoiceLine[] = (data.lines || []).map((l: any) => {
           const aliasMatch = aliases.find((a) => a.alias_text.toLowerCase() === l.description.toLowerCase() || l.description.toLowerCase().includes(a.alias_text.toLowerCase()));
@@ -192,7 +198,12 @@ export default function InvoicesPage() {
               <td className="px-4 py-2.5 text-right font-mono text-navy">{inv.total_value ? formatCurrency(inv.total_value) : "—"}</td>
               <td className="px-4 py-2.5 text-xs text-gray-500">{job ? (job.job_number || job.job_name) : "—"}</td>
               <td className="px-4 py-2.5"><span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-gray-100 text-gray-500")}>{inv.status}</span></td>
-              <td className="px-4 py-2.5"><button onClick={() => openEditInvoice(inv)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button></td>
+              <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1">
+                          <button onClick={() => openEditInvoice(inv)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                          <button onClick={async () => { if (window.confirm(`Delete invoice ${inv.invoice_number || inv.supplier}? This cannot be undone.`)) { await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id); await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id); loadData(); } }} className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        </td>
             </tr>); })}</tbody></table></div>)}
       </div>
     </div>); }
