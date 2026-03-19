@@ -7,6 +7,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { WoBom, Freelancer, ScopeContext } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
+import { WODocumentsPanel } from "@/components/wo-documents-panel";
 import {
   ArrowLeft,
   ChevronDown,
@@ -949,6 +950,18 @@ export default function ScopeWorkOrdersPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Documents & Files */}
+                    <WODocumentsPanel
+                      workOrderId={wo.work_order_id}
+                      scopeItemId={scopeId}
+                      jobId={jobId}
+                      jobNumber={scope?.job_number || ""}
+                      jobName={scope?.job_name || ""}
+                      scopeName={scope?.item_name || ""}
+                      activityLabel={wo.activity_label || ""}
+                      readOnly={wo.status === "Voided" || wo.status === "Complete"}
+                    />
                   </div>
                 )}
               </div>
