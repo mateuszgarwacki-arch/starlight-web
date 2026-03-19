@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { QuoteMarginPanel } from "@/components/quote-margin-panel";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
@@ -235,6 +235,28 @@ export default function JobDetailPage() {
   function isDone(line: QuoteLine): boolean {
     return isTruthy(line.interpretation_complete) || isAutoComplete(line);
   }
+
+  // ================================================================
+  // JOB HEADER EDITING
+  // ================================================================
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = (field: string, currentValue: string | null) => {
+    setEditingField(field);
+    setEditValue(currentValue || "");
+  };
+
+  const saveJobField = async () => {
+    if (!editingField || !job) return;
+    const val = editValue.trim() || null;
+    await supabase.from("tbl_production_plan").update({ [editingField]: val }).eq("job_id", job.job_id);
+    setJob({ ...job, [editingField]: val } as Job);
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const cancelEdit = () => { setEditingField(null); setEditValue(""); };
 
   // ================================================================
   // UPDATE HANDLERS
@@ -502,19 +524,72 @@ export default function JobDetailPage() {
         All Jobs
       </Link>
 
-      {/* Job header */}
+      {/* Job header — editable */}
       <div className="card px-6 py-5">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="space-y-1.5 flex-1 min-w-0">
             <p className="text-xs text-gray-400 font-mono">{job.job_number}</p>
-            <h1 className="text-xl font-bold text-navy mt-1">{job.job_name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{job.client_name}</p>
+
+            {/* Job name — editable */}
+            {editingField === "job_name" ? (
+              <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveJobField(); if (e.key === "Escape") cancelEdit(); }}
+                onBlur={saveJobField} autoFocus
+                className="text-xl font-bold text-navy w-full border-b-2 border-starlight-blue bg-transparent outline-none py-0.5" />
+            ) : (
+              <h1 onClick={() => startEdit("job_name", job.job_name)}
+                className="text-xl font-bold text-navy cursor-pointer hover:text-starlight-blue transition-colors group flex items-center gap-1.5">
+                {job.job_name || "Untitled Job"}
+                <Pencil className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </h1>
+            )}
+
+            {/* Client — editable */}
+            {editingField === "client_name" ? (
+              <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveJobField(); if (e.key === "Escape") cancelEdit(); }}
+                onBlur={saveJobField} autoFocus
+                className="text-sm text-gray-500 w-full border-b border-starlight-blue bg-transparent outline-none" />
+            ) : (
+              <p onClick={() => startEdit("client_name", job.client_name)}
+                className="text-sm text-gray-500 cursor-pointer hover:text-navy transition-colors group flex items-center gap-1.5">
+                {job.client_name || "No client"}
+                <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </p>
+            )}
           </div>
-          <div className="text-right space-y-1">
+          <div className="text-right space-y-1 shrink-0 ml-4">
             <DaysRemainingBadge eventDate={job.event_date} />
-            <p className="text-sm text-gray-500">{formatDate(job.event_date)}</p>
-            {job.event_location && (
-              <p className="text-xs text-gray-400">{job.event_location}</p>
+
+            {/* Event date — editable */}
+            {editingField === "event_date" ? (
+              <input type="date" value={editValue} onChange={e => { setEditValue(e.target.value); }}
+                onKeyDown={e => { if (e.key === "Escape") cancelEdit(); }}
+                onBlur={saveJobField} autoFocus
+                className="text-sm text-gray-500 border-b border-starlight-blue bg-transparent outline-none text-right" />
+            ) : (
+              <p onClick={() => startEdit("event_date", job.event_date)}
+                className="text-sm text-gray-500 cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1.5">
+                {formatDate(job.event_date)}
+                <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </p>
+            )}
+
+            {/* Location — editable */}
+            {editingField === "event_location" ? (
+              <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveJobField(); if (e.key === "Escape") cancelEdit(); }}
+                onBlur={saveJobField} autoFocus
+                className="text-xs text-gray-400 w-48 border-b border-starlight-blue bg-transparent outline-none text-right" />
+            ) : job.event_location ? (
+              <p onClick={() => startEdit("event_location", job.event_location)}
+                className="text-xs text-gray-400 cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1">
+                {job.event_location}
+                <Pencil className="h-2.5 w-2.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </p>
+            ) : (
+              <button onClick={() => startEdit("event_location", "")}
+                className="text-xs text-gray-300 hover:text-gray-500 transition-colors">+ Location</button>
             )}
           </div>
         </div>
