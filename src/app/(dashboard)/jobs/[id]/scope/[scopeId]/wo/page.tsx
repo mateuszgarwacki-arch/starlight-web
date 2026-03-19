@@ -8,6 +8,7 @@ import { isTruthy } from "@/lib/types";
 import type { WoBom, Freelancer, ScopeContext } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import { WODocumentsPanel } from "@/components/wo-documents-panel";
+import { PrintTravellerButton } from "@/components/traveller/traveller-preview";
 import {
   ArrowLeft,
   ChevronDown,
@@ -44,6 +45,7 @@ interface WORow {
   complexity_construction: string | null;
   finish_relative: string | null;
   wo_sequence: number | null;
+  traveller_printed_at?: string | null;
   sort_phase: number;
   // Enriched client-side
   activity_label?: string;
@@ -610,6 +612,21 @@ export default function ScopeWorkOrdersPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {/* Print Traveller */}
+                    <PrintTravellerButton
+                      wo={{
+                        ...wo,
+                        activity_label: wo.activity_label || "No Activity",
+                      }}
+                      workOrders={sortedArr.map((w) => ({
+                        ...w,
+                        activity_label: w.activity_label || "No Activity",
+                      }))}
+                      scope={scope!}
+                      scopeId={scopeId}
+                      jobId={jobId}
+                      onPrinted={() => loadAll()}
+                    />
                     {wo.status === "Not-Started" && (
                       <button
                         onClick={() => updateWOStatus(wo.work_order_id, "Ready")}

@@ -55,3 +55,54 @@
     opacity: 1;
   }
 }
+
+
+/* ============================================================
+   Traveller Print Styles
+   ============================================================ */
+@media print {
+  body > *:not(.traveller-print-area),
+  nav, .sidebar, header,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .traveller-print-area {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .traveller-page {
+    margin: 0 !important;
+    width: 100% !important;
+    min-height: auto !important;
+    page-break-after: always;
+    page-break-inside: avoid;
+    border-width: 1.5pt !important;
+    border-color: #1A1A2E !important;
+  }
+
+  .traveller-page:last-child {
+    page-break-after: auto;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 5mm;
+  }
+}

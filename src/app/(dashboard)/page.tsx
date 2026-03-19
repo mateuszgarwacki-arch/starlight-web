@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Briefcase, ClipboardList, Package, Users, AlertCircle,
-  Flag, FileText, Clock, RefreshCw, ShoppingCart, Zap,
+  Flag, FileText, Clock, RefreshCw, ShoppingCart, Zap, Printer,
 } from "lucide-react";
 import Link from "next/link";
 import type { DashUpcomingJob, ManpowerDemand } from "@/lib/types";
@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const [flags, setFlags] = useState<any[]>([]);
   const [activeWorkers, setActiveWorkers] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
+  const [staleTravellers, setStaleTravellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,6 +75,10 @@ export default function DashboardPage() {
       if (manpowerRes.data) setManpower(manpowerRes.data);
       setProcurement(procRes.data || []);
       setRecentInvoices(invoiceRes.data || []);
+
+      // Stale travellers
+      const { data: staleData } = await supabase.from("qry_stale_travellers").select("*");
+      setStaleTravellers(staleData || []);
 
       // Enrich flags with context
       const rawFlags = flagsRes.data || [];
