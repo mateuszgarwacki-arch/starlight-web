@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate } from "@/lib/utils";
+import { QRCodeSVG } from "qrcode.react";
 import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Printer, RotateCw, Loader2, Check } from "lucide-react";
@@ -540,8 +541,13 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
             {" · "}Event: {formatDate(scope.event_date)}
           </p>
         </div>
-        <div className="w-[72px] h-[72px] border-2 border-dashed border-gray-300 rounded flex items-center justify-center shrink-0 text-center">
-          <span className="text-[7px] text-gray-400 leading-tight">QR CODE<br />/m/wo/{wo.work_order_id}</span>
+        <div className="w-[72px] h-[72px] shrink-0">
+          <QRCodeSVG
+            value={`${typeof window !== "undefined" ? window.location.origin : ""}/m/wo/${wo.work_order_id}`}
+            size={72}
+            level="M"
+            includeMargin={false}
+          />
         </div>
       </div>
 
