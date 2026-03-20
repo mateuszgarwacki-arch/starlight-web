@@ -267,35 +267,46 @@ export function CutListExtractor({
 
     const { data: materials } = await supabase
       .from("tbl_materials")
-      .select("material_id, material_name, unit, current_unit_cost, material_category")
+      .select("material_id, material_name, unit, current_unit_cost, material_category, standard_length, standard_sheet_size")
       .eq("active", true);
 
-    for (const mat of selected) {
+    // Recalculate inline from parts — don't trust matSummary state
+    const recalced = recalcMaterialSummary(parts, selected, materials || []);
+    console.log("[CutList][addToBom] recalced inline:", JSON.stringify(recalced.map(m => ({ mat: m.material, cat: m.material_category, totalMm: m.total_linear_mm, lengths: m.lengths_needed, sheets: m.sheets_needed }))));
+
+    for (const mat of recalced) {
+      if (!mat._selected) continue;
       const matLower = (mat.material || "").toLowerCase();
       let matched = (materials || []).find(m => (m.material_name || "").toLowerCase() === matLower);
       if (!matched) matched = (materials || []).find(m => matLower.includes((m.material_name || "").toLowerCase()) || (m.material_name || "").toLowerCase().includes(matLower));
 
-      const qty = mat.sheets_needed || mat.lengths_needed || 1;
-      const unit = mat.sheets_needed ? "Sheet" : mat.lengths_needed ? "Length" : (matched?.unit || "Each");
       const catKey = (mat.material_category || "other").toLowerCase();
 
-      // Build description with context
+      // Build parts note
       const partsForMat = parts.filter(p => (p.material || "").toLowerCase() === matLower);
-      const piecesDesc = partsForMat.map(p => {
+      // Expand by quantity for piece list
+      const expandedParts: string[] = [];
+      for (const p of partsForMat) {
         const dims = [p.length_mm, p.width_mm].filter(Boolean).join("x");
-        return `${p.quantity || 1}× ${p.description}${dims ? ` ${dims}mm` : ""}`;
-      }).join(", ");
-      const partsNote = partsForMat.length > 0
-        ? `${partsForMat.length} parts: ${piecesDesc}`.substring(0, 250)
+        expandedParts.push(`${p.quantity || 1}× ${p.description}${dims ? ` ${dims}mm` : ""}`);
+      }
+      const partsNote = expandedParts.length > 0
+        ? `${expandedParts.length} parts: ${expandedParts.join(", ")}`.substring(0, 250)
         : "";
 
-      // For timber: store total linear mm as quantity, include lengths needed in description
-      const isTimber = mat.total_linear_mm && mat.total_linear_mm > 0;
-      const bomQty = isTimber ? mat.total_linear_mm : qty;
-      const bomUnit = isTimber ? "mm" : unit;
+      // Determine BOM values based on recalculated data
+      const isTimber = mat.total_linear_mm != null && mat.total_linear_mm > 0;
+      const bomQty = isTimber ? mat.total_linear_mm
+        : mat.sheets_needed || mat.lengths_needed || 1;
+      const bomUnit = isTimber ? "mm"
+        : mat.sheets_needed ? "Sheet"
+        : mat.lengths_needed ? "Length"
+        : (matched?.unit || "Each");
       const bomDesc = isTimber
         ? `${mat.material} — ${mat.lengths_needed}× ${mat.standard_length_mm || 4800}mm lengths`
         : mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
+
+      console.log(`[CutList][addToBom] inserting: ${bomDesc} qty=${bomQty} unit=${bomUnit}`);
 
       await supabase.from("tbl_wo_bom").insert({
         work_order_id: workOrderId,
