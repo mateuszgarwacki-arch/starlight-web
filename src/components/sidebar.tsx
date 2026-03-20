@@ -17,6 +17,7 @@ import {
   FileText,
   Truck,
   ShoppingCart,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/invoices", label: "Invoices", icon: FileText, zone: 1 },
   { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
+  { href: "/settings", label: "Settings", icon: Settings, zone: 1 },
 ];
 
 export function Sidebar() {
