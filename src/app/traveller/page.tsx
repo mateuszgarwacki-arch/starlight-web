@@ -647,11 +647,10 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
               const idx = all.findIndex((x) => x.work_order_id === s.work_order_id);
               return (
                 <p key={s.work_order_id} className="text-xs text-gray-600 mb-0.5">
-                  <span className="text-gray-400 inline-block w-7">{idx + 1}/{all.length}</span>
+                  <span className="text-gray-400 inline-block w-10">{idx + 1} of {all.length}</span>
                   <span className="font-medium">{s.activity_label}</span>
-                  {" · "}{s.estimated_duration_hrs != null ? `${s.estimated_duration_hrs}h` : "—"}
+                  {s.description && <span className="text-gray-500"> · {s.description.length > 80 ? s.description.substring(0, 80) + "…" : s.description}</span>}
                   {" · "}<span className={s.status === "Complete" ? "text-green-600" : s.status === "In-Progress" ? "text-blue-600" : "text-gray-400"}>{s.status}</span>
-                  {s.lead_name && ` · ${s.lead_name}`}
                 </p>
               );
             })}
