@@ -344,10 +344,20 @@ export default function TravellerPage() {
   let pageNum = 0;
   const pages: React.ReactNode[] = [];
 
+  // All non-voided WOs sorted by sequence (for position calculation)
+  const allSortedWOs = allWOs
+    .filter((w) => w.status !== "Voided")
+    .sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+  const totalWOCount = allSortedWOs.length;
+
   for (let woIdx = 0; woIdx < wosToPrint.length; woIdx++) {
     const wo = wosToPrint[woIdx];
     const data = woDataMap[wo.work_order_id];
     if (!data) continue;
+
+    // Real position within all WOs on this scope (not just those being printed)
+    const realIdx = allSortedWOs.findIndex((w) => w.work_order_id === wo.work_order_id);
+    const stepNum = realIdx >= 0 ? realIdx + 1 : woIdx + 1;
 
     const drawings = data.docs.filter((d) => d.doc_type === "drawing");
     const references = data.docs.filter((d) => d.doc_type === "reference");
@@ -357,10 +367,10 @@ export default function TravellerPage() {
     if (mode === "pack" && woIdx > 0) {
       pageNum++;
       pages.push(
-        <Page key={`div-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+        <Page key={`div-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
           <div className="flex items-center justify-center" style={{ minHeight: "240mm" }}>
             <div className="text-center">
-              <p className="text-5xl font-bold text-gray-800 mb-3">Step {woIdx + 1}/{wosToPrint.length}</p>
+              <p className="text-5xl font-bold text-gray-800 mb-3">Step {stepNum} of {totalWOCount}</p>
               <p className="text-2xl font-semibold text-gray-600 mb-4">{wo.activity_label}</p>
               {wo.description && <p className="text-base text-gray-500 max-w-lg mx-auto">{wo.description}</p>}
               <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-400">
@@ -376,8 +386,8 @@ export default function TravellerPage() {
     // Task brief
     pageNum++;
     pages.push(
-      <Page key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-        <TaskBrief wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} />
+      <Page key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} />
       </Page>
     );
 
@@ -389,7 +399,7 @@ export default function TravellerPage() {
           pageNum++;
           const rKey = `pdf-${cl.doc_id}-${pi}`;
           pages.push(
-            <Page key={rKey} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+            <Page key={rKey} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
               <ImagePage url={urls[pi]} fileName={cl.file_name} label="Cut list" rotationKey={rKey} rotation={rotations[rKey] || 0} onRotate={() => toggleRotation(rKey)} isPdf />
             </Page>
           );
@@ -397,7 +407,7 @@ export default function TravellerPage() {
       } else {
         pageNum++;
         pages.push(
-          <Page key={`cl-${cl.doc_id}`} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+          <Page key={`cl-${cl.doc_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
             <div className="text-center py-20 text-gray-400 text-sm">Cut list file not available for preview</div>
           </Page>
         );
@@ -409,7 +419,7 @@ export default function TravellerPage() {
       pageNum++;
       const rKey = `drw-${d.doc_id}`;
       pages.push(
-        <Page key={rKey} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+        <Page key={rKey} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
           <ImagePage url={data.imageUrls[d.doc_id] || ""} fileName={d.file_name} label="Drawing" rotationKey={rKey} rotation={rotations[rKey] || 0} onRotate={() => toggleRotation(rKey)} />
         </Page>
       );
@@ -420,7 +430,7 @@ export default function TravellerPage() {
       pageNum++;
       const rKey = `ref-${r.doc_id}`;
       pages.push(
-        <Page key={rKey} scope={scope} wo={wo} woIdx={woIdx} totalWOs={wosToPrint.length} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+        <Page key={rKey} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
           <ImagePage url={data.imageUrls[r.doc_id] || ""} fileName={r.file_name} label="Reference" rotationKey={rKey} rotation={rotations[rKey] || 0} onRotate={() => toggleRotation(rKey)} />
         </Page>
       );
@@ -489,7 +499,7 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
               <span className="text-gray-300">|</span>
               <span className="text-gray-600">{scope.job_name}</span>
             </div>
-            <span className="font-semibold text-gray-700 shrink-0">Step {woIdx + 1}/{totalWOs} {wo.activity_label}</span>
+            <span className="font-semibold text-gray-700 shrink-0">Step {woIdx + 1} of {totalWOs} {wo.activity_label}</span>
           </div>
           <p className="text-gray-500 mt-0.5 leading-tight">{scope.item_name}</p>
         </div>
@@ -525,7 +535,7 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
           <h1 className="text-lg font-bold text-gray-900">{scope.job_number} — {scope.job_name}</h1>
           <p className="text-sm font-medium text-gray-700 mt-1 break-words">{scope.item_name}</p>
           <p className="text-xs text-gray-500 mt-1">
-            <span className="font-semibold text-gray-800">Step {woIdx + 1}/{totalWOs} — {wo.activity_label}</span>
+            <span className="font-semibold text-gray-800">Step {woIdx + 1} of {totalWOs} — {wo.activity_label}</span>
             {" · "}Est. {wo.estimated_duration_hrs ?? "—"}h
             {" · "}Event: {formatDate(scope.event_date)}
           </p>
