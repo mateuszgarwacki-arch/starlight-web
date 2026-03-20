@@ -352,8 +352,11 @@ export function CutListExtractor({
           </div>
           <button
             onClick={async () => {
+              // Delete existing BOM rows for this WO so we don't duplicate
+              await supabase.from("tbl_wo_bom").delete().eq("work_order_id", workOrderId);
               await supabase.from("tbl_wo_documents").update({ extraction_status: "extracted" }).eq("doc_id", docId);
               setStatus("extracted");
+              if (onUpdate) onUpdate();
             }}
             className="text-[10px] text-gray-400 hover:text-starlight-blue px-2 py-0.5 rounded hover:bg-starlight-blue/10 transition-colors"
           >
