@@ -574,20 +574,18 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                 let unitDisplay = r.unit || "—";
 
                 if (r.mat_standard_length && r.quantity) {
-                  // Determine qty in mm based on unit
+                  // BOM stores whole-length Metres for costing
+                  // Traveller shows length count for the workshop floor
                   const uLower = unitDisplay.toLowerCase();
-                  const qtyMm = uLower === "mm" ? r.quantity
-                    : (uLower.startsWith("metre") || uLower === "m") ? r.quantity * 1000
+                  const qtyMm = (uLower.startsWith("metre") || uLower === "m") ? r.quantity * 1000
+                    : uLower === "mm" ? r.quantity
                     : r.quantity;
                   const stdLenMm = r.mat_standard_length;
-                  // Bin-pack: each piece that exceeds remaining space needs a new length
-                  // For BOM we only have total — use simple ceiling division
-                  const lengths = Math.ceil(qtyMm / stdLenMm);
-                  qtyDisplay = `${Math.round(qtyMm)}mm`;
-                  unitDisplay = "";
-                  stockPull = `${lengths}× ${stdLenMm}mm`;
+                  const lengths = Math.round(qtyMm / stdLenMm);
+                  qtyDisplay = `${lengths}`;
+                  unitDisplay = lengths === 1 ? "length" : "lengths";
+                  stockPull = `${stdLenMm}mm each`;
                 } else if (r.unit?.toLowerCase() === "mm" && r.quantity) {
-                  // mm unit but no catalogue match — just show mm
                   qtyDisplay = `${Math.round(r.quantity)}mm`;
                   unitDisplay = "";
                 } else if (r.mat_standard_sheet_size && r.quantity) {

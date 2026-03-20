@@ -299,19 +299,22 @@ export function CutListExtractor({
         : "";
 
       // Determine BOM values based on recalculated data
-      // Timber: store in Metres (catalogue unit) so unit_cost × qty = correct £
-      // Traveller converts to mm for workshop display
+      // Timber: cost whole standard lengths (overestimate > underestimate)
+      // Description shows actual total + length count for context
       const isTimber = mat.total_linear_mm != null && mat.total_linear_mm > 0;
-      const totalMetres = isTimber ? Math.ceil((mat.total_linear_mm || 0) / 10) / 100 : 0; // round up to nearest 10mm then convert
-      const bomQty = isTimber ? totalMetres
+      const stdLen = mat.standard_length_mm || 4800;
+      const lengthsNeeded = mat.lengths_needed || 1;
+      const totalMm = mat.total_linear_mm || 0;
+      const totalMetresActual = Math.ceil(totalMm / 100) / 10; // round up to 0.1m
+      const wholeMetres = (lengthsNeeded * stdLen) / 1000; // full lengths in metres for costing
+      const bomQty = isTimber ? wholeMetres
         : mat.sheets_needed || mat.lengths_needed || 1;
       const bomUnit = isTimber ? "Metre"
         : mat.sheets_needed ? "Sheet"
         : mat.lengths_needed ? "Length"
         : (matched?.unit || "Each");
-      const stdLen = mat.standard_length_mm || 4800;
       const bomDesc = isTimber
-        ? `${mat.material} — ${mat.total_linear_mm}mm (${mat.lengths_needed}× ${stdLen}mm)`
+        ? `${mat.material} - ${totalMetresActual}m Total (${lengthsNeeded} length${lengthsNeeded > 1 ? "s" : ""})`
         : mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
 
       console.log(`[CutList][addToBom] inserting: ${bomDesc} qty=${bomQty} unit=${bomUnit}`);
