@@ -428,7 +428,7 @@ export default function TravellerPage() {
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="bg-gray-100 min-h-screen print:bg-white">
       {/* Floating toolbar — hidden on print */}
       <div className="print:hidden fixed top-0 left-0 right-0 z-50 bg-[#1A1A2E] text-white px-6 py-3 flex items-center justify-between shadow-lg">
         <div>
@@ -482,16 +482,16 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
       <div className="absolute inset-[3px] border border-gray-400 pointer-events-none" style={{ zIndex: 0 }} />
       <div className="relative" style={{ zIndex: 1, padding: "7mm 8mm" }}>
         {/* Header */}
-        <div className="flex items-center justify-between text-[10px] pb-2 mb-3 border-b border-gray-300">
-          <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between text-[10px] pb-2 mb-3 border-b border-gray-300 gap-4">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="font-bold text-gray-900">{scope.job_number}</span>
             <span className="text-gray-300">|</span>
             <span className="text-gray-600">{scope.job_name}</span>
           </div>
-          <div className="flex items-center gap-2 text-right">
+          <div className="text-right">
             <span className="font-semibold text-gray-700">Step {woIdx + 1}/{totalWOs} {wo.activity_label}</span>
-            <span className="text-gray-300">|</span>
-            <span className="text-gray-500">{scope.item_name}</span>
+            <span className="text-gray-300"> | </span>
+            <span className="text-gray-500 break-words">{scope.item_name}</span>
           </div>
         </div>
 
