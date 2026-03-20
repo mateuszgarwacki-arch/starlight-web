@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Loader2, Check, Plus, FileText, Zap } from "lucide-react";
@@ -157,6 +157,20 @@ export function CutListExtractor({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showParts, setShowParts] = useState(false);
+
+  // Recalculate material summary with bin-packing whenever we have parts data
+  useEffect(() => {
+    if (parts.length === 0 || status === "pending" || status === "confirmed") return;
+    const recalc = async () => {
+      const { data: catMats } = await supabase.from("tbl_materials")
+        .select("material_id, material_name, standard_length, standard_sheet_size, unit")
+        .eq("active", true);
+      const aiSummary = (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }));
+      const recalced = recalcMaterialSummary(parts, aiSummary, catMats || []);
+      setMatSummary(recalced);
+    };
+    recalc();
+  }, [parts, status]);
 
   const handleExtract = async () => {
     if (!onedrivePath) return;
