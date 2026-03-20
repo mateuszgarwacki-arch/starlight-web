@@ -491,7 +491,7 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
           <div className="flex items-center gap-2 text-right">
             <span className="font-semibold text-gray-700">Step {woIdx + 1}/{totalWOs} {wo.activity_label}</span>
             <span className="text-gray-300">|</span>
-            <span className="text-gray-500 max-w-[200px] truncate">{scope.item_name}</span>
+            <span className="text-gray-500">{scope.item_name}</span>
           </div>
         </div>
 
@@ -529,11 +529,6 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
             <span className="font-semibold text-gray-800">Step {woIdx + 1}/{totalWOs} — {wo.activity_label}</span>
             {" · "}Est. {wo.estimated_duration_hrs ?? "—"}h
             {" · "}Event: {formatDate(scope.event_date)}
-            {daysRemaining !== null && (
-              <span className={daysRemaining <= 7 ? " text-red-600 font-semibold" : daysRemaining <= 14 ? " text-amber-600 font-semibold" : ""}>
-                {" · "}{daysRemaining}d remaining
-              </span>
-            )}
           </p>
         </div>
         <div className="w-[72px] h-[72px] border-2 border-dashed border-gray-300 rounded flex items-center justify-center shrink-0 text-center">
