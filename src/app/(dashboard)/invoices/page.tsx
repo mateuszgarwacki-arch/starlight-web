@@ -39,6 +39,7 @@ export default function InvoicesPage() {
   const [showNewMaterial, setShowNewMaterial] = useState(false);
   const [newMatLine, setNewMatLine] = useState<number | null>(null);
   const [newMatForm, setNewMatForm] = useState({ name: "", category: "", unit: "" });
+  const [unitOptions, setUnitOptions] = useState<string[]>([]);
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
   const [expandedInvId, setExpandedInvId] = useState<number | null>(null);
@@ -46,15 +47,18 @@ export default function InvoicesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [invRes, jobRes, matRes, supRes, aliasRes] = await Promise.all([
+    const [invRes, jobRes, matRes, supRes, aliasRes, unitRes] = await Promise.all([
       supabase.from("tbl_invoices").select("*").order("uploaded_at", { ascending: false }),
       supabase.from("tbl_production_plan").select("job_id, job_number, job_name").order("event_date", { ascending: false }),
       supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost").eq("active", true).order("material_name"),
       supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name"),
       supabase.from("tbl_material_aliases").select("*"),
+      supabase.from("tbl_master_lookups").select("lookup_value").eq("category", "UNIT").eq("active", true).order("display_order"),
     ]);
     setInvoices(invRes.data || []); setJobs(jobRes.data || []); setMaterials(matRes.data || []);
-    setSuppliers(supRes.data || []); setAliases(aliasRes.data || []); setLoading(false);
+    setSuppliers(supRes.data || []); setAliases(aliasRes.data || []);
+    setUnitOptions((unitRes.data || []).map((u: any) => u.lookup_value).filter(Boolean));
+    setLoading(false);
   }, []);
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -332,7 +336,10 @@ export default function InvoicesPage() {
                           <button onClick={() => { setSearchingLine(idx); setMaterialSearch(""); }} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-starlight-amber/10 text-starlight-amber hover:bg-starlight-amber/20 transition-colors"><Search className="h-3 w-3" /> Match Material</button>
                         )}
                         <input type="number" step="0.01" value={line.quantity ?? ""} onChange={(e) => updateLine(idx, "quantity", e.target.value ? Number(e.target.value) : null)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Qty" />
-                        <input type="text" value={line.unit ?? ""} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Unit" />
+                        <select value={line.unit ?? ""} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="w-20 px-1 py-1 border border-gray-200 rounded-lg text-xs text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue">
+                          <option value="">Unit</option>
+                          {unitOptions.map((u) => (<option key={u} value={u}>{u}</option>))}
+                        </select>
                         <input type="number" step="0.01" value={line.unit_cost ?? ""} onChange={(e) => updateLine(idx, "unit_cost", e.target.value ? Number(e.target.value) : null)} className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="£ cost" />
                         {line.line_total != null && <span className="text-xs font-mono text-navy font-medium">{formatCurrency(line.line_total)}</span>}
                         <select value={line.job_id ?? ""} onChange={(e) => updateLine(idx, "job_id", e.target.value ? Number(e.target.value) : null)} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue max-w-[140px]"><option value="">Invoice job</option>{jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number}</option>))}</select>
@@ -420,9 +427,11 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
-                <input type="text" value={newMatForm.unit} onChange={(e) => setNewMatForm({ ...newMatForm, unit: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                  placeholder="Metre / Sheet / Each" />
+                <select value={newMatForm.unit} onChange={(e) => setNewMatForm({ ...newMatForm, unit: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                  <option value="">Select unit...</option>
+                  {unitOptions.map((u) => (<option key={u} value={u}>{u}</option>))}
+                </select>
               </div>
             </div>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
