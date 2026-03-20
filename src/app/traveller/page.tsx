@@ -524,7 +524,7 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-gray-900">{scope.job_number} — {scope.job_name}</h1>
-          <p className="text-sm font-medium text-gray-700 mt-1">{scope.item_name}</p>
+          <p className="text-sm font-medium text-gray-700 mt-1 break-words">{scope.item_name}</p>
           <p className="text-xs text-gray-500 mt-1">
             <span className="font-semibold text-gray-800">Step {woIdx + 1}/{totalWOs} — {wo.activity_label}</span>
             {" · "}Est. {wo.estimated_duration_hrs ?? "—"}h
@@ -546,14 +546,7 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       {/* Full description */}
       <div>
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Task description</p>
-        <p className="text-[13px] text-gray-800 bg-gray-50 px-3 py-2 rounded leading-snug">{wo.description || "No description provided"}</p>
-      </div>
-
-      {/* Complexity / Finish */}
-      <div className="flex gap-3 flex-wrap">
-        <span className="bg-gray-50 px-3 py-1 rounded text-xs"><span className="text-gray-500">Complexity: </span><span className="font-medium text-gray-800">{wo.complexity_construction || scope.complexity_construction || "—"}</span></span>
-        <span className="bg-gray-50 px-3 py-1 rounded text-xs"><span className="text-gray-500">Finish: </span><span className="font-medium text-gray-800">{wo.finish_relative || scope.finish_relative || "—"}</span></span>
-        {wo.lead_name && <span className="bg-gray-50 px-3 py-1 rounded text-xs"><span className="text-gray-500">Lead: </span><span className="font-medium text-gray-800">{wo.lead_name}</span></span>}
+        <p className="text-[13px] text-gray-800 bg-gray-50 px-3 py-2 rounded leading-snug break-words whitespace-pre-wrap">{wo.description || "No description provided"}</p>
       </div>
 
       <hr className="border-gray-300" />
@@ -577,17 +570,27 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
             <tbody>
               {bom.map((r) => {
                 let stockPull = "";
+                let qtyDisplay = `${r.quantity ?? "—"}`;
+                let unitDisplay = r.unit || "—";
+
                 if (r.mat_standard_length && r.quantity) {
-                  const lengths = Math.ceil(r.quantity / r.mat_standard_length);
-                  stockPull = `${lengths}× ${r.mat_standard_length}m length${lengths > 1 ? "s" : ""}`;
+                  // Convert qty to mm if unit is Metre
+                  const qtyMm = unitDisplay.toLowerCase().startsWith("metre") || unitDisplay.toLowerCase() === "m"
+                    ? r.quantity * 1000
+                    : r.quantity;
+                  const stdLenMm = r.mat_standard_length;
+                  const lengths = Math.ceil(qtyMm / stdLenMm);
+                  qtyDisplay = `${Math.round(qtyMm)}mm`;
+                  unitDisplay = "";
+                  stockPull = `${lengths}× ${stdLenMm}mm`;
                 } else if (r.mat_standard_sheet_size && r.quantity) {
                   stockPull = `${r.quantity} sheet${r.quantity > 1 ? "s" : ""} (${r.mat_standard_sheet_size})`;
                 }
                 return (
                   <tr key={r.bom_id} className="border-b border-gray-100">
                     <td className="py-1 px-2 text-gray-800">{r.item_description || "—"}</td>
-                    <td className="py-1 px-2 text-right">{r.quantity ?? "—"}</td>
-                    <td className="py-1 px-2 text-right text-gray-600">{r.unit || "—"}</td>
+                    <td className="py-1 px-2 text-right">{qtyDisplay}</td>
+                    <td className="py-1 px-2 text-right text-gray-600">{unitDisplay}</td>
                     <td className="py-1 px-2 text-[10px] text-gray-500">{stockPull || "—"}</td>
                     <td className="py-1 px-2 text-right text-[10px] text-gray-500">{isTruthy(r.needs_ordering) ? "needs order" : "—"}</td>
                   </tr>
