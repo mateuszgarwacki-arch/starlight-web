@@ -302,7 +302,7 @@ export function CutListExtractor({
       // Timber: store in Metres (catalogue unit) so unit_cost × qty = correct £
       // Traveller converts to mm for workshop display
       const isTimber = mat.total_linear_mm != null && mat.total_linear_mm > 0;
-      const totalMetres = isTimber ? Math.ceil(mat.total_linear_mm / 10) / 100 : 0; // round up to nearest 10mm then convert
+      const totalMetres = isTimber ? Math.ceil((mat.total_linear_mm || 0) / 10) / 100 : 0; // round up to nearest 10mm then convert
       const bomQty = isTimber ? totalMetres
         : mat.sheets_needed || mat.lengths_needed || 1;
       const bomUnit = isTimber ? "Metre"
