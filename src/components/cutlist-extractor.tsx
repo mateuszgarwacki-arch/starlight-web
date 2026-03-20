@@ -91,9 +91,13 @@ function recalcMaterialSummary(
     );
     const anomalies: string[] = [];
 
-    console.log(`[CutList][recalc] material="${mat.material}" cat="${mat.material_category}" partsFound=${matParts.length} catMatMatch=${!!catMat}`);
+    // Derive category from parts (AI summary often missing it) or catalogue
+    const partsCat = matParts.length > 0 ? (matParts[0].material_category || "").toLowerCase() : "";
+    const effectiveCat = (mat.material_category || "").toLowerCase() || partsCat;
 
-    if ((mat.material_category || "").toLowerCase() === "timber") {
+    console.log(`[CutList][recalc] material="${mat.material}" cat="${effectiveCat}" (fromSummary="${mat.material_category}" fromParts="${partsCat}") partsFound=${matParts.length} catMatMatch=${!!catMat}`);
+
+    if (effectiveCat === "timber") {
       // Collect individual piece lengths
       const pieceLengths = matParts
         .map(p => p.length_mm || 0)
