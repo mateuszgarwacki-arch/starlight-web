@@ -199,11 +199,22 @@ export function CutListExtractor({
   if (status === "confirmed") {
     return (
       <div className="mt-2 p-2 bg-starlight-green/5 border border-starlight-green/20 rounded-lg">
-        <div className="flex items-center gap-2">
-          <Check className="h-3.5 w-3.5 text-starlight-green" />
-          <span className="text-[10px] text-starlight-green font-medium">
-            {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} added to BOM ({parts.length} parts extracted)
-          </span>
+        <div className="flex items-center gap-2 justify-between">
+          <div className="flex items-center gap-2">
+            <Check className="h-3.5 w-3.5 text-starlight-green" />
+            <span className="text-[10px] text-starlight-green font-medium">
+              {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} added to BOM ({parts.length} parts extracted)
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              await supabase.from("tbl_wo_documents").update({ extraction_status: "extracted" }).eq("doc_id", docId);
+              setStatus("extracted");
+            }}
+            className="text-[10px] text-gray-400 hover:text-starlight-blue px-2 py-0.5 rounded hover:bg-starlight-blue/10 transition-colors"
+          >
+            Re-add to BOM
+          </button>
         </div>
       </div>
     );
