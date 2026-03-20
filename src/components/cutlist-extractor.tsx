@@ -91,11 +91,15 @@ function recalcMaterialSummary(
     );
     const anomalies: string[] = [];
 
+    console.log(`[CutList][recalc] material="${mat.material}" cat="${mat.material_category}" partsFound=${matParts.length} catMatMatch=${!!catMat}`);
+
     if ((mat.material_category || "").toLowerCase() === "timber") {
       // Collect individual piece lengths
       const pieceLengths = matParts
         .map(p => p.length_mm || 0)
         .filter(l => l > 0);
+
+      console.log(`[CutList][timber] pieceLengths=${JSON.stringify(pieceLengths)} stdLen=${catMat?.standard_length || mat.standard_length_mm || 4800}`);
 
       const totalLinearMm = pieceLengths.reduce((a, b) => a + b, 0);
       const stdLen = catMat?.standard_length || mat.standard_length_mm || 4800;
@@ -166,7 +170,11 @@ export function CutListExtractor({
         .select("material_id, material_name, standard_length, standard_sheet_size, unit")
         .eq("active", true);
       const aiSummary = (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }));
+      console.log("[CutList] recalc input — parts:", parts.length, "aiSummary:", JSON.stringify(aiSummary));
+      console.log("[CutList] parts sample:", JSON.stringify(parts.slice(0, 3)));
+      console.log("[CutList] catalogue materials:", JSON.stringify(catMats?.map(m => ({ name: m.material_name, stdLen: m.standard_length }))));
       const recalced = recalcMaterialSummary(parts, aiSummary, catMats || []);
+      console.log("[CutList] recalc output:", JSON.stringify(recalced));
       setMatSummary(recalced);
     };
     recalc();
