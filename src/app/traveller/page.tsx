@@ -577,7 +577,7 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                   const stdLenMm = r.mat_standard_length;
                   const lengths = Math.round(qtyMm / stdLenMm);
                   qtyDisplay = `${lengths}`;
-                  unitDisplay = lengths === 1 ? "length" : "lengths";
+                  unitDisplay = lengths === 1 ? "Length" : "Lengths";
                   stockPull = `${stdLenMm}mm each`;
                 } else if (r.unit?.toLowerCase() === "mm" && r.quantity) {
                   qtyDisplay = `${Math.round(r.quantity)}mm`;
