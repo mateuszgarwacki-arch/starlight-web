@@ -19,6 +19,10 @@ interface QuoteLineMargin {
   line_margin: number;
   margin_pct: number | null;
   tracking_status: string;
+  // Added from rate card
+  estimated_labour?: number;
+  estimated_material?: number;
+  estimated_total?: number;
 }
 
 interface JobQuoteMargin {
@@ -41,12 +45,35 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
     if (!expanded) return;
     setLoading(true);
 
-    const [lineRes, sumRes] = await Promise.all([
+    const [lineRes, sumRes, estRes, scopeRes] = await Promise.all([
       supabase.from("qry_quoteline_margin").select("*").eq("job_id", jobId).order("quote_line_id"),
       supabase.from("qry_job_quote_margin").select("*").eq("job_id", jobId).single(),
+      supabase.from("qry_wo_estimated_cost").select("scope_item_id, estimated_labour_cost, estimated_material_cost, estimated_total_cost").eq("job_id", jobId),
+      supabase.from("tbl_scope_items").select("scope_item_id, quote_line_id").eq("job_id", jobId),
     ]);
 
-    if (lineRes.data) setLines(lineRes.data);
+    // Build scope→quote_line map, then aggregate estimated costs per quote line
+    const scopeToLine: Record<number, number> = {};
+    (scopeRes.data || []).forEach((s: any) => { if (s.quote_line_id) scopeToLine[s.scope_item_id] = s.quote_line_id; });
+
+    const estByLine: Record<number, { labour: number; material: number; total: number }> = {};
+    (estRes.data || []).forEach((e: any) => {
+      const lineId = scopeToLine[e.scope_item_id];
+      if (!lineId) return;
+      if (!estByLine[lineId]) estByLine[lineId] = { labour: 0, material: 0, total: 0 };
+      estByLine[lineId].labour += e.estimated_labour_cost || 0;
+      estByLine[lineId].material += e.estimated_material_cost || 0;
+      estByLine[lineId].total += e.estimated_total_cost || 0;
+    });
+
+    if (lineRes.data) {
+      setLines(lineRes.data.map(l => ({
+        ...l,
+        estimated_labour: estByLine[l.quote_line_id]?.labour || 0,
+        estimated_material: estByLine[l.quote_line_id]?.material || 0,
+        estimated_total: estByLine[l.quote_line_id]?.total || 0,
+      })));
+    }
     if (sumRes.data) setSummary(sumRes.data);
     setLoading(false);
   }, [jobId, expanded]);
@@ -90,6 +117,12 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                   <div>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Actual Cost</p>
                     <p className="text-sm font-mono font-semibold text-navy">{formatCurrency(summary.total_actual)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimated Cost</p>
+                    <p className="text-sm font-mono font-semibold text-blue-600">
+                      {formatCurrency(lines.reduce((s, l) => s + (l.estimated_total || 0), 0))}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Margin</p>
@@ -150,9 +183,24 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                           )}
                         </td>
                         <td className="px-4 py-2 text-right font-mono text-gray-600">{l.quoted_value ? formatCurrency(l.quoted_value) : "—"}</td>
-                        <td className="px-4 py-2 text-right font-mono text-navy">{l.actual_labour > 0 ? formatCurrency(l.actual_labour) : "—"}</td>
-                        <td className="px-4 py-2 text-right font-mono text-navy">{l.actual_material > 0 ? formatCurrency(l.actual_material) : "—"}</td>
-                        <td className="px-4 py-2 text-right font-mono font-medium text-navy">{l.actual_total > 0 ? formatCurrency(l.actual_total) : "—"}</td>
+                        <td className="px-4 py-2 text-right font-mono">
+                          {l.actual_labour > 0
+                            ? <span className="text-navy">{formatCurrency(l.actual_labour)}</span>
+                            : l.estimated_labour ? <span className="text-blue-500">{formatCurrency(l.estimated_labour)} <span className="text-[9px] text-gray-400">est</span></span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono">
+                          {l.actual_material > 0
+                            ? <span className="text-navy">{formatCurrency(l.actual_material)}</span>
+                            : l.estimated_material ? <span className="text-blue-500">{formatCurrency(l.estimated_material)} <span className="text-[9px] text-gray-400">est</span></span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono font-medium">
+                          {l.actual_total > 0
+                            ? <span className="text-navy">{formatCurrency(l.actual_total)}</span>
+                            : (l.estimated_total || 0) > 0 ? <span className="text-blue-500">{formatCurrency(l.estimated_total || 0)} <span className="text-[9px] text-gray-400">est</span></span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className={"px-4 py-2 text-right font-mono font-semibold " + (
                           l.tracking_status === "No Scope" ? "text-gray-300" :
                           l.line_margin >= 0 ? "text-starlight-green" : "text-starlight-red"
