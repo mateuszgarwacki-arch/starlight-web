@@ -568,7 +568,6 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                 <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Qty</th>
                 <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Unit</th>
                 <th className="text-left py-1 px-2 font-semibold text-gray-600 w-36">Stock pull</th>
-                <th className="text-right py-1 px-2 font-semibold text-gray-600 w-16">Order?</th>
               </tr>
             </thead>
             <tbody>
@@ -601,7 +600,6 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                     <td className="py-1 px-2 text-right">{qtyDisplay}</td>
                     <td className="py-1 px-2 text-right text-gray-600">{unitDisplay}</td>
                     <td className="py-1 px-2 text-[10px] text-gray-500">{stockPull || "—"}</td>
-                    <td className="py-1 px-2 text-right text-[10px] text-gray-500">{isTruthy(r.needs_ordering) ? "needs order" : "—"}</td>
                   </tr>
                 );
               })}
