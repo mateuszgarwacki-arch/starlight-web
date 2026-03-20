@@ -797,7 +797,7 @@ export default function MaterialsPage() {
                   >
                     <option value="">Select unit...</option>
                     {units.map((u) => (
-                      <option key={u.lookup_id} value={u.lookup_value}>{u.lookup_value}</option>
+                      <option key={u.lookup_id} value={u.lookup_value || ""}>{u.lookup_value}</option>
                     ))}
                     <option value="__custom__">Other...</option>
                   </select>
