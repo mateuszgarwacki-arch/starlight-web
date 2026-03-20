@@ -9,6 +9,7 @@ import type { WoBom, Freelancer, ScopeContext } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import { WODocumentsPanel } from "@/components/wo-documents-panel";
 import { PrintTravellerButton } from "@/components/traveller/traveller-preview";
+import { CostBreakdown } from "@/components/cost-breakdown";
 import {
   ArrowLeft,
   ChevronDown,
@@ -518,6 +519,9 @@ export default function ScopeWorkOrdersPage() {
           </div>
         </div>
       </div>
+
+      {/* Cost analysis */}
+      <CostBreakdown scopeItemId={scopeId} />
 
       {/* Work Orders header */}
       <div className="flex items-center justify-between">

@@ -9,6 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { PromptPanel } from "@/components/prompt-panel";
 import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
+import { CostBreakdown } from "@/components/cost-breakdown";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -275,6 +276,9 @@ export default function ScopeDetailPage() {
         </div>
 
       </div>
+
+      {/* Cost analysis */}
+      <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} />
 
       {/* Main content: prompt engine + job items + WO link */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">

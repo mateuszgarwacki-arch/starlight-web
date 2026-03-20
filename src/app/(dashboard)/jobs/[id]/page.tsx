@@ -9,6 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { QuoteMarginPanel } from "@/components/quote-margin-panel";
+import { CostBreakdown } from "@/components/cost-breakdown";
 import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
@@ -627,6 +628,9 @@ export default function JobDetailPage() {
           </p>
         </div>
       )}
+
+      {/* Job Cost Analysis */}
+      <CostBreakdown jobId={jobId} quotedValue={totalValue || undefined} />
 
       {/* Quote Line Margin Analysis */}
       <QuoteMarginPanel jobId={jobId} />
