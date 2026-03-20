@@ -69,6 +69,9 @@ export default function MaterialsPage() {
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [categories, setCategories] = useState<MasterLookup[]>([]);
   const [units, setUnits] = useState<MasterLookup[]>([]);
+  const [suppliers, setSuppliers] = useState<{ supplier_id: number; supplier_name: string }[]>([]);
+  const [showNewSupplier, setShowNewSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -104,10 +107,11 @@ export default function MaterialsPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [matRes, catRes, unitRes] = await Promise.all([
+    const [matRes, catRes, unitRes, suppRes] = await Promise.all([
       supabase.from("tbl_materials").select("*").order("material_name"),
       supabase.from("tbl_master_lookups").select("*").eq("category", "MATERIAL_CATEGORY").eq("active", true).order("display_order"),
       supabase.from("tbl_master_lookups").select("*").eq("category", "UNIT").eq("active", true).order("display_order"),
+      supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name"),
     ]);
 
     const catMap: Record<number, string> = {};
@@ -123,6 +127,7 @@ export default function MaterialsPage() {
     }
     if (catRes.data) setCategories(catRes.data);
     if (unitRes.data) setUnits(unitRes.data);
+    if (suppRes.data) setSuppliers(suppRes.data);
     setLoading(false);
   }, []);
 
@@ -829,13 +834,58 @@ export default function MaterialsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Primary Supplier</label>
-                  <input
-                    type="text"
-                    value={form.primary_supplier}
-                    onChange={(e) => setForm({ ...form, primary_supplier: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                    placeholder="Supplier name"
-                  />
+                  <select
+                    value={suppliers.some(s => s.supplier_name === form.primary_supplier) ? form.primary_supplier : (form.primary_supplier ? "__custom__" : "")}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") { setShowNewSupplier(true); setNewSupplierName(""); }
+                      else if (e.target.value === "__custom__") { /* keep current */ }
+                      else { setForm({ ...form, primary_supplier: e.target.value }); setShowNewSupplier(false); }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                  >
+                    <option value="">No supplier</option>
+                    {suppliers.map((s) => (
+                      <option key={s.supplier_id} value={s.supplier_name}>{s.supplier_name}</option>
+                    ))}
+                    {form.primary_supplier && !suppliers.some(s => s.supplier_name === form.primary_supplier) && (
+                      <option value="__custom__">{form.primary_supplier} (unlisted)</option>
+                    )}
+                    <option value="__new__">+ Add new supplier...</option>
+                  </select>
+                  {showNewSupplier && (
+                    <div className="flex gap-1.5 mt-1.5">
+                      <input
+                        type="text"
+                        value={newSupplierName}
+                        onChange={(e) => setNewSupplierName(e.target.value)}
+                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                        placeholder="New supplier name..."
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newSupplierName.trim()) {
+                            (async () => {
+                              await supabase.from("tbl_suppliers").insert({ supplier_name: newSupplierName.trim(), active: true });
+                              setForm({ ...form, primary_supplier: newSupplierName.trim() });
+                              setShowNewSupplier(false);
+                              const { data } = await supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name");
+                              if (data) setSuppliers(data);
+                            })();
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!newSupplierName.trim()) return;
+                          await supabase.from("tbl_suppliers").insert({ supplier_name: newSupplierName.trim(), active: true });
+                          setForm({ ...form, primary_supplier: newSupplierName.trim() });
+                          setShowNewSupplier(false);
+                          const { data } = await supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name");
+                          if (data) setSuppliers(data);
+                        }}
+                        className="px-3 py-1.5 bg-starlight-blue text-white text-xs rounded-lg hover:bg-blue-600"
+                      >Add</button>
+                    </div>
+                  )}
                 </div>
               </div>
 
