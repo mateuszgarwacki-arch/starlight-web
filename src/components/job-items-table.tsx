@@ -225,7 +225,7 @@ export function JobItemsTable({
                   return (
                     <tr
                       key={item.item_id}
-                      className={`border-t border-gray-100 transition-colors ${
+                      className={`border-t border-gray-100 transition-colors align-top ${
                         isSelected ? "bg-blue-50/50" : ""
                       } ${hasWo ? "opacity-70" : ""}`}
                     >

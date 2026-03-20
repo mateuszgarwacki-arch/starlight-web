@@ -161,11 +161,17 @@ export default function ScopeDetailPage() {
             <p className="text-xs text-gray-400 font-mono">
               {scope.job_number} &gt; Scope #{scope.scope_item_id}
             </p>
-            <h1 className="text-xl font-bold text-navy mt-1">
-              {scope.line_text
-                ? (scope.line_text).substring(0, 100)
-                : scope.item_name || `Scope Item #${scope.scope_item_id}`}
-            </h1>
+            <input
+              type="text"
+              defaultValue={scope.line_text || scope.item_name || `Scope Item #${scope.scope_item_id}`}
+              onBlur={async (e) => {
+                const val = e.target.value.trim();
+                if (val && val !== scope.item_name) {
+                  await supabase.from("tbl_scope_items").update({ item_name: val }).eq("scope_item_id", scope.scope_item_id);
+                }
+              }}
+              className="text-xl font-bold text-navy mt-1 w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none rounded px-1 -ml-1"
+            />
             {scope.job_name && (
               <p className="text-sm text-gray-400 mt-1">{scope.job_name}</p>
             )}
