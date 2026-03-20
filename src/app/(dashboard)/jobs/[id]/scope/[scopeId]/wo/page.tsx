@@ -855,11 +855,11 @@ export default function ScopeWorkOrdersPage() {
                             <thead>
                               <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
                                 <th className="text-left py-1.5 pr-3 font-medium">Material</th>
-                                <th className="text-right py-1.5 px-2 font-medium w-16">Qty</th>
-                                <th className="text-left py-1.5 px-2 font-medium w-16">Unit</th>
-                                <th className="text-right py-1.5 px-2 font-medium w-20">Unit £</th>
-                                <th className="text-right py-1.5 px-2 font-medium w-20">Total</th>
-                                <th className="text-center py-1.5 px-2 font-medium w-14">Order</th>
+                                <th className="text-right py-1.5 px-2 font-medium w-20">Qty</th>
+                                <th className="text-left py-1.5 px-2 font-medium w-20">Unit</th>
+                                <th className="text-right py-1.5 px-2 font-medium w-24">Unit £</th>
+                                <th className="text-right py-1.5 px-2 font-medium w-24">Total</th>
+                                <th className="text-center py-1.5 px-2 font-medium w-16">Order</th>
                                 <th className="w-8"></th>
                               </tr>
                             </thead>
