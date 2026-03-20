@@ -138,8 +138,6 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
   const actualMarginPct = q > 0 ? (actualMargin / q) * 100 : 0;
   const accuracy = estTotal > 0 ? ((committedTotal / estTotal) * 100) : 0;
   const showBothQuoted = data.quotedTotal > 0 && data.quotedTotal !== data.quotedWorkshop;
-  const actualMarginPct = q > 0 ? (actualMargin / q) * 100 : 0;
-  const accuracy = estTotal > 0 ? ((committedTotal / estTotal) * 100) : 0;
 
   const marginColor = (pct: number) =>
     pct >= data.targetMarginPct ? "text-starlight-green" :
