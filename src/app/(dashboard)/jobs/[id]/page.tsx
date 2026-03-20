@@ -157,7 +157,7 @@ export default function JobDetailPage() {
       if (scopesRes.data) {
         scopesRes.data.forEach((s: any) => {
           const line = linesRes.data?.find((l: any) => l.quote_line_id === s.quote_line_id);
-          scopeMap[s.scope_item_id] = line?.line_text?.substring(0, 60) || s.item_name || "Scope #" + s.scope_item_id;
+          scopeMap[s.scope_item_id] = line?.line_text || s.item_name || "Scope #" + s.scope_item_id;
         });
       }
 
@@ -383,8 +383,7 @@ export default function JobDetailPage() {
         {/* Description + PM note + contractor/stock */}
         <td className="px-3 py-2.5">
           <p className="text-sm text-gray-700 leading-relaxed">
-            {(line.line_text || "").substring(0, 150)}
-            {(line.line_text || "").length > 150 ? "..." : ""}
+            {line.line_text || ""}
           </p>
           <input
             type="text"
@@ -763,7 +762,7 @@ export default function JobDetailPage() {
           ) : (
             scopes.map((scope) => {
               const scopeLine = lines.find((l) => l.quote_line_id === scope.quote_line_id);
-              const scopeTitle = scopeLine?.line_text?.substring(0, 100) || scope.item_name || "(unnamed)";
+              const scopeTitle = scopeLine?.line_text || scope.item_name || "(unnamed)";
               const scopeWOs = woData.filter((w: any) => w.scope_item_id === scope.scope_item_id);
               const woComplete = scopeWOs.filter((w: any) => w.status === "Complete").length;
 

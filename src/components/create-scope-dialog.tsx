@@ -25,8 +25,8 @@ export function CreateScopeDialog({
 }: CreateScopeDialogProps) {
   const supabase = createClient();
   const [itemName, setItemName] = useState(
-    // Auto-populate from quote line - first 80 chars, clean up
-    (quoteLine.line_text || "").substring(0, 80).split("\n")[0].trim()
+    // Auto-populate from full quote line text
+    (quoteLine.line_text || "").split("\n")[0].trim()
   );
   const [complexity, setComplexity] = useState("");
   const [finishRelative, setFinishRelative] = useState("");
