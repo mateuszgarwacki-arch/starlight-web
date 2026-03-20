@@ -574,15 +574,22 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                 let unitDisplay = r.unit || "—";
 
                 if (r.mat_standard_length && r.quantity) {
-                  // Convert qty to mm if unit is Metre
-                  const qtyMm = unitDisplay.toLowerCase().startsWith("metre") || unitDisplay.toLowerCase() === "m"
-                    ? r.quantity * 1000
+                  // Determine qty in mm based on unit
+                  const uLower = unitDisplay.toLowerCase();
+                  const qtyMm = uLower === "mm" ? r.quantity
+                    : (uLower.startsWith("metre") || uLower === "m") ? r.quantity * 1000
                     : r.quantity;
                   const stdLenMm = r.mat_standard_length;
+                  // Bin-pack: each piece that exceeds remaining space needs a new length
+                  // For BOM we only have total — use simple ceiling division
                   const lengths = Math.ceil(qtyMm / stdLenMm);
                   qtyDisplay = `${Math.round(qtyMm)}mm`;
                   unitDisplay = "";
                   stockPull = `${lengths}× ${stdLenMm}mm`;
+                } else if (r.unit?.toLowerCase() === "mm" && r.quantity) {
+                  // mm unit but no catalogue match — just show mm
+                  qtyDisplay = `${Math.round(r.quantity)}mm`;
+                  unitDisplay = "";
                 } else if (r.mat_standard_sheet_size && r.quantity) {
                   stockPull = `${r.quantity} sheet${r.quantity > 1 ? "s" : ""} (${r.mat_standard_sheet_size})`;
                 }

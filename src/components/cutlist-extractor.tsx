@@ -24,9 +24,12 @@ interface MaterialSummary {
   total_parts: number;
   sheets_needed?: number;
   lengths_needed?: number;
+  total_linear_mm?: number;
   standard_sheet_size?: string;
   standard_length_mm?: number;
   waste_pct?: number;
+  piece_lengths?: number[];
+  anomalies?: string[];
   _selected?: boolean;
 }
 
@@ -40,6 +43,103 @@ interface CutListExtractorProps {
   extractionStatus: string | null;
   extractedData: any;
   onUpdate: () => void;
+}
+
+/* ============================================================
+   Post-processing: client-side bin-packing + anomaly detection
+   ============================================================ */
+
+function binPackLengths(pieceLengths: number[], standardLength: number): number {
+  // First-Fit Decreasing bin packing
+  const sorted = [...pieceLengths].sort((a, b) => b - a);
+  const bins: number[] = [];
+  for (const piece of sorted) {
+    let placed = false;
+    for (let i = 0; i < bins.length; i++) {
+      if (bins[i] + piece <= standardLength) {
+        bins[i] += piece;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) bins.push(piece);
+  }
+  return bins.length;
+}
+
+function recalcMaterialSummary(
+  parts: ExtractedLine[],
+  aiSummary: MaterialSummary[],
+  catalogueMaterials: any[]
+): MaterialSummary[] {
+  // Group parts by material name (lowercase match)
+  const groups: Record<string, ExtractedLine[]> = {};
+  for (const p of parts) {
+    const key = (p.material || "unknown").toLowerCase();
+    if (!groups[key]) groups[key] = [];
+    // Expand by quantity
+    for (let i = 0; i < (p.quantity || 1); i++) groups[key].push(p);
+  }
+
+  return aiSummary.map(mat => {
+    const matKey = (mat.material || "").toLowerCase();
+    const matParts = groups[matKey] || [];
+    const catMat = catalogueMaterials.find(m =>
+      (m.material_name || "").toLowerCase() === matKey ||
+      matKey.includes((m.material_name || "").toLowerCase()) ||
+      (m.material_name || "").toLowerCase().includes(matKey)
+    );
+    const anomalies: string[] = [];
+
+    if ((mat.material_category || "").toLowerCase() === "timber") {
+      // Collect individual piece lengths
+      const pieceLengths = matParts
+        .map(p => p.length_mm || 0)
+        .filter(l => l > 0);
+
+      const totalLinearMm = pieceLengths.reduce((a, b) => a + b, 0);
+      const stdLen = catMat?.standard_length || mat.standard_length_mm || 4800;
+
+      // Bin-pack to find actual lengths needed
+      const lengthsNeeded = pieceLengths.length > 0
+        ? binPackLengths(pieceLengths, stdLen)
+        : Math.ceil(totalLinearMm / stdLen) || 1;
+
+      const usedMm = lengthsNeeded * stdLen;
+      const waste = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
+
+      // Anomaly: check for suspicious cross-sections on timber
+      // Timber width should typically be < 100mm for dimensional lumber
+      for (const p of matParts) {
+        const w = p.width_mm || 0;
+        const t = p.thickness_mm || 0;
+        const crossSection = Math.max(w, t);
+        if (crossSection > 100 && (p.length_mm || 0) > 0) {
+          const msg = `${p.description}: width ${w}mm × thickness ${t}mm looks too wide for timber — rotated component?`;
+          if (!anomalies.includes(msg)) anomalies.push(msg);
+        }
+      }
+
+      return {
+        ...mat,
+        total_parts: matParts.length,
+        total_linear_mm: totalLinearMm,
+        lengths_needed: lengthsNeeded,
+        standard_length_mm: stdLen,
+        waste_pct: waste,
+        piece_lengths: pieceLengths,
+        anomalies,
+        _selected: mat._selected,
+      };
+    }
+
+    // Sheets — keep AI calculation but validate
+    if (mat.sheets_needed) {
+      return { ...mat, anomalies, _selected: mat._selected };
+    }
+
+    return { ...mat, anomalies, _selected: mat._selected };
+  });
 }
 
 export function CutListExtractor({
@@ -106,8 +206,18 @@ export function CutListExtractor({
       }
 
       const data = await extractRes.json();
-      setParts(data.lines || []);
-      setMatSummary((data.material_summary || []).map((m: any) => ({ ...m, _selected: true })));
+      const extractedParts = data.lines || [];
+      setParts(extractedParts);
+
+      // Fetch catalogue materials for bin-packing reference
+      const { data: catMats } = await supabase.from("tbl_materials")
+        .select("material_id, material_name, standard_length, standard_sheet_size, unit")
+        .eq("active", true);
+
+      // Client-side recalculation with bin-packing for timber
+      const aiSummary = (data.material_summary || []).map((m: any) => ({ ...m, _selected: true }));
+      const recalced = recalcMaterialSummary(extractedParts, aiSummary, catMats || []);
+      setMatSummary(recalced);
       setSummary(data.summary || null);
       setStatus("extracted");
 
@@ -149,18 +259,30 @@ export function CutListExtractor({
 
       // Build description with context
       const partsForMat = parts.filter(p => (p.material || "").toLowerCase() === matLower);
+      const piecesDesc = partsForMat.map(p => {
+        const dims = [p.length_mm, p.width_mm].filter(Boolean).join("x");
+        return `${p.quantity || 1}× ${p.description}${dims ? ` ${dims}mm` : ""}`;
+      }).join(", ");
       const partsNote = partsForMat.length > 0
-        ? `${partsForMat.length} parts (${partsForMat.map(p => `${p.description} ${p.length_mm || ''}x${p.width_mm || ''}`).join(', ').substring(0, 150)})`
+        ? `${partsForMat.length} parts: ${piecesDesc}`.substring(0, 250)
         : "";
+
+      // For timber: store total linear mm as quantity, include lengths needed in description
+      const isTimber = mat.total_linear_mm && mat.total_linear_mm > 0;
+      const bomQty = isTimber ? mat.total_linear_mm : qty;
+      const bomUnit = isTimber ? "mm" : unit;
+      const bomDesc = isTimber
+        ? `${mat.material} — ${mat.lengths_needed}× ${mat.standard_length_mm || 4800}mm lengths`
+        : mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
 
       await supabase.from("tbl_wo_bom").insert({
         work_order_id: workOrderId,
         job_id: jobId,
         material_id: matched?.material_id || null,
         material_category: matched?.material_category || catMap[catKey] || null,
-        item_description: mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : mat.standard_length_mm ? ` (${mat.standard_length_mm}mm lengths)` : ""),
-        quantity: qty,
-        unit: unit,
+        item_description: bomDesc,
+        quantity: bomQty,
+        unit: bomUnit,
         unit_cost: matched?.current_unit_cost || null,
         needs_ordering: matched ? "false" : "true",
         notes: partsNote || null,
@@ -235,18 +357,32 @@ export function CutListExtractor({
           <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Materials to Order</p>
           <div className="space-y-1.5">
             {matSummary.map((mat, idx) => (
-              <div key={idx} className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-gray-50 opacity-50")}>
-                <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-gray-300" />
-                <span className="text-xs text-navy font-medium flex-1">{mat.material}</span>
-                {mat.sheets_needed && (
-                  <span className="text-xs font-mono text-starlight-blue font-medium">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
-                )}
-                {mat.lengths_needed && (
-                  <span className="text-xs font-mono text-starlight-blue font-medium">{mat.lengths_needed} length{mat.lengths_needed > 1 ? "s" : ""}</span>
-                )}
-                <span className="text-[10px] text-gray-400">{mat.total_parts} parts</span>
-                {mat.waste_pct != null && (
-                  <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-gray-400")}>{mat.waste_pct}% waste</span>
+              <div key={idx}>
+                <div className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-gray-50 opacity-50")}>
+                  <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-gray-300" />
+                  <span className="text-xs text-navy font-medium flex-1">{mat.material}</span>
+                  {mat.total_linear_mm != null && mat.total_linear_mm > 0 && (
+                    <span className="text-[10px] font-mono text-gray-500">{mat.total_linear_mm}mm total</span>
+                  )}
+                  {mat.lengths_needed != null && mat.lengths_needed > 0 && (
+                    <span className="text-xs font-mono text-starlight-blue font-medium">{mat.lengths_needed}× {mat.standard_length_mm || 4800}mm</span>
+                  )}
+                  {mat.sheets_needed != null && mat.sheets_needed > 0 && (
+                    <span className="text-xs font-mono text-starlight-blue font-medium">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
+                  )}
+                  <span className="text-[10px] text-gray-400">{mat.total_parts} parts</span>
+                  {mat.waste_pct != null && (
+                    <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-gray-400")}>{mat.waste_pct}% waste</span>
+                  )}
+                </div>
+                {mat.anomalies && mat.anomalies.length > 0 && (
+                  <div className="ml-7 mt-0.5 mb-1">
+                    {mat.anomalies.map((a, ai) => (
+                      <p key={ai} className="text-[10px] text-starlight-amber flex items-start gap-1">
+                        <span className="shrink-0">⚠</span> {a}
+                      </p>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}
