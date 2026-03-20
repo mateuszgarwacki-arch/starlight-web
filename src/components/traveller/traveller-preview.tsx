@@ -6,6 +6,7 @@ interface PrintButtonWO {
   work_order_id: number;
   status: string | null;
   traveller_printed_at?: string | null;
+  [key: string]: any;
 }
 
 interface PrintButtonScope {
