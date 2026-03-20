@@ -161,8 +161,7 @@ export default function ScopeDetailPage() {
             <p className="text-xs text-gray-400 font-mono">
               {scope.job_number} &gt; Scope #{scope.scope_item_id}
             </p>
-            <input
-              type="text"
+            <textarea
               defaultValue={scope.line_text || scope.item_name || `Scope Item #${scope.scope_item_id}`}
               onBlur={async (e) => {
                 const val = e.target.value.trim();
@@ -170,7 +169,16 @@ export default function ScopeDetailPage() {
                   await supabase.from("tbl_scope_items").update({ item_name: val }).eq("scope_item_id", scope.scope_item_id);
                 }
               }}
-              className="text-xl font-bold text-navy mt-1 w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none rounded px-1 -ml-1"
+              ref={(el) => {
+                if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+              }}
+              onInput={(e) => {
+                const el = e.target as HTMLTextAreaElement;
+                el.style.height = "auto";
+                el.style.height = el.scrollHeight + "px";
+              }}
+              rows={1}
+              className="text-xl font-bold text-navy mt-1 w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none rounded px-1 -ml-1 resize-none overflow-hidden leading-tight"
             />
             {scope.job_name && (
               <p className="text-sm text-gray-400 mt-1">{scope.job_name}</p>

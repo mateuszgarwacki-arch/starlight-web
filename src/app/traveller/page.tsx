@@ -461,7 +461,7 @@ export default function TravellerPage() {
       </div>
 
       {/* Pages */}
-      <div className="pt-16 print:pt-0 pb-8 print:pb-0">
+      <div className="pt-16 print:pt-0 pb-8 print:pb-0 print:m-0">
         {pages}
       </div>
     </div>
@@ -478,7 +478,7 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
   children: React.ReactNode;
 }) {
   return (
-    <div className="traveller-page bg-white mx-auto my-4 print:my-0 relative" style={{ width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakAfter: "always", pageBreakInside: "avoid" }}>
+    <div className="traveller-page bg-white mx-auto my-4 print:my-0 relative" style={{ width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" }}>
       <div className="absolute inset-[3px] border border-gray-400 pointer-events-none" style={{ zIndex: 0 }} />
       <div className="relative" style={{ zIndex: 1, padding: "7mm 8mm" }}>
         {/* Header */}
