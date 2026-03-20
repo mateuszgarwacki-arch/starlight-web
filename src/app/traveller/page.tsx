@@ -176,6 +176,14 @@ export default function TravellerPage() {
 
     setAllWOs(enriched);
 
+    // Check if already printed
+    const toPrintCheck = mode === "single" && singleWoId
+      ? enriched.filter((w) => w.work_order_id === singleWoId)
+      : enriched.filter((w) => w.status !== "Voided");
+    if (toPrintCheck.every((w) => w.traveller_printed_at)) {
+      setPrinted(true);
+    }
+
     // 4. Determine which WOs to print
     const toPrint = mode === "single" && singleWoId
       ? enriched.filter((w) => w.work_order_id === singleWoId)
