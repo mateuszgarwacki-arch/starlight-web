@@ -346,9 +346,9 @@ export default function InvoicesPage() {
                       </div>
                       {searchingLine === idx && (
                         <div className="border border-gray-200 rounded-lg bg-white shadow-lg p-2 max-h-56 overflow-y-auto z-10 relative">
+                          <div className="mb-1 pb-1 border-b border-gray-100"><button onClick={() => openNewMaterial(idx)} className="w-full text-left px-3 py-1.5 rounded-md text-xs text-starlight-blue hover:bg-blue-50 transition-colors font-medium"><Plus className="h-3 w-3 inline mr-1.5" /> Create New Material</button></div>
                           <div className="relative mb-2"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" /><input type="text" value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Search materials..." autoFocus /></div>
                           {filteredMaterials.map((m) => (<button key={m.material_id} onClick={() => assignMaterial(idx, m)} className="w-full text-left px-3 py-1.5 rounded-md text-xs hover:bg-gray-50 transition-colors"><span className="font-medium text-navy">{m.material_name}</span>{m.current_unit_cost != null && <span className="ml-2 text-gray-400 font-mono">{formatCurrency(m.current_unit_cost)}</span>}</button>))}
-                          <div className="border-t border-gray-100 mt-1 pt-1"><button onClick={() => openNewMaterial(idx)} className="w-full text-left px-3 py-1.5 rounded-md text-xs text-starlight-blue hover:bg-blue-50 transition-colors font-medium"><Plus className="h-3 w-3 inline mr-1.5" /> Create New Material</button></div>
                         </div>
                       )}
                     </div>

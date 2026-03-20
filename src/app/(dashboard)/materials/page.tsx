@@ -310,11 +310,9 @@ export default function MaterialsPage() {
   // Contextual fields based on category
   // ============================================================
 
-  const selectedCategoryName = editingMaterial
-    ? editingMaterial.category_name
-    : form.material_category
-      ? categories.find((c) => c.lookup_id === Number(form.material_category))?.lookup_value
-      : null;
+  const selectedCategoryName = form.material_category
+    ? categories.find((c) => c.lookup_id === Number(form.material_category))?.lookup_value
+    : null;
 
   const showLength = selectedCategoryName === "Timber" || selectedCategoryName === "Metal" || selectedCategoryName === "Fabric";
   const showSheetSize = selectedCategoryName === "Sheet";
