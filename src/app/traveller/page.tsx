@@ -33,6 +33,10 @@ interface BOM {
   quantity: number | null;
   unit: string | null;
   needs_ordering: string | boolean | null;
+  material_id: number | null;
+  mat_standard_length: number | null;
+  mat_standard_sheet_size: string | null;
+  mat_unit: string | null;
 }
 
 interface Doc {
@@ -182,7 +186,7 @@ export default function TravellerPage() {
     for (const wo of toPrint) {
       const [bomRes, docsRes, jxnRes] = await Promise.all([
         supabase.from("tbl_wo_bom")
-          .select("bom_id, item_description, quantity, unit, needs_ordering")
+          .select("bom_id, item_description, quantity, unit, needs_ordering, material_id")
           .eq("work_order_id", wo.work_order_id).order("bom_id"),
         supabase.from("tbl_wo_documents")
           .select("doc_id, doc_type, file_name, onedrive_path, caption, sort_order, extracted_data, extraction_status")
@@ -220,8 +224,30 @@ export default function TravellerPage() {
         }
       }
 
+      // Enrich BOM with material catalogue data (standard lengths, sheet sizes)
+      const rawBom = (bomRes.data || []) as any[];
+      const matIds = rawBom.map((b: any) => b.material_id).filter(Boolean);
+      let matMap: Record<number, { standard_length: number | null; standard_sheet_size: string | null; unit: string | null }> = {};
+      if (matIds.length > 0) {
+        const { data: mats } = await supabase.from("tbl_materials")
+          .select("material_id, standard_length, standard_sheet_size, unit")
+          .in("material_id", matIds);
+        if (mats) mats.forEach((m: any) => {
+          matMap[m.material_id] = { standard_length: m.standard_length, standard_sheet_size: m.standard_sheet_size, unit: m.unit };
+        });
+      }
+      const enrichedBom: BOM[] = rawBom.map((b: any) => {
+        const mat = b.material_id ? matMap[b.material_id] : null;
+        return {
+          ...b,
+          mat_standard_length: mat?.standard_length || null,
+          mat_standard_sheet_size: mat?.standard_sheet_size || null,
+          mat_unit: mat?.unit || null,
+        };
+      });
+
       dataMap[wo.work_order_id] = {
-        wo, bom: (bomRes.data || []) as BOM[], docs, linkedItems, imageUrls, pdfPageUrls,
+        wo, bom: enrichedBom, docs, linkedItems, imageUrls, pdfPageUrls,
       };
     }
 
@@ -544,18 +570,29 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                 <th className="text-left py-1 px-2 font-semibold text-gray-600">Material</th>
                 <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Qty</th>
                 <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Unit</th>
-                <th className="text-right py-1 px-2 font-semibold text-gray-600 w-20">Order?</th>
+                <th className="text-left py-1 px-2 font-semibold text-gray-600 w-36">Stock pull</th>
+                <th className="text-right py-1 px-2 font-semibold text-gray-600 w-16">Order?</th>
               </tr>
             </thead>
             <tbody>
-              {bom.map((r) => (
-                <tr key={r.bom_id} className="border-b border-gray-100">
-                  <td className="py-1 px-2 text-gray-800">{r.item_description || "—"}</td>
-                  <td className="py-1 px-2 text-right">{r.quantity ?? "—"}</td>
-                  <td className="py-1 px-2 text-right text-gray-600">{r.unit || "—"}</td>
-                  <td className="py-1 px-2 text-right text-[10px] text-gray-500">{isTruthy(r.needs_ordering) ? "needs order" : "—"}</td>
-                </tr>
-              ))}
+              {bom.map((r) => {
+                let stockPull = "";
+                if (r.mat_standard_length && r.quantity) {
+                  const lengths = Math.ceil(r.quantity / r.mat_standard_length);
+                  stockPull = `${lengths}× ${r.mat_standard_length}m length${lengths > 1 ? "s" : ""}`;
+                } else if (r.mat_standard_sheet_size && r.quantity) {
+                  stockPull = `${r.quantity} sheet${r.quantity > 1 ? "s" : ""} (${r.mat_standard_sheet_size})`;
+                }
+                return (
+                  <tr key={r.bom_id} className="border-b border-gray-100">
+                    <td className="py-1 px-2 text-gray-800">{r.item_description || "—"}</td>
+                    <td className="py-1 px-2 text-right">{r.quantity ?? "—"}</td>
+                    <td className="py-1 px-2 text-right text-gray-600">{r.unit || "—"}</td>
+                    <td className="py-1 px-2 text-[10px] text-gray-500">{stockPull || "—"}</td>
+                    <td className="py-1 px-2 text-right text-[10px] text-gray-500">{isTruthy(r.needs_ordering) ? "needs order" : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
