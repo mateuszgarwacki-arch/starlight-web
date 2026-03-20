@@ -61,7 +61,6 @@
    Traveller Print Styles
    ============================================================ */
 @media print {
-  body > *:not(#__next):not(.traveller-print-area),
   nav, .sidebar, header,
   .print\:hidden {
     display: none !important;

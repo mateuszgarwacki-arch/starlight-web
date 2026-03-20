@@ -482,17 +482,16 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
       <div className="absolute inset-[3px] border border-gray-400 pointer-events-none" style={{ zIndex: 0 }} />
       <div className="relative" style={{ zIndex: 1, padding: "7mm 8mm" }}>
         {/* Header */}
-        <div className="flex items-start justify-between text-[10px] pb-2 mb-3 border-b border-gray-300 gap-4">
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="font-bold text-gray-900">{scope.job_number}</span>
-            <span className="text-gray-300">|</span>
-            <span className="text-gray-600">{scope.job_name}</span>
+        <div className="text-[9px] pb-2 mb-3 border-b border-gray-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-900">{scope.job_number}</span>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-600">{scope.job_name}</span>
+            </div>
+            <span className="font-semibold text-gray-700 shrink-0">Step {woIdx + 1}/{totalWOs} {wo.activity_label}</span>
           </div>
-          <div className="text-right">
-            <span className="font-semibold text-gray-700">Step {woIdx + 1}/{totalWOs} {wo.activity_label}</span>
-            <span className="text-gray-300"> | </span>
-            <span className="text-gray-500 break-words">{scope.item_name}</span>
-          </div>
+          <p className="text-gray-500 mt-0.5 leading-tight">{scope.item_name}</p>
         </div>
 
         {/* Content */}
