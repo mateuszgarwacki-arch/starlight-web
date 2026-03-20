@@ -42,6 +42,9 @@ const EMPTY_FORM = {
   unit: "",
   standard_length: "",
   standard_sheet_size: "",
+  sheet_length_mm: "",
+  sheet_width_mm: "",
+  sheet_thickness_mm: "",
   current_unit_cost: "",
   primary_supplier: "",
   notes: "",
@@ -65,6 +68,7 @@ export default function MaterialsPage() {
   // Data
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [categories, setCategories] = useState<MasterLookup[]>([]);
+  const [units, setUnits] = useState<MasterLookup[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -100,9 +104,10 @@ export default function MaterialsPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [matRes, catRes] = await Promise.all([
+    const [matRes, catRes, unitRes] = await Promise.all([
       supabase.from("tbl_materials").select("*").order("material_name"),
       supabase.from("tbl_master_lookups").select("*").eq("category", "MATERIAL_CATEGORY").eq("active", true).order("display_order"),
+      supabase.from("tbl_master_lookups").select("*").eq("category", "UNIT").eq("active", true).order("display_order"),
     ]);
 
     const catMap: Record<number, string> = {};
@@ -117,6 +122,7 @@ export default function MaterialsPage() {
       })));
     }
     if (catRes.data) setCategories(catRes.data);
+    if (unitRes.data) setUnits(unitRes.data);
     setLoading(false);
   }, []);
 
@@ -155,12 +161,21 @@ export default function MaterialsPage() {
 
   const openEditDialog = (m: MaterialRow) => {
     setEditingMaterial(m);
+    // Parse standard_sheet_size "2440x1220" into individual dimensions
+    let sheetL = "", sheetW = "";
+    if (m.standard_sheet_size) {
+      const parts = m.standard_sheet_size.split(/[x×X]/);
+      if (parts.length >= 2) { sheetL = parts[0].trim(); sheetW = parts[1].trim(); }
+    }
     setForm({
       material_name: m.material_name || "",
       material_category: m.material_category ? String(m.material_category) : "",
       unit: m.unit || "",
       standard_length: m.standard_length ? String(m.standard_length) : "",
       standard_sheet_size: m.standard_sheet_size || "",
+      sheet_length_mm: sheetL,
+      sheet_width_mm: sheetW,
+      sheet_thickness_mm: m.spec_val_1 ? String(m.spec_val_1) : "",
       current_unit_cost: m.current_unit_cost ? String(m.current_unit_cost) : "",
       primary_supplier: m.primary_supplier || "",
       notes: m.notes || "",
@@ -178,17 +193,29 @@ export default function MaterialsPage() {
     if (!form.material_name.trim()) return;
     setSaving(true);
 
+    // Compose standard_sheet_size from individual dimension inputs
+    const composedSheetSize = form.sheet_length_mm && form.sheet_width_mm
+      ? `${form.sheet_length_mm}x${form.sheet_width_mm}`
+      : form.standard_sheet_size.trim() || null;
+
+    // For sheets, store thickness in spec_val_1
+    const isSheet = selectedCategoryName === "Sheet";
+    const isTimber = selectedCategoryName === "Timber" || selectedCategoryName === "Metal";
+
     const payload: Record<string, any> = {
       material_name: form.material_name.trim(),
       material_category: form.material_category ? Number(form.material_category) : null,
       unit: form.unit.trim() || null,
       standard_length: form.standard_length ? Number(form.standard_length) : null,
-      standard_sheet_size: form.standard_sheet_size.trim() || null,
+      standard_sheet_size: isSheet ? composedSheetSize : form.standard_sheet_size.trim() || null,
       current_unit_cost: form.current_unit_cost ? Number(form.current_unit_cost) : null,
       primary_supplier: form.primary_supplier.trim() || null,
       notes: form.notes.trim() || null,
-      spec_val_1: form.spec_val_1 ? Number(form.spec_val_1) : null,
-      spec_val_2: form.spec_val_2 ? Number(form.spec_val_2) : null,
+      spec_val_1: isSheet && form.sheet_thickness_mm ? Number(form.sheet_thickness_mm)
+        : isTimber && form.spec_val_1 ? Number(form.spec_val_1)
+        : form.spec_val_1 ? Number(form.spec_val_1) : null,
+      spec_val_2: isTimber && form.spec_val_2 ? Number(form.spec_val_2)
+        : form.spec_val_2 ? Number(form.spec_val_2) : null,
       spec_val_3: form.spec_val_3 ? Number(form.spec_val_3) : null,
       spec_text_1: form.spec_text_1.trim() || null,
       spec_text_2: form.spec_text_2.trim() || null,
@@ -447,8 +474,9 @@ export default function MaterialsPage() {
                         </td>
                         <td className="px-4 py-2.5 text-gray-500 text-xs">{m.primary_supplier || "—"}</td>
                         <td className="px-4 py-2.5 text-gray-500 text-xs">
-                          {m.standard_length ? `${m.standard_length}m` : ""}
-                          {m.standard_sheet_size || ""}
+                          {m.standard_length ? `${m.standard_length}mm` : ""}
+                          {m.standard_sheet_size ? ` ${m.standard_sheet_size}` : ""}
+                          {m.spec_val_1 && m.spec_val_2 ? ` (${m.spec_val_1}×${m.spec_val_2}mm)` : ""}
                           {!m.standard_length && !m.standard_sheet_size && "—"}
                         </td>
                         <td className="px-4 py-2.5">
@@ -759,13 +787,30 @@ export default function MaterialsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
-                  <input
-                    type="text"
-                    value={form.unit}
-                    onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                    placeholder="Metre / Sheet / Litre / Each"
-                  />
+                  <select
+                    value={units.some(u => u.lookup_value === form.unit) ? form.unit : (form.unit ? "__custom__" : "")}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") setForm({ ...form, unit: "" });
+                      else setForm({ ...form, unit: e.target.value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                  >
+                    <option value="">Select unit...</option>
+                    {units.map((u) => (
+                      <option key={u.lookup_id} value={u.lookup_value}>{u.lookup_value}</option>
+                    ))}
+                    <option value="__custom__">Other...</option>
+                  </select>
+                  {(form.unit && !units.some(u => u.lookup_value === form.unit)) && (
+                    <input
+                      type="text"
+                      value={form.unit}
+                      onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                      className="w-full mt-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                      placeholder="Enter custom unit..."
+                      autoFocus
+                    />
+                  )}
                 </div>
               </div>
 
@@ -794,34 +839,43 @@ export default function MaterialsPage() {
                 </div>
               </div>
 
-              {/* Standard size fields — only when category is relevant */}
-              {(showLength || showSheetSize) && (
-                <div className="grid grid-cols-2 gap-3">
-                  {showLength && (
+              {/* Stock dimensions — category-specific */}
+              {showSheetSize && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Standard Sheet Dimensions (mm)</p>
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Standard Length (m)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={form.standard_length}
-                        onChange={(e) => setForm({ ...form, standard_length: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                        placeholder="e.g. 2.4"
-                      />
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Length (mm)</label>
+                      <input type="number" value={form.sheet_length_mm} onChange={(e) => setForm({ ...form, sheet_length_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="2440" />
                     </div>
-                  )}
-                  {showSheetSize && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Standard Sheet Size</label>
-                      <input
-                        type="text"
-                        value={form.standard_sheet_size}
-                        onChange={(e) => setForm({ ...form, standard_sheet_size: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                        placeholder="e.g. 2440×1220"
-                      />
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Width (mm)</label>
+                      <input type="number" value={form.sheet_width_mm} onChange={(e) => setForm({ ...form, sheet_width_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="1220" />
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Thickness (mm)</label>
+                      <input type="number" value={form.sheet_thickness_mm} onChange={(e) => setForm({ ...form, sheet_thickness_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="18" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {showLength && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Standard Stock Dimensions (mm)</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Stock Length (mm)</label>
+                      <input type="number" value={form.standard_length} onChange={(e) => setForm({ ...form, standard_length: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="4800" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Width (mm)</label>
+                      <input type="number" value={form.spec_val_1} onChange={(e) => setForm({ ...form, spec_val_1: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="44" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Thickness (mm)</label>
+                      <input type="number" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="19" />
+                    </div>
+                  </div>
                 </div>
               )}
 
