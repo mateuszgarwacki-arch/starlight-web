@@ -270,6 +270,9 @@ export function JobItemsTable({
                           rows={1}
                           className="w-full px-2 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-starlight-blue focus:outline-none rounded bg-white resize-none overflow-hidden"
                           placeholder="Item description..."
+                          ref={(el) => {
+                            if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+                          }}
                           onInput={(e) => {
                             const el = e.target as HTMLTextAreaElement;
                             el.style.height = "auto";
