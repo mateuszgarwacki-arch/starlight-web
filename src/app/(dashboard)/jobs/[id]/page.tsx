@@ -117,7 +117,7 @@ export default function JobDetailPage() {
 
   // --- ADD LINE state ---
   const [showAddLine, setShowAddLine] = useState(false);
-  const [newLine, setNewLine] = useState({ line_text: "", line_value: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
+  const [newLine, setNewLine] = useState({ line_text: "", line_value: "", quantity: "", unit_price: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
   const [addingSaving, setAddingSaving] = useState(false);
 
   // --- INLINE EDIT state ---
@@ -327,13 +327,20 @@ export default function JobDetailPage() {
     const nextSeq = lines.length > 0 ? Math.max(...lines.map(l => l.import_sequence || 0)) + 1 : 1;
     const nextNum = String(nextSeq);
 
+    const qty = newLine.quantity ? parseFloat(newLine.quantity) : null;
+    const unitP = newLine.unit_price ? parseFloat(newLine.unit_price) : null;
+    const manualVal = newLine.line_value ? parseFloat(newLine.line_value) : null;
+    const computedValue = (qty && unitP) ? qty * unitP : manualVal;
+
     const { error } = await supabase.from("tbl_quote_lines").insert({
       quote_id: quoteId,
       job_id: jobId,
       line_number: nextNum,
       import_sequence: nextSeq,
       line_text: newLine.line_text.trim(),
-      line_value: newLine.line_value ? parseFloat(newLine.line_value) : null,
+      line_value: computedValue,
+      quantity: qty,
+      unit_price: unitP,
       event_zone: newLine.event_zone.trim() || null,
       line_sub_group: newLine.line_sub_group.trim() || null,
       category: newLine.category || null,
@@ -343,7 +350,7 @@ export default function JobDetailPage() {
     if (error) { toast.error("Failed to add line"); setAddingSaving(false); return; }
 
     toast.success("Line added");
-    setNewLine({ line_text: "", line_value: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
+    setNewLine({ line_text: "", line_value: "", quantity: "", unit_price: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
     setShowAddLine(false);
     setAddingSaving(false);
     loadData();
@@ -378,8 +385,24 @@ export default function JobDetailPage() {
     if (!editingLineCell) return;
     const { lineId, field } = editingLineCell;
     let val: string | number | null = editLineCellValue.trim() || null;
-    if (field === "line_value" && val !== null) val = parseFloat(val as string) || null;
+    if (["line_value", "quantity", "unit_price"].includes(field) && val !== null) val = parseFloat(val as string) || null;
+
+    // Save the edited field
     await updateLine(lineId, field, val as any);
+
+    // Auto-recalc line_value when qty or unit_price changes
+    if (field === "quantity" || field === "unit_price") {
+      const line = lines.find(l => l.quote_line_id === lineId);
+      if (line) {
+        const newQty = field === "quantity" ? (val as number) : line.quantity;
+        const newUp = field === "unit_price" ? (val as number) : line.unit_price;
+        if (newQty && newUp) {
+          const total = Math.round(newQty * newUp * 100) / 100;
+          await updateLine(lineId, "line_value", total as any);
+        }
+      }
+    }
+
     setEditingLineCell(null);
     setEditLineCellValue("");
   };
@@ -542,21 +565,51 @@ export default function JobDetailPage() {
           />
         </td>
 
-        {/* Value — editable */}
+        {/* Qty × Price → Value */}
         <td className="px-3 py-2.5 text-right">
-          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_value" ? (
-            <input type="number" step="0.01" value={editLineCellValue}
-              onChange={(e) => setEditLineCellValue(e.target.value)}
-              onBlur={saveLineEdit}
-              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-              autoFocus
-              className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-          ) : (
-            <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
-              className="font-medium text-gray-700 cursor-pointer hover:text-starlight-blue transition-colors">
-              {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
-            </span>
-          )}
+          <div className="space-y-0.5">
+            {/* Qty + Unit Price row (editable) */}
+            <div className="flex items-center justify-end gap-1 text-xs text-gray-400">
+              {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "quantity" ? (
+                <input type="number" step="1" value={editLineCellValue}
+                  onChange={(e) => setEditLineCellValue(e.target.value)}
+                  onBlur={saveLineEdit}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+                  autoFocus className="w-14 px-1 py-0.5 text-xs text-right border border-starlight-blue rounded bg-white focus:outline-none" />
+              ) : (
+                <span onClick={() => startLineEdit(line.quote_line_id, "quantity", line.quantity)}
+                  className="cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
+                  {line.quantity != null ? line.quantity : <span className="text-gray-200">qty</span>}
+                </span>
+              )}
+              <span className="text-gray-300">×</span>
+              {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "unit_price" ? (
+                <input type="number" step="0.01" value={editLineCellValue}
+                  onChange={(e) => setEditLineCellValue(e.target.value)}
+                  onBlur={saveLineEdit}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+                  autoFocus className="w-16 px-1 py-0.5 text-xs text-right border border-starlight-blue rounded bg-white focus:outline-none" />
+              ) : (
+                <span onClick={() => startLineEdit(line.quote_line_id, "unit_price", line.unit_price)}
+                  className="cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
+                  {line.unit_price != null ? formatCurrency(line.unit_price) : <span className="text-gray-200">price</span>}
+                </span>
+              )}
+            </div>
+            {/* Total value (editable, bold) */}
+            {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_value" ? (
+              <input type="number" step="0.01" value={editLineCellValue}
+                onChange={(e) => setEditLineCellValue(e.target.value)}
+                onBlur={saveLineEdit}
+                onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+                autoFocus className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+            ) : (
+              <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
+                className="font-medium text-gray-700 cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
+                {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
+              </span>
+            )}
+          </div>
         </td>
 
         {/* Done — hybrid: shows auto-tick state + manual override */}
@@ -630,7 +683,7 @@ export default function JobDetailPage() {
         <th className="px-3 py-2.5 font-medium text-gray-500 w-24">Zone</th>
         <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-32 text-right">Value</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Done</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
       </tr>
@@ -905,13 +958,37 @@ export default function JobDetailPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
                 />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Value</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Qty</label>
+                  <input type="number" step="1" value={newLine.quantity}
+                    onChange={(e) => {
+                      const q = e.target.value;
+                      const up = newLine.unit_price;
+                      const autoVal = (q && up) ? String(Math.round(parseFloat(q) * parseFloat(up) * 100) / 100) : newLine.line_value;
+                      setNewLine({ ...newLine, quantity: q, line_value: autoVal });
+                    }}
+                    placeholder="e.g. 10"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Unit Price</label>
+                  <input type="number" step="0.01" value={newLine.unit_price}
+                    onChange={(e) => {
+                      const up = e.target.value;
+                      const q = newLine.quantity;
+                      const autoVal = (q && up) ? String(Math.round(parseFloat(q) * parseFloat(up) * 100) / 100) : newLine.line_value;
+                      setNewLine({ ...newLine, unit_price: up, line_value: autoVal });
+                    }}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Total Value</label>
                   <input type="number" step="0.01" value={newLine.line_value}
                     onChange={(e) => setNewLine({ ...newLine, line_value: e.target.value })}
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue ${newLine.quantity && newLine.unit_price ? "bg-gray-50 text-gray-400" : ""}`} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Zone</label>

@@ -41,6 +41,8 @@ export interface QuoteLine {
   import_sequence: number | null;
   line_text: string | null;
   line_value: number | null;
+  quantity: number | null;
+  unit_price: number | null;
   event_zone: string | null;
   line_sub_group: string | null;
   category: string | null;
