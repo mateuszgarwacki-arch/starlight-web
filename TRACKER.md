@@ -156,6 +156,7 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/app/(dashboard)/workshop/page.tsx` | Workshop view - all WOs grouped by scope |
 | `src/app/(dashboard)/review/page.tsx` | Cost visibility, time entries, flags, accuracy |
 | `src/app/(dashboard)/crew/page.tsx` | Crew management: people, rates, PINs (calendar moved to Capacity) |
+| `src/app/(dashboard)/notifications/page.tsx` | Notifications: severity-coded cards, filter tabs, mark read/dismiss |
 | `src/app/(dashboard)/materials/page.tsx` | Materials catalogue, category filters, price history |
 | `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, booking calendar, conflicts |
 | `src/app/(dashboard)/capacity/add-booking/page.tsx` | Add booking: month-view day picker, WhatsApp notify |
@@ -166,6 +167,7 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/app/api/extract-cutlist/route.ts` | API: Claude-powered cut list extraction |
 | `src/app/api/onedrive/upload/route.ts` | API: upload files to OneDrive via Graph API |
 | `src/app/api/onedrive/download/route.ts` | API: get download URLs from OneDrive |
+| `src/lib/notifications.ts` | Shared notify() helper — single function for all notification types |
 | `src/app/api/calendar/[freelancerId]/route.ts` | API: ICS calendar download (per-booking or full schedule) |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar (Tasks, Schedule, Photos, Me) |
 | `src/app/m/schedule/page.tsx` | Mobile schedule: interactive calendar, confirm/decline/withdraw, unavailability |
@@ -322,6 +324,9 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 ### Session 6 (23 Mar 2026) — Crew Booking, Capacity Redesign, Mobile Schedule
 ~11 commits. Full booking workflow: Capacity page redesigned with weekly calendar + Add Booking page (month-view day picker, WhatsApp wa.me notify). Mobile schedule (/m/schedule) with interactive monthly calendar — tap days for context-appropriate actions (confirm, decline, withdraw, mark unavailable). Crew page stripped to people management only. ICS calendar download API. Notifications table created (tbl_notifications) — booking withdrawals auto-create alerts. Timezone bug fixed (BST toISOString shift). Schema: booking_group UUID, notified_at, unavailable_reason added to tbl_freelancer_schedule.
 
+### Session 6b (23 Mar 2026) — Notifications System + Toast Polish
+~4 commits. Notifications page with severity-coded cards, filter tabs (All/Needs attention/Urgent), mark read/dismiss/bulk actions. Sidebar bell badge with unread count (polls 30s). Notification triggers wired into: booking confirm/decline/withdrawal, WO start/join/log/flag/complete. Shared notify() helper in lib/notifications.ts. Sonner toast notifications on all actions across mobile and desktop. General Workshop booking option on Add Booking page. ICS filenames now descriptive.
+
 ## Next Session Pickup
 
 ### Current State
@@ -348,12 +353,11 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - standard_length converted from metres to mm where < 100
 
 ### Outstanding Work (prioritised)
-1. **Notifications UI** — badge on sidebar, notification panel/page, mark as read/dismissed
-2. **Loading states & toast notifications** — install sonner, add Toaster to layout
-3. **WO status refresh after Print & Release** — page doesn't update until manual reload
-4. **Real-time Supabase subscriptions** on Workshop view + Capacity calendar
-5. **Quote import from real source** — currently manual entry only
-6. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+1. **Dashboard notification panel** — show unread notifications on main dashboard
+2. **WO status refresh after Print & Release** — page doesn't update until manual reload
+3. **Real-time Supabase subscriptions** on Workshop view + Capacity calendar
+4. **Quote import from real source** — currently manual entry only
+5. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
 ### New Routes (Session 6)
 | Route | Purpose |
