@@ -138,6 +138,10 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
 
   const removeBooking = async () => {
     if (!dialog?.existing) return;
+    // Detach any notifications referencing this booking before deleting
+    await supabase.from("tbl_notifications")
+      .update({ source_schedule_id: null })
+      .eq("source_schedule_id", dialog.existing.schedule_id);
     const { error } = await supabase.from("tbl_freelancer_schedule")
       .delete().eq("schedule_id", dialog.existing.schedule_id);
     if (error) {
