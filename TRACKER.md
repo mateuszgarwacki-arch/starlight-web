@@ -96,9 +96,9 @@
 - [x] Complexity extraction: `LEFT(complexity_construction, 1)` handles "1 - Straightforward" format
 
 #### Remaining Phase 8
-- [ ] Loading states & toast notifications (no toast library installed, basic "Loading..." text only)
+- [x] Toast notifications — Sonner installed, wired across all mobile + desktop actions (Session 6b)
 - [ ] WO status refresh after Print & Release (page doesn't update until manual reload)
-- [ ] Real-time Supabase subscriptions on Workshop view
+- [ ] Real-time Supabase subscriptions on Workshop view + Capacity calendar
 - [ ] Quote import from real source (currently manual entry)
 
 ### Future / Tier 3
@@ -114,8 +114,8 @@
 ### Migrated from Access (21)
 tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
 
-### Added by web app (9)
-tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents, tbl_rate_card, tbl_business_settings
+### Added by web app (10)
+tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents, tbl_rate_card, tbl_business_settings, tbl_notifications
 
 ### Key Views (27+)
 qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_breakdown, qry_manpower_demand, qry_procurement_needed, qry_job_cost_summary, qry_scopeitem_cost_summary, qry_wo_cost_summary, qry_estimate_vs_actual, qry_jobitems_withcoverage, qry_today_roster, qry_supplier_summary, qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin, qry_wo_estimated_cost, qry_scope_estimated_cost, qry_job_estimated_cost
@@ -321,6 +321,52 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - **Smart supplier dropdown**: last-used first from order history, ★ prefix, ↻ for historical
 - **Complexity field format**: "1 - Straightforward" / "2 - Skilled" / "3 - Bespoke / Artistic" — extract number with `LEFT(field, 1)`
 
+### Notification Pattern (MANDATORY for new features)
+Every user-facing action that changes state should generate a notification AND a toast. This is the standard pattern:
+
+**Notifications (`tbl_notifications`):**
+- Import `notify` from `@/lib/notifications` 
+- Call `notify({ supabase, type, title, detail, severity, freelancerId, jobId, woId, actionUrl })`
+- Types: `booking_confirmed`, `booking_declined`, `booking_withdrawal`, `wo_started`, `hours_logged`, `wo_flagged`, `wo_completed`, `scope_change`, `wo_overrun`, `material_needed`
+- Severities: `info` (awareness only), `warning` (needs attention), `urgent` (act now — creates gap)
+- Always include `actionUrl` so the notification deep-links to the relevant page
+- Always include relevant source IDs (freelancerId, jobId, woId, scheduleId) for filtering/context
+
+**Toast notifications (Sonner):**
+- Import `toast` from `sonner`
+- `toast.success("Message")` for confirmations
+- `toast.warning("Message")` for warnings (e.g. withdrawals)
+- `toast("Message")` for neutral info
+- `toast.error("Message")` for errors
+- Call toast AFTER the async operation completes, not before
+
+**When building ANY new feature, ask: "What notifications should this generate?"**
+- Freelancer does something → PM gets notified (info or warning)
+- System detects an issue → PM gets notified (warning or urgent)
+- PM changes something affecting freelancers → consider whether freelancers need to know (future: mobile notification bell)
+
+### Booking & Scheduling
+- **Booking statuses**: Booked → Notified → Confirmed / Declined. Unavailable is separate (no job_id). All count toward capacity except Declined
+- **booking_group UUID**: generated on creation, groups multi-day bookings into single actionable cards on mobile. Each booking action (Add Booking click) creates one group
+- **Soft signals only**: unavailable/booked days are visually flagged but never block PM from booking. Amber warning banner lists conflicts. Weekends are clickable too — only past days are truly disabled
+- **WhatsApp notify**: `wa.me/{phone}?text={encoded}` deep links. Phone cleaned: strip non-digits, replace leading 0 with 44. Opens in new tab
+- **ICS calendar**: downloadable .ics files (not subscription — Google Calendar subscriptions take 12-24h to first fetch). Per-booking via `?group={uuid}` param, or full schedule. `Content-Disposition: attachment` forces download. Filename: `Starlight-{JobName}-{PersonName}-{Date}.ics`
+- **Calendar sync approach**: `.ics` file download is universal — every phone OS routes calendar files to the default calendar app automatically. No "choose your provider" step needed
+- **Freelancer mobile calendar**: tap any day → bottom sheet with context-appropriate actions. Confirmed days show "I can't make this day anymore" which triggers `booking_withdrawal` notification (urgent severity)
+
+### Timezone Safety
+- **NEVER use `toISOString().split("T")[0]`** for local dates — BST (UTC+1) shifts midnight to previous day in UTC
+- **Always use `localDateStr(year, month, day)`** helper: `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`
+- **`todayLocal()`** helper for current date string
+- **`fmtDate(d)`** with `new Date(d + "T00:00:00")` to prevent timezone parse shifts
+- This bug caused calendar days to appear in wrong grid positions — very visible, very confusing
+
+### PostgreSQL Gotchas
+- **No `CREATE POLICY IF NOT EXISTS`** — use `DROP POLICY IF EXISTS` + `CREATE POLICY`
+- **`CREATE INDEX IF NOT EXISTS`** works fine
+- **`ALTER TABLE ADD COLUMN IF NOT EXISTS`** works fine
+- **CTE chains with `RETURNING`** for multi-table inserts — `@@IDENTITY` doesn't exist in PostgreSQL
+
 ### Session 6 (23 Mar 2026) — Crew Booking, Capacity Redesign, Mobile Schedule
 ~11 commits. Full booking workflow: Capacity page redesigned with weekly calendar + Add Booking page (month-view day picker, WhatsApp wa.me notify). Mobile schedule (/m/schedule) with interactive monthly calendar — tap days for context-appropriate actions (confirm, decline, withdraw, mark unavailable). Crew page stripped to people management only. ICS calendar download API. Notifications table created (tbl_notifications) — booking withdrawals auto-create alerts. Timezone bug fixed (BST toISOString shift). Schema: booking_group UUID, notified_at, unavailable_reason added to tbl_freelancer_schedule.
 
@@ -335,7 +381,8 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - Settings page live with rate card (£35/£40/£50) and business defaults (40% margin, 10hr days)
 - Analytics engine live: estimated costs flow through to cost analysis panels on job, scope, and WO pages
 - **Booking system live**: Add Booking page, weekly calendar on Capacity, mobile schedule with interactive calendar
-- **tbl_notifications created** but no UI yet to view/dismiss them
+- **Notifications system live**: /notifications page with severity-coded cards, sidebar bell badge, triggers on all booking + WO actions
+- **Toast notifications live**: Sonner wired across all mobile and desktop actions
 - **ICS download working** — per-booking and full schedule export
 
 ### SQL Already Run (Session 6)
