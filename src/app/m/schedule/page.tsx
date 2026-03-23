@@ -3,11 +3,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus, AlertTriangle } from "lucide-react";
 
-// ============================================================
-// Types
-// ============================================================
+// Timezone-safe date string
+function localDateStr(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+function todayLocal(): string {
+  const d = new Date();
+  return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function fmtDate(d: string) {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
 
 interface ScheduleRow {
   schedule_id: number;
@@ -20,67 +28,31 @@ interface ScheduleRow {
   notified_at: string | null;
   unavailable_reason: string | null;
 }
-
-interface JobInfo {
-  job_id: number;
-  job_name: string | null;
-  job_number: string | null;
-  event_date: string | null;
-}
-
+interface JobInfo { job_id: number; job_name: string | null; job_number: string | null; event_date: string | null; }
 interface BookingGroup {
-  booking_group: string | null;
-  job: JobInfo | null;
-  notes: string | null;
-  rows: ScheduleRow[];
-  dateRange: string;
-  dayCount: number;
-  status: "pending" | "confirmed" | "partial" | "declined";
+  key: string; job: JobInfo | null; notes: string | null; rows: ScheduleRow[];
+  dateRange: string; dayCount: number; status: "pending" | "confirmed" | "partial" | "declined";
 }
-
-// ============================================================
-// Helpers
-// ============================================================
-
-// Timezone-safe date string (avoids toISOString UTC shift)
-function localDateStr(year: number, month: number, day: number): string {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function todayLocal(): string {
-  const d = new Date();
-  return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function fmtDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("en-GB", {
-    weekday: "short", day: "numeric", month: "short",
-  });
-}
+interface DayInfo { status: string; job: JobInfo | null; row: ScheduleRow; }
 
 function dateRange(rows: ScheduleRow[]): string {
   if (rows.length === 0) return "";
-  const sorted = [...rows].sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
-  if (rows.length === 1) return fmtDate(sorted[0].scheduled_date);
-  return `${fmtDate(sorted[0].scheduled_date)} – ${fmtDate(sorted[sorted.length - 1].scheduled_date)}`;
+  const s = [...rows].sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  return s.length === 1 ? fmtDate(s[0].scheduled_date) : `${fmtDate(s[0].scheduled_date)} – ${fmtDate(s[s.length - 1].scheduled_date)}`;
 }
-
 function groupStatus(rows: ScheduleRow[]): BookingGroup["status"] {
-  const statuses = rows.map((r) => r.status);
-  if (statuses.every((s) => s === "Confirmed")) return "confirmed";
-  if (statuses.every((s) => s === "Declined")) return "declined";
-  if (statuses.some((s) => s === "Confirmed") && statuses.some((s) => s === "Declined")) return "partial";
+  const st = rows.map((r) => r.status);
+  if (st.every((s) => s === "Confirmed")) return "confirmed";
+  if (st.every((s) => s === "Declined")) return "declined";
+  if (st.some((s) => s === "Confirmed") && st.some((s) => s === "Declined")) return "partial";
   return "pending";
 }
-
-// ============================================================
-// Main Page
-// ============================================================
 
 export default function MobileSchedule() {
   const supabase = createClient();
   const router = useRouter();
   const [myId, setMyId] = useState(0);
+  const [myName, setMyName] = useState("");
   const [myPin, setMyPin] = useState("");
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<ScheduleRow[]>([]);
@@ -90,16 +62,11 @@ export default function MobileSchedule() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [dayToggles, setDayToggles] = useState<Record<number, boolean>>({});
   const [acting, setActing] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
 
-  // Calendar month
-  const [calMonth, setCalMonth] = useState(() => {
-    const d = new Date();
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
-
-  // Unavailability form
-  const [showUnavailForm, setShowUnavailForm] = useState(false);
-  const [unavailDates, setUnavailDates] = useState<string[]>([]);
+  // Day action sheet
+  const [selectedDay, setSelectedDay] = useState<{ date: string; info: DayInfo | null } | null>(null);
+  // Unavailability inline
   const [unavailReason, setUnavailReason] = useState("");
 
   const loadData = useCallback(async () => {
@@ -110,194 +77,148 @@ export default function MobileSchedule() {
     setMyId(fId);
     if (!fId) { setLoading(false); return; }
 
-    // Fetch PIN for calendar feed URL
-    const { data: me } = await supabase.from("tbl_freelancers").select("pin").eq("freelancer_id", fId).single();
+    const { data: me } = await supabase.from("tbl_freelancers").select("pin, freelancer_name").eq("freelancer_id", fId).single();
     if (me?.pin) setMyPin(me.pin);
+    if (me?.freelancer_name) setMyName(me.freelancer_name);
 
-    // Fetch all schedule rows (past + future for calendar display)
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     const pastStr = localDateStr(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth(), threeMonthsAgo.getDate());
-
-    const { data: rows } = await supabase
-      .from("tbl_freelancer_schedule")
-      .select("*")
-      .eq("freelancer_id", fId)
-      .gte("scheduled_date", pastStr)
-      .order("scheduled_date");
-
+    const { data: rows } = await supabase.from("tbl_freelancer_schedule").select("*").eq("freelancer_id", fId).gte("scheduled_date", pastStr).order("scheduled_date");
     const all = (rows || []) as ScheduleRow[];
     setAllRows(all);
 
-    // Separate unavailable vs bookings (future only for cards)
     const todayStr = todayLocal();
     const futureRows = all.filter((r) => r.scheduled_date >= todayStr);
-    const unavailRows = futureRows.filter((r) => r.status === "Unavailable");
+    setUnavailable(futureRows.filter((r) => r.status === "Unavailable"));
     const bookingRows = futureRows.filter((r) => r.status !== "Unavailable");
-    setUnavailable(unavailRows);
 
-    // Get unique job IDs for all rows (calendar needs them too)
     const jobIds = [...new Set(all.map((r) => r.job_id).filter(Boolean))] as number[];
     let jMap: Record<number, JobInfo> = {};
     if (jobIds.length > 0) {
-      const { data: jobData } = await supabase
-        .from("tbl_production_plan")
-        .select("job_id, job_name, job_number, event_date")
-        .in("job_id", jobIds);
-      (jobData || []).forEach((j: any) => { jMap[j.job_id] = j; });
+      const { data: jd } = await supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", jobIds);
+      (jd || []).forEach((j: any) => { jMap[j.job_id] = j; });
     }
     setJobMap(jMap);
 
-    // Group future bookings by booking_group
     const groupMap: Record<string, ScheduleRow[]> = {};
-    bookingRows.forEach((r) => {
-      const key = r.booking_group || `single-${r.schedule_id}`;
-      if (!groupMap[key]) groupMap[key] = [];
-      groupMap[key].push(r);
-    });
-
-    const bookingGroups: BookingGroup[] = Object.entries(groupMap).map(([key, gRows]) => {
+    bookingRows.forEach((r) => { const k = r.booking_group || `s-${r.schedule_id}`; if (!groupMap[k]) groupMap[k] = []; groupMap[k].push(r); });
+    const bgs: BookingGroup[] = Object.entries(groupMap).map(([key, gRows]) => {
       const sorted = [...gRows].sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
-      const firstRow = sorted[0];
-      return {
-        booking_group: firstRow.booking_group,
-        job: firstRow.job_id ? jMap[firstRow.job_id] || null : null,
-        notes: firstRow.notes,
-        rows: sorted,
-        dateRange: dateRange(sorted),
-        dayCount: sorted.length,
-        status: groupStatus(sorted),
-      };
+      const f = sorted[0];
+      return { key, job: f.job_id ? jMap[f.job_id] || null : null, notes: f.notes, rows: sorted, dateRange: dateRange(sorted), dayCount: sorted.length, status: groupStatus(sorted) };
     });
-
-    bookingGroups.sort((a, b) => {
-      const aPending = a.status === "pending" ? 0 : 1;
-      const bPending = b.status === "pending" ? 0 : 1;
-      if (aPending !== bPending) return aPending - bPending;
-      return (a.rows[0]?.scheduled_date || "").localeCompare(b.rows[0]?.scheduled_date || "");
-    });
-
-    setGroups(bookingGroups);
+    bgs.sort((a, b) => { const ap = a.status === "pending" ? 0 : 1; const bp = b.status === "pending" ? 0 : 1; if (ap !== bp) return ap - bp; return (a.rows[0]?.scheduled_date || "").localeCompare(b.rows[0]?.scheduled_date || ""); });
+    setGroups(bgs);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   // ============================================================
-  // Actions
+  // Booking group actions
   // ============================================================
-  const confirmAll = async (group: BookingGroup) => {
+  const confirmAll = async (g: BookingGroup) => {
     setActing(true);
-    const ids = group.rows.map((r) => r.schedule_id);
-    await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", ids);
-    await loadData();
-    setActing(false);
+    await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", g.rows.map((r) => r.schedule_id));
+    await loadData(); setActing(false);
+  };
+  const confirmWithExceptions = async (g: BookingGroup) => {
+    setActing(true);
+    const cIds = g.rows.filter((r) => dayToggles[r.schedule_id] !== false).map((r) => r.schedule_id);
+    const dIds = g.rows.filter((r) => dayToggles[r.schedule_id] === false).map((r) => r.schedule_id);
+    if (cIds.length) await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", cIds);
+    if (dIds.length) await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).in("schedule_id", dIds);
+    setExpandedGroup(null); setDayToggles({}); await loadData(); setActing(false);
+  };
+  const toggleExpand = (key: string, g: BookingGroup) => {
+    if (expandedGroup === key) { setExpandedGroup(null); setDayToggles({}); return; }
+    setExpandedGroup(key);
+    const t: Record<number, boolean> = {}; g.rows.forEach((r) => { t[r.schedule_id] = true; }); setDayToggles(t);
   };
 
-  const confirmWithExceptions = async (group: BookingGroup) => {
+  // ============================================================
+  // Single-day actions (from calendar tap)
+  // ============================================================
+  const confirmDay = async (row: ScheduleRow) => {
     setActing(true);
-    const confirmIds: number[] = [];
-    const declineIds: number[] = [];
-    group.rows.forEach((r) => {
-      if (dayToggles[r.schedule_id] === false) declineIds.push(r.schedule_id);
-      else confirmIds.push(r.schedule_id);
+    await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).eq("schedule_id", row.schedule_id);
+    setSelectedDay(null); await loadData(); setActing(false);
+  };
+
+  const declineDay = async (row: ScheduleRow) => {
+    setActing(true);
+    await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
+    setSelectedDay(null); await loadData(); setActing(false);
+  };
+
+  const withdrawDay = async (row: ScheduleRow) => {
+    setActing(true);
+    // Change to Declined
+    await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
+    // Create notification for PM
+    const jobName = row.job_id && jobMap[row.job_id] ? jobMap[row.job_id].job_name : "a job";
+    await supabase.from("tbl_notifications").insert({
+      type: "booking_withdrawal",
+      title: `${myName} withdrew from ${fmtDate(row.scheduled_date)}`,
+      detail: `${myName} can no longer work on ${jobName} on ${fmtDate(row.scheduled_date)}. You may need to find a replacement.`,
+      severity: "warning",
+      source_freelancer_id: myId,
+      source_job_id: row.job_id,
+      source_schedule_id: row.schedule_id,
+      action_url: "/capacity",
     });
-    if (confirmIds.length > 0) await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", confirmIds);
-    if (declineIds.length > 0) await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).in("schedule_id", declineIds);
-    setExpandedGroup(null);
-    setDayToggles({});
-    await loadData();
-    setActing(false);
+    setSelectedDay(null); await loadData(); setActing(false);
   };
 
-  const toggleExpand = (groupKey: string, group: BookingGroup) => {
-    if (expandedGroup === groupKey) { setExpandedGroup(null); setDayToggles({}); return; }
-    setExpandedGroup(groupKey);
-    const toggles: Record<number, boolean> = {};
-    group.rows.forEach((r) => { toggles[r.schedule_id] = true; });
-    setDayToggles(toggles);
-  };
-
-  // Unavailability
-  const toggleUnavailDate = (dateStr: string) => {
-    setUnavailDates((prev) => prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]);
-  };
-
-  const saveUnavailability = async () => {
-    if (unavailDates.length === 0) return;
+  const markDayUnavailable = async (dateStr: string, reason: string) => {
     setActing(true);
-    const inserts = unavailDates.map((d) => ({
-      freelancer_id: myId,
-      scheduled_date: d,
-      status: "Unavailable",
-      unavailable_reason: unavailReason.trim() || null,
-    }));
-    await supabase.from("tbl_freelancer_schedule").insert(inserts);
-    setShowUnavailForm(false);
-    setUnavailDates([]);
-    setUnavailReason("");
-    await loadData();
-    setActing(false);
+    await supabase.from("tbl_freelancer_schedule").insert({
+      freelancer_id: myId, scheduled_date: dateStr, status: "Unavailable", unavailable_reason: reason.trim() || null,
+    });
+    setSelectedDay(null); setUnavailReason(""); await loadData(); setActing(false);
   };
 
-  const removeUnavail = async (id: number) => {
+  const removeDayUnavailable = async (row: ScheduleRow) => {
     setActing(true);
-    await supabase.from("tbl_freelancer_schedule").delete().eq("schedule_id", id);
-    await loadData();
-    setActing(false);
+    await supabase.from("tbl_freelancer_schedule").delete().eq("schedule_id", row.schedule_id);
+    setSelectedDay(null); await loadData(); setActing(false);
   };
 
   // ============================================================
   // Calendar helpers
   // ============================================================
-  const getMonthData = (year: number, month: number) => {
-    const first = new Date(year, month, 1);
-    const last = new Date(year, month + 1, 0);
+  const getMonthData = (y: number, m: number) => {
+    const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
     const firstDow = first.getDay() === 0 ? 6 : first.getDay() - 1;
     const days: { date: string; num: number; isWeekend: boolean }[] = [];
     for (let d = 1; d <= last.getDate(); d++) {
-      const dt = new Date(year, month, d);
-      days.push({ date: localDateStr(year, month, d), num: d, isWeekend: dt.getDay() === 0 || dt.getDay() === 6 });
+      const dt = new Date(y, m, d);
+      days.push({ date: localDateStr(y, m, d), num: d, isWeekend: dt.getDay() === 0 || dt.getDay() === 6 });
     }
     return { days, firstDow, label: first.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) };
   };
-
-  const shiftCalMonth = (dir: number) => {
-    setCalMonth((prev) => {
-      const d = new Date(prev.year, prev.month + dir, 1);
-      return { year: d.getFullYear(), month: d.getMonth() };
-    });
-  };
-
+  const shiftCalMonth = (dir: number) => setCalMonth((p) => { const d = new Date(p.year, p.month + dir, 1); return { year: d.getFullYear(), month: d.getMonth() }; });
   const { days: calDays, firstDow: calPad, label: calLabel } = getMonthData(calMonth.year, calMonth.month);
   const todayStr = todayLocal();
 
-  // Get status for a calendar day
-  const getCalDayInfo = (dateStr: string) => {
+  const getCalDayInfo = (dateStr: string): DayInfo | null => {
     const dayRows = allRows.filter((r) => r.scheduled_date === dateStr);
     if (dayRows.length === 0) return null;
-    // Priority: Confirmed > Notified > Booked > Declined > Unavailable
-    const confirmed = dayRows.find((r) => r.status === "Confirmed");
-    if (confirmed) return { status: "Confirmed", job: confirmed.job_id ? jobMap[confirmed.job_id] : null, row: confirmed };
-    const notified = dayRows.find((r) => r.status === "Notified");
-    if (notified) return { status: "Notified", job: notified.job_id ? jobMap[notified.job_id] : null, row: notified };
-    const booked = dayRows.find((r) => r.status === "Booked");
-    if (booked) return { status: "Booked", job: booked.job_id ? jobMap[booked.job_id] : null, row: booked };
-    const declined = dayRows.find((r) => r.status === "Declined");
-    if (declined) return { status: "Declined", job: declined.job_id ? jobMap[declined.job_id] : null, row: declined };
-    const unavail = dayRows.find((r) => r.status === "Unavailable");
-    if (unavail) return { status: "Unavailable", job: null, row: unavail };
+    const c = dayRows.find((r) => r.status === "Confirmed");
+    if (c) return { status: "Confirmed", job: c.job_id ? jobMap[c.job_id] : null, row: c };
+    const n = dayRows.find((r) => r.status === "Notified");
+    if (n) return { status: "Notified", job: n.job_id ? jobMap[n.job_id] : null, row: n };
+    const b = dayRows.find((r) => r.status === "Booked");
+    if (b) return { status: "Booked", job: b.job_id ? jobMap[b.job_id] : null, row: b };
+    const dc = dayRows.find((r) => r.status === "Declined");
+    if (dc) return { status: "Declined", job: dc.job_id ? jobMap[dc.job_id] : null, row: dc };
+    const u = dayRows.find((r) => r.status === "Unavailable");
+    if (u) return { status: "Unavailable", job: null, row: u };
     return null;
   };
 
   const pendingCount = groups.filter((g) => g.status === "pending").length;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
-  if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading schedule...</div>;
-  }
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading schedule...</div>;
 
   return (
     <div className="space-y-4">
@@ -305,177 +226,108 @@ export default function MobileSchedule() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-navy">My schedule</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Upcoming bookings and availability</p>
+          <p className="text-xs text-gray-400 mt-0.5">Tap any day to see options</p>
         </div>
         {myPin && (
-          <button
-            onClick={() => {
-              const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
-              const httpsUrl = `https://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
-              const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(httpsUrl)}`;
-              // Try webcal first (works on iOS/Mac), fall back to Google Calendar URL
-              if (/iPhone|iPad|Mac/.test(navigator.userAgent)) {
-                window.location.href = webcalUrl;
-              } else {
-                window.open(googleUrl, "_blank");
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg hover:bg-starlight-blue/20 transition-colors"
-          >
-            <CalendarPlus className="h-3.5 w-3.5" />
-            Sync to calendar
+          <button onClick={() => {
+            const httpsUrl = `https://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
+            const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
+            const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(httpsUrl)}`;
+            if (/iPhone|iPad|Mac/.test(navigator.userAgent)) window.location.href = webcalUrl;
+            else window.open(googleUrl, "_blank");
+          }} className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg">
+            <CalendarPlus className="h-3.5 w-3.5" /> Sync
           </button>
         )}
       </div>
 
-      {/* ============================================================ */}
-      {/* Monthly Calendar View */}
-      {/* ============================================================ */}
-      <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-        {/* Month nav */}
-        <div className="flex items-center justify-between mb-3">
-          <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-gray-400 hover:text-navy">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
+      {/* Monthly Calendar */}
+      <div className="bg-white rounded-xl border border-gray-100 px-3 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-gray-400"><ChevronLeft className="h-4 w-4" /></button>
           <span className="text-sm font-semibold text-navy">{calLabel}</span>
-          <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-gray-400 hover:text-navy">
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-gray-400"><ChevronRight className="h-4 w-4" /></button>
         </div>
-
-        {/* Legend */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 justify-center">
-          <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-green-400" /> Confirmed</span>
-          <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-amber-300" /> Pending</span>
-          <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-blue-300" /> Notified</span>
-          <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-red-300" /> Declined</span>
-          <span className="flex items-center gap-1 text-[10px] text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300" /> Unavailable</span>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2 justify-center">
+          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-green-400" /> Confirmed</span>
+          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-amber-300" /> Pending</span>
+          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-red-300" /> Declined</span>
+          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-gray-300" /> Off</span>
         </div>
-
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
+        <div className="grid grid-cols-7 gap-0.5 mb-1">
           {["M","T","W","T","F","S","S"].map((d, i) => (
-            <div key={i} className="text-center text-[11px] font-medium text-gray-400">{d}</div>
+            <div key={i} className="text-center text-[10px] font-medium text-gray-400">{d}</div>
           ))}
         </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: calPad }).map((_, i) => <div key={`p-${i}`} />)}
+        <div className="grid grid-cols-7 gap-0.5">
+          {Array.from({ length: calPad }).map((_, i) => <div key={`p-${i}`} className="h-11" />)}
           {calDays.map((d) => {
             const info = getCalDayInfo(d.date);
             const isToday = d.date === todayStr;
-
-            let bgClass = "";
-            let textClass = d.isWeekend ? "text-gray-300" : "text-gray-600";
-            let dotColor = "";
-
+            const isPast = d.date < todayStr;
+            let bg = ""; let tc = d.isWeekend ? "text-gray-300" : "text-gray-500";
             if (info) {
               switch (info.status) {
-                case "Confirmed": bgClass = "bg-green-100"; textClass = "text-green-800 font-semibold"; dotColor = "bg-green-400"; break;
-                case "Booked": bgClass = "bg-amber-50"; textClass = "text-amber-700 font-semibold"; dotColor = "bg-amber-300"; break;
-                case "Notified": bgClass = "bg-blue-50"; textClass = "text-blue-700 font-semibold"; dotColor = "bg-blue-300"; break;
-                case "Declined": bgClass = "bg-red-50"; textClass = "text-red-400 line-through"; dotColor = "bg-red-300"; break;
-                case "Unavailable": bgClass = "bg-gray-100"; textClass = "text-gray-400"; dotColor = "bg-gray-300"; break;
+                case "Confirmed": bg = "bg-green-100"; tc = "text-green-800 font-semibold"; break;
+                case "Booked": case "Notified": bg = "bg-amber-50"; tc = "text-amber-700 font-semibold"; break;
+                case "Declined": bg = "bg-red-50"; tc = "text-red-400 line-through"; break;
+                case "Unavailable": bg = "bg-gray-100"; tc = "text-gray-400"; break;
               }
             }
-
             return (
-              <div
-                key={d.date}
-                className={
-                  "relative text-center py-2 rounded-lg text-[13px] " +
-                  bgClass + " " + textClass +
-                  (isToday ? " ring-2 ring-navy/30" : "")
-                }
-              >
-                {d.num}
-                {info && info.job && (
-                  <div className="text-[8px] leading-tight truncate px-0.5 opacity-70">{info.job.job_name?.split(" ")[0]}</div>
-                )}
-                {info && !info.job && info.status === "Unavailable" && info.row.unavailable_reason && (
-                  <div className="text-[8px] leading-tight truncate px-0.5 opacity-60">{info.row.unavailable_reason}</div>
-                )}
-              </div>
+              <button key={d.date} onClick={() => !isPast && setSelectedDay({ date: d.date, info })}
+                disabled={isPast}
+                className={"relative flex flex-col items-center justify-center h-11 rounded-lg text-[12px] transition-colors " + bg + " " + tc + (isToday ? " ring-2 ring-navy/30" : "") + (!isPast ? " active:scale-95" : " opacity-50")}>
+                <span>{d.num}</span>
+                {info && info.job && <span className="text-[7px] leading-tight truncate w-full text-center opacity-60">{info.job.job_name?.split(" ")[0]}</span>}
+                {info?.status === "Unavailable" && info.row.unavailable_reason && <span className="text-[7px] leading-tight truncate w-full text-center opacity-50">{info.row.unavailable_reason}</span>}
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* Pending bookings needing response */}
-      {/* ============================================================ */}
+      {/* Pending bookings — bulk actions */}
       {pendingCount > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-navy mb-2">Action needed</h2>
           {groups.filter((g) => g.status === "pending").map((g) => {
-            const key = g.booking_group || `single-${g.rows[0]?.schedule_id}`;
-            const isExpanded = expandedGroup === key;
-            const confirmedCount = isExpanded ? Object.values(dayToggles).filter(Boolean).length : 0;
-            const declinedCount = isExpanded ? Object.values(dayToggles).filter((v) => !v).length : 0;
-
+            const isExp = expandedGroup === g.key;
+            const cc = isExp ? Object.values(dayToggles).filter(Boolean).length : 0;
+            const dc = isExp ? Object.values(dayToggles).filter((v) => !v).length : 0;
             return (
-              <div key={key} className="bg-white rounded-xl border-2 border-amber-300 overflow-hidden mb-3">
+              <div key={g.key} className="bg-white rounded-xl border-2 border-amber-300 overflow-hidden mb-3">
                 <div className="px-4 pt-4 pb-3">
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-semibold text-navy truncate">{g.job?.job_name || "General workshop"}</p>
-                      <p className="text-xs text-gray-400 mt-1">{g.dateRange}</p>
-                      <p className="text-xs text-gray-400">{g.dayCount} day{g.dayCount > 1 ? "s" : ""}</p>
-                    </div>
-                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 shrink-0">Pending</span>
+                  <div className="flex justify-between items-start">
+                    <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-gray-400 mt-1">{g.dateRange} · {g.dayCount} day{g.dayCount > 1 ? "s" : ""}</p></div>
+                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">Pending</span>
                   </div>
-                  {g.notes && (
-                    <div className="mt-2 px-3 py-2 bg-gray-50 rounded-lg text-xs text-gray-500">{g.notes}</div>
-                  )}
+                  {g.notes && <div className="mt-2 px-3 py-2 bg-gray-50 rounded-lg text-xs text-gray-500">{g.notes}</div>}
                 </div>
-
-                {/* Confirm buttons */}
-                {!isExpanded && (
+                {!isExp && (
                   <div className="px-4 pb-4 space-y-2">
-                    <button onClick={() => confirmAll(g)} disabled={acting}
-                      className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50">
-                      <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-                      Confirm all {g.dayCount} day{g.dayCount > 1 ? "s" : ""}
+                    <button onClick={() => confirmAll(g)} disabled={acting} className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                      <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" />Confirm all {g.dayCount} day{g.dayCount > 1 ? "s" : ""}
                     </button>
-                    <button onClick={() => toggleExpand(key, g)}
-                      className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      Confirm with exceptions
-                    </button>
+                    <button onClick={() => toggleExpand(g.key, g)} className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg">Confirm with exceptions</button>
                   </div>
                 )}
-
-                {/* Expanded day toggles */}
-                {isExpanded && (
+                {isExp && (
                   <div className="px-4 pb-4">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">Toggle days you can't do:</p>
-                    <div className="space-y-1 max-h-[280px] overflow-y-auto mb-3">
-                      {g.rows.map((r) => {
-                        const isOn = dayToggles[r.schedule_id] !== false;
-                        return (
-                          <button key={r.schedule_id}
-                            onClick={() => setDayToggles((prev) => ({ ...prev, [r.schedule_id]: !isOn }))}
-                            className={"w-full flex justify-between items-center px-3 py-2.5 rounded-lg transition-colors " + (isOn ? "bg-green-50" : "bg-red-50")}>
-                            <span className={"text-[13px] font-medium " + (isOn ? "text-green-700" : "text-red-600")}>{fmtDate(r.scheduled_date)}</span>
-                            <div className={"w-9 h-5 rounded-full relative transition-colors " + (isOn ? "bg-green-500" : "bg-gray-300")}>
-                              <div className={"w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all " + (isOn ? "right-0.5" : "left-0.5")} />
-                            </div>
-                          </button>
-                        );
-                      })}
+                    <div className="space-y-1 max-h-[240px] overflow-y-auto mb-3">
+                      {g.rows.map((r) => { const on = dayToggles[r.schedule_id] !== false; return (
+                        <button key={r.schedule_id} onClick={() => setDayToggles((p) => ({ ...p, [r.schedule_id]: !on }))} className={"w-full flex justify-between items-center px-3 py-2.5 rounded-lg " + (on ? "bg-green-50" : "bg-red-50")}>
+                          <span className={"text-[13px] font-medium " + (on ? "text-green-700" : "text-red-600")}>{fmtDate(r.scheduled_date)}</span>
+                          <div className={"w-9 h-5 rounded-full relative " + (on ? "bg-green-500" : "bg-gray-300")}><div className={"w-4 h-4 bg-white rounded-full absolute top-0.5 " + (on ? "right-0.5" : "left-0.5")} /></div>
+                        </button>
+                      ); })}
                     </div>
-                    <div className="flex justify-between items-center px-3 py-2.5 bg-gray-50 rounded-lg mb-3">
-                      <span className="text-xs text-gray-500">Confirming</span>
-                      <span className="text-sm font-semibold text-navy">{confirmedCount} of {g.dayCount} days</span>
-                    </div>
-                    <button onClick={() => confirmWithExceptions(g)} disabled={acting || confirmedCount === 0}
-                      className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 mb-2">
-                      {declinedCount > 0 ? `Confirm ${confirmedCount} day${confirmedCount > 1 ? "s" : ""}, decline ${declinedCount}` : `Confirm all ${confirmedCount} days`}
+                    <div className="flex justify-between px-3 py-2.5 bg-gray-50 rounded-lg mb-3"><span className="text-xs text-gray-500">Confirming</span><span className="text-sm font-semibold text-navy">{cc} of {g.dayCount}</span></div>
+                    <button onClick={() => confirmWithExceptions(g)} disabled={acting || cc === 0} className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50 mb-2">
+                      {dc > 0 ? `Confirm ${cc}, decline ${dc}` : `Confirm all ${cc} days`}
                     </button>
-                    <button onClick={() => { setExpandedGroup(null); setDayToggles({}); }}
-                      className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      Back
-                    </button>
+                    <button onClick={() => { setExpandedGroup(null); setDayToggles({}); }} className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg">Back</button>
                   </div>
                 )}
               </div>
@@ -484,30 +336,22 @@ export default function MobileSchedule() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* Upcoming confirmed bookings */}
-      {/* ============================================================ */}
+      {/* Upcoming bookings summary */}
       {groups.filter((g) => g.status !== "pending").length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-navy mb-2">Upcoming bookings</h2>
+          <h2 className="text-sm font-semibold text-navy mb-2">Upcoming</h2>
           {groups.filter((g) => g.status !== "pending").map((g) => {
-            const key = g.booking_group || `single-${g.rows[0]?.schedule_id}`;
-            const statusLabel = g.status === "confirmed" ? "Confirmed" : g.status === "declined" ? "Declined" : "Partial";
-            const statusClass = g.status === "confirmed" ? "bg-green-100 text-green-700" : g.status === "declined" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700";
-            const confirmedDays = g.rows.filter((r) => r.status === "Confirmed").length;
-            const declinedDays = g.rows.filter((r) => r.status === "Declined").length;
-
+            const sl = g.status === "confirmed" ? "Confirmed" : g.status === "declined" ? "Declined" : "Partial";
+            const sc = g.status === "confirmed" ? "bg-green-100 text-green-700" : g.status === "declined" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700";
+            const cd = g.rows.filter((r) => r.status === "Confirmed").length;
+            const dd = g.rows.filter((r) => r.status === "Declined").length;
             return (
-              <div key={key} className="bg-white rounded-xl border border-gray-100 px-4 py-3 mb-2">
+              <div key={g.key} className="bg-white rounded-xl border border-gray-100 px-4 py-3 mb-2">
                 <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-navy truncate">{g.job?.job_name || "General workshop"}</p>
-                    <p className="text-xs text-gray-400 mt-1">{g.dateRange}</p>
-                    {g.status === "partial" && (
-                      <p className="text-xs text-gray-500 mt-0.5">{confirmedDays} confirmed, {declinedDays} declined</p>
-                    )}
+                  <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-gray-400 mt-1">{g.dateRange}</p>
+                    {g.status === "partial" && <p className="text-xs text-gray-500 mt-0.5">{cd} confirmed, {dd} declined</p>}
                   </div>
-                  <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0 " + statusClass}>{statusLabel}</span>
+                  <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full " + sc}>{sl}</span>
                 </div>
               </div>
             );
@@ -516,101 +360,90 @@ export default function MobileSchedule() {
       )}
 
       {/* ============================================================ */}
-      {/* Unavailability */}
+      {/* Day action bottom sheet */}
       {/* ============================================================ */}
-      <div>
-        <h2 className="text-sm font-semibold text-navy mb-2">My availability</h2>
-        {unavailable.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {unavailable.map((u) => (
-              <div key={u.schedule_id} className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3">
-                <div>
-                  <p className="text-[13px] text-gray-600">{fmtDate(u.scheduled_date)}</p>
-                  {u.unavailable_reason && <p className="text-[11px] text-gray-400">{u.unavailable_reason}</p>}
-                </div>
-                <button onClick={() => removeUnavail(u.schedule_id)} disabled={acting} className="text-red-400 hover:text-red-600 p-1 disabled:opacity-50">
-                  <Trash2 className="h-4 w-4" />
-                </button>
+      {selectedDay && (
+        <div className="fixed inset-0 bg-black/40 flex items-end z-50" onClick={(e) => { if (e.target === e.currentTarget) setSelectedDay(null); }}>
+          <div className="bg-white w-full rounded-t-2xl max-h-[60vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-[15px] font-semibold text-navy">{fmtDate(selectedDay.date)}</h3>
+                {selectedDay.info ? (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {selectedDay.info.status === "Unavailable" 
+                      ? `Unavailable${selectedDay.info.row.unavailable_reason ? " — " + selectedDay.info.row.unavailable_reason : ""}`
+                      : `${selectedDay.info.status} — ${selectedDay.info.job?.job_name || "Workshop"}`}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-0.5">No bookings</p>
+                )}
               </div>
-            ))}
-          </div>
-        )}
-        <button onClick={() => { setShowUnavailForm(true); setUnavailDates([]); setUnavailReason(""); }}
-          className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-gray-300 hover:text-gray-500 transition-colors">
-          <Plus className="h-4 w-4 inline mr-1.5 -mt-0.5" />
-          Mark days as unavailable
-        </button>
-      </div>
-
-      {/* Unavailability form modal */}
-      {showUnavailForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-2xl max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h3 className="text-[15px] font-semibold text-navy">Mark unavailable</h3>
-              <button onClick={() => setShowUnavailForm(false)} className="p-1 text-gray-400"><X className="h-5 w-5" /></button>
+              <button onClick={() => setSelectedDay(null)} className="p-1 text-gray-400"><X className="h-5 w-5" /></button>
             </div>
-            <div className="px-5 py-4">
-              {/* Month navigation */}
-              <div className="flex items-center justify-between mb-3">
-                <button onClick={() => setCalMonth((p) => { const d = new Date(p.year, p.month - 1, 1); return { year: d.getFullYear(), month: d.getMonth() }; })}
-                  className="px-3 py-1.5 text-gray-400 hover:text-navy text-sm">‹</button>
-                <span className="text-sm font-semibold text-navy">{calLabel}</span>
-                <button onClick={() => setCalMonth((p) => { const d = new Date(p.year, p.month + 1, 1); return { year: d.getFullYear(), month: d.getMonth() }; })}
-                  className="px-3 py-1.5 text-gray-400 hover:text-navy text-sm">›</button>
-              </div>
+            <div className="px-5 py-4 space-y-2">
 
-              {/* Day headers */}
-              <div className="grid grid-cols-7 gap-1 mb-1">
-                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-                  <div key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</div>
-                ))}
-              </div>
-
-              {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-1 mb-4">
-                {Array.from({ length: calPad }).map((_, i) => <div key={`pad-${i}`} />)}
-                {calDays.map((d) => {
-                  const isPast = d.date < todayStr;
-                  const isSelected = unavailDates.includes(d.date);
-                  const existing = getCalDayInfo(d.date);
-                  const disabled = isPast || (existing !== null);
-                  return (
-                    <button key={d.date} onClick={() => !disabled && toggleUnavailDate(d.date)} disabled={disabled}
-                      className={
-                        "text-center py-2.5 rounded-lg text-[13px] transition-colors " +
-                        (isSelected ? "bg-red-100 text-red-700 font-semibold" :
-                         existing?.status === "Confirmed" ? "bg-green-100 text-green-600" :
-                         existing?.status === "Unavailable" ? "bg-gray-100 text-gray-300 line-through" :
-                         existing ? "bg-amber-50 text-amber-600" :
-                         isPast ? "text-gray-200" :
-                         "text-gray-700 hover:bg-gray-50")
-                      }>{d.num}</button>
-                  );
-                })}
-              </div>
-
-              {/* Reason */}
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason (optional)</label>
-                <input type="text" value={unavailReason} onChange={(e) => setUnavailReason(e.target.value)}
-                  placeholder="Holiday, other job, appointment..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
-              </div>
-
-              {unavailDates.length > 0 && (
-                <div className="bg-gray-50 rounded-lg px-3 py-2.5 mb-4 flex justify-between items-center">
-                  <span className="text-xs text-gray-500">Selected</span>
-                  <span className="text-sm font-semibold text-navy">{unavailDates.length} day{unavailDates.length > 1 ? "s" : ""}</span>
-                </div>
+              {/* Empty day — mark unavailable */}
+              {!selectedDay.info && (
+                <>
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason (optional)</label>
+                    <input type="text" value={unavailReason} onChange={(e) => setUnavailReason(e.target.value)}
+                      placeholder="Holiday, other job, appointment..."
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                  </div>
+                  <button onClick={() => markDayUnavailable(selectedDay.date, unavailReason)} disabled={acting}
+                    className="w-full py-3 bg-gray-100 text-gray-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                    Mark as unavailable
+                  </button>
+                </>
               )}
 
-              <button onClick={saveUnavailability} disabled={acting || unavailDates.length === 0}
-                className="w-full py-3 bg-red-50 text-red-700 font-medium text-sm rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 mb-2">
-                Mark {unavailDates.length || 0} day{unavailDates.length !== 1 ? "s" : ""} as unavailable
-              </button>
-              <button onClick={() => setShowUnavailForm(false)}
-                className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              {/* Pending / Notified / Booked — confirm or decline */}
+              {selectedDay.info && ["Booked", "Notified"].includes(selectedDay.info.status) && (
+                <>
+                  <button onClick={() => confirmDay(selectedDay.info!.row)} disabled={acting}
+                    className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                    <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Confirm this day
+                  </button>
+                  <button onClick={() => declineDay(selectedDay.info!.row)} disabled={acting}
+                    className="w-full py-3 bg-red-50 text-red-600 font-medium text-sm rounded-lg disabled:opacity-50">
+                    <X className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Decline this day
+                  </button>
+                </>
+              )}
+
+              {/* Confirmed — option to withdraw */}
+              {selectedDay.info?.status === "Confirmed" && (
+                <>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-1">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-amber-700">Withdrawing will notify the workshop manager so they can find a replacement.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => withdrawDay(selectedDay.info!.row)} disabled={acting}
+                    className="w-full py-3 bg-red-50 text-red-600 font-medium text-sm rounded-lg disabled:opacity-50">
+                    I can't make this day anymore
+                  </button>
+                </>
+              )}
+
+              {/* Declined — info only */}
+              {selectedDay.info?.status === "Declined" && (
+                <p className="text-sm text-gray-400 text-center py-2">You declined this day. Contact the workshop manager if you've changed your mind.</p>
+              )}
+
+              {/* Unavailable — remove it */}
+              {selectedDay.info?.status === "Unavailable" && (
+                <button onClick={() => removeDayUnavailable(selectedDay.info!.row)} disabled={acting}
+                  className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                  Remove unavailability — I'm free this day
+                </button>
+              )}
+
+              {/* Cancel */}
+              <button onClick={() => { setSelectedDay(null); setUnavailReason(""); }}
+                className="w-full py-2.5 text-gray-400 text-sm mt-1">
                 Cancel
               </button>
             </div>
