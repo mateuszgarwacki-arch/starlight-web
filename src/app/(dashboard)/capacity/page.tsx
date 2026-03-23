@@ -7,8 +7,10 @@ import { isTruthy } from "@/lib/types";
 import {
   Users, RefreshCw, AlertTriangle, ChevronDown, ChevronRight,
   BarChart3, Clock, CheckCircle2, Calendar, Briefcase,
+  Plus, ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { BookingCalendar } from "@/components/booking-calendar";
 
 // ============================================================
 // Types
@@ -143,7 +145,7 @@ export default function CapacityPage() {
     const jobBookedDays: Record<number, number> = {};
     const jobBookedHours: Record<number, number> = {};
     bookData.forEach((b: Booking) => {
-      if (b.job_id && (b.status === "Booked" || b.status === "Confirmed")) {
+      if (b.job_id && (b.status === "Booked" || b.status === "Confirmed" || b.status === "Notified")) {
         jobBookedDays[b.job_id] = (jobBookedDays[b.job_id] || 0) + 1;
         const person = crewMap[b.freelancer_id];
         jobBookedHours[b.job_id] = (jobBookedHours[b.job_id] || 0) + (person?.standard_day_hours || 8);
@@ -179,7 +181,7 @@ export default function CapacityPage() {
     // Cross-job conflict detection
     const personDayJobs: Record<string, { freelancer_id: number; freelancer_name: string; date: string; jobs: Set<number> }> = {};
     bookData
-      .filter((b: Booking) => b.job_id && (b.status === "Booked" || b.status === "Confirmed"))
+      .filter((b: Booking) => b.job_id && (b.status === "Booked" || b.status === "Confirmed" || b.status === "Notified"))
       .forEach((b: Booking) => {
         const key = `${b.freelancer_id}-${b.scheduled_date}`;
         if (!personDayJobs[key]) {
@@ -298,8 +300,8 @@ export default function CapacityPage() {
           <p className="text-sm text-gray-400 mt-0.5">Demand vs supply · next 4 weeks · {jobDemands.length} active jobs</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/crew" className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
-            <Calendar className="h-4 w-4" /> Crew Calendar
+          <Link href="/capacity/add-booking" className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-blue/10 text-starlight-blue text-sm font-medium rounded-lg hover:bg-starlight-blue/20 transition-colors">
+            <Plus className="h-4 w-4" /> Add booking
           </Link>
           <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
@@ -359,6 +361,22 @@ export default function CapacityPage() {
           </div>
         </div>
       )}
+
+      {/* Booking Calendar */}
+      <div className="card px-5 py-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="h-5 w-5 text-navy" />
+          <h2 className="text-sm font-semibold text-navy">Booking calendar</h2>
+        </div>
+        <BookingCalendar
+          crew={crew.map(c => ({
+            freelancer_id: c.freelancer_id,
+            freelancer_name: c.freelancer_name || "",
+            speciality: c.speciality || null,
+            day_rate: c.day_rate || null,
+          }))}
+        />
+      </div>
 
       {/* Job demand breakdown */}
       <div>
@@ -455,66 +473,6 @@ export default function CapacityPage() {
         </div>
       </div>
 
-      {/* Crew availability summary */}
-      <div>
-        <h2 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
-          <Users className="h-4 w-4" /> Crew Availability (Next 4 Weeks)
-        </h2>
-        <div className="card overflow-hidden">
-          {crew.length === 0 ? (
-            <div className="px-6 py-10 text-center text-gray-400 text-sm">No active crew members</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
-                    <th className="px-4 py-2 font-medium">Person</th>
-                    <th className="px-4 py-2 font-medium">Speciality</th>
-                    <th className="px-4 py-2 font-medium text-right">Day Rate</th>
-                    <th className="px-4 py-2 font-medium text-right">Hrs / Day</th>
-                    <th className="px-4 py-2 font-medium text-center">Days Booked</th>
-                    <th className="px-4 py-2 font-medium text-center">Hours Booked</th>
-                    <th className="px-4 py-2 font-medium">Jobs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {crew.map((c) => {
-                    const myBookings = bookings.filter((b) => b.freelancer_id === c.freelancer_id && (b.status === "Booked" || b.status === "Confirmed"));
-                    const daysBooked = myBookings.length;
-                    const hoursBooked = daysBooked * (c.standard_day_hours || 8);
-                    const myJobs = [...new Set(myBookings.map((b) => b.job_id).filter(Boolean))];
-                    const hasConflict = conflicts.some((cf) => cf.freelancer_id === c.freelancer_id);
-                    return (
-                      <tr key={c.freelancer_id} className={"border-t border-gray-100 " + (hasConflict ? "bg-red-50/50" : "")}>
-                        <td className="px-4 py-2.5">
-                          <span className="font-medium text-navy">{c.freelancer_name}</span>
-                          {hasConflict && (<AlertTriangle className="h-3 w-3 text-starlight-red inline ml-1.5" />)}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-500">{c.speciality || "—"}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-600">{c.day_rate ? formatCurrency(c.day_rate) : "—"}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-600">{c.standard_day_hours || "—"}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={"font-mono font-medium " + (daysBooked > 0 ? "text-starlight-blue" : "text-gray-300")}>{daysBooked}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-mono text-navy">{hoursBooked > 0 ? `${hoursBooked}h` : "—"}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-500">
-                          {myJobs.length > 0
-                            ? myJobs.map((jId) => {
-                                const job = jobs.find((j: any) => j.job_id === jId);
-                                return job ? (job.job_number || job.job_name) : `#${jId}`;
-                              }).join(", ")
-                            : "—"
-                          }
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

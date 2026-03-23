@@ -12,6 +12,8 @@ interface Booking {
   status: string;
   job_id: number | null;
   notes: string | null;
+  booking_group: string | null;
+  unavailable_reason: string | null;
 }
 
 interface CrewMember {
@@ -145,6 +147,8 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
       case "Confirmed": return "bg-starlight-green text-white";
       case "Declined": return "bg-starlight-red/20 text-starlight-red line-through";
       case "Booked": return "bg-starlight-amber/20 text-starlight-amber";
+      case "Notified": return "bg-starlight-blue/20 text-starlight-blue";
+      case "Unavailable": return "bg-gray-200 text-gray-500";
       default: return "bg-gray-100 text-gray-500";
     }
   };
@@ -179,8 +183,10 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
         </div>
         <div className="flex items-center gap-3 text-[10px] text-gray-400">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-starlight-amber/20 border border-starlight-amber/40" /> Booked</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-starlight-blue/20 border border-starlight-blue/40" /> Notified</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-starlight-green" /> Confirmed</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-starlight-red/20 border border-starlight-red/40" /> Declined</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-200" /> Unavailable</span>
         </div>
       </div>
 
@@ -229,9 +235,12 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
                       >
                         {booking ? (
                           <div className={"rounded-md px-1.5 py-1 text-[10px] font-medium " + statusColor(booking.status)}>
-                            {booking.status === "Booked" ? "●" : booking.status === "Confirmed" ? "✓" : "✕"}
-                            {booking.job_id && jobMap[booking.job_id] && (
+                            {booking.status === "Booked" ? "●" : booking.status === "Confirmed" ? "✓" : booking.status === "Notified" ? "◉" : booking.status === "Unavailable" ? "—" : "✕"}
+                            {booking.job_id && jobMap[booking.job_id] && booking.status !== "Unavailable" && (
                               <div className="text-[9px] font-normal opacity-75 truncate">{jobMap[booking.job_id]}</div>
+                            )}
+                            {booking.status === "Unavailable" && booking.unavailable_reason && (
+                              <div className="text-[9px] font-normal opacity-75 truncate">{booking.unavailable_reason}</div>
                             )}
                           </div>
                         ) : (
