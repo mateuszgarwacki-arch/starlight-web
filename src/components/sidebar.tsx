@@ -20,9 +20,10 @@ import {
   Settings,
   Bell,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, zone: 1 },
@@ -46,21 +47,20 @@ export function Sidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Fetch unread notification count
-  useEffect(() => {
+  const fetchCount = useCallback(async () => {
     const supabase = createClient();
-    const fetchCount = async () => {
-      const { count } = await supabase
-        .from("tbl_notifications")
-        .select("*", { count: "exact", head: true })
-        .is("read_at", null)
-        .is("dismissed_at", null);
-      setUnreadCount(count || 0);
-    };
-    fetchCount();
-    // Poll every 30 seconds
-    const interval = setInterval(fetchCount, 30000);
-    return () => clearInterval(interval);
+    const { count } = await supabase
+      .from("tbl_notifications")
+      .select("*", { count: "exact", head: true })
+      .is("read_at", null)
+      .is("dismissed_at", null);
+    setUnreadCount(count || 0);
   }, []);
+
+  useEffect(() => { fetchCount(); }, [fetchCount]);
+
+  // Real-time: update badge instantly when notifications change
+  useRealtimeRefresh("tbl_notifications", fetchCount);
 
   const handleLogout = async () => {
     const supabase = createClient();

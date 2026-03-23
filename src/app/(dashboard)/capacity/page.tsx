@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BookingCalendar } from "@/components/booking-calendar";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 
 // ============================================================
 // Types
@@ -204,6 +205,9 @@ export default function CapacityPage() {
   }, [todayStr, futureStr]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Real-time: refresh demand stats when WOs or bookings change
+  useRealtimeRefresh(["tbl_work_orders", "tbl_freelancer_schedule"], loadData, !loading);
 
   // ============================================================
   // Expand job to show WO breakdown

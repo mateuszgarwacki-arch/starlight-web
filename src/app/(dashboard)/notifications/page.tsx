@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 
 interface Notification {
   notification_id: number;
@@ -76,6 +77,9 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
+
+  // Real-time: new notifications appear instantly
+  useRealtimeRefresh("tbl_notifications", loadNotifications, !loading);
 
   const markRead = async (id: number) => {
     await supabase.from("tbl_notifications").update({ read_at: new Date().toISOString() }).eq("notification_id", id);

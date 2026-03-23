@@ -10,6 +10,7 @@ import {
   Filter, Search, RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 
 interface WorkshopWO {
   work_order_id: number;
@@ -163,6 +164,9 @@ export default function WorkshopPage() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Real-time: auto-refresh when WOs or time entries change
+  useRealtimeRefresh(["tbl_work_orders", "tbl_wo_time_entries"], loadAll, !loading);
 
   // Expand to show time entries
   const toggleExpand = async (woId: number) => {

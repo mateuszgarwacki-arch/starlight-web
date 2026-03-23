@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 
 interface Booking {
   schedule_id: number;
@@ -87,6 +88,9 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
   }, [startStr, endStr]);
 
   useEffect(() => { loadBookings(); }, [loadBookings]);
+
+  // Real-time: auto-refresh when bookings change (e.g. freelancer confirms from mobile)
+  useRealtimeRefresh("tbl_freelancer_schedule", loadBookings, !loading);
 
   const prevWeek = () => {
     const d = new Date(weekStart);
