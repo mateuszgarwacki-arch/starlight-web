@@ -565,51 +565,52 @@ export default function JobDetailPage() {
           />
         </td>
 
-        {/* Qty × Price → Value */}
+        {/* Qty — editable */}
+        <td className="px-3 py-2.5 text-center">
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "quantity" ? (
+            <input type="number" step="1" value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus className="w-16 px-2 py-1 text-sm text-center border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+          ) : (
+            <span onClick={() => startLineEdit(line.quote_line_id, "quantity", line.quantity)}
+              className="inline-block min-w-[2rem] px-1 py-0.5 text-sm tabular-nums cursor-pointer hover:bg-blue-50 rounded transition-colors text-gray-700">
+              {line.quantity != null ? line.quantity : <span className="text-gray-300">—</span>}
+            </span>
+          )}
+        </td>
+
+        {/* Unit Price — editable */}
         <td className="px-3 py-2.5 text-right">
-          <div className="space-y-0.5">
-            {/* Qty + Unit Price row (editable) */}
-            <div className="flex items-center justify-end gap-1 text-xs text-gray-400">
-              {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "quantity" ? (
-                <input type="number" step="1" value={editLineCellValue}
-                  onChange={(e) => setEditLineCellValue(e.target.value)}
-                  onBlur={saveLineEdit}
-                  onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-                  autoFocus className="w-14 px-1 py-0.5 text-xs text-right border border-starlight-blue rounded bg-white focus:outline-none" />
-              ) : (
-                <span onClick={() => startLineEdit(line.quote_line_id, "quantity", line.quantity)}
-                  className="cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
-                  {line.quantity != null ? line.quantity : <span className="text-gray-200">qty</span>}
-                </span>
-              )}
-              <span className="text-gray-300">×</span>
-              {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "unit_price" ? (
-                <input type="number" step="0.01" value={editLineCellValue}
-                  onChange={(e) => setEditLineCellValue(e.target.value)}
-                  onBlur={saveLineEdit}
-                  onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-                  autoFocus className="w-16 px-1 py-0.5 text-xs text-right border border-starlight-blue rounded bg-white focus:outline-none" />
-              ) : (
-                <span onClick={() => startLineEdit(line.quote_line_id, "unit_price", line.unit_price)}
-                  className="cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
-                  {line.unit_price != null ? formatCurrency(line.unit_price) : <span className="text-gray-200">price</span>}
-                </span>
-              )}
-            </div>
-            {/* Total value (editable, bold) */}
-            {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_value" ? (
-              <input type="number" step="0.01" value={editLineCellValue}
-                onChange={(e) => setEditLineCellValue(e.target.value)}
-                onBlur={saveLineEdit}
-                onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-                autoFocus className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-            ) : (
-              <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
-                className="font-medium text-gray-700 cursor-pointer hover:text-starlight-blue transition-colors tabular-nums">
-                {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
-              </span>
-            )}
-          </div>
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "unit_price" ? (
+            <input type="number" step="0.01" value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+          ) : (
+            <span onClick={() => startLineEdit(line.quote_line_id, "unit_price", line.unit_price)}
+              className="text-sm tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-500">
+              {line.unit_price != null ? formatCurrency(line.unit_price) : <span className="text-gray-300">—</span>}
+            </span>
+          )}
+        </td>
+
+        {/* Total Value — editable */}
+        <td className="px-3 py-2.5 text-right">
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_value" ? (
+            <input type="number" step="0.01" value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+          ) : (
+            <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
+              className="font-medium text-gray-700 tabular-nums cursor-pointer hover:text-starlight-blue transition-colors">
+              {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
+            </span>
+          )}
         </td>
 
         {/* Done — hybrid: shows auto-tick state + manual override */}
@@ -683,7 +684,9 @@ export default function JobDetailPage() {
         <th className="px-3 py-2.5 font-medium text-gray-500 w-24">Zone</th>
         <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-32 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Qty</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Unit Price</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Done</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
       </tr>
@@ -920,7 +923,7 @@ export default function JobDetailPage() {
                     {filteredLines.map(renderLineRow)}
                     {filteredLines.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
+                        <td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">
                           No lines match this filter
                         </td>
                       </tr>
