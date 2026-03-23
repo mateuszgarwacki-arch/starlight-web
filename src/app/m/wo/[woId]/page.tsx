@@ -7,6 +7,7 @@ import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client"
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { notify } from "@/lib/notifications";
+import { toast } from "sonner";
 import Link from "next/link";
 
 interface WODetail {
@@ -165,6 +166,7 @@ export default function MobileWODetail() {
 
     await loadWO();
     setActing(false);
+    toast.success("Started — clock is running");
   };
 
   const handleJoin = async () => {
@@ -180,6 +182,7 @@ export default function MobileWODetail() {
 
     await loadWO();
     setActing(false);
+    toast.success("Joined — clock is running");
   };
 
   const handleLogHours = async () => {
@@ -228,6 +231,7 @@ export default function MobileWODetail() {
     setFlagNote("");
     await loadWO();
     setActing(false);
+    toast.success(`${hrs}h logged`);
   };
 
   const openLogSheet = () => {
@@ -276,6 +280,7 @@ export default function MobileWODetail() {
       actionUrl: `/workshop`,
     });
 
+    toast.success("Work order completed");
     router.push("/m");
   };
 

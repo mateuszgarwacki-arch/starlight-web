@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus, AlertTriangle } from "lucide-react";
 import { notify } from "@/lib/notifications";
+import { toast } from "sonner";
 
 // Timezone-safe date string
 function localDateStr(y: number, m: number, d: number): string {
@@ -126,6 +127,7 @@ export default function MobileSchedule() {
       freelancerId: myId, jobId: g.job?.job_id, actionUrl: "/capacity",
     });
     await loadData(); setActing(false);
+    toast.success(`Confirmed ${g.dayCount} day${g.dayCount > 1 ? "s" : ""}`);
   };
   const confirmWithExceptions = async (g: BookingGroup) => {
     setActing(true);
@@ -147,6 +149,7 @@ export default function MobileSchedule() {
       });
     }
     setExpandedGroup(null); setDayToggles({}); await loadData(); setActing(false);
+    toast.success(dIds.length > 0 ? `Confirmed ${cIds.length}, declined ${dIds.length}` : `Confirmed ${cIds.length} days`);
   };
   const toggleExpand = (key: string, g: BookingGroup) => {
     if (expandedGroup === key) { setExpandedGroup(null); setDayToggles({}); return; }
@@ -166,6 +169,7 @@ export default function MobileSchedule() {
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
     setSelectedDay(null); await loadData(); setActing(false);
+    toast.success("Day confirmed");
   };
 
   const declineDay = async (row: ScheduleRow) => {
@@ -177,6 +181,7 @@ export default function MobileSchedule() {
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
     setSelectedDay(null); await loadData(); setActing(false);
+    toast("Day declined", { icon: "✕" });
   };
 
   const withdrawDay = async (row: ScheduleRow) => {
@@ -189,6 +194,7 @@ export default function MobileSchedule() {
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
     setSelectedDay(null); await loadData(); setActing(false);
+    toast.warning("Withdrawal sent — workshop manager notified");
   };
 
   const markDayUnavailable = async (dateStr: string, reason: string) => {
@@ -197,12 +203,14 @@ export default function MobileSchedule() {
       freelancer_id: myId, scheduled_date: dateStr, status: "Unavailable", unavailable_reason: reason.trim() || null,
     });
     setSelectedDay(null); setUnavailReason(""); await loadData(); setActing(false);
+    toast.success("Marked as unavailable");
   };
 
   const removeDayUnavailable = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").delete().eq("schedule_id", row.schedule_id);
     setSelectedDay(null); await loadData(); setActing(false);
+    toast.success("Availability restored");
   };
 
   // ============================================================

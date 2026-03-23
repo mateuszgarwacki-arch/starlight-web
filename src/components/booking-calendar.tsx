@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 
 interface Booking {
   schedule_id: number;
@@ -132,6 +133,7 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
     }
     setDialog(null);
     loadBookings();
+    toast.success(dialog.existing ? "Booking updated" : "Day booked");
   };
 
   const removeBooking = async () => {
@@ -140,6 +142,7 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
       .delete().eq("schedule_id", dialog.existing.schedule_id);
     setDialog(null);
     loadBookings();
+    toast("Booking removed");
   };
 
   const statusColor = (s: string) => {

@@ -9,6 +9,7 @@ import {
   Users, Plus, Key, Pencil, X, Check, Smartphone,
   UserCheck, UserX, Copy, Eye, EyeOff,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface FreelancerRow extends Freelancer {
   _editing?: boolean;
@@ -97,8 +98,10 @@ export default function CrewPage() {
       const json = await res.json();
       if (json.error) {
         setPinResult("Error: " + json.error);
+        toast.error("PIN save failed");
       } else {
         setPinResult(json.status === "created" ? "Account created — PIN set" : "PIN updated");
+        toast.success(json.status === "created" ? "Account created" : "PIN updated");
         // Update pin in tbl_freelancers too
         await supabase.from("tbl_freelancers").update({ pin: newPin.trim() }).eq("freelancer_id", pinDialog.id);
         setCrew((prev) => prev.map((f) => f.freelancer_id === pinDialog.id ? { ...f, pin: newPin.trim() } : f));
@@ -157,6 +160,7 @@ export default function CrewPage() {
     }
     setShowAddDialog(false);
     loadCrew();
+    toast.success(editingId ? "Freelancer updated" : "Freelancer added");
   };
 
   const toggleActive = async (id: number, current: string | boolean | null) => {
@@ -167,6 +171,7 @@ export default function CrewPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
   };
 
   // ============================================================

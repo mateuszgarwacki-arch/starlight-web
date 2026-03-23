@@ -7,6 +7,7 @@ import {
   ExternalLink, Filter, Trash2, CheckCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 interface Notification {
   notification_id: number;
@@ -84,6 +85,7 @@ export default function NotificationsPage() {
   const dismiss = async (id: number) => {
     await supabase.from("tbl_notifications").update({ dismissed_at: new Date().toISOString() }).eq("notification_id", id);
     setNotifications((prev) => prev.filter((n) => n.notification_id !== id));
+    toast("Notification dismissed");
   };
 
   const markAllRead = async () => {
@@ -91,6 +93,7 @@ export default function NotificationsPage() {
     if (unreadIds.length === 0) return;
     await supabase.from("tbl_notifications").update({ read_at: new Date().toISOString() }).in("notification_id", unreadIds);
     setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
+    toast.success(`${unreadIds.length} marked as read`);
   };
 
   const dismissAllRead = async () => {
@@ -98,6 +101,7 @@ export default function NotificationsPage() {
     if (readIds.length === 0) return;
     await supabase.from("tbl_notifications").update({ dismissed_at: new Date().toISOString() }).in("notification_id", readIds);
     setNotifications((prev) => prev.filter((n) => !n.read_at));
+    toast.success(`${readIds.length} cleared`);
   };
 
   // Filtering

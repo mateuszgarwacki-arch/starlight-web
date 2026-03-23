@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import { ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, Save } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 // Timezone-safe date string (avoids toISOString UTC shift in BST etc.)
 function localDateStr(year: number, month: number, day: number): string {
@@ -209,6 +210,7 @@ export default function AddBookingPage() {
       window.open(waUrl, "_blank");
     }
 
+    toast.success(`Booked ${selectedDates.length} day${selectedDates.length > 1 ? "s" : ""}${notify ? " — WhatsApp opening" : ""}`);
     router.push("/capacity");
   };
 
