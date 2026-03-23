@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
+import { getAuthHeaders } from "@/lib/auth-headers";
 import {
   Users, Plus, Key, Pencil, X, Check, Smartphone,
   UserCheck, UserX, Copy, Eye, EyeOff,
@@ -84,9 +85,10 @@ export default function CrewPage() {
     if (!freelancer) { setPinSaving(false); return; }
 
     try {
+      const authH = await getAuthHeaders();
       const res = await fetch("/api/auth/freelancer-sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authH },
         body: JSON.stringify({
           freelancer_id: freelancer.freelancer_id,
           phone: freelancer.phone,

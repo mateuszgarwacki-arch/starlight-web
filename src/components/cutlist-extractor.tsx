@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
+import { getAuthHeaders } from "@/lib/auth-headers";
 import { Loader2, Check, Plus, FileText, Zap } from "lucide-react";
 
 interface ExtractedLine {

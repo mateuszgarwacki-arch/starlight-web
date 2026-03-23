@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
+import { getAuthHeaders } from "@/lib/auth-headers";
 import {
   FileText, Upload, Search, Check, X, Plus, RefreshCw,
   AlertTriangle, Zap, Package, Pencil, Eye, ChevronDown, ChevronRight,
@@ -79,7 +80,8 @@ export default function InvoicesPage() {
       const mediaType = file.type || "application/pdf";
       setFileData(base64); setFileType(mediaType);
       try {
-        const res = await fetch("/api/extract-invoice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file_data: base64, media_type: mediaType }) });
+        const authH = await getAuthHeaders();
+        const res = await fetch("/api/extract-invoice", { method: "POST", headers: { "Content-Type": "application/json", ...authH }, body: JSON.stringify({ file_data: base64, media_type: mediaType }) });
         if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Extraction failed"); }
         const data = await res.json();
         const matchedSupplier = suppliers.find((s) => (s.supplier_name || "").toLowerCase() === (data.supplier || "").toLowerCase() || (data.supplier || "").toLowerCase().includes((s.supplier_name || "").toLowerCase()));

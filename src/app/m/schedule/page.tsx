@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus, AlertTriangle } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
+import { getAuthHeaders } from "@/lib/auth-headers";
 
 // Timezone-safe date string
 function localDateStr(y: number, m: number, d: number): string {
@@ -55,7 +56,6 @@ export default function MobileSchedule() {
   const router = useRouter();
   const [myId, setMyId] = useState(0);
   const [myName, setMyName] = useState("");
-  const [myPin, setMyPin] = useState("");
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<ScheduleRow[]>([]);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
@@ -79,8 +79,7 @@ export default function MobileSchedule() {
     setMyId(fId);
     if (!fId) { setLoading(false); return; }
 
-    const { data: me } = await supabase.from("tbl_freelancers").select("pin, freelancer_name").eq("freelancer_id", fId).single();
-    if (me?.pin) setMyPin(me.pin);
+    const { data: me } = await supabase.from("tbl_freelancers").select("freelancer_name").eq("freelancer_id", fId).single();
     if (me?.freelancer_name) setMyName(me.freelancer_name);
 
     const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -257,9 +256,15 @@ export default function MobileSchedule() {
           <h1 className="text-lg font-bold text-navy">My schedule</h1>
           <p className="text-xs text-gray-400 mt-0.5">Tap any day to see options</p>
         </div>
-        {myPin && (
-          <button onClick={() => {
-            window.location.href = `/api/calendar/${myId}?pin=${myPin}`;
+        {myId && (
+          <button onClick={async () => {
+            try {
+              const authH = await getAuthHeaders();
+              const res = await fetch("/api/calendar/token", { method: "POST", headers: { "Content-Type": "application/json", ...authH }, body: JSON.stringify({ freelancer_id: myId }) });
+              if (!res.ok) { toast.error("Failed to generate calendar link"); return; }
+              const { url } = await res.json();
+              window.location.href = url;
+            } catch { toast.error("Calendar export failed"); }
           }} className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg">
             <CalendarPlus className="h-3.5 w-3.5" /> Export .ics
           </button>
@@ -378,8 +383,16 @@ export default function MobileSchedule() {
                   </div>
                   <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full " + sc}>{sl}</span>
                 </div>
-                {(g.status === "confirmed" || g.status === "partial") && g.rows[0]?.booking_group && myPin && (
-                  <button onClick={() => { window.location.href = `/api/calendar/${myId}?pin=${myPin}&group=${g.rows[0].booking_group}`; }}
+                {(g.status === "confirmed" || g.status === "partial") && g.rows[0]?.booking_group && myId && (
+                  <button onClick={async () => {
+                    try {
+                      const authH = await getAuthHeaders();
+                      const res = await fetch("/api/calendar/token", { method: "POST", headers: { "Content-Type": "application/json", ...authH }, body: JSON.stringify({ freelancer_id: myId, group: g.rows[0].booking_group }) });
+                      if (!res.ok) { toast.error("Failed to generate link"); return; }
+                      const { url } = await res.json();
+                      window.location.href = url;
+                    } catch { toast.error("Calendar download failed"); }
+                  }}
                     className="mt-2 flex items-center gap-1.5 text-xs text-starlight-blue font-medium">
                     <CalendarPlus className="h-3.5 w-3.5" /> Add to my calendar
                   </button>

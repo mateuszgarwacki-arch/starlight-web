@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { validateCalendarToken } from "@/lib/calendar-token";
 
 // ICS download for a freelancer's bookings
-// Full schedule: /api/calendar/{id}?pin={pin}
-// Single booking group: /api/calendar/{id}?pin={pin}&group={uuid}
+// Full schedule: /api/calendar/{id}?token={signed_token}
+// Single booking group: /api/calendar/{id}?token={signed_token}&group={uuid}
 
 function icsDateClean(dateStr: string): string {
   return dateStr.replace(/-/g, "");
@@ -22,9 +23,15 @@ export async function GET(
   const fId = Number(freelancerId);
   if (!fId) return new NextResponse("Invalid ID", { status: 400 });
 
-  const pin = request.nextUrl.searchParams.get("pin");
+  const token = request.nextUrl.searchParams.get("token");
   const groupFilter = request.nextUrl.searchParams.get("group");
-  if (!pin) return new NextResponse("PIN required", { status: 401 });
+  if (!token) return new NextResponse("Token required", { status: 401 });
+
+  // Validate signed token
+  const validatedId = validateCalendarToken(token);
+  if (validatedId === null || validatedId !== fId) {
+    return new NextResponse("Invalid or expired token", { status: 401 });
+  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,10 +40,10 @@ export async function GET(
 
   const { data: freelancer } = await supabase
     .from("tbl_freelancers")
-    .select("freelancer_id, freelancer_name, pin")
+    .select("freelancer_id, freelancer_name")
     .eq("freelancer_id", fId)
     .single();
-  if (!freelancer || freelancer.pin !== pin) return new NextResponse("Unauthorized", { status: 401 });
+  if (!freelancer) return new NextResponse("Not found", { status: 404 });
 
   // Build query
   let query = supabase
@@ -49,7 +56,6 @@ export async function GET(
   if (groupFilter) {
     query = query.eq("booking_group", groupFilter);
   } else {
-    // Full schedule — future only
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     query = query.gte("scheduled_date", todayStr);
@@ -93,15 +99,13 @@ export async function GET(
   });
   ics.push("END:VCALENDAR");
 
-  // Build filename
   const safeName = (name || "freelancer").replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
   let filename: string;
   if (groupFilter && bookings && bookings.length > 0) {
     const firstBooking = bookings[0];
     const jobName = firstBooking.job_id && jobMap[firstBooking.job_id] ? jobMap[firstBooking.job_id] : "Workshop";
     const safeJob = jobName.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
-    const startDate = firstBooking.scheduled_date;
-    filename = `Starlight-${safeJob}-${safeName}-${startDate}.ics`;
+    filename = `Starlight-${safeJob}-${safeName}-${firstBooking.scheduled_date}.ics`;
   } else {
     filename = `Starlight-Schedule-${safeName}.ics`;
   }
