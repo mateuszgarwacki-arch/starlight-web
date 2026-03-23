@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus } from "lucide-react";
 
 // ============================================================
 // Types
@@ -71,6 +71,7 @@ export default function MobileSchedule() {
   const supabase = createClient();
   const router = useRouter();
   const [myId, setMyId] = useState(0);
+  const [myPin, setMyPin] = useState("");
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<ScheduleRow[]>([]);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
@@ -98,6 +99,10 @@ export default function MobileSchedule() {
     const fId = user.user_metadata?.freelancer_id || 0;
     setMyId(fId);
     if (!fId) { setLoading(false); return; }
+
+    // Fetch PIN for calendar feed URL
+    const { data: me } = await supabase.from("tbl_freelancers").select("pin").eq("freelancer_id", fId).single();
+    if (me?.pin) setMyPin(me.pin);
 
     // Fetch all schedule rows (past + future for calendar display)
     const threeMonthsAgo = new Date();
@@ -287,9 +292,30 @@ export default function MobileSchedule() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h1 className="text-lg font-bold text-navy">My schedule</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Upcoming bookings and availability</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-navy">My schedule</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Upcoming bookings and availability</p>
+        </div>
+        {myPin && (
+          <button
+            onClick={() => {
+              const base = window.location.origin;
+              const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}/route?pin=${myPin}`;
+              const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`;
+              // Try webcal first (works on iOS/Mac), fall back to Google Calendar URL
+              if (/iPhone|iPad|Mac/.test(navigator.userAgent)) {
+                window.location.href = webcalUrl;
+              } else {
+                window.open(googleUrl, "_blank");
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg hover:bg-starlight-blue/20 transition-colors"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Sync to calendar
+          </button>
+        )}
       </div>
 
       {/* ============================================================ */}
