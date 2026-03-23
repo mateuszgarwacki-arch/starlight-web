@@ -9,8 +9,9 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -113,6 +114,15 @@ export default function JobDetailPage() {
   const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(null);
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
+
+  // --- ADD LINE state ---
+  const [showAddLine, setShowAddLine] = useState(false);
+  const [newLine, setNewLine] = useState({ line_text: "", line_value: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
+  const [addingSaving, setAddingSaving] = useState(false);
+
+  // --- INLINE EDIT state ---
+  const [editingLineCell, setEditingLineCell] = useState<{ lineId: number; field: string } | null>(null);
+  const [editLineCellValue, setEditLineCellValue] = useState("");
 
   const loadData = useCallback(async () => {
     const [jobRes, quotesRes, linesRes, scopesRes, contractorRes] = await Promise.all([
@@ -293,6 +303,90 @@ export default function JobDetailPage() {
   };
 
   // ================================================================
+  // ADD LINE
+  // ================================================================
+  const handleAddLine = async () => {
+    if (!newLine.line_text.trim()) return;
+    setAddingSaving(true);
+
+    // Ensure a quote container exists
+    let quoteId = quotes[0]?.quote_id;
+    if (!quoteId) {
+      const { data: q } = await supabase
+        .from("tbl_quotes")
+        .insert({ job_id: jobId, quote_description: "Internal Build List", status: "Accepted", imported_at: new Date().toISOString() })
+        .select()
+        .single();
+      if (q) {
+        quoteId = q.quote_id;
+        setQuotes([q]);
+      }
+    }
+    if (!quoteId) { toast.error("Failed to create quote"); setAddingSaving(false); return; }
+
+    const nextSeq = lines.length > 0 ? Math.max(...lines.map(l => l.import_sequence || 0)) + 1 : 1;
+    const nextNum = String(nextSeq);
+
+    const { error } = await supabase.from("tbl_quote_lines").insert({
+      quote_id: quoteId,
+      job_id: jobId,
+      line_number: nextNum,
+      import_sequence: nextSeq,
+      line_text: newLine.line_text.trim(),
+      line_value: newLine.line_value ? parseFloat(newLine.line_value) : null,
+      event_zone: newLine.event_zone.trim() || null,
+      line_sub_group: newLine.line_sub_group.trim() || null,
+      category: newLine.category || null,
+      interpretation_complete: "false",
+    });
+
+    if (error) { toast.error("Failed to add line"); setAddingSaving(false); return; }
+
+    toast.success("Line added");
+    setNewLine({ line_text: "", line_value: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
+    setShowAddLine(false);
+    setAddingSaving(false);
+    loadData();
+  };
+
+  // ================================================================
+  // DELETE LINE
+  // ================================================================
+  const handleDeleteLine = async (line: QuoteLine) => {
+    const hasScope = scopes.some(s => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
+    if (hasScope) { toast.error("Cannot delete — scope item exists from this line"); return; }
+
+    const desc = (line.line_text || "").slice(0, 50);
+    if (!confirm(`Delete line ${line.line_number}: "${desc}..."?`)) return;
+
+    const { error } = await supabase.from("tbl_quote_lines").delete().eq("quote_line_id", line.quote_line_id);
+    if (error) { toast.error("Delete failed"); return; }
+
+    toast.success("Line deleted");
+    setLines(prev => prev.filter(l => l.quote_line_id !== line.quote_line_id));
+  };
+
+  // ================================================================
+  // INLINE EDIT (description & value)
+  // ================================================================
+  const startLineEdit = (lineId: number, field: string, currentValue: string | number | null) => {
+    setEditingLineCell({ lineId, field });
+    setEditLineCellValue(String(currentValue ?? ""));
+  };
+
+  const saveLineEdit = async () => {
+    if (!editingLineCell) return;
+    const { lineId, field } = editingLineCell;
+    let val: string | number | null = editLineCellValue.trim() || null;
+    if (field === "line_value" && val !== null) val = parseFloat(val as string) || null;
+    await updateLine(lineId, field, val as any);
+    setEditingLineCell(null);
+    setEditLineCellValue("");
+  };
+
+  const cancelLineEdit = () => { setEditingLineCell(null); setEditLineCellValue(""); };
+
+  // ================================================================
   // COMPUTED VALUES
   // ================================================================
   const scopeReadyLines = lines.filter((l) => getCategoryConfig(l.category).canCreateScope);
@@ -382,9 +476,22 @@ export default function JobDetailPage() {
 
         {/* Description + PM note + contractor/stock */}
         <td className="px-3 py-2.5">
-          <p className="text-sm text-gray-700 leading-relaxed">
-            {line.line_text || ""}
-          </p>
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_text" ? (
+            <textarea
+              value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus rows={3}
+              className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue"
+            />
+          ) : (
+            <p onClick={() => startLineEdit(line.quote_line_id, "line_text", line.line_text)}
+              className="text-sm text-gray-700 leading-relaxed cursor-pointer hover:bg-blue-50/50 rounded px-1 -mx-1 transition-colors group">
+              {line.line_text || <span className="text-gray-300 italic">Click to add description</span>}
+              <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 inline ml-1.5 transition-opacity" />
+            </p>
+          )}
           <input
             type="text"
             value={line.pm_note || ""}
@@ -435,9 +542,21 @@ export default function JobDetailPage() {
           />
         </td>
 
-        {/* Value */}
-        <td className="px-3 py-2.5 text-right font-medium text-gray-700">
-          {formatCurrency(line.line_value)}
+        {/* Value — editable */}
+        <td className="px-3 py-2.5 text-right">
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "line_value" ? (
+            <input type="number" step="0.01" value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus
+              className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+          ) : (
+            <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
+              className="font-medium text-gray-700 cursor-pointer hover:text-starlight-blue transition-colors">
+              {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
+            </span>
+          )}
         </td>
 
         {/* Done — hybrid: shows auto-tick state + manual override */}
@@ -486,6 +605,15 @@ export default function JobDetailPage() {
             >
               <FileText className="h-4 w-4" />
             </a>
+          )}
+          {!hasScope && (
+            <button
+              onClick={() => handleDeleteLine(line)}
+              title="Delete line"
+              className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           )}
         </td>
       </tr>
@@ -746,6 +874,73 @@ export default function JobDetailPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* ADD LINE — button + inline form */}
+          {!showAddLine ? (
+            <button
+              onClick={() => setShowAddLine(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-starlight-red border-2 border-dashed border-starlight-red/30 rounded-lg hover:bg-red-50/50 hover:border-starlight-red/50 transition-colors w-full justify-center"
+            >
+              <Plus className="h-4 w-4" />
+              Add Quote Line
+            </button>
+          ) : (
+            <div className="card px-5 py-4 border-2 border-starlight-blue/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-navy">New Quote Line</h3>
+                <button onClick={() => setShowAddLine(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Description <span className="text-starlight-red">*</span></label>
+                <textarea
+                  value={newLine.line_text}
+                  onChange={(e) => setNewLine({ ...newLine, line_text: e.target.value })}
+                  placeholder="What needs to be built or supplied..."
+                  rows={2} autoFocus
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Value</label>
+                  <input type="number" step="0.01" value={newLine.line_value}
+                    onChange={(e) => setNewLine({ ...newLine, line_value: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Zone</label>
+                  <input type="text" value={newLine.event_zone}
+                    onChange={(e) => setNewLine({ ...newLine, event_zone: e.target.value })}
+                    placeholder="e.g. Entrance"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Sub-group</label>
+                  <input type="text" value={newLine.line_sub_group}
+                    onChange={(e) => setNewLine({ ...newLine, line_sub_group: e.target.value })}
+                    placeholder="e.g. Décor"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                  <LookupCombo category="QUOTE_LINE_CATEGORY" value={newLine.category}
+                    onChange={(val) => setNewLine({ ...newLine, category: val || "Workshop Build" })}
+                    className="w-full text-xs" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-1">
+                <button onClick={() => setShowAddLine(false)}
+                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+                <button onClick={handleAddLine} disabled={addingSaving || !newLine.line_text.trim()}
+                  className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  {addingSaving ? "Adding..." : "Add Line"}
+                </button>
               </div>
             </div>
           )}
