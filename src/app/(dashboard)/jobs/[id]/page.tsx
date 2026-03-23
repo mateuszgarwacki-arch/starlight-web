@@ -12,6 +12,7 @@ import { CostBreakdown } from "@/components/cost-breakdown";
 import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -260,7 +261,8 @@ export default function JobDetailPage() {
   const saveJobField = async () => {
     if (!editingField || !job) return;
     const val = editValue.trim() || null;
-    await supabase.from("tbl_production_plan").update({ [editingField]: val }).eq("job_id", job.job_id);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_production_plan", job.job_id, { [editingField]: val }, job.job_id);
     setJob({ ...job, [editingField]: val } as Job);
     setEditingField(null);
     setEditValue("");
@@ -275,10 +277,8 @@ export default function JobDetailPage() {
     const cellKey = `${lineId}-${field}`;
     setSavingCells((prev) => new Set(prev).add(cellKey));
 
-    await supabase
-      .from("tbl_quote_lines")
-      .update({ [field]: value })
-      .eq("quote_line_id", lineId);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_quote_lines", lineId, { [field]: value }, jobId);
 
     setLines((prev) =>
       prev.map((l) => (l.quote_line_id === lineId ? { ...l, [field]: value } : l))
@@ -368,6 +368,15 @@ export default function JobDetailPage() {
 
     const { error } = await supabase.from("tbl_quote_lines").delete().eq("quote_line_id", line.quote_line_id);
     if (error) { toast.error("Delete failed"); return; }
+
+    // Log deletion
+    const ctx = await getAuditContext(supabase);
+    await supabase.from("tbl_audit_log").insert({
+      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
+      table_name: "tbl_quote_lines", record_id: line.quote_line_id,
+      field_name: "_record", old_value: JSON.stringify(line), new_value: null,
+      job_id: jobId, action_type: "delete",
+    });
 
     toast.success("Line deleted");
     setLines(prev => prev.filter(l => l.quote_line_id !== line.quote_line_id));
