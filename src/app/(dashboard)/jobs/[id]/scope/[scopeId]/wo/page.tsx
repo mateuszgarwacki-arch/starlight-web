@@ -223,6 +223,17 @@ export default function ScopeWorkOrdersPage() {
     loadAll();
   }, [loadAll]);
 
+  // Refresh data when user returns from traveller tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadAll();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loadAll]);
+
   // ============================================================
   // BOM loading for expanded WO
   // ============================================================

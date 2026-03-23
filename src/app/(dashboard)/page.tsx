@@ -7,6 +7,7 @@ import { DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Briefcase, ClipboardList, Package, Users, AlertCircle,
   Flag, FileText, Clock, RefreshCw, ShoppingCart, Zap, Printer,
+  Bell, AlertOctagon,
 } from "lucide-react";
 import Link from "next/link";
 import type { DashUpcomingJob, ManpowerDemand } from "@/lib/types";
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [activeWorkers, setActiveWorkers] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [staleTravellers, setStaleTravellers] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,6 +81,16 @@ export default function DashboardPage() {
       // Stale travellers
       const { data: staleData } = await supabase.from("qry_stale_travellers").select("*");
       setStaleTravellers(staleData || []);
+
+      // Recent unread notifications
+      const { data: notifData } = await supabase
+        .from("tbl_notifications")
+        .select("notification_id, type, title, detail, severity, action_url, created_at, read_at")
+        .is("dismissed_at", null)
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      setNotifications(notifData || []);
 
       // Enrich flags with context
       const rawFlags = flagsRes.data || [];
@@ -166,7 +178,64 @@ export default function DashboardPage() {
 
       {/* Two-column: Procurement + Flags */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Procurement panel */}
+        {/* Notifications panel */}
+        <div>
+          <h2 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
+            <Bell className="h-4 w-4" /> Notifications
+            {notifications.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-starlight-red text-white">
+                {notifications.length}
+              </span>
+            )}
+          </h2>
+          <div className="card overflow-hidden">
+            {notifications.length === 0 ? (
+              <div className="px-5 py-6 text-center text-gray-400 text-sm">All caught up</div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {notifications.slice(0, 5).map((n: any) => {
+                  const sevIcon = n.severity === "urgent" ? AlertOctagon : n.severity === "warning" ? AlertCircle : Bell;
+                  const SevIcon = sevIcon;
+                  const sevColor = n.severity === "urgent" ? "text-starlight-red" : n.severity === "warning" ? "text-starlight-amber" : "text-starlight-blue";
+                  const ago = (() => {
+                    const diff = Date.now() - new Date(n.created_at).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    if (mins < 1) return "Just now";
+                    if (mins < 60) return `${mins}m ago`;
+                    const hrs = Math.floor(mins / 60);
+                    if (hrs < 24) return `${hrs}h ago`;
+                    return `${Math.floor(hrs / 24)}d ago`;
+                  })();
+                  const inner = (
+                    <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <SevIcon className={`h-4 w-4 mt-0.5 shrink-0 ${sevColor}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-navy">{n.title}</p>
+                        {n.detail && <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{n.detail}</p>}
+                        <p className="text-[10px] text-gray-300 mt-0.5">{ago}</p>
+                      </div>
+                    </div>
+                  );
+                  return n.action_url ? (
+                    <Link key={n.notification_id} href={n.action_url}>{inner}</Link>
+                  ) : (
+                    <div key={n.notification_id}>{inner}</div>
+                  );
+                })}
+                {notifications.length > 5 && (
+                  <div className="px-4 py-2 text-[10px] text-gray-400 text-center border-t border-gray-100">
+                    +{notifications.length - 5} more — <Link href="/notifications" className="text-starlight-blue hover:underline">View all</Link>
+                  </div>
+                )}
+                <div className="px-4 py-2 text-center border-t border-gray-100">
+                  <Link href="/notifications" className="text-xs text-starlight-blue hover:underline font-medium">
+                    Open notifications
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         <div>
           <h2 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Procurement Actions</h2>
           <div className="card overflow-hidden">
