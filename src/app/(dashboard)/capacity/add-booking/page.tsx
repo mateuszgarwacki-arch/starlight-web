@@ -345,7 +345,7 @@ export default function AddBookingPage() {
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-                  <div key={d} className={"text-center text-[11px] font-medium py-1 " + (d === "Sat" || d === "Sun" ? "text-gray-300" : "text-gray-400")}>{d}</div>
+                  <div key={d} className={"text-center text-[11px] font-medium py-1 " + (d === "Sat" || d === "Sun" ? "text-gray-400" : "text-gray-400")}>{d}</div>
                 ))}
               </div>
 
@@ -355,7 +355,7 @@ export default function AddBookingPage() {
                 {calDays.map((d) => {
                   const state = getDayState(d.date);
                   const isPast = d.date < todayStr;
-                  const disabled = isPast || d.isWeekend;
+                  const disabled = isPast;
                   const existing = existingDays.find((e) => e.date === d.date);
 
                   return (
@@ -375,7 +375,7 @@ export default function AddBookingPage() {
                          state === "booked" ? "bg-starlight-green/15 text-starlight-green font-medium cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
                          state === "unavailable" ? "text-gray-400 cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
                          isPast ? "text-gray-200 cursor-not-allowed" :
-                         d.isWeekend ? "text-gray-200 cursor-not-allowed" :
+                         d.isWeekend ? "text-gray-400 hover:bg-gray-50 cursor-pointer" :
                          "text-gray-700 hover:bg-gray-50 cursor-pointer")
                       }
                       style={state === "unavailable" ? {
