@@ -230,13 +230,9 @@ export default function MobileSchedule() {
         </div>
         {myPin && (
           <button onClick={() => {
-            const httpsUrl = `https://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
-            const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
-            const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(httpsUrl)}`;
-            if (/iPhone|iPad|Mac/.test(navigator.userAgent)) window.location.href = webcalUrl;
-            else window.open(googleUrl, "_blank");
+            window.location.href = `/api/calendar/${myId}?pin=${myPin}`;
           }} className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg">
-            <CalendarPlus className="h-3.5 w-3.5" /> Sync
+            <CalendarPlus className="h-3.5 w-3.5" /> Export .ics
           </button>
         )}
       </div>
@@ -353,6 +349,12 @@ export default function MobileSchedule() {
                   </div>
                   <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full " + sc}>{sl}</span>
                 </div>
+                {(g.status === "confirmed" || g.status === "partial") && g.rows[0]?.booking_group && myPin && (
+                  <button onClick={() => { window.location.href = `/api/calendar/${myId}?pin=${myPin}&group=${g.rows[0].booking_group}`; }}
+                    className="mt-2 flex items-center gap-1.5 text-xs text-starlight-blue font-medium">
+                    <CalendarPlus className="h-3.5 w-3.5" /> Add to my calendar
+                  </button>
+                )}
               </div>
             );
           })}
