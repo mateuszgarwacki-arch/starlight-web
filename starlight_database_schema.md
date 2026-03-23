@@ -481,16 +481,20 @@
 
 ### tbl_freelancer_schedule
 **Purpose:** Booking calendar entries. Which freelancer is booked to which job on which dates.
-**Used by:** Crew booking calendar, capacity planning, cross-job conflict detection.
+**Used by:** Capacity booking calendar, mobile schedule, cross-job conflict detection.
+**Updated:** Session 6 (23 Mar 2026) — added booking_group, notified_at, unavailable_reason.
 
 | Column | Type | Nullable | Purpose |
 |--------|------|----------|---------|
 | schedule_id | SERIAL PK | No | Primary key |
 | freelancer_id | INT FK→freelancers | No | Who is booked |
-| job_id | INT FK→production_plan | Yes | Which job |
-| schedule_date | DATE | No | Which day |
-| status | VARCHAR | Yes | booked / confirmed / declined |
-| notes | VARCHAR | Yes | Context |
+| job_id | INT FK→production_plan | Yes | Which job (NULL for Unavailable entries) |
+| scheduled_date | DATE | No | Which day |
+| status | VARCHAR | Yes | Booked / Notified / Confirmed / Declined / Unavailable |
+| booking_group | UUID | Yes | Groups multi-day bookings into single actionable cards |
+| notified_at | TIMESTAMPTZ | Yes | When WhatsApp notification was sent |
+| unavailable_reason | VARCHAR | Yes | Freelancer-declared reason for unavailability |
+| notes | VARCHAR | Yes | Context (from PM when booking) |
 | created_at | TIMESTAMPTZ | Yes | Auto |
 
 ---
@@ -553,6 +557,29 @@
 **Current keys:**
 - `default_target_margin_pct` = "40" — Default margin target for new jobs
 - `standard_day_hours` = "10" — Working hours per day for capacity calcs
+
+---
+
+### tbl_notifications
+**Purpose:** System notifications for PM. All types: booking changes, WO events, flags, scope changes, material alerts.
+**Used by:** Notifications page, sidebar bell badge, dashboard panel (future).
+**Added:** Session 6 (23 Mar 2026)
+
+| Column | Type | Nullable | Purpose |
+|--------|------|----------|---------|
+| notification_id | SERIAL PK | No | Primary key |
+| type | VARCHAR | No | booking_confirmed, booking_declined, booking_withdrawal, wo_started, hours_logged, wo_flagged, wo_completed, scope_change, wo_overrun, material_needed |
+| title | VARCHAR | No | Short headline: "Mark withdrew from Wed 26 Mar" |
+| detail | TEXT | Yes | Longer context |
+| severity | VARCHAR | Yes | info / warning / urgent. Default: info |
+| source_freelancer_id | INT FK→freelancers | Yes | Who triggered it |
+| source_job_id | INT FK→production_plan | Yes | Which job |
+| source_schedule_id | INT FK→freelancer_schedule | Yes | Which booking |
+| source_wo_id | INT FK→work_orders | Yes | Which work order |
+| read_at | TIMESTAMPTZ | Yes | NULL = unread |
+| dismissed_at | TIMESTAMPTZ | Yes | NULL = not dismissed |
+| action_url | VARCHAR | Yes | Deep link: "/capacity" or "/review" |
+| created_at | TIMESTAMPTZ | Yes | Auto |
 
 ---
 
