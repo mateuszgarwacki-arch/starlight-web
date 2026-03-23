@@ -138,8 +138,13 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
 
   const removeBooking = async () => {
     if (!dialog?.existing) return;
-    await supabase.from("tbl_freelancer_schedule")
+    const { error } = await supabase.from("tbl_freelancer_schedule")
       .delete().eq("schedule_id", dialog.existing.schedule_id);
+    if (error) {
+      console.error("Delete failed:", error);
+      toast.error("Failed to remove booking: " + error.message);
+      return;
+    }
     setDialog(null);
     loadBookings();
     toast("Booking removed");
