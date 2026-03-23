@@ -6,7 +6,7 @@
 **Backend:** Supabase (PostgreSQL) — 30 tables, 27+ views, fully migrated from Access.
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
-**Auth:** Supabase Auth (email+password for PM). RLS enabled on all tables.
+**Auth:** Supabase Auth (email+password for PM/foreman, phone+PIN for freelancers). Three-layer security: middleware session validation + API route auth + RLS on all tables. See Security conventions below.
 **Git:** github.com/mateuszgarwacki-arch/starlight-web
 **Deploy:** `vercel --prod` from CLI (use cmd shell, not powershell)
 **Test Job:** Chelsea In Bloom (job_id=6, job_number=13794) — all other test data deleted.
@@ -97,8 +97,9 @@
 
 #### Remaining Phase 8
 - [x] Toast notifications — Sonner installed, wired across all mobile + desktop actions (Session 6b)
-- [ ] WO status refresh after Print & Release (page doesn't update until manual reload)
-- [ ] Real-time Supabase subscriptions on Workshop view + Capacity calendar
+- [x] WO status refresh after Print & Release — visibilitychange listener auto-refreshes on tab return (Session 7)
+- [x] Real-time Supabase subscriptions — Workshop, Capacity, Booking Calendar, Notifications page, Sidebar badge (Session 7)
+- [x] Security hardening — middleware auth, API auth, RLS overhaul, signed calendar tokens, PIN removal (Session 7)
 - [ ] Quote import from real source (currently manual entry)
 
 ### Future / Tier 3
@@ -168,7 +169,13 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/app/api/onedrive/upload/route.ts` | API: upload files to OneDrive via Graph API |
 | `src/app/api/onedrive/download/route.ts` | API: get download URLs from OneDrive |
 | `src/lib/notifications.ts` | Shared notify() helper — single function for all notification types |
-| `src/app/api/calendar/[freelancerId]/route.ts` | API: ICS calendar download (per-booking or full schedule) |
+| `src/app/api/calendar/[freelancerId]/route.ts` | API: ICS calendar download (signed token auth, no PINs) |
+| `src/app/api/calendar/token/route.ts` | API: Generate signed HMAC tokens for ICS downloads |
+| `src/lib/auth-headers.ts` | Helper: get Supabase session auth headers for internal API calls |
+| `src/lib/calendar-token.ts` | HMAC-SHA256 token generation/validation for calendar downloads |
+| `src/lib/use-realtime.ts` | Hook: useRealtimeRefresh — subscribe to table changes with debounce |
+| `src/middleware.ts` | Auth middleware: session validation, role-based routing, login redirects |
+| `sql/security-hardening.sql` | RLS policies, helper functions, realtime config — run in Supabase SQL Editor |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar (Tasks, Schedule, Photos, Me) |
 | `src/app/m/schedule/page.tsx` | Mobile schedule: interactive calendar, confirm/decline/withdraw, unavailability |
 | `src/app/m/wo/[woId]/page.tsx` | Mobile WO detail - START/JOIN/LOG/COMPLETE + docs |
@@ -199,7 +206,20 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 - **Booking statuses**: Booked → Notified → Confirmed / Declined. Unavailable is separate (no job_id). All count toward capacity except Declined
 - **Soft signals only**: unavailable/booked days are visually flagged but never block PM from booking. Warnings, not blocks
 - **WhatsApp notify**: wa.me deep links with pre-filled message. Phone number cleaned: strip non-digits, replace leading 0 with 44
-- **ICS calendar**: downloadable .ics files (not subscription). Per-booking via booking_group param, or full schedule. Filename includes job name + freelancer name + date
+- **ICS calendar**: downloadable .ics files (not subscription). Uses HMAC-signed tokens (72h expiry) via `/api/calendar/token` endpoint. No PINs in URLs. Filename includes job name + freelancer name + date
+- **Sidebar badge**: real-time subscription on tbl_notifications (replaced 30s polling in Session 7)
+
+### Security (Session 7 — mandatory for all future development)
+- **Defence in depth**: every data path protected by middleware + API auth + RLS (three layers)
+- **Middleware**: `src/middleware.ts` validates Supabase session on all routes. Unauthenticated → redirect to login. Freelancer role → forced to `/m/*` only. API routes excluded (handle own auth)
+- **API auth pattern**: every API route must independently validate session via Authorization header. Use `getAuthHeaders()` from `src/lib/auth-headers.ts` on the client side. Check role before executing. Return 401/403, never redirect
+- **New table checklist**: (1) enable RLS, (2) create policies per role, (3) if added to Realtime publication, set REPLICA IDENTITY FULL
+- **New API route checklist**: (1) extract auth header, (2) validate session via supabase.auth.getUser(), (3) check role, (4) return 401/403 on failure
+- **No credentials in URLs**: never pass PINs, tokens, or secrets as query parameters that could be logged. Use signed tokens with expiry for external-facing endpoints
+- **No plaintext credentials in database**: PINs exist only as bcrypt hashes in Supabase Auth. The tbl_freelancers.pin column is deprecated and must be dropped
+- **Commercial data isolation**: tbl_quotes, tbl_quote_lines, tbl_invoices, tbl_invoice_lines, tbl_rate_card, tbl_business_settings, tbl_suppliers, tbl_material_prices — all PM-only via RLS
+- **Realtime tables**: must have REPLICA IDENTITY FULL for RLS to filter subscription events correctly
+- **Security policy reference**: see `Starlight_Security_Policy_v1.docx` (17 policies, SP-001 to SP-017)
 
 ## Deployment Cheat Sheet
 
@@ -373,6 +393,20 @@ Every user-facing action that changes state should generate a notification AND a
 ### Session 6b (23 Mar 2026) — Notifications System + Toast Polish
 ~4 commits. Notifications page with severity-coded cards, filter tabs (All/Needs attention/Urgent), mark read/dismiss/bulk actions. Sidebar bell badge with unread count (polls 30s). Notification triggers wired into: booking confirm/decline/withdrawal, WO start/join/log/flag/complete. Shared notify() helper in lib/notifications.ts. Sonner toast notifications on all actions across mobile and desktop. General Workshop booking option on Add Booking page. ICS filenames now descriptive.
 
+### Session 7 (23 Mar 2026) — Security Hardening + Realtime + Quick Wins
+~7 commits. Full security audit and remediation:
+- **Bug fixes**: Booking delete FK error (nullify notifications before delete), booking delete error handling (surface real errors instead of false success)
+- **Quick wins**: WO auto-refresh on tab return (visibilitychange listener), Dashboard notification panel (unread alerts with severity icons + deep links)
+- **Realtime subscriptions**: useRealtimeRefresh hook with 500ms debounce. Wired to Workshop (WO + time entries), Capacity (WO + bookings), Booking Calendar (schedule), Notifications page, Sidebar badge (replaced 30s polling)
+- **Security — C1 Middleware**: Server-side session validation on all routes. Freelancers restricted to /m/*. Login redirects for unauthenticated requests
+- **Security — C2 API auth**: Extract-invoice + extract-cutlist now require valid session + PM/foreman role. Auth header passed via getAuthHeaders() helper
+- **Security — C3 Privilege escalation**: Freelancer-sync endpoint now requires PM session before creating/updating auth users
+- **Security — H2 Calendar tokens**: HMAC-SHA256 signed tokens replace PINs in ICS download URLs. 72h expiry. New /api/calendar/token endpoint
+- **Security — H3 PIN removal**: All code references to tbl_freelancers.pin removed. Column flagged for DROP
+- **Security — H4 RLS overhaul**: Comprehensive policies for all tables. Helper functions get_my_role() and get_my_freelancer_id(). Commercial tables locked to PM-only
+- **Security — M1 Realtime**: REPLICA IDENTITY FULL on all 4 realtime tables
+- **Documents**: Security Audit Report + Security Policy v1.0 (17 policies) generated
+
 ## Next Session Pickup
 
 ### Current State
@@ -384,6 +418,13 @@ Every user-facing action that changes state should generate a notification AND a
 - **Notifications system live**: /notifications page with severity-coded cards, sidebar bell badge, triggers on all booking + WO actions
 - **Toast notifications live**: Sonner wired across all mobile and desktop actions
 - **ICS download working** — per-booking and full schedule export
+
+### SQL Already Run (Session 7)
+- Helper functions: get_my_role(), get_my_freelancer_id() for RLS policy evaluation
+- Comprehensive RLS policies on ALL tables (commercial = PM-only, execution = role-filtered, reference = read-all)
+- REPLICA IDENTITY FULL on tbl_work_orders, tbl_wo_time_entries, tbl_freelancer_schedule, tbl_notifications
+- Realtime publication: all 4 tables added
+- Full script: `sql/security-hardening.sql`
 
 ### SQL Already Run (Session 6)
 - tbl_freelancer_schedule: added booking_group (UUID), notified_at (TIMESTAMPTZ), unavailable_reason (VARCHAR)
@@ -400,22 +441,26 @@ Every user-facing action that changes state should generate a notification AND a
 - standard_length converted from metres to mm where < 100
 
 ### Outstanding Work (prioritised)
-1. **Dashboard notification panel** — show unread notifications on main dashboard
-2. **WO status refresh after Print & Release** — page doesn't update until manual reload
-3. **Real-time Supabase subscriptions** on Workshop view + Capacity calendar
-4. **Quote import from real source** — currently manual entry only
+1. **Quote import from real source** — currently manual entry only
+2. **Drop tbl_freelancers.pin column** — code references removed, confirm nothing breaks then ALTER TABLE DROP COLUMN
+3. **Rate limiting on AI extraction APIs** — prevent abuse/cost overrun
+4. **Audit logging** — track PM-level operations (user management, deletions, settings changes)
 5. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
-### New Routes (Session 6)
+### New Routes (Session 6 + 7)
 | Route | Purpose |
 |-------|---------|
 | `/m/schedule` | Freelancer mobile schedule: monthly calendar, confirm/decline/withdraw, unavailability |
 | `/capacity/add-booking` | Month-view day picker, freelancer/job selection, WhatsApp notify |
-| `/api/calendar/[freelancerId]` | ICS calendar download (per-booking or full schedule) |
+| `/api/calendar/[freelancerId]` | ICS calendar download (signed token auth) |
+| `/api/calendar/token` | Generate HMAC-signed tokens for ICS downloads (requires session) |
 
 ### Test Workflow for New Session
-1. Go to /capacity → should see weekly booking calendar with colour-coded statuses
-2. Click "Add booking" → pick a freelancer, pick a job, select days, "Book & notify via WhatsApp"
-3. Open /m/schedule (logged in as freelancer) → tap calendar days to confirm/decline
-4. Tap a confirmed day → "I can't make this day anymore" → check tbl_notifications for withdrawal row
-5. On a booking card, tap "Add to my calendar" → ICS file should download and open in calendar app
+1. **Security — middleware**: visit /jobs in incognito → must redirect to /login
+2. **Security — role isolation**: log in as freelancer → navigate to /jobs → must redirect to /m
+3. **Security — API auth**: POST to /api/extract-invoice without auth header → must return 401
+4. **Security — RLS**: as freelancer session, query tbl_quotes → must return zero rows
+5. **Realtime**: open /workshop in one tab, START a WO from /m/wo/[id] in another → workshop refreshes automatically
+6. **Bookings**: go to /capacity → booking calendar shows colour-coded statuses with live updates
+7. **Calendar**: on /m/schedule, tap "Export .ics" → downloads via signed token (no PIN in URL)
+8. **Notifications**: trigger a booking change → sidebar bell updates instantly, /notifications shows new card
