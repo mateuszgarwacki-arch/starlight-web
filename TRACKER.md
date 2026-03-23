@@ -155,9 +155,10 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/app/(dashboard)/settings/page.tsx` | Rate card + business defaults |
 | `src/app/(dashboard)/workshop/page.tsx` | Workshop view - all WOs grouped by scope |
 | `src/app/(dashboard)/review/page.tsx` | Cost visibility, time entries, flags, accuracy |
-| `src/app/(dashboard)/crew/page.tsx` | Crew management, PINs, booking calendar |
+| `src/app/(dashboard)/crew/page.tsx` | Crew management: people, rates, PINs (calendar moved to Capacity) |
 | `src/app/(dashboard)/materials/page.tsx` | Materials catalogue, category filters, price history |
-| `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, conflicts |
+| `src/app/(dashboard)/capacity/page.tsx` | Capacity planning: demand vs supply, booking calendar, conflicts |
+| `src/app/(dashboard)/capacity/add-booking/page.tsx` | Add booking: month-view day picker, WhatsApp notify |
 | `src/app/(dashboard)/invoices/page.tsx` | Invoice upload, AI extraction, material matching |
 | `src/app/(dashboard)/suppliers/page.tsx` | Suppliers CRUD, order history, materials tabs |
 | `src/app/(dashboard)/orders/page.tsx` | Orders page with material grouping |
@@ -165,7 +166,9 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/app/api/extract-cutlist/route.ts` | API: Claude-powered cut list extraction |
 | `src/app/api/onedrive/upload/route.ts` | API: upload files to OneDrive via Graph API |
 | `src/app/api/onedrive/download/route.ts` | API: get download URLs from OneDrive |
-| `src/app/m/layout.tsx` | Mobile layout with bottom tab bar |
+| `src/app/api/calendar/[freelancerId]/route.ts` | API: ICS calendar download (per-booking or full schedule) |
+| `src/app/m/layout.tsx` | Mobile layout with bottom tab bar (Tasks, Schedule, Photos, Me) |
+| `src/app/m/schedule/page.tsx` | Mobile schedule: interactive calendar, confirm/decline/withdraw, unavailability |
 | `src/app/m/wo/[woId]/page.tsx` | Mobile WO detail - START/JOIN/LOG/COMPLETE + docs |
 
 ## Conventions
@@ -190,6 +193,11 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 - Scope name editable inline via textarea with auto-height
 - Deploy via cmd shell (not powershell)
 - File deployment: Desktop Commander write_file with mode 'rewrite' then 'append' chunks (~300 lines each)
+- **Timezone-safe dates**: never use `toISOString().split("T")[0]` for local dates — BST shifts midnight to previous day. Use `localDateStr(year, month, day)` helper instead
+- **Booking statuses**: Booked → Notified → Confirmed / Declined. Unavailable is separate (no job_id). All count toward capacity except Declined
+- **Soft signals only**: unavailable/booked days are visually flagged but never block PM from booking. Warnings, not blocks
+- **WhatsApp notify**: wa.me deep links with pre-filled message. Phone number cleaned: strip non-digits, replace leading 0 with 44
+- **ICS calendar**: downloadable .ics files (not subscription). Per-booking via booking_group param, or full schedule. Filename includes job name + freelancer name + date
 
 ## Deployment Cheat Sheet
 
@@ -311,14 +319,25 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - **Smart supplier dropdown**: last-used first from order history, ★ prefix, ↻ for historical
 - **Complexity field format**: "1 - Straightforward" / "2 - Skilled" / "3 - Bespoke / Artistic" — extract number with `LEFT(field, 1)`
 
+### Session 6 (23 Mar 2026) — Crew Booking, Capacity Redesign, Mobile Schedule
+~11 commits. Full booking workflow: Capacity page redesigned with weekly calendar + Add Booking page (month-view day picker, WhatsApp wa.me notify). Mobile schedule (/m/schedule) with interactive monthly calendar — tap days for context-appropriate actions (confirm, decline, withdraw, mark unavailable). Crew page stripped to people management only. ICS calendar download API. Notifications table created (tbl_notifications) — booking withdrawals auto-create alerts. Timezone bug fixed (BST toISOString shift). Schema: booking_group UUID, notified_at, unavailable_reason added to tbl_freelancer_schedule.
+
 ## Next Session Pickup
 
 ### Current State
 - Chelsea In Bloom (job_id=6, job_number=13794) is the only job with data
 - 2 scope items, 2 WOs, BOM with cut list extracted, traveller printable
-- All test data from other jobs has been deleted
 - Settings page live with rate card (£35/£40/£50) and business defaults (40% margin, 10hr days)
 - Analytics engine live: estimated costs flow through to cost analysis panels on job, scope, and WO pages
+- **Booking system live**: Add Booking page, weekly calendar on Capacity, mobile schedule with interactive calendar
+- **tbl_notifications created** but no UI yet to view/dismiss them
+- **ICS download working** — per-booking and full schedule export
+
+### SQL Already Run (Session 6)
+- tbl_freelancer_schedule: added booking_group (UUID), notified_at (TIMESTAMPTZ), unavailable_reason (VARCHAR)
+- Indexes: idx_schedule_booking_group, idx_schedule_freelancer_status
+- RLS policies on tbl_freelancer_schedule (select/update/insert/delete)
+- tbl_notifications created with indexes and RLS
 
 ### SQL Already Run (Session 5)
 - tbl_rate_card created with 3 complexity levels
@@ -329,14 +348,23 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - standard_length converted from metres to mm where < 100
 
 ### Outstanding Work (prioritised)
-1. **Loading states & toast notifications** — install sonner, add Toaster to layout, sprinkle toast calls (~30 min)
-2. **WO status refresh after Print & Release** — page doesn't update until manual reload
-3. **Real-time Supabase subscriptions** on Workshop view
-4. **Quote import from real source** — currently manual entry only
-5. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+1. **Notifications UI** — badge on sidebar, notification panel/page, mark as read/dismissed
+2. **Loading states & toast notifications** — install sonner, add Toaster to layout
+3. **WO status refresh after Print & Release** — page doesn't update until manual reload
+4. **Real-time Supabase subscriptions** on Workshop view + Capacity calendar
+5. **Quote import from real source** — currently manual entry only
+6. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+
+### New Routes (Session 6)
+| Route | Purpose |
+|-------|---------|
+| `/m/schedule` | Freelancer mobile schedule: monthly calendar, confirm/decline/withdraw, unavailability |
+| `/capacity/add-booking` | Month-view day picker, freelancer/job selection, WhatsApp notify |
+| `/api/calendar/[freelancerId]` | ICS calendar download (per-booking or full schedule) |
 
 ### Test Workflow for New Session
-1. Go to /jobs/6 — should see Chelsea In Bloom with cost analysis showing Est. £503.79
-2. Click into scope → WO page → expand WO 1/2 → verify BOM shows 2x1 PAR at 4.8m Metre
-3. Click traveller icon → verify QR code, full layout, print works
-4. Go to /settings → verify rate card shows £35/£40/£50
+1. Go to /capacity → should see weekly booking calendar with colour-coded statuses
+2. Click "Add booking" → pick a freelancer, pick a job, select days, "Book & notify via WhatsApp"
+3. Open /m/schedule (logged in as freelancer) → tap calendar days to confirm/decline
+4. Tap a confirmed day → "I can't make this day anymore" → check tbl_notifications for withdrawal row
+5. On a booking card, tap "Add to my calendar" → ICS file should download and open in calendar app
