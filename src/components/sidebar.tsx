@@ -18,8 +18,9 @@ import {
   Truck,
   ShoppingCart,
   Settings,
+  Bell,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/invoices", label: "Invoices", icon: FileText, zone: 1 },
   { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
+  { href: "/notifications", label: "Notifications", icon: Bell, zone: 1, hasBadge: true },
   { href: "/settings", label: "Settings", icon: Settings, zone: 1 },
 ];
 
@@ -41,6 +43,24 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    const supabase = createClient();
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from("tbl_notifications")
+        .select("*", { count: "exact", head: true })
+        .is("read_at", null)
+        .is("dismissed_at", null);
+      setUnreadCount(count || 0);
+    };
+    fetchCount();
+    // Poll every 30 seconds
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -72,19 +92,27 @@ export function Sidebar() {
             item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+          const showBadge = (item as any).hasBadge && unreadCount > 0;
 
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors relative",
                 isActive
                   ? "bg-white/15 text-white"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               )}
             >
-              <item.icon className="h-4.5 w-4.5 shrink-0" />
+              <div className="relative shrink-0">
+                <item.icon className="h-4.5 w-4.5" />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-starlight-red text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </div>
               {!collapsed && <span>{item.label}</span>}
             </Link>
           );

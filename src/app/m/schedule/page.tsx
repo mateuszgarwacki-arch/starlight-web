@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus, AlertTriangle } from "lucide-react";
+import { notify } from "@/lib/notifications";
 
 // Timezone-safe date string
 function localDateStr(y: number, m: number, d: number): string {
@@ -120,6 +121,10 @@ export default function MobileSchedule() {
   const confirmAll = async (g: BookingGroup) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", g.rows.map((r) => r.schedule_id));
+    await notify({ supabase, type: "booking_confirmed", severity: "info",
+      title: `${myName || "Someone"} confirmed ${g.dayCount} day${g.dayCount > 1 ? "s" : ""} on ${g.job?.job_name || "Workshop"}`,
+      freelancerId: myId, jobId: g.job?.job_id, actionUrl: "/capacity",
+    });
     await loadData(); setActing(false);
   };
   const confirmWithExceptions = async (g: BookingGroup) => {
@@ -128,6 +133,19 @@ export default function MobileSchedule() {
     const dIds = g.rows.filter((r) => dayToggles[r.schedule_id] === false).map((r) => r.schedule_id);
     if (cIds.length) await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).in("schedule_id", cIds);
     if (dIds.length) await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).in("schedule_id", dIds);
+    const jobName = g.job?.job_name || "Workshop";
+    if (dIds.length > 0) {
+      await notify({ supabase, type: "booking_declined", severity: "warning",
+        title: `${myName || "Someone"} declined ${dIds.length} day${dIds.length > 1 ? "s" : ""} on ${jobName}`,
+        detail: `Confirmed ${cIds.length}, declined ${dIds.length}`,
+        freelancerId: myId, jobId: g.job?.job_id, actionUrl: "/capacity",
+      });
+    } else {
+      await notify({ supabase, type: "booking_confirmed", severity: "info",
+        title: `${myName || "Someone"} confirmed ${cIds.length} day${cIds.length > 1 ? "s" : ""} on ${jobName}`,
+        freelancerId: myId, jobId: g.job?.job_id, actionUrl: "/capacity",
+      });
+    }
     setExpandedGroup(null); setDayToggles({}); await loadData(); setActing(false);
   };
   const toggleExpand = (key: string, g: BookingGroup) => {
@@ -142,30 +160,33 @@ export default function MobileSchedule() {
   const confirmDay = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).eq("schedule_id", row.schedule_id);
+    const jobName = row.job_id && jobMap[row.job_id] ? jobMap[row.job_id].job_name : "Workshop";
+    await notify({ supabase, type: "booking_confirmed", severity: "info",
+      title: `${myName || "Someone"} confirmed ${fmtDate(row.scheduled_date)} on ${jobName}`,
+      freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
+    });
     setSelectedDay(null); await loadData(); setActing(false);
   };
 
   const declineDay = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
+    const jobName = row.job_id && jobMap[row.job_id] ? jobMap[row.job_id].job_name : "Workshop";
+    await notify({ supabase, type: "booking_declined", severity: "warning",
+      title: `${myName || "Someone"} declined ${fmtDate(row.scheduled_date)} on ${jobName}`,
+      freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
+    });
     setSelectedDay(null); await loadData(); setActing(false);
   };
 
   const withdrawDay = async (row: ScheduleRow) => {
     setActing(true);
-    // Change to Declined
     await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
-    // Create notification for PM
     const jobName = row.job_id && jobMap[row.job_id] ? jobMap[row.job_id].job_name : "a job";
-    await supabase.from("tbl_notifications").insert({
-      type: "booking_withdrawal",
-      title: `${myName} withdrew from ${fmtDate(row.scheduled_date)}`,
+    await notify({ supabase, type: "booking_withdrawal", severity: "urgent",
+      title: `${myName || "Someone"} withdrew from ${fmtDate(row.scheduled_date)}`,
       detail: `${myName} can no longer work on ${jobName} on ${fmtDate(row.scheduled_date)}. You may need to find a replacement.`,
-      severity: "warning",
-      source_freelancer_id: myId,
-      source_job_id: row.job_id,
-      source_schedule_id: row.schedule_id,
-      action_url: "/capacity",
+      freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
     setSelectedDay(null); await loadData(); setActing(false);
   };

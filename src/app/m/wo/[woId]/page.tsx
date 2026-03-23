@@ -6,10 +6,12 @@ import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
+import { notify } from "@/lib/notifications";
 import Link from "next/link";
 
 interface WODetail {
   work_order_id: number;
+  job_id: number | null;
   description: string | null;
   estimated_duration_hrs: number | null;
   status: string;
@@ -39,6 +41,7 @@ export default function MobileWODetail() {
   const [wo, setWo] = useState<WODetail | null>(null);
   const [entries, setEntries] = useState<TimeEntryInfo[]>([]);
   const [myId, setMyId] = useState(0);
+  const [myName, setMyName] = useState("");
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
 
@@ -57,6 +60,9 @@ export default function MobileWODetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/m/login"); return; }
     setMyId(user.user_metadata?.freelancer_id || 0);
+    const fId = user.user_metadata?.freelancer_id || 0;
+    const { data: meData } = await supabase.from("tbl_freelancers").select("freelancer_name").eq("freelancer_id", fId).single();
+    if (meData?.freelancer_name) setMyName(meData.freelancer_name);
 
     // Load WO
     const { data: woData } = await supabase
@@ -101,6 +107,7 @@ export default function MobileWODetail() {
 
     setWo({
       work_order_id: woData.work_order_id,
+      job_id: woData.job_id,
       description: woData.description,
       estimated_duration_hrs: woData.estimated_duration_hrs,
       status: woData.status,
@@ -148,6 +155,14 @@ export default function MobileWODetail() {
       await supabase.from("tbl_work_orders").update({ status: "In-Progress" }).eq("work_order_id", woId);
     }
 
+    // Notify: WO started
+    await notify({ supabase, type: "wo_started", severity: "info",
+      title: `${myName || "Someone"} started ${wo?.activity_label || "a task"}`,
+      detail: `${wo?.scope_name || ""} — ${wo?.description || ""}`.trim(),
+      freelancerId: myId, jobId: wo?.job_id || undefined, woId,
+      actionUrl: `/workshop`,
+    });
+
     await loadWO();
     setActing(false);
   };
@@ -191,6 +206,22 @@ export default function MobileWODetail() {
       entry_cost: cost,
       flag_note: flagNote.trim() || null,
     }).eq("entry_id", myOpenEntry.entry_id);
+
+    // Notify: hours logged (flag = warning, no flag = info)
+    if (flagNote.trim()) {
+      await notify({ supabase, type: "wo_flagged", severity: "warning",
+        title: `${myName || "Someone"} flagged ${wo?.activity_label || "a task"}`,
+        detail: flagNote.trim(),
+        freelancerId: myId, jobId: wo?.job_id || undefined, woId,
+        actionUrl: `/review`,
+      });
+    }
+    await notify({ supabase, type: "hours_logged", severity: "info",
+      title: `${myName || "Someone"} logged ${hrs}h on ${wo?.activity_label || "a task"}`,
+      detail: wo?.scope_name || "",
+      freelancerId: myId, jobId: wo?.job_id || undefined, woId,
+      actionUrl: `/review`,
+    });
 
     setShowLogSheet(false);
     setLogHours("");
@@ -236,6 +267,14 @@ export default function MobileWODetail() {
       actual_complete_timestamp: now,
       completion_photo_path: photoPath,
     }).eq("work_order_id", woId);
+
+    // Notify: WO completed
+    await notify({ supabase, type: "wo_completed", severity: "info",
+      title: `${myName || "Someone"} completed ${wo?.activity_label || "a task"}`,
+      detail: wo?.scope_name || "",
+      freelancerId: myId, jobId: wo?.job_id || undefined, woId,
+      actionUrl: `/workshop`,
+    });
 
     router.push("/m");
   };
