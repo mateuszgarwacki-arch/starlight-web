@@ -131,14 +131,27 @@ export default function AddBookingPage() {
   };
 
   const getDayState = (dateStr: string) => {
+    const isSelected = selectedDates.includes(dateStr);
     const existing = existingDays.find((e) => e.date === dateStr);
-    if (existing) {
-      if (existing.status === "Unavailable") return "unavailable";
-      if (["Booked", "Confirmed", "Notified"].includes(existing.status)) return "booked";
-    }
-    if (selectedDates.includes(dateStr)) return "selected";
+    if (isSelected && existing?.status === "Unavailable") return "selected-unavailable";
+    if (isSelected && existing && ["Booked", "Confirmed", "Notified"].includes(existing.status)) return "selected-booked";
+    if (isSelected) return "selected";
+    if (existing?.status === "Unavailable") return "unavailable";
+    if (existing && ["Booked", "Confirmed", "Notified"].includes(existing.status)) return "booked";
     return "free";
   };
+
+  // Warnings for selected dates that overlap with existing bookings/unavailability
+  const conflictWarnings = selectedDates
+    .map((d) => {
+      const existing = existingDays.find((e) => e.date === d);
+      if (!existing) return null;
+      const fmtD = new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+      if (existing.status === "Unavailable") return `${fmtD} — marked unavailable${existing.unavailable_reason ? " (" + existing.unavailable_reason + ")" : ""}`;
+      if (["Booked", "Confirmed", "Notified"].includes(existing.status)) return `${fmtD} — already booked on ${existing.job_name || "another job"}`;
+      return null;
+    })
+    .filter(Boolean) as string[];
 
   // Summary calculations
   const dayCount = selectedDates.length;
@@ -274,6 +287,16 @@ export default function AddBookingPage() {
             </div>
           )}
 
+          {/* Conflict warnings — soft signal, not a block */}
+          {conflictWarnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+              <p className="text-[11px] font-medium text-amber-700 mb-1">Heads up — {conflictWarnings.length} day{conflictWarnings.length > 1 ? "s" : ""} with existing commitments:</p>
+              {conflictWarnings.map((w, i) => (
+                <p key={i} className="text-[11px] text-amber-600">{w}</p>
+              ))}
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="space-y-2">
             <button
@@ -332,7 +355,7 @@ export default function AddBookingPage() {
                 {calDays.map((d) => {
                   const state = getDayState(d.date);
                   const isPast = d.date < todayStr;
-                  const disabled = isPast || state === "unavailable" || state === "booked" || d.isWeekend;
+                  const disabled = isPast || d.isWeekend;
                   const existing = existingDays.find((e) => e.date === d.date);
 
                   return (
@@ -341,17 +364,19 @@ export default function AddBookingPage() {
                       onClick={() => !disabled && toggleDate(d.date)}
                       disabled={disabled}
                       title={
-                        state === "unavailable" ? `Unavailable${existing?.unavailable_reason ? ": " + existing.unavailable_reason : ""}` :
-                        state === "booked" ? `Booked: ${existing?.job_name || "another job"}` : ""
+                        state === "unavailable" || state === "selected-unavailable" ? `⚠ Unavailable${existing?.unavailable_reason ? ": " + existing.unavailable_reason : ""} — you can still book` :
+                        state === "booked" || state === "selected-booked" ? `⚠ Already on ${existing?.job_name || "another job"} — you can still book` : ""
                       }
                       className={
-                        "text-center py-2.5 rounded-lg text-[13px] transition-all cursor-pointer " +
-                        (state === "selected" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-1 ring-starlight-blue/30" :
-                         state === "booked" ? "bg-starlight-green/15 text-starlight-green font-medium cursor-not-allowed" :
-                         state === "unavailable" ? "text-gray-300 cursor-not-allowed" :
+                        "text-center py-2.5 rounded-lg text-[13px] transition-all " +
+                        (state === "selected" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-1 ring-starlight-blue/30 cursor-pointer" :
+                         state === "selected-unavailable" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-2 ring-starlight-amber/50 cursor-pointer" :
+                         state === "selected-booked" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-2 ring-starlight-amber/50 cursor-pointer" :
+                         state === "booked" ? "bg-starlight-green/15 text-starlight-green font-medium cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
+                         state === "unavailable" ? "text-gray-400 cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
                          isPast ? "text-gray-200 cursor-not-allowed" :
                          d.isWeekend ? "text-gray-200 cursor-not-allowed" :
-                         "text-gray-700 hover:bg-gray-50")
+                         "text-gray-700 hover:bg-gray-50 cursor-pointer")
                       }
                       style={state === "unavailable" ? {
                         background: "repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 3px, transparent 3px, transparent 7px)",
