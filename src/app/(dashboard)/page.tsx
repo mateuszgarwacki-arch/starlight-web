@@ -72,7 +72,7 @@ export default function DashboardPage() {
 
       // Filter out deleted jobs and empty jobs
       const deletedJobIds = new Set((jobStatusRes.data || []).filter((j: any) => j.job_status === "Deleted").map((j: any) => j.job_id));
-      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id) && (j.total_wos || 0) > 0);
+      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id));
       if (activeJobs) setJobs(activeJobs);
       if (manpowerRes.data) setManpower(manpowerRes.data);
       setProcurement(procRes.data || []);
