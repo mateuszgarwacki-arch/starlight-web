@@ -174,9 +174,10 @@ export default function AddBookingPage() {
     setSaving(true);
 
     const bookingGroup = crypto.randomUUID();
+    const jobIdToSave = selectedJob.job_id === 0 ? null : selectedJob.job_id;
     const inserts = selectedDates.sort().map((d) => ({
       freelancer_id: selectedFreelancer.freelancer_id,
-      job_id: selectedJob.job_id,
+      job_id: jobIdToSave,
       scheduled_date: d,
       status: notify ? "Notified" : "Booked",
       booking_group: bookingGroup,
@@ -199,7 +200,7 @@ export default function AddBookingPage() {
         ? sorted.map(fmtD).join(", ")
         : `${fmtD(sorted[0])} – ${fmtD(sorted[sorted.length - 1])} (${sorted.length} days)`;
 
-      const msg = `Hi ${selectedFreelancer.freelancer_name?.split(" ")[0]}, I've got work for you: ${dateStr} on ${selectedJob.job_name}. Can you confirm? Check your schedule here: https://workshop-five-gamma.vercel.app/m/schedule`;
+      const msg = `Hi ${selectedFreelancer.freelancer_name?.split(" ")[0]}, I've got work for you: ${dateStr}${selectedJob.job_id ? " on " + selectedJob.job_name : " at the workshop"}. Can you confirm? Check your schedule here: https://workshop-five-gamma.vercel.app/m/schedule`;
 
       // Clean phone number for wa.me
       const phone = selectedFreelancer.phone.replace(/\D/g, "");
@@ -259,12 +260,14 @@ export default function AddBookingPage() {
             <select
               value={selectedJob?.job_id || ""}
               onChange={(e) => {
-                const j = jobs.find((x) => x.job_id === Number(e.target.value));
-                setSelectedJob(j || null);
+                const val = e.target.value;
+                if (val === "0") setSelectedJob({ job_id: 0, job_name: "General workshop", job_number: "", event_date: null } as any);
+                else { const j = jobs.find((x) => x.job_id === Number(val)); setSelectedJob(j || null); }
               }}
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             >
               <option value="">Select a job...</option>
+              <option value="0">General workshop</option>
               {jobs.map((j) => (
                 <option key={j.job_id} value={j.job_id}>
                   {j.job_number} — {j.job_name}

@@ -93,7 +93,19 @@ export async function GET(
   });
   ics.push("END:VCALENDAR");
 
-  const filename = groupFilter ? `starlight-booking.ics` : `starlight-schedule-${fId}.ics`;
+  // Build filename
+  const safeName = (name || "freelancer").replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
+  let filename: string;
+  if (groupFilter && bookings && bookings.length > 0) {
+    const firstBooking = bookings[0];
+    const jobName = firstBooking.job_id && jobMap[firstBooking.job_id] ? jobMap[firstBooking.job_id] : "Workshop";
+    const safeJob = jobName.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
+    const startDate = firstBooking.scheduled_date;
+    filename = `Starlight-${safeJob}-${safeName}-${startDate}.ics`;
+  } else {
+    filename = `Starlight-Schedule-${safeName}.ics`;
+  }
+
   return new NextResponse(ics.join("\r\n"), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
