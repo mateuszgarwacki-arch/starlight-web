@@ -42,6 +42,16 @@ interface BookingGroup {
 // Helpers
 // ============================================================
 
+// Timezone-safe date string (avoids toISOString UTC shift)
+function localDateStr(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function todayLocal(): string {
+  const d = new Date();
+  return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function fmtDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("en-GB", {
     weekday: "short", day: "numeric", month: "short",
@@ -107,7 +117,7 @@ export default function MobileSchedule() {
     // Fetch all schedule rows (past + future for calendar display)
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const pastStr = threeMonthsAgo.toISOString().split("T")[0];
+    const pastStr = localDateStr(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth(), threeMonthsAgo.getDate());
 
     const { data: rows } = await supabase
       .from("tbl_freelancer_schedule")
@@ -120,7 +130,7 @@ export default function MobileSchedule() {
     setAllRows(all);
 
     // Separate unavailable vs bookings (future only for cards)
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = todayLocal();
     const futureRows = all.filter((r) => r.scheduled_date >= todayStr);
     const unavailRows = futureRows.filter((r) => r.status === "Unavailable");
     const bookingRows = futureRows.filter((r) => r.status !== "Unavailable");
@@ -247,7 +257,7 @@ export default function MobileSchedule() {
     const days: { date: string; num: number; isWeekend: boolean }[] = [];
     for (let d = 1; d <= last.getDate(); d++) {
       const dt = new Date(year, month, d);
-      days.push({ date: dt.toISOString().split("T")[0], num: d, isWeekend: dt.getDay() === 0 || dt.getDay() === 6 });
+      days.push({ date: localDateStr(year, month, d), num: d, isWeekend: dt.getDay() === 0 || dt.getDay() === 6 });
     }
     return { days, firstDow, label: first.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) };
   };
@@ -260,7 +270,7 @@ export default function MobileSchedule() {
   };
 
   const { days: calDays, firstDow: calPad, label: calLabel } = getMonthData(calMonth.year, calMonth.month);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = todayLocal();
 
   // Get status for a calendar day
   const getCalDayInfo = (dateStr: string) => {
@@ -300,9 +310,9 @@ export default function MobileSchedule() {
         {myPin && (
           <button
             onClick={() => {
-              const base = window.location.origin;
-              const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}/route?pin=${myPin}`;
-              const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`;
+              const webcalUrl = `webcal://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
+              const httpsUrl = `https://${window.location.host}/api/calendar/${myId}?pin=${myPin}`;
+              const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(httpsUrl)}`;
               // Try webcal first (works on iOS/Mac), fall back to Google Calendar URL
               if (/iPhone|iPad|Mac/.test(navigator.userAgent)) {
                 window.location.href = webcalUrl;

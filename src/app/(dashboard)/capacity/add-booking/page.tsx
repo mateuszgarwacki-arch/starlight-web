@@ -7,6 +7,15 @@ import { formatCurrency } from "@/lib/utils";
 import { ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, Save } from "lucide-react";
 import Link from "next/link";
 
+// Timezone-safe date string (avoids toISOString UTC shift in BST etc.)
+function localDateStr(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function todayLocal(): string {
+  const d = new Date();
+  return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 interface FreelancerOption {
   freelancer_id: number;
   freelancer_name: string;
@@ -65,7 +74,7 @@ export default function AddBookingPage() {
 
   // Load existing schedule when freelancer changes
   const loadExistingDays = useCallback(async (fId: number) => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = todayLocal();
     const { data: schedRows } = await supabase
       .from("tbl_freelancer_schedule")
       .select("scheduled_date, status, job_id, unavailable_reason")
@@ -106,7 +115,7 @@ export default function AddBookingPage() {
     for (let d = 1; d <= last.getDate(); d++) {
       const dt = new Date(year, month, d);
       days.push({
-        date: dt.toISOString().split("T")[0],
+      date: localDateStr(year, month, d),
         num: d,
         isWeekend: dt.getDay() === 0 || dt.getDay() === 6,
       });
@@ -206,7 +215,7 @@ export default function AddBookingPage() {
     return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading...</div>;
   }
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = todayLocal();
 
   return (
     <div className="space-y-5">
