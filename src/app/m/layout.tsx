@@ -2,10 +2,11 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ClipboardList, Camera, User, Star } from "lucide-react";
+import { ClipboardList, CalendarDays, Camera, User, Star } from "lucide-react";
 
 const tabs = [
   { href: "/m", icon: ClipboardList, label: "Tasks" },
+  { href: "/m/schedule", icon: CalendarDays, label: "Schedule" },
   { href: "/m/photos", icon: Camera, label: "Photos" },
   { href: "/m/me", icon: User, label: "Me" },
 ];
