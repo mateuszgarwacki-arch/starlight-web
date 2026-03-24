@@ -78,7 +78,7 @@ SELECT
   COALESCE(sc.material_cost, 0) AS material_cost,
   COALESCE(sc.total_cost, 0) AS total_cost,
   CASE WHEN COALESCE(q.quote_total, 0) > 0
-    THEN ROUND((1 - COALESCE(sc.total_cost, 0) / q.quote_total) * 100, 1)
+    THEN ROUND(((1 - COALESCE(sc.total_cost, 0)::numeric / q.quote_total::numeric) * 100)::numeric, 1)
     ELSE NULL END AS margin_pct
 FROM tbl_production_plan pp
 LEFT JOIN (
@@ -108,7 +108,7 @@ SELECT
   wo.status,
   COALESCE(te.total_hours, 0) AS actual_hours,
   CASE WHEN wo.estimated_duration_hrs > 0
-    THEN ROUND(COALESCE(te.total_hours, 0) / wo.estimated_duration_hrs * 100, 1)
+    THEN ROUND((COALESCE(te.total_hours, 0)::numeric / wo.estimated_duration_hrs::numeric * 100)::numeric, 1)
     ELSE NULL END AS accuracy_pct
 FROM tbl_work_orders wo
 LEFT JOIN (
