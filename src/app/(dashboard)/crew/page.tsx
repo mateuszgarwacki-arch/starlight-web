@@ -224,9 +224,9 @@ export default function CrewPage() {
                 const hourlyRate = f.day_rate && f.standard_day_hours ? f.day_rate / f.standard_day_hours : null;
                 const isActive = isTruthy(f.active);
                 return (
-                  <tr key={f.freelancer_id} className={"border-t border-gray-100 " + (!isActive ? "opacity-50" : "")}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-navy">{f.freelancer_name}</p>
+                  <tr key={f.freelancer_id} className={"border-t border-gray-100 hover:bg-blue-50/30 transition-colors " + (!isActive ? "opacity-50" : "")}>
+                    <td className="px-4 py-3 cursor-pointer" onClick={() => window.location.href = `/crew/${f.freelancer_id}`}>
+                      <p className="font-medium text-navy hover:text-starlight-blue transition-colors">{f.freelancer_name}</p>
                       {f.email && <p className="text-xs text-gray-400">{f.email}</p>}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-600">{f.phone}</td>
