@@ -115,8 +115,8 @@
 ### Migrated from Access (21)
 tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
 
-### Added by web app (10)
-tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents, tbl_rate_card, tbl_business_settings, tbl_notifications
+### Added by web app (11)
+tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents, tbl_rate_card, tbl_business_settings, tbl_notifications, tbl_audit_log
 
 ### Key Views (27+)
 qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_breakdown, qry_manpower_demand, qry_procurement_needed, qry_job_cost_summary, qry_scopeitem_cost_summary, qry_wo_cost_summary, qry_estimate_vs_actual, qry_jobitems_withcoverage, qry_today_roster, qry_supplier_summary, qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin, qry_wo_estimated_cost, qry_scope_estimated_cost, qry_job_estimated_cost
@@ -175,6 +175,12 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/lib/calendar-token.ts` | HMAC-SHA256 token generation/validation for calendar downloads |
 | `src/lib/use-realtime.ts` | Hook: useRealtimeRefresh — subscribe to table changes with debounce |
 | `src/middleware.ts` | Auth middleware: session validation, role-based routing, login redirects |
+| `src/lib/audit.ts` | Audit engine: auditedUpdate/Insert/Delete, revertAuditEntry, getAuditContext |
+| `src/app/api/auth/manage-user/route.ts` | API: create/update/reset/list staff accounts (admin/PM only) |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | Freelancer detail: profile, stats, activity timeline, bookings, admin edit/archive |
+| `sql/session8-multiuser.sql` | Audit log table, updated_at triggers, RLS on audit log |
+| `sql/session8-time-entry-archive.sql` | Archive columns on time entries, cost views rebuilt with archive filter |
+| `sql/seed-grosvenor.sql` | Grosvenor Hotel Wedding — 89 quote lines, £377,340 |
 | `sql/security-hardening.sql` | RLS policies, helper functions, realtime config — run in Supabase SQL Editor |
 | `src/app/m/layout.tsx` | Mobile layout with bottom tab bar (Tasks, Schedule, Photos, Me) |
 | `src/app/m/schedule/page.tsx` | Mobile schedule: interactive calendar, confirm/decline/withdraw, unavailability |
@@ -208,6 +214,22 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 - **WhatsApp notify**: wa.me deep links with pre-filled message. Phone number cleaned: strip non-digits, replace leading 0 with 44
 - **ICS calendar**: downloadable .ics files (not subscription). Uses HMAC-signed tokens (72h expiry) via `/api/calendar/token` endpoint. No PINs in URLs. Filename includes job name + freelancer name + date
 - **Sidebar badge**: real-time subscription on tbl_notifications (replaced 30s polling in Session 7)
+
+### Security (Session 7 — mandatory for all future development)
+
+### Audit & Multi-User (Session 8 — mandatory for all future development)
+- **Audit all writes on key tables**: use `auditedUpdate()` from `src/lib/audit.ts` instead of raw `supabase.from().update()`. Covers: tbl_quote_lines, tbl_scope_items, tbl_work_orders, tbl_wo_bom, tbl_production_plan, tbl_quotes, tbl_wo_time_entries, tbl_freelancers
+- **Audit log schema**: `tbl_audit_log` — user_id, user_name, user_role, table_name, record_id, field_name, old_value (JSON text), new_value (JSON text), changed_at, job_id, action_type (update/insert/delete/archive/revert), reverted_at, reverted_by
+- **For deletes**: log the full record as old_value with action_type="delete" BEFORE the cascade delete
+- **For archives (soft delete)**: set archived_at + archived_by + archive_reason, don't hard delete. Log with action_type="archive"
+- **Revert capability**: `revertAuditEntry()` restores old value, marks entry as reverted, logs the revert as a new entry
+- **Time entries MUST filter archived**: every query on `tbl_wo_time_entries` MUST include `.is("archived_at", null)`. Cost views already have `WHERE archived_at IS NULL`. There are 9 direct queries across the codebase — all patched
+- **Admin role**: `admin` in user_metadata.role. Can manage users, edit freelancer details, archive time entries, see audit log. PM cannot do these
+- **Role hierarchy**: admin > production_manager > foreman > freelancer. Only admin can create admin accounts
+- **Staff accounts**: created via `/api/auth/manage-user` with real email+password (not phone+PIN like freelancers)
+- **PostgreSQL ROUND needs ::numeric cast**: `ROUND((value)::numeric, 1)` — double precision fails with "function does not exist"
+- **New job auto-creates quote container**: when creating via + New Job, insert tbl_quotes with status "Accepted" and description "Internal Build List" so lines can be added immediately
+- **Audit log retention policy** (future): Hot 0-3mo (full detail + undo), Warm 3-12mo (read-only), Cold 12mo+ (compress to job summary)
 
 ### Security (Session 7 — mandatory for all future development)
 - **Defence in depth**: every data path protected by middleware + API auth + RLS (three layers)
@@ -271,6 +293,49 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - Unified analytics engine: 5-layer cost model (Quoted→Estimated→Committed→Reconciled→Margin)
 - Workshop vs total quoted separation for margin calculations
 - All test data deleted except Chelsea In Bloom (job_id=6)
+
+### Session 8 (23-24 Mar 2026) — Quote Management + Multi-User Foundation + Audit System
+~10 commits. Two major themes: manual quote line entry and multi-user readiness.
+
+**Manual Quote Lines & Job Creation:**
+- + New Job dialog on /jobs page: creates tbl_production_plan + auto-creates tbl_quotes container
+- + Add Quote Line inline form on job detail: description, qty, unit_price, value, zone, sub-group, category
+- Inline edit on description and value (click to edit, blur to save)
+- Delete line with scope item protection (can't delete lines with linked scopes)
+- Qty and Unit Price as proper table columns (not crammed into value cell)
+- Auto-calculate line_value = qty × unit_price when both present
+- Dashboard fix: show all active jobs, not just WO-bearing ones
+
+**Multi-User Foundation:**
+- Admin role added to role hierarchy (admin > pm > foreman > freelancer)
+- User management in Settings: Users tab creates PM/foreman/admin accounts with email+password
+- `/api/auth/manage-user` route: create_staff, update_role, reset_password, list_users
+- Only admin can create other admins. Only admin can edit freelancer details on crew profile
+
+**Audit Log System (with undo):**
+- `tbl_audit_log` table: who, when, which table, which record, which field, old value, new value, revert support
+- `src/lib/audit.ts`: auditedUpdate(), auditedInsert(), auditedDelete(), revertAuditEntry()
+- Audit logging wired into ALL key pages: job detail, scope breakdown, work orders, BOM, traveller, mobile WO, mobile photos
+- Settings → Audit Log tab: table of recent changes with Revert button per field-level update
+- `updated_at` columns + auto-update triggers on 6 key tables for future optimistic concurrency
+
+**Time Entry Admin Controls:**
+- Soft delete (archive) on time entries: archived_at, archived_by, archive_reason columns
+- Admin can edit hours inline on freelancer detail page (recalculates entry_cost)
+- Admin can archive entries with mandatory reason
+- Archived entries excluded from ALL cost calculations (views + 9 direct queries patched)
+- "Show archived" toggle on freelancer detail page
+- 4 cost views recreated with `WHERE archived_at IS NULL`
+
+**Freelancer Detail Page (`/crew/[id]`):**
+- Click crew name → full profile with editable header (admin only), stats, activity timeline, bookings
+- Stats: total hours, last 30d hours, WOs completed, avg vs estimate %, flag count
+- Activity tab: reverse-chronological time entries with job links, flag notes highlighted, admin edit/archive buttons
+- Bookings tab: schedule entries with status badges
+
+**Grosvenor Hotel Quote Seeded:**
+- 89 quote lines across 11 zones, £377,340 total, all with qty × unit_price
+- Job 13725, client Fait Accompli, quote ref 40656 v16
 
 ## Lessons Learned & Execution Rules
 
@@ -410,57 +475,46 @@ Every user-facing action that changes state should generate a notification AND a
 ## Next Session Pickup
 
 ### Current State
-- Chelsea In Bloom (job_id=6, job_number=13794) is the only job with data
-- 2 scope items, 2 WOs, BOM with cut list extracted, traveller printable
-- Settings page live with rate card (£35/£40/£50) and business defaults (40% margin, 10hr days)
-- Analytics engine live: estimated costs flow through to cost analysis panels on job, scope, and WO pages
-- **Booking system live**: Add Booking page, weekly calendar on Capacity, mobile schedule with interactive calendar
-- **Notifications system live**: /notifications page with severity-coded cards, sidebar bell badge, triggers on all booking + WO actions
-- **Toast notifications live**: Sonner wired across all mobile and desktop actions
-- **ICS download working** — per-booking and full schedule export
+- Chelsea In Bloom (job_id=6, job_number=13794) — test job with scope items, WOs, BOM
+- **Grosvenor Hotel Wedding (job_number=13725)** — real job, 89 quote lines, £377,340, all zones populated with qty/unit_price
+- **Goodwood Revival 2026** — manually created job, empty (testing + New Job flow)
+- Settings page: 4 tabs (Rate Card, Defaults, Users, Audit Log)
+- Admin role active — Mateusz is admin, can create PM accounts
+- Audit logging live on all key tables with revert capability
+- Time entry archive system live with cost exclusion across entire app
+- Freelancer detail page live at /crew/[id]
 
-### SQL Already Run (Session 7)
-- Helper functions: get_my_role(), get_my_freelancer_id() for RLS policy evaluation
-- Comprehensive RLS policies on ALL tables (commercial = PM-only, execution = role-filtered, reference = read-all)
-- REPLICA IDENTITY FULL on tbl_work_orders, tbl_wo_time_entries, tbl_freelancer_schedule, tbl_notifications
-- Realtime publication: all 4 tables added
-- Full script: `sql/security-hardening.sql`
-
-### SQL Already Run (Session 6)
-- tbl_freelancer_schedule: added booking_group (UUID), notified_at (TIMESTAMPTZ), unavailable_reason (VARCHAR)
-- Indexes: idx_schedule_booking_group, idx_schedule_freelancer_status
-- RLS policies on tbl_freelancer_schedule (select/update/insert/delete)
-- tbl_notifications created with indexes and RLS
-
-### SQL Already Run (Session 5)
-- tbl_rate_card created with 3 complexity levels
-- tbl_business_settings created with 2 defaults
-- qry_wo_estimated_cost, qry_scope_estimated_cost, qry_job_estimated_cost views created
-- traveller_printed_at + traveller_printed_by columns added to tbl_work_orders
-- UNIT category seeded in tbl_master_lookups (Each, Sheet, Metre, Length, Litre, kg, Roll, Pack, mm)
-- standard_length converted from metres to mm where < 100
+### SQL Already Run (Session 8)
+- `sql/add-quote-line-qty.sql`: quantity + unit_price columns on tbl_quote_lines
+- `sql/session8-multiuser.sql`: tbl_audit_log, updated_at triggers on 6 tables, RLS on audit log
+- `sql/session8-time-entry-archive.sql`: archived_at/by/reason on tbl_wo_time_entries, 4 cost views rebuilt with archive filter, today_roster rebuilt
+- `sql/seed-grosvenor.sql`: Grosvenor Hotel Wedding job + quote + 89 lines
+- Admin role set via: `UPDATE auth.users SET raw_user_meta_data = jsonb_set(raw_user_meta_data, '{role}', '"admin"') WHERE email = '...'`
 
 ### Outstanding Work (prioritised)
-1. **Quote import from real source** — currently manual entry only
-2. **Drop tbl_freelancers.pin column** — code references removed, confirm nothing breaks then ALTER TABLE DROP COLUMN
-3. **Rate limiting on AI extraction APIs** — prevent abuse/cost overrun
-4. **Audit logging** — track PM-level operations (user management, deletions, settings changes)
-5. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+1. **Optimistic concurrency** — `updated_at` columns exist, need conflict detection on save (show "modified by X, reload?")
+2. **Real-time presence** — Supabase Realtime presence channels: who's viewing what job/scope, soft edit signals
+3. **Wire audit into remaining insert paths** — new WO creation, new BOM rows, new scope items currently use plain insert
+4. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
+5. **Quote import from real source** — currently manual entry only
+6. **Drop tbl_freelancers.pin column** — code references removed, confirm nothing breaks then ALTER TABLE DROP COLUMN
+7. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
+8. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
-### New Routes (Session 6 + 7)
+### New Routes (Session 8)
 | Route | Purpose |
 |-------|---------|
-| `/m/schedule` | Freelancer mobile schedule: monthly calendar, confirm/decline/withdraw, unavailability |
-| `/capacity/add-booking` | Month-view day picker, freelancer/job selection, WhatsApp notify |
-| `/api/calendar/[freelancerId]` | ICS calendar download (signed token auth) |
-| `/api/calendar/token` | Generate HMAC-signed tokens for ICS downloads (requires session) |
+| `/crew/[id]` | Freelancer detail: profile, stats, activity timeline, bookings, admin controls |
+| `/api/auth/manage-user` | Staff account management: create, update role, reset password, list |
 
-### Test Workflow for New Session
-1. **Security — middleware**: visit /jobs in incognito → must redirect to /login
-2. **Security — role isolation**: log in as freelancer → navigate to /jobs → must redirect to /m
-3. **Security — API auth**: POST to /api/extract-invoice without auth header → must return 401
-4. **Security — RLS**: as freelancer session, query tbl_quotes → must return zero rows
-5. **Realtime**: open /workshop in one tab, START a WO from /m/wo/[id] in another → workshop refreshes automatically
-6. **Bookings**: go to /capacity → booking calendar shows colour-coded statuses with live updates
-7. **Calendar**: on /m/schedule, tap "Export .ics" → downloads via signed token (no PIN in URL)
-8. **Notifications**: trigger a booking change → sidebar bell updates instantly, /notifications shows new card
+### Test Workflow for Session 8 Features
+1. **New Job**: /jobs → + New Job → fill form → verify lands on job detail with empty quote lines tab
+2. **Add Quote Line**: on any job → + Add Quote Line → fill description + qty + unit_price → verify auto-calculates value
+3. **Inline edit**: click any quote line description/value/qty → edit → blur → verify saved
+4. **Delete line**: click trash on line without scope → confirm → verify removed
+5. **User management**: Settings → Users → Add User → create PM account → verify they can log in
+6. **Audit log**: make any edit → Settings → Audit Log → verify entry appears with old/new values
+7. **Revert**: click Revert on an audit entry → verify value restored
+8. **Freelancer detail**: Crew → click name → verify profile loads with stats, timeline, bookings
+9. **Archive time entry**: on freelancer detail → click archive icon → enter reason → verify entry greyed out
+10. **Cost exclusion**: after archive → check job cost analysis → verify archived entry cost excluded
