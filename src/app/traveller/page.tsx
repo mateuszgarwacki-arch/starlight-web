@@ -7,6 +7,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Printer, RotateCw, Loader2, Check } from "lucide-react";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 /* ================================================================
    Types
@@ -273,16 +274,17 @@ export default function TravellerPage() {
     if (!scope) return;
     const toPrint = wosToPrint;
     const now = new Date().toISOString();
+    const ctx = await getAuditContext(supabase);
 
     for (const wo of toPrint) {
-      await supabase.from("tbl_work_orders").update({
+      await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, {
         traveller_printed_at: now,
-      }).eq("work_order_id", wo.work_order_id);
+      }, scope.job_id);
 
       if (wo.status === "Not-Started") {
-        await supabase.from("tbl_work_orders").update({
+        await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, {
           status: "Ready",
-        }).eq("work_order_id", wo.work_order_id);
+        }, scope.job_id);
       }
     }
 

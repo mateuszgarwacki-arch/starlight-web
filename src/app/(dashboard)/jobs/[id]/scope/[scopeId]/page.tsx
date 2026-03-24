@@ -12,6 +12,8 @@ import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 interface ScopeDetail {
   scope_item_id: number;
@@ -83,7 +85,8 @@ export default function ScopeDetailPage() {
   }, [loadData]);
 
   const updateField = async (field: string, value: string | number | null) => {
-    await supabase.from("tbl_scope_items").update({ [field]: value }).eq("scope_item_id", scopeId);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_scope_items", scopeId, { [field]: value }, jobId);
     setScope((prev) => (prev ? { ...prev, [field]: value } : null));
   };
 
@@ -109,6 +112,14 @@ export default function ScopeDetailPage() {
 
   const deleteScope = async () => {
     if (!confirm("Delete this scope item? This cannot be undone.")) return;
+    const ctx = await getAuditContext(supabase);
+    // Log the deletion before cascade
+    await supabase.from("tbl_audit_log").insert({
+      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
+      table_name: "tbl_scope_items", record_id: scopeId,
+      field_name: "_record", old_value: JSON.stringify(scope), new_value: null,
+      job_id: jobId, action_type: "delete",
+    });
     // Delete linked WOs, job items, junction records first
     const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id").eq("scope_item_id", scopeId);
     if (wos && wos.length > 0) {
@@ -124,9 +135,8 @@ export default function ScopeDetailPage() {
   };
 
   const cancelScope = async (reason: string) => {
-    await supabase.from("tbl_scope_items")
-      .update({ status: "Cancelled-Cost-Retained", cancellation_reason: reason })
-      .eq("scope_item_id", scopeId);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_scope_items", scopeId, { status: "Cancelled-Cost-Retained", cancellation_reason: reason }, jobId);
     setScope((prev) => prev ? { ...prev, status: "Cancelled-Cost-Retained" } : null);
     setShowCancelDialog(false);
     setCancelReason("");
@@ -167,7 +177,8 @@ export default function ScopeDetailPage() {
               onBlur={async (e) => {
                 const val = e.target.value.trim();
                 if (val && val !== scope.item_name) {
-                  await supabase.from("tbl_scope_items").update({ item_name: val }).eq("scope_item_id", scope.scope_item_id);
+                  const ctx = await getAuditContext(supabase);
+                  await auditedUpdate(ctx, "tbl_scope_items", scope.scope_item_id, { item_name: val }, jobId);
                 }
               }}
               ref={(el) => {

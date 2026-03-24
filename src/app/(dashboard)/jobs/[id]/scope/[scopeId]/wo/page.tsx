@@ -26,6 +26,8 @@ import {
   ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 // ============================================================
 // Types for this page
@@ -284,13 +286,23 @@ export default function ScopeWorkOrdersPage() {
   // ============================================================
 
   const updateWOStatus = async (woId: number, newStatus: string) => {
-    await supabase.from("tbl_work_orders").update({ status: newStatus }).eq("work_order_id", woId);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_work_orders", woId, { status: newStatus }, jobId);
     setWorkOrders((prev) =>
       prev.map((wo) => (wo.work_order_id === woId ? { ...wo, status: newStatus } : wo))
     );
   };
 
   const deleteWO = async (woId: number) => {
+    const ctx = await getAuditContext(supabase);
+    const wo = workOrders.find(w => w.work_order_id === woId);
+    // Log before cascade delete
+    await supabase.from("tbl_audit_log").insert({
+      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
+      table_name: "tbl_work_orders", record_id: woId,
+      field_name: "_record", old_value: wo ? JSON.stringify(wo) : null, new_value: null,
+      job_id: jobId, action_type: "delete",
+    });
     // Delete junction records first, then WO
     await supabase.from("tbl_wo_activities").delete().eq("work_order_id", woId);
     await supabase.from("tbl_jobitem_workorder").delete().eq("work_order_id", woId);
@@ -316,9 +328,10 @@ export default function ScopeWorkOrdersPage() {
     const swapSeq = swap.wo_sequence || swapIdx + 1;
 
     // Swap sequences in DB
+    const ctx = await getAuditContext(supabase);
     await Promise.all([
-      supabase.from("tbl_work_orders").update({ wo_sequence: swapSeq }).eq("work_order_id", current.work_order_id),
-      supabase.from("tbl_work_orders").update({ wo_sequence: currentSeq }).eq("work_order_id", swap.work_order_id),
+      auditedUpdate(ctx, "tbl_work_orders", current.work_order_id, { wo_sequence: swapSeq }, jobId),
+      auditedUpdate(ctx, "tbl_work_orders", swap.work_order_id, { wo_sequence: currentSeq }, jobId),
     ]);
 
     // Update local state
@@ -448,13 +461,22 @@ export default function ScopeWorkOrdersPage() {
   };
 
   const updateBomField = async (bomId: number, field: string, value: string | number | null) => {
-    await supabase.from("tbl_wo_bom").update({ [field]: value }).eq("bom_id", bomId);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_bom", bomId, { [field]: value }, jobId);
     setBomRows((prev) =>
       prev.map((r) => (r.bom_id === bomId ? { ...r, [field]: value } : r))
     );
   };
 
   const deleteBomRow = async (bomId: number) => {
+    const ctx = await getAuditContext(supabase);
+    const row = bomRows.find(r => r.bom_id === bomId);
+    await supabase.from("tbl_audit_log").insert({
+      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
+      table_name: "tbl_wo_bom", record_id: bomId,
+      field_name: "_record", old_value: row ? JSON.stringify(row) : null, new_value: null,
+      job_id: jobId, action_type: "delete",
+    });
     await supabase.from("tbl_wo_bom").delete().eq("bom_id", bomId);
     setBomRows((prev) => prev.filter((r) => r.bom_id !== bomId));
   };
@@ -759,7 +781,8 @@ export default function ScopeWorkOrdersPage() {
                           value={wo.complexity_construction || ""}
                           onChange={async (e) => {
                             const val = e.target.value || null;
-                            await supabase.from("tbl_work_orders").update({ complexity_construction: val }).eq("work_order_id", wo.work_order_id);
+                            const ctx = await getAuditContext(supabase);
+                            await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, { complexity_construction: val }, jobId);
                             setWorkOrders((prev) => prev.map((w) => w.work_order_id === wo.work_order_id ? { ...w, complexity_construction: val } : w));
                           }}
                           className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
@@ -778,7 +801,8 @@ export default function ScopeWorkOrdersPage() {
                           value={wo.finish_relative || ""}
                           onChange={async (e) => {
                             const val = e.target.value || null;
-                            await supabase.from("tbl_work_orders").update({ finish_relative: val }).eq("work_order_id", wo.work_order_id);
+                            const ctx = await getAuditContext(supabase);
+                            await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, { finish_relative: val }, jobId);
                             setWorkOrders((prev) => prev.map((w) => w.work_order_id === wo.work_order_id ? { ...w, finish_relative: val } : w));
                           }}
                           className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"

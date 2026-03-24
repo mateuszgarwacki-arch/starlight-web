@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, jobFolder, scopePhotoName } from "@/lib/onedrive-client";
 import { Camera, Check, AlertTriangle, RefreshCw } from "lucide-react";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 interface ScopePhotoItem {
   scope_item_id: number;
   item_name: string;
   job_name: string;
   job_number: string;
+  job_id: number | null;
   event_zone: string | null;
   status: string;
   completion_photo_path: string | null;
@@ -54,6 +56,7 @@ export default function MobilePhotosPage() {
       item_name: s.item_name || "Unnamed",
       job_name: jMap[s.job_id]?.name || "—",
       job_number: jMap[s.job_id]?.number || "—",
+      job_id: s.job_id,
       event_zone: s.event_zone,
       status: s.status,
       completion_photo_path: s.completion_photo_path,
@@ -77,10 +80,11 @@ export default function MobilePhotosPage() {
 
     try {
       const result = await uploadToOneDrive(file, folder, fileName);
-      await supabase.from("tbl_scope_items").update({
+      const ctx = await getAuditContext(supabase);
+      await auditedUpdate(ctx, "tbl_scope_items", scopeId, {
         completion_photo_path: result.path,
         status: "Completed",
-      }).eq("scope_item_id", scopeId);
+      }, item?.job_id);
     } catch (err: any) {
       alert("Upload failed: " + (err.message || "Unknown error. Check OneDrive configuration."));
       setUploading(null);
@@ -95,11 +99,13 @@ export default function MobilePhotosPage() {
   const handleWaiver = async (scopeId: number) => {
     if (!waiverReason.trim()) return;
     setUploading(scopeId);
-    await supabase.from("tbl_scope_items").update({
+    const ctx = await getAuditContext(supabase);
+    const item = items.find(i => i.scope_item_id === scopeId);
+    await auditedUpdate(ctx, "tbl_scope_items", scopeId, {
       photo_waiver: true,
       photo_waiver_reason: waiverReason.trim(),
       status: "Completed",
-    }).eq("scope_item_id", scopeId);
+    }, item?.job_id);
     setShowWaiver(null);
     setWaiverReason("");
     setUploading(null);

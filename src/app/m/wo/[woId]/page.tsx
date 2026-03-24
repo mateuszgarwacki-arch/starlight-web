@@ -9,6 +9,7 @@ import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import Link from "next/link";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 interface WODetail {
   work_order_id: number;
@@ -153,7 +154,8 @@ export default function MobileWODetail() {
 
     // Move WO to In-Progress if Ready
     if (wo?.status === "Ready") {
-      await supabase.from("tbl_work_orders").update({ status: "In-Progress" }).eq("work_order_id", woId);
+      const ctx = await getAuditContext(supabase);
+      await auditedUpdate(ctx, "tbl_work_orders", woId, { status: "In-Progress" }, wo?.job_id);
     }
 
     // Notify: WO started
@@ -265,12 +267,13 @@ export default function MobileWODetail() {
       }
     }
 
-    await supabase.from("tbl_work_orders").update({
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_work_orders", woId, {
       status: "Complete",
       system_complete_timestamp: now,
       actual_complete_timestamp: now,
       completion_photo_path: photoPath,
-    }).eq("work_order_id", woId);
+    }, wo?.job_id);
 
     // Notify: WO completed
     await notify({ supabase, type: "wo_completed", severity: "info",
