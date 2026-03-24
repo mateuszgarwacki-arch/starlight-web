@@ -203,15 +203,15 @@ export default function FreelancerDetailPage() {
 
   // Editable field component
   const EditableField = ({ field, value, label, type = "text", suffix = "" }: { field: string; value: string | number | null; label: string; type?: string; suffix?: string }) => (
-    <div>
+    <div className="min-w-0">
       <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
       {editingField === field ? (
         <input type={type} value={editValue} onChange={e => setEditValue(e.target.value)}
           onBlur={saveField} onKeyDown={e => { if (e.key === "Enter") saveField(); if (e.key === "Escape") cancelEdit(); }}
           autoFocus className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-white focus:outline-none" />
       ) : (
-        <p onClick={() => startEdit(field, value)}
-          className={`text-sm text-navy font-medium ${isAdmin ? "cursor-pointer hover:text-starlight-blue transition-colors group" : ""}`}>
+        <p onClick={() => startEdit(field, value)} title={String(value ?? "")}
+          className={`text-sm text-navy font-medium truncate ${isAdmin ? "cursor-pointer hover:text-starlight-blue transition-colors group" : ""}`}>
           {value ?? <span className="text-gray-300">—</span>}{suffix}
           {isAdmin && <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 inline ml-1" />}
         </p>
