@@ -7,7 +7,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -28,6 +28,9 @@ interface TimeEntryRow {
   job_id: number | null;
   scope_item_id: number | null;
   wo_status: string | null;
+  // Archive fields
+  archived_at: string | null;
+  archive_reason: string | null;
 }
 
 interface BookingRow {
@@ -63,6 +66,11 @@ export default function FreelancerDetailPage() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [activeTab, setActiveTab] = useState<"timeline" | "bookings">("timeline");
+  const [showArchived, setShowArchived] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<number | null>(null);
+  const [editHoursValue, setEditHoursValue] = useState("");
+  const [archivingEntry, setArchivingEntry] = useState<number | null>(null);
+  const [archiveReason, setArchiveReason] = useState("");
 
   const loadData = useCallback(async () => {
     // Check current user role
@@ -77,7 +85,7 @@ export default function FreelancerDetailPage() {
     // Load time entries with WO + job context
     const { data: entries } = await supabase
       .from("tbl_wo_time_entries")
-      .select("entry_id, work_order_id, actual_hours, flag_note, system_start_timestamp, system_end_timestamp, entry_cost")
+      .select("entry_id, work_order_id, actual_hours, flag_note, system_start_timestamp, system_end_timestamp, entry_cost, archived_at, archive_reason")
       .eq("freelancer_id", freelancerId)
       .order("system_start_timestamp", { ascending: false })
       .limit(200);
@@ -121,25 +129,28 @@ export default function FreelancerDetailPage() {
           job_id: wo.job_id || null,
           scope_item_id: wo.scope_item_id || null,
           wo_status: wo.status || null,
+          archived_at: e.archived_at || null,
+          archive_reason: e.archive_reason || null,
         };
       });
       setTimeEntries(enriched);
 
-      // Calculate stats
+      // Calculate stats (exclude archived)
+      const activeEntries = entries.filter(e => !e.archived_at);
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const totalHours = entries.reduce((s, e) => s + (e.actual_hours || 0), 0);
-      const last30 = entries.filter(e => e.system_start_timestamp && new Date(e.system_start_timestamp) > thirtyDaysAgo);
+      const totalHours = activeEntries.reduce((s, e) => s + (e.actual_hours || 0), 0);
+      const last30 = activeEntries.filter(e => e.system_start_timestamp && new Date(e.system_start_timestamp) > thirtyDaysAgo);
       const last30Hours = last30.reduce((s, e) => s + (e.actual_hours || 0), 0);
-      const completedWOs = new Set(entries.filter(e => woMap[e.work_order_id]?.status === "Complete").map(e => e.work_order_id));
-      const flags = entries.filter(e => e.flag_note && e.flag_note.trim().length > 0);
+      const completedWOs = new Set(activeEntries.filter(e => woMap[e.work_order_id]?.status === "Complete").map(e => e.work_order_id));
+      const flags = activeEntries.filter(e => e.flag_note && e.flag_note.trim().length > 0);
 
       // Accuracy: compare actual vs estimated on completed WOs
       let accuracySum = 0, accuracyCount = 0;
       completedWOs.forEach(woId => {
         const wo = woMap[woId];
         if (wo?.estimated_duration_hrs) {
-          const actual = entries.filter(e => e.work_order_id === woId).reduce((s, e) => s + (e.actual_hours || 0), 0);
+          const actual = activeEntries.filter(e => e.work_order_id === woId).reduce((s, e) => s + (e.actual_hours || 0), 0);
           if (actual > 0) { accuracySum += actual / wo.estimated_duration_hrs; accuracyCount++; }
         }
       });
@@ -218,6 +229,51 @@ export default function FreelancerDetailPage() {
       )}
     </div>
   );
+
+  // Admin: Edit hours
+  const handleEditHours = async (entryId: number) => {
+    const hours = parseFloat(editHoursValue);
+    if (isNaN(hours) || hours < 0) { toast.error("Invalid hours"); return; }
+    const entry = timeEntries.find(e => e.entry_id === entryId);
+    const rate = person?.day_rate && person?.standard_day_hours ? person.day_rate / person.standard_day_hours : 0;
+    const newCost = Math.round(hours * rate * 100) / 100;
+
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, {
+      actual_hours: hours,
+      entry_cost: newCost,
+    }, entry?.job_id);
+
+    setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? { ...e, actual_hours: hours, entry_cost: newCost } : e));
+    setEditingEntry(null);
+    toast.success(`Hours updated to ${hours}h`);
+  };
+
+  // Admin: Archive entry
+  const handleArchive = async (entryId: number) => {
+    if (!archiveReason.trim()) { toast.error("Reason required"); return; }
+    const ctx = await getAuditContext(supabase);
+    const entry = timeEntries.find(e => e.entry_id === entryId);
+
+    await supabase.from("tbl_wo_time_entries").update({
+      archived_at: new Date().toISOString(),
+      archived_by: ctx.userId,
+      archive_reason: archiveReason.trim(),
+    }).eq("entry_id", entryId);
+
+    // Log it
+    await supabase.from("tbl_audit_log").insert({
+      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
+      table_name: "tbl_wo_time_entries", record_id: entryId,
+      field_name: "_archive", old_value: JSON.stringify(entry), new_value: JSON.stringify({ reason: archiveReason.trim() }),
+      job_id: entry?.job_id, action_type: "archive",
+    });
+
+    setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? { ...e, archived_at: new Date().toISOString(), archive_reason: archiveReason.trim() } : e));
+    setArchivingEntry(null);
+    setArchiveReason("");
+    toast.success("Entry archived");
+  };
 
   const statusColor = (s: string | null) => {
     if (!s) return "bg-gray-100 text-gray-500";
@@ -312,17 +368,39 @@ export default function FreelancerDetailPage() {
       {/* TAB: Activity Timeline */}
       {activeTab === "timeline" && (
         <div className="space-y-2">
-          {timeEntries.length === 0 ? (
-            <div className="card px-6 py-10 text-center text-gray-400 text-sm">No time entries recorded yet.</div>
-          ) : (
-            timeEntries.map(e => (
-              <div key={e.entry_id} className={`card px-5 py-3.5 flex items-start gap-4 ${e.flag_note ? "border-l-4 border-l-starlight-amber" : ""}`}>
+          {/* Show archived toggle */}
+          {isAdmin && (
+            <div className="flex items-center justify-end">
+              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)}
+                  className="rounded border-gray-300" />
+                Show archived ({timeEntries.filter(e => e.archived_at).length})
+              </label>
+            </div>
+          )}
+          {(() => {
+            const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
+            if (visible.length === 0) return <div className="card px-6 py-10 text-center text-gray-400 text-sm">No time entries recorded yet.</div>;
+            return visible.map(e => {
+              const isArchived = !!e.archived_at;
+              return (
+              <div key={e.entry_id} className={`card px-5 py-3.5 flex items-start gap-4 ${e.flag_note && !isArchived ? "border-l-4 border-l-starlight-amber" : ""} ${isArchived ? "opacity-40 border-l-4 border-l-red-300" : ""}`}>
                 {/* Date */}
                 <div className="w-20 shrink-0 text-center">
                   <p className="text-xs text-gray-400">
                     {e.system_start_timestamp ? new Date(e.system_start_timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
                   </p>
-                  <p className="text-lg font-semibold text-navy">{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</p>
+                  {editingEntry === e.entry_id ? (
+                    <div className="flex items-center gap-1">
+                      <input type="number" step="0.5" value={editHoursValue}
+                        onChange={ev => setEditHoursValue(ev.target.value)}
+                        onKeyDown={ev => { if (ev.key === "Enter") handleEditHours(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                        autoFocus className="w-14 px-1 py-0.5 text-sm text-center border border-starlight-blue rounded" />
+                      <button onClick={() => handleEditHours(e.entry_id)} className="text-starlight-green"><CheckCircle2 className="h-4 w-4" /></button>
+                    </div>
+                  ) : (
+                    <p className={`text-lg font-semibold text-navy ${isArchived ? "line-through" : ""}`}>{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</p>
+                  )}
                 </div>
 
                 {/* Content */}
@@ -351,10 +429,47 @@ export default function FreelancerDetailPage() {
                       <p className="text-xs text-amber-800 leading-relaxed">{e.flag_note}</p>
                     </div>
                   )}
+                  {/* Archive reason (if archived) */}
+                  {isArchived && e.archive_reason && (
+                    <div className="mt-2 flex items-start gap-2 bg-red-50 rounded px-3 py-2">
+                      <Archive className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-600 leading-relaxed">Archived: {e.archive_reason}</p>
+                    </div>
+                  )}
+                  {/* Archive form (when archiving) */}
+                  {archivingEntry === e.entry_id && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded space-y-2">
+                      <p className="text-xs font-medium text-red-700">Archive this time entry — it will be excluded from all costs</p>
+                      <input type="text" value={archiveReason} onChange={ev => setArchiveReason(ev.target.value)}
+                        onKeyDown={ev => { if (ev.key === "Enter") handleArchive(e.entry_id); if (ev.key === "Escape") setArchivingEntry(null); }}
+                        placeholder="Reason (required)..." autoFocus
+                        className="w-full px-3 py-1.5 text-sm border border-red-200 rounded focus:outline-none focus:ring-2 focus:ring-red-300" />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setArchivingEntry(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                        <button onClick={() => handleArchive(e.entry_id)} disabled={!archiveReason.trim()}
+                          className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">Archive</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Admin action buttons */}
+                {isAdmin && !isArchived && archivingEntry !== e.entry_id && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button onClick={() => { setEditingEntry(e.entry_id); setEditHoursValue(String(e.actual_hours ?? "")); }}
+                      title="Edit hours" className="p-1.5 text-gray-300 hover:text-starlight-blue hover:bg-blue-50 rounded transition-colors">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => { setArchivingEntry(e.entry_id); setArchiveReason(""); }}
+                      title="Archive entry" className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
-            ))
-          )}
+              );
+            });
+          })()}
         </div>
       )}
 

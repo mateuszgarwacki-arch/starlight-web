@@ -30,6 +30,8 @@ const AUDITED_TABLES: Record<string, string> = {
   tbl_wo_bom: "bom_id",
   tbl_production_plan: "job_id",
   tbl_quotes: "quote_id",
+  tbl_wo_time_entries: "entry_id",
+  tbl_freelancers: "freelancer_id",
 };
 
 // Fields to skip auditing (noisy, system-managed)
