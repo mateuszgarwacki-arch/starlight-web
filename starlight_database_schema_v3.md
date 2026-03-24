@@ -1,5 +1,5 @@
 # STARLIGHT PRODUCTION SYSTEM — Complete Database Schema
-## Snapshot: 24 March 2026 (Session 8)
+## Snapshot: 24 March 2026 (Session 9)
 
 **Supabase Project:** qbdnoueqkmhznqzpkvos
 **Tables:** 31 (21 migrated from Access + 10 web app additions)
@@ -221,11 +221,32 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 
 ---
 
-## TRIGGERS (NEW — Session 8)
+## TRIGGERS (Session 8)
 
 **trigger_set_updated_at** — Function that sets `updated_at = NOW()` before every UPDATE.
 Applied to: tbl_quote_lines, tbl_scope_items, tbl_work_orders, tbl_wo_bom, tbl_production_plan, tbl_quotes.
-Purpose: Foundation for optimistic concurrency (conflict detection on multi-user edits).
+Purpose: Optimistic concurrency — `auditedUpdate()` compares `updated_at` before writing to detect conflicts (Session 9).
+
+---
+
+## REALTIME PRESENCE (Session 9)
+
+**Not a database feature** — uses Supabase Realtime Presence API (in-memory channel state, no tables).
+Channels: `presence:job:{id}`, `presence:scope:{id}`. Tracks user name, avatar colour, editing field, entry time.
+Frontend: `usePresence` hook in `src/lib/use-presence.ts`. UI: `<PresenceAvatars>` in `src/components/presence-avatars.tsx`.
+No database writes — purely connection-based. Supabase heartbeat removes stale users after ~30s.
+
+---
+
+## OPTIMISTIC CONCURRENCY (Session 9)
+
+**How it works:** `auditedUpdate()` accepts optional `expectedUpdatedAt` (6th param). Before writing, it fetches the current record and compares `updated_at`. If the DB value differs (another user saved in between), returns `{ conflict: true, currentRecord }` without writing.
+
+**Tables with concurrency protection:** tbl_quote_lines, tbl_scope_items, tbl_work_orders, tbl_wo_bom, tbl_production_plan, tbl_quotes (all 6 tables with `updated_at` triggers).
+
+**Tables WITHOUT concurrency protection:** tbl_wo_time_entries (freelancer-only writes), tbl_freelancer_schedule (PM-only), tbl_notifications (personal), all lookup/reference tables.
+
+**Conflict resolution:** `<ConflictDialog>` for single-field inline edits (shows both values). `toast.warning + auto-reload` for status changes and bulk operations.
 
 ---
 
@@ -277,3 +298,5 @@ tbl_production_plan (job_id)
 | `sql/session8-multiuser.sql` | 8 | tbl_audit_log, updated_at triggers, audit RLS |
 | `sql/session8-time-entry-archive.sql` | 8 | Archive columns, rebuilt cost views with archive filter |
 | `sql/seed-grosvenor.sql` | 8 | Grosvenor Hotel Wedding — 89 lines, £377,340 |
+
+**Session 9: No new SQL required.** Presence uses Supabase Realtime (in-memory). Concurrency uses existing `updated_at` triggers. Audit inserts use existing `tbl_audit_log`.

@@ -1,5 +1,5 @@
 # STARLIGHT PRODUCTION SYSTEM — Project Summary
-## Updated: 24 March 2026 (Session 8)
+## Updated: 24 March 2026 (Session 9)
 
 ---
 
@@ -56,7 +56,7 @@ A production management system for Starlight Design, a high-end events fabricati
 
 ---
 
-## WHAT'S BUILT (Sessions 1-8)
+## WHAT'S BUILT (Sessions 1-9)
 
 ### Phase 0-7: Complete
 All core functionality shipped: Dashboard, Jobs & Quote Lines, Scope Breakdown, Work Orders & BOM, Freelancer Mobile, Cost Visibility & Review, Capacity & Materials.
@@ -105,6 +105,24 @@ All core functionality shipped: Dashboard, Jobs & Quote Lines, Scope Breakdown, 
 - Activity timeline: reverse-chronological time entries with job links, flags, admin edit/archive buttons
 - Bookings tab: schedule entries with status badges
 
+### Session 9 Additions (24 Mar 2026)
+
+**Real-time Presence:**
+- `usePresence` hook joins Supabase Realtime Presence channels (`presence:job:{id}`, `presence:scope:{id}`)
+- `<PresenceAvatars>` shows coloured initials of other users viewing the same page
+- `<FieldPresenceIndicator>` shows coloured ring around fields another user is editing (Excel Online pattern)
+- Wired into: Job detail, Scope breakdown, WO pages. Deterministic 8-colour palette from user ID hash
+
+**Optimistic Concurrency:**
+- `auditedUpdate()` now accepts optional `expectedUpdatedAt` — detects when another user modified a record
+- `<ConflictDialog>` modal shows both values side-by-side: "Keep theirs" / "Use mine" / "Cancel"
+- Quote line edits show full dialog; WO status/field changes use toast warning + auto-reload
+- All 6 WO page update handlers converted from raw Supabase to audited with concurrency guards
+
+**Audit on All Creation Paths:**
+- `auditedInsert()` wired into: WO creation, scope creation, BOM rows (catalogue + custom), quote lines, mobile time entries
+- All raw `.insert()` calls on audited tables eliminated — every creation appears in audit log
+
 ---
 
 ## KEY TABLES
@@ -128,19 +146,25 @@ All core functionality shipped: Dashboard, Jobs & Quote Lines, Scope Breakdown, 
 
 ## OUTSTANDING WORK (prioritised)
 
-1. **Optimistic concurrency** — updated_at columns exist, need conflict detection on save
-2. **Real-time presence** — Supabase presence channels: who's viewing what, soft edit signals
-3. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
-4. **Wire audit into remaining insert paths** — new WO, BOM, scope creation still use plain insert
-5. **Audit log retention** — monthly cleanup of closed job entries
-6. **Quote import from real source** — currently manual entry only
+1. **Wire `presenceSetEditing`** into field focus/blur handlers — enables full field-highlight effect (optional polish)
+2. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
+3. **Drop tbl_freelancers.pin column** — code references removed, just needs ALTER TABLE DROP COLUMN
+4. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
+5. **Quote import from real source** — currently manual entry only
+6. **Add `updated_at?: string` to TS interfaces** — Job, QuoteLine, WORow, BomRow (cleanup)
 7. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
 ---
 
 ## MANDATORY PATTERNS FOR NEW FEATURES
 
-**Audit:** Use `auditedUpdate()` from `lib/audit.ts` for all writes on key tables. Never raw `supabase.update()`.
+**Audit updates:** Use `auditedUpdate()` from `lib/audit.ts` for all writes on key tables. Never raw `supabase.update()`. Pass `expectedUpdatedAt` (6th param) for optimistic concurrency on tables with `updated_at` triggers.
+
+**Audit inserts:** Use `auditedInsert()` for creation of WOs, scope items, BOM rows, quote lines, time entries. Never raw `.insert()` on audited tables.
+
+**Concurrency:** When `auditedUpdate` returns `{ conflict: true }`, show `<ConflictDialog>` for single-field inline edits, or `toast.warning + reload` for status changes. Always update local state with `result.data?.updated_at` after successful saves.
+
+**Presence:** Add `usePresence(type, id, pageName)` + `<PresenceAvatars>` to any new page where multiple PMs may view simultaneously. Keep channel granularity to job/scope level — no per-WO channels.
 
 **Time entries:** Every query MUST include `.is("archived_at", null)`.
 

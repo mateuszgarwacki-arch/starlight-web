@@ -102,6 +102,38 @@
 - [x] Security hardening — middleware auth, API auth, RLS overhaul, signed calendar tokens, PIN removal (Session 7)
 - [ ] Quote import from real source (currently manual entry)
 
+### Session 9: Presence + Concurrency + Audit Inserts ✅
+
+#### Real-time Presence ✅ (Session 9)
+- [x] `usePresence` hook — Supabase Realtime Presence API, channels scoped to `presence:{type}:{id}`
+- [x] `<PresenceAvatars>` component — coloured initials circles with hover tooltip (name, editing field, time on page)
+- [x] `<FieldPresenceIndicator>` component — coloured ring around fields being edited by others (Excel Online pattern)
+- [x] Wired into: Job detail page, Scope breakdown page, WO page
+- [x] Deterministic avatar colours from user ID hash (8-colour palette)
+- [x] Self-filtering — you never see your own avatar in the presence row
+
+#### Optimistic Concurrency ✅ (Session 9)
+- [x] `auditedUpdate()` accepts optional `expectedUpdatedAt` — compares against DB before writing
+- [x] Returns `AuditUpdateResult` with `{ conflict: boolean, currentRecord }` — fully backward-compatible
+- [x] `<ConflictDialog>` component — shows both values side-by-side with "Keep theirs" / "Use mine" / "Cancel"
+- [x] Job detail: quote line inline edits show full conflict dialog; job header edits auto-reload on conflict
+- [x] WO page: all 6 update handlers converted from raw Supabase to `auditedUpdate` with concurrency guards
+- [x] WO page: `updateBomField` also gets concurrency guard
+- [x] Conflict on WO page triggers toast + auto-reload (simpler UX than dialog for non-field-level edits)
+
+#### Audit on Remaining Inserts ✅ (Session 9)
+- [x] WO creation (`create-wo-dialog.tsx`) → `auditedInsert`
+- [x] Scope creation (`create-scope-dialog.tsx`) → `auditedInsert`
+- [x] BOM rows: `selectMaterial` + `addCustomBomRow` → `auditedInsert`
+- [x] Quote lines: `handleAddLine` → `auditedInsert`
+- [x] Time entries: mobile START + JOIN → `auditedInsert`
+
+#### Raw Supabase Updates Eliminated (Session 9)
+- [x] WO page `voidWO` → `auditedUpdate` with concurrency guard
+- [x] WO page `updatePlannedLead` → `auditedUpdate` with concurrency guard
+- [x] WO page `updateEstimatedHrs` → `auditedUpdate` with concurrency guard
+- [x] WO page `updateWODescription` → `auditedUpdate` with concurrency guard
+
 ### Future / Tier 3
 - [ ] Job templating — clone scope/WO/BOM from previous builds
 - [ ] Precedent search UI — search completed WOs by verb, complexity, material
@@ -176,6 +208,9 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/lib/use-realtime.ts` | Hook: useRealtimeRefresh — subscribe to table changes with debounce |
 | `src/middleware.ts` | Auth middleware: session validation, role-based routing, login redirects |
 | `src/lib/audit.ts` | Audit engine: auditedUpdate/Insert/Delete, revertAuditEntry, getAuditContext |
+| `src/lib/use-presence.ts` | Hook: usePresence — Supabase Realtime Presence for who's viewing what |
+| `src/components/presence-avatars.tsx` | PresenceAvatars (coloured initials) + FieldPresenceIndicator (edit ring) |
+| `src/components/conflict-dialog.tsx` | Optimistic concurrency conflict resolution dialog |
 | `src/app/api/auth/manage-user/route.ts` | API: create/update/reset/list staff accounts (admin/PM only) |
 | `src/app/(dashboard)/crew/[id]/page.tsx` | Freelancer detail: profile, stats, activity timeline, bookings, admin edit/archive |
 | `sql/session8-multiuser.sql` | Audit log table, updated_at triggers, RLS on audit log |
@@ -215,10 +250,26 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 - **ICS calendar**: downloadable .ics files (not subscription). Uses HMAC-signed tokens (72h expiry) via `/api/calendar/token` endpoint. No PINs in URLs. Filename includes job name + freelancer name + date
 - **Sidebar badge**: real-time subscription on tbl_notifications (replaced 30s polling in Session 7)
 
+### Presence & Concurrency (Session 9 — mandatory for all future development)
+- **Presence channels**: `usePresence(resourceType, resourceId, pageName)` from `src/lib/use-presence.ts`. Channel name: `presence:{type}:{id}`. Currently wired to job detail, scope breakdown, WO pages
+- **Presence scope**: job-level and scope-level only. Do NOT create per-WO channels — channel proliferation kills performance with low user counts
+- **Presence skip for freelancers**: mobile interface (`/m/*`) does not participate in presence. Freelancers aren't competing with PMs for the same fields
+- **PresenceAvatars placement**: always in the top bar between the back link and the page header, wrapped in a flex justify-between div
+- **Field editing signals**: call `presenceSetEditing("field_name")` on focus, `presenceSetEditing(null)` on blur. Enables `<FieldPresenceIndicator>` glow on other users' screens. Infrastructure deployed, wiring per-field is optional polish
+- **Optimistic concurrency scope**: applied to all 6 tables with `updated_at` triggers (tbl_quote_lines, tbl_scope_items, tbl_work_orders, tbl_wo_bom, tbl_production_plan, tbl_quotes). NOT applied to tbl_freelancer_schedule, tbl_notifications, lookup tables
+- **Conflict resolution strategy**: `<ConflictDialog>` for single-field inline edits (shows both values, user chooses). `toast.warning + auto-reload` for status transitions and bulk operations (simpler, less disruptive)
+- **auditedUpdate return type changed**: now returns `AuditUpdateResult { data, error, conflict, currentRecord? }` instead of raw Supabase result. Existing callers that destructure `{ error }` still work because the shape is compatible
+- **TypeScript updated_at gap**: `Job`, `QuoteLine`, `WORow` interfaces don't include `updated_at` but the DB records have it. Use `(record as any)?.updated_at` for reads and `as any` cast for writes. Adding to interfaces is future cleanup
+
 ### Security (Session 7 — mandatory for all future development)
 
-### Audit & Multi-User (Session 8 — mandatory for all future development)
+### Audit & Multi-User (Session 8+9 — mandatory for all future development)
 - **Audit all writes on key tables**: use `auditedUpdate()` from `src/lib/audit.ts` instead of raw `supabase.from().update()`. Covers: tbl_quote_lines, tbl_scope_items, tbl_work_orders, tbl_wo_bom, tbl_production_plan, tbl_quotes, tbl_wo_time_entries, tbl_freelancers
+- **Audit all inserts on key tables**: use `auditedInsert()` for creation of WOs, scope items, BOM rows, quote lines, time entries. Logs with `action_type: "insert"`, `field_name: "_record"`
+- **Optimistic concurrency**: pass `expectedUpdatedAt` (6th param) to `auditedUpdate()` when editing records with `updated_at` columns. Returns `{ conflict: true, currentRecord }` when another user modified the record. Handle with `<ConflictDialog>` for field-level edits or `toast.warning + loadAll()` for simpler cases
+- **Concurrency guard pattern**: on load, capture `updated_at` from the record. On save, pass it as `expectedUpdatedAt`. On conflict, either show dialog (for single-field inline edits) or auto-reload (for status changes, bulk operations)
+- **updated_at tracking in local state**: after successful `auditedUpdate`, always update local state with `result.data?.updated_at` so subsequent edits use the fresh timestamp. Use `as any` cast when the TS interface doesn't include `updated_at`
+- **No raw Supabase updates on audited tables**: every `.update()` on the 8 audited tables must go through `auditedUpdate()`. Session 9 eliminated all remaining raw updates on WO page
 - **Audit log schema**: `tbl_audit_log` — user_id, user_name, user_role, table_name, record_id, field_name, old_value (JSON text), new_value (JSON text), changed_at, job_id, action_type (update/insert/delete/archive/revert), reverted_at, reverted_by
 - **For deletes**: log the full record as old_value with action_type="delete" BEFORE the cascade delete
 - **For archives (soft delete)**: set archived_at + archived_by + archive_reason, don't hard delete. Log with action_type="archive"
@@ -337,6 +388,26 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - 89 quote lines across 11 zones, £377,340 total, all with qty × unit_price
 - Job 13725, client Fait Accompli, quote ref 40656 v16
 
+### Session 9 (24 Mar 2026) — Presence + Optimistic Concurrency + Audit Inserts
+1 commit, 10 files changed, 688 insertions, 153 deletions. Three interconnected features:
+
+**Real-time Presence:**
+- `usePresence` hook joins Supabase Realtime Presence channels scoped to `presence:{type}:{id}`
+- `<PresenceAvatars>` component: coloured initial circles with hover tooltips (name, editing field, time on page)
+- `<FieldPresenceIndicator>`: coloured ring around fields being edited by others (Excel Online pattern, infrastructure deployed)
+- Wired into Job detail, Scope breakdown, WO pages. Deterministic 8-colour palette from user ID hash
+
+**Optimistic Concurrency:**
+- `auditedUpdate()` now accepts optional `expectedUpdatedAt` (6th param). Compares DB `updated_at` before writing
+- Returns `AuditUpdateResult { data, error, conflict, currentRecord }` — fully backward-compatible
+- `<ConflictDialog>`: side-by-side value comparison with "Keep theirs" / "Use mine" / "Cancel"
+- Job detail: quote line edits show full dialog on conflict. Job header edits auto-reload
+- WO page: 6 handlers converted from raw Supabase to `auditedUpdate` with guards: `voidWO`, `updatePlannedLead`, `updateEstimatedHrs`, `updateWODescription`, `updateWOStatus`, `updateBomField`
+
+**Audit on Remaining Inserts:**
+- `auditedInsert()` wired into: WO creation, scope creation, BOM rows (catalogue + custom), quote lines, mobile time entries (START + JOIN)
+- All creation paths now appear in Settings → Audit Log with `action_type: "insert"`
+
 ## Lessons Learned & Execution Rules
 
 ### Deployment
@@ -452,6 +523,17 @@ Every user-facing action that changes state should generate a notification AND a
 - **`ALTER TABLE ADD COLUMN IF NOT EXISTS`** works fine
 - **CTE chains with `RETURNING`** for multi-table inserts — `@@IDENTITY` doesn't exist in PostgreSQL
 
+### Presence & Concurrency (Session 9)
+- **Presence solves 80% of concurrency problems**: people naturally avoid editing the same thing when they can see who else is there. Presence is cheap, conflicts are expensive — deploy presence first
+- **Supabase Presence is connection-based**: when a user closes the tab, the heartbeat timeout (30s default) removes them. Brief ghosts are cosmetic, not harmful
+- **Channel granularity matters**: one channel per job and one per scope is sufficient. Per-WO channels multiply quickly and waste resources at Starlight's user count
+- **Optimistic concurrency uses pre-check, not WHERE clause**: the initial implementation tried `WHERE updated_at = ?` in the UPDATE, but Supabase returns ambiguous results (null data + null error = zero rows vs genuine not-found). Solution: fetch current record first, compare `updated_at` in code, only proceed with update if they match. If mismatch, return conflict immediately without writing
+- **Two conflict resolution UX patterns**: (1) `<ConflictDialog>` for single-field inline edits where the user is actively looking at the field — shows both values, lets them choose. (2) `toast.warning + auto-reload` for status changes and multi-field operations — simpler, less disruptive, acceptable loss of the user's in-flight change
+- **TypeScript interfaces lag behind DB schema**: `Job`, `QuoteLine`, `WORow` don't declare `updated_at` even though the DB has it. Use `(record as any)?.updated_at` for reads and `as any` cast for state updates. Adding `updated_at?: string` to all interfaces is future cleanup
+- **`auditedUpdate` return type change is backward-compatible**: old callers that destructure `{ error }` or ignore the return still work because `AuditUpdateResult` has `error` in the same position. Only callers that want conflict detection need to check `.conflict`
+- **Build before deploy**: always run `npx next build` locally before `git push && vercel --prod`. Catches TS type errors that would fail the Vercel build (Session 9 caught `ringColor` not being valid CSS, `updated_at` not on TS interfaces)
+- **CSS ring colour can't use `style={{ ringColor }}`**: Tailwind's `ring-*` classes are implemented as box-shadow, not a CSS property. Use `style={{ boxShadow: '0 0 0 2px {color}' }}` for dynamic ring colours
+
 ### Session 6 (23 Mar 2026) — Crew Booking, Capacity Redesign, Mobile Schedule
 ~11 commits. Full booking workflow: Capacity page redesigned with weekly calendar + Add Booking page (month-view day picker, WhatsApp wa.me notify). Mobile schedule (/m/schedule) with interactive monthly calendar — tap days for context-appropriate actions (confirm, decline, withdraw, mark unavailable). Crew page stripped to people management only. ICS calendar download API. Notifications table created (tbl_notifications) — booking withdrawals auto-create alerts. Timezone bug fixed (BST toISOString shift). Schema: booking_group UUID, notified_at, unavailable_reason added to tbl_freelancer_schedule.
 
@@ -480,11 +562,14 @@ Every user-facing action that changes state should generate a notification AND a
 - **Goodwood Revival 2026** — manually created job, empty (testing + New Job flow)
 - Settings page: 4 tabs (Rate Card, Defaults, Users, Audit Log)
 - Admin role active — Mateusz is admin, can create PM accounts
-- Audit logging live on all key tables with revert capability
+- Audit logging live on all key tables with revert capability — now includes inserts
 - Time entry archive system live with cost exclusion across entire app
 - Freelancer detail page live at /crew/[id]
+- **Real-time presence** live on job detail, scope breakdown, WO pages
+- **Optimistic concurrency** live on all audited update paths with conflict dialog
+- **All creation paths audited** — WOs, scopes, BOM rows, quote lines, time entries
 
-### SQL Already Run (Session 8)
+### SQL Already Run (Session 8 — no new SQL in Session 9)
 - `sql/add-quote-line-qty.sql`: quantity + unit_price columns on tbl_quote_lines
 - `sql/session8-multiuser.sql`: tbl_audit_log, updated_at triggers on 6 tables, RLS on audit log
 - `sql/session8-time-entry-archive.sql`: archived_at/by/reason on tbl_wo_time_entries, 4 cost views rebuilt with archive filter, today_roster rebuilt
@@ -492,29 +577,29 @@ Every user-facing action that changes state should generate a notification AND a
 - Admin role set via: `UPDATE auth.users SET raw_user_meta_data = jsonb_set(raw_user_meta_data, '{role}', '"admin"') WHERE email = '...'`
 
 ### Outstanding Work (prioritised)
-1. **Optimistic concurrency** — `updated_at` columns exist, need conflict detection on save (show "modified by X, reload?")
-2. **Real-time presence** — Supabase Realtime presence channels: who's viewing what job/scope, soft edit signals
-3. **Wire audit into remaining insert paths** — new WO creation, new BOM rows, new scope items currently use plain insert
-4. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
+1. **Wire `presenceSetEditing`** into individual field focus/blur handlers — enables full field-highlight effect (optional polish, infrastructure deployed)
+2. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
+3. **Drop tbl_freelancers.pin column** — code references removed Session 7, confirm nothing breaks then `ALTER TABLE DROP COLUMN`
+4. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
 5. **Quote import from real source** — currently manual entry only
-6. **Drop tbl_freelancers.pin column** — code references removed, confirm nothing breaks then ALTER TABLE DROP COLUMN
-7. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
-8. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+6. **Add `updated_at?: string` to TS interfaces** — Job, QuoteLine, WORow, BomRow (cleanup, not blocking)
+7. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
-### New Routes (Session 8)
-| Route | Purpose |
-|-------|---------|
-| `/crew/[id]` | Freelancer detail: profile, stats, activity timeline, bookings, admin controls |
-| `/api/auth/manage-user` | Staff account management: create, update role, reset password, list |
+### New Files (Session 9)
+| File | Purpose |
+|------|---------|
+| `src/lib/use-presence.ts` | Supabase Realtime Presence hook — who's viewing what |
+| `src/components/presence-avatars.tsx` | Coloured avatars + field editing indicator |
+| `src/components/conflict-dialog.tsx` | Optimistic concurrency conflict resolution modal |
 
-### Test Workflow for Session 8 Features
-1. **New Job**: /jobs → + New Job → fill form → verify lands on job detail with empty quote lines tab
-2. **Add Quote Line**: on any job → + Add Quote Line → fill description + qty + unit_price → verify auto-calculates value
-3. **Inline edit**: click any quote line description/value/qty → edit → blur → verify saved
-4. **Delete line**: click trash on line without scope → confirm → verify removed
-5. **User management**: Settings → Users → Add User → create PM account → verify they can log in
-6. **Audit log**: make any edit → Settings → Audit Log → verify entry appears with old/new values
-7. **Revert**: click Revert on an audit entry → verify value restored
-8. **Freelancer detail**: Crew → click name → verify profile loads with stats, timeline, bookings
-9. **Archive time entry**: on freelancer detail → click archive icon → enter reason → verify entry greyed out
-10. **Cost exclusion**: after archive → check job cost analysis → verify archived entry cost excluded
+### Test Workflow for Session 9 Features
+1. **Presence**: Open same job in two browser windows with different user accounts → verify avatar appears in header bar
+2. **Presence cleanup**: Close one tab → verify avatar disappears within ~30 seconds
+3. **Optimistic concurrency**: In tab A, click to edit a quote line value. In tab B, edit the same field to a different value and save. Go back to tab A and save → verify conflict dialog shows both values
+4. **Conflict "Use mine"**: In the conflict dialog, click "Use mine" → verify your value is saved
+5. **Conflict "Keep theirs"**: Repeat conflict scenario, click "Keep theirs" → verify other user's value is kept
+6. **WO status conflict**: In two tabs, try to change a WO status simultaneously → verify toast warning + auto-reload
+7. **Audit inserts**: Create a new WO → check Settings → Audit Log → verify entry appears with action_type "insert"
+8. **Audit inserts (BOM)**: Add a BOM row from material catalogue → check audit log → verify "insert" entry
+9. **Audit inserts (scope)**: Create a scope item → check audit log → verify "insert" entry
+10. **Audit inserts (quote line)**: Add a quote line → check audit log → verify "insert" entry
