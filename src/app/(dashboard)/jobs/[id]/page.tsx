@@ -13,6 +13,9 @@ import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
+import { usePresence } from "@/lib/use-presence";
+import { PresenceAvatars } from "@/components/presence-avatars";
+import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -124,6 +127,16 @@ export default function JobDetailPage() {
   // --- INLINE EDIT state ---
   const [editingLineCell, setEditingLineCell] = useState<{ lineId: number; field: string } | null>(null);
   const [editLineCellValue, setEditLineCellValue] = useState("");
+
+  // Presence — show who else is viewing this job
+  const { others: presenceOthers, setEditing: presenceSetEditing } = usePresence("job", jobId, "Quote Lines");
+
+  // Conflict dialog state for optimistic concurrency
+  const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+  const [conflictResolve, setConflictResolve] = useState<{
+    onMine: () => void;
+    onTheirs: () => void;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     const [jobRes, quotesRes, linesRes, scopesRes, contractorRes] = await Promise.all([
@@ -261,9 +274,15 @@ export default function JobDetailPage() {
   const saveJobField = async () => {
     if (!editingField || !job) return;
     const val = editValue.trim() || null;
+    const expectedAt = (job as any).updated_at ?? null;
     const ctx = await getAuditContext(supabase);
-    await auditedUpdate(ctx, "tbl_production_plan", job.job_id, { [editingField]: val }, job.job_id);
-    setJob({ ...job, [editingField]: val } as Job);
+    const result = await auditedUpdate(ctx, "tbl_production_plan", job.job_id, { [editingField]: val }, job.job_id, expectedAt);
+    if (result.conflict) {
+      toast.warning("This job was modified by someone else — reloading");
+      await loadData();
+    } else {
+      setJob({ ...job, [editingField]: val } as Job);
+    }
     setEditingField(null);
     setEditValue("");
   };
@@ -277,12 +296,52 @@ export default function JobDetailPage() {
     const cellKey = `${lineId}-${field}`;
     setSavingCells((prev) => new Set(prev).add(cellKey));
 
-    const ctx = await getAuditContext(supabase);
-    await auditedUpdate(ctx, "tbl_quote_lines", lineId, { [field]: value }, jobId);
+    const line = lines.find((l) => l.quote_line_id === lineId);
+    const expectedAt = (line as any)?.updated_at ?? null;
 
-    setLines((prev) =>
-      prev.map((l) => (l.quote_line_id === lineId ? { ...l, [field]: value } : l))
-    );
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(ctx, "tbl_quote_lines", lineId, { [field]: value }, jobId, expectedAt);
+
+    if (result.conflict && result.currentRecord) {
+      // Show conflict dialog — let user choose
+      const current = result.currentRecord;
+      const fieldLabel = field.replace(/_/g, " ");
+      setConflictInfo({
+        fieldLabel,
+        yourValue: String(value ?? ""),
+        currentValue: String(current[field] ?? ""),
+        changedBy: undefined, // could enrich from audit log
+      });
+      setConflictResolve({
+        onMine: async () => {
+          // Force-save: no concurrency guard this time
+          const ctx2 = await getAuditContext(supabase);
+          await auditedUpdate(ctx2, "tbl_quote_lines", lineId, { [field]: value }, jobId);
+          setLines((prev) =>
+            prev.map((l) => (l.quote_line_id === lineId ? { ...l, [field]: value, updated_at: new Date().toISOString() } as any : l))
+          );
+          setConflictInfo(null);
+          setConflictResolve(null);
+          toast.success("Your value saved");
+        },
+        onTheirs: () => {
+          // Accept DB value — update local state to match
+          setLines((prev) =>
+            prev.map((l) => (l.quote_line_id === lineId ? { ...l, ...current } : l))
+          );
+          setConflictInfo(null);
+          setConflictResolve(null);
+          toast("Kept other user's value");
+        },
+      });
+    } else {
+      // Success — update local state with new updated_at
+      setLines((prev) =>
+        prev.map((l) => (l.quote_line_id === lineId
+          ? { ...l, [field]: value, updated_at: result.data?.updated_at } as any
+          : l))
+      );
+    }
 
     setSavingCells((prev) => {
       const next = new Set(prev);
@@ -332,7 +391,8 @@ export default function JobDetailPage() {
     const manualVal = newLine.line_value ? parseFloat(newLine.line_value) : null;
     const computedValue = (qty && unitP) ? qty * unitP : manualVal;
 
-    const { error } = await supabase.from("tbl_quote_lines").insert({
+    const ctx = await getAuditContext(supabase);
+    const { error } = await auditedInsert(ctx, "tbl_quote_lines", {
       quote_id: quoteId,
       job_id: jobId,
       line_number: nextNum,
@@ -345,7 +405,7 @@ export default function JobDetailPage() {
       line_sub_group: newLine.line_sub_group.trim() || null,
       category: newLine.category || null,
       interpretation_complete: "false",
-    });
+    }, jobId);
 
     if (error) { toast.error("Failed to add line"); setAddingSaving(false); return; }
 
@@ -707,14 +767,17 @@ export default function JobDetailPage() {
   // ================================================================
   return (
     <div className="space-y-5">
-      {/* Back link */}
-      <Link
-        href="/jobs"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        All Jobs
-      </Link>
+      {/* Back link + presence */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/jobs"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          All Jobs
+        </Link>
+        <PresenceAvatars others={presenceOthers} />
+      </div>
 
       {/* Job header — editable */}
       <div className="card px-6 py-5">
@@ -1146,6 +1209,17 @@ export default function JobDetailPage() {
           quoteLine={scopeDialogLine}
           onClose={() => setScopeDialogLine(null)}
           onCreated={handleScopeCreated}
+        />
+      )}
+
+      {/* Conflict dialog for concurrent edits */}
+      {conflictInfo && conflictResolve && (
+        <ConflictDialog
+          open={true}
+          conflict={conflictInfo}
+          onUseMine={conflictResolve.onMine}
+          onUseTheirs={conflictResolve.onTheirs}
+          onCancel={() => { setConflictInfo(null); setConflictResolve(null); }}
         />
       )}
     </div>

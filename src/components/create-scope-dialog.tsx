@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { getAuditContext, auditedInsert } from "@/lib/audit";
 import { X } from "lucide-react";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 
@@ -42,22 +43,19 @@ export function CreateScopeDialog({
     setSaving(true);
     setError(null);
 
-    const { data, error: insertError } = await supabase
-      .from("tbl_scope_items")
-      .insert({
-        job_id: jobId,
-        quote_line_id: quoteLine.quote_line_id,
-        item_name: itemName.trim(),
-        event_zone: quoteLine.event_zone,
-        complexity_construction: complexity || null,
-        finish_relative: finishRelative || null,
-        status: "Provisional",
-        is_general: "false",
-        photo_waiver: "false",
-        created_at: new Date().toISOString(),
-      })
-      .select("scope_item_id")
-      .single();
+    const ctx = await getAuditContext(supabase);
+    const { data, error: insertError } = await auditedInsert(ctx, "tbl_scope_items", {
+      job_id: jobId,
+      quote_line_id: quoteLine.quote_line_id,
+      item_name: itemName.trim(),
+      event_zone: quoteLine.event_zone,
+      complexity_construction: complexity || null,
+      finish_relative: finishRelative || null,
+      status: "Provisional",
+      is_general: "false",
+      photo_waiver: "false",
+      created_at: new Date().toISOString(),
+    }, jobId);
 
     if (insertError) {
       setError(insertError.message);

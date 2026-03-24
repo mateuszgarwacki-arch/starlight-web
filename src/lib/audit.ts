@@ -37,9 +37,21 @@ const AUDITED_TABLES: Record<string, string> = {
 // Fields to skip auditing (noisy, system-managed)
 const SKIP_FIELDS = new Set(["updated_at", "imported_at", "created_at"]);
 
+// Result type for concurrency-aware updates
+export interface AuditUpdateResult {
+  data: any;
+  error: any;
+  conflict: boolean;
+  /** When conflict=true, this holds the current DB record (what someone else saved) */
+  currentRecord?: Record<string, any>;
+}
+
 /**
- * Audited update — records each field change before applying
- * Returns the Supabase update result
+ * Audited update — records each field change before applying.
+ *
+ * Optimistic concurrency: when `expectedUpdatedAt` is provided, the update
+ * includes `WHERE updated_at = expectedUpdatedAt`. If zero rows match
+ * (someone else updated the record), returns { conflict: true, currentRecord }.
  */
 export async function auditedUpdate(
   ctx: AuditContext,
@@ -47,11 +59,13 @@ export async function auditedUpdate(
   recordId: number,
   changes: Record<string, any>,
   jobId?: number | null,
-) {
+  expectedUpdatedAt?: string | null,
+): Promise<AuditUpdateResult> {
   const pkCol = AUDITED_TABLES[tableName];
   if (!pkCol) {
     // Not an audited table — just do a plain update
-    return ctx.supabase.from(tableName).update(changes).eq(pkCol || "id", recordId);
+    const result = await ctx.supabase.from(tableName).update(changes).eq(pkCol || "id", recordId);
+    return { data: result.data, error: result.error, conflict: false };
   }
 
   // 1. Fetch current record to capture old values
@@ -60,6 +74,15 @@ export async function auditedUpdate(
     .select("*")
     .eq(pkCol, recordId)
     .single();
+
+  // 1b. Concurrency check — if expectedUpdatedAt was given and record has
+  //     already been modified, return conflict WITHOUT writing
+  if (expectedUpdatedAt && current) {
+    const dbUpdatedAt = current.updated_at;
+    if (dbUpdatedAt && dbUpdatedAt !== expectedUpdatedAt) {
+      return { data: null, error: null, conflict: true, currentRecord: current };
+    }
+  }
 
   // 2. Build audit entries for each changed field
   const auditRows: any[] = [];
@@ -89,8 +112,21 @@ export async function auditedUpdate(
     ctx.supabase.from("tbl_audit_log").insert(auditRows).then(() => {});
   }
 
-  // 4. Perform the actual update
-  return ctx.supabase.from(tableName).update(changes).eq(pkCol, recordId);
+  // 4. Perform the actual update — with concurrency guard if provided
+  let query = ctx.supabase.from(tableName).update(changes).eq(pkCol, recordId);
+  if (expectedUpdatedAt) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const result = await query.select().maybeSingle();
+
+  // 4b. If concurrency guard was active and zero rows updated — conflict
+  if (expectedUpdatedAt && !result.data && !result.error) {
+    // Re-fetch to get whoever else's changes
+    const { data: fresh } = await ctx.supabase.from(tableName).select("*").eq(pkCol, recordId).single();
+    return { data: null, error: null, conflict: true, currentRecord: fresh ?? undefined };
+  }
+
+  return { data: result.data, error: result.error, conflict: false };
 }
 
 /**

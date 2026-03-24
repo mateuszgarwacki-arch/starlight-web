@@ -14,6 +14,8 @@ import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-r
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { usePresence } from "@/lib/use-presence";
+import { PresenceAvatars } from "@/components/presence-avatars";
 
 interface ScopeDetail {
   scope_item_id: number;
@@ -54,6 +56,9 @@ export default function ScopeDetailPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const router = useRouter();
+
+  // Presence — show who else is viewing this scope item
+  const { others: presenceOthers, setEditing: presenceSetEditing } = usePresence("scope", scopeId, "Scope Breakdown");
 
   const loadData = useCallback(async () => {
     const [scopeRes, catRes, woRes] = await Promise.all([
@@ -156,14 +161,17 @@ export default function ScopeDetailPage() {
 
   return (
     <div className="space-y-5">
-      {/* Back */}
-      <Link
-        href={`/jobs/${jobId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Job
-      </Link>
+      {/* Back + presence */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/jobs/${jobId}`}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Job
+        </Link>
+        <PresenceAvatars others={presenceOthers} />
+      </div>
 
       {/* Scope header card */}
       <div className="card px-6 py-5">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { getAuditContext, auditedInsert } from "@/lib/audit";
 import { X } from "lucide-react";
 
 interface Activity {
@@ -93,21 +94,18 @@ export function CreateWODialog({
       ? existingWOs[0].wo_sequence + 1 : 1;
 
     // 1. Create Work Order (activity_verb = first activity for backwards compat)
-    const { data: wo, error: woError } = await supabase
-      .from("tbl_work_orders")
-      .insert({
-        job_id: jobId,
-        scope_item_id: scopeItemId,
-        activity_verb: chosenActivities[0].lookup_id,
-        description: description.trim() || null,
-        estimated_duration_hrs: estimatedHrs ? parseFloat(estimatedHrs) : null,
-        complexity_construction: complexity || null,
-        finish_relative: finish || null,
-        wo_sequence: nextSeq,
-        status: "Not-Started",
-      })
-      .select("work_order_id")
-      .single();
+    const ctx = await getAuditContext(supabase);
+    const { data: wo, error: woError } = await auditedInsert(ctx, "tbl_work_orders", {
+      job_id: jobId,
+      scope_item_id: scopeItemId,
+      activity_verb: chosenActivities[0].lookup_id,
+      description: description.trim() || null,
+      estimated_duration_hrs: estimatedHrs ? parseFloat(estimatedHrs) : null,
+      complexity_construction: complexity || null,
+      finish_relative: finish || null,
+      wo_sequence: nextSeq,
+      status: "Not-Started",
+    }, jobId);
 
     if (woError || !wo) {
       setError(woError?.message || "Failed to create work order");

@@ -27,7 +27,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { usePresence } from "@/lib/use-presence";
+import { PresenceAvatars } from "@/components/presence-avatars";
+import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 
 // ============================================================
 // Types for this page
@@ -95,6 +98,16 @@ export default function ScopeWorkOrdersPage() {
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
   const [voidDialog, setVoidDialog] = useState<{ woId: number; status: string } | null>(null);
   const [voidReason, setVoidReason] = useState("");
+
+  // Presence — show who else is viewing this scope's work orders
+  const { others: presenceOthers, setEditing: presenceSetEditing } = usePresence("scope", scopeId, "Work Orders");
+
+  // Conflict dialog state for optimistic concurrency
+  const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+  const [conflictResolve, setConflictResolve] = useState<{
+    onMine: () => void;
+    onTheirs: () => void;
+  } | null>(null);
 
   // ============================================================
   // Data loading
@@ -286,11 +299,18 @@ export default function ScopeWorkOrdersPage() {
   // ============================================================
 
   const updateWOStatus = async (woId: number, newStatus: string) => {
+    const wo = workOrders.find((w) => w.work_order_id === woId);
+    const expectedAt = (wo as any)?.updated_at ?? null;
     const ctx = await getAuditContext(supabase);
-    await auditedUpdate(ctx, "tbl_work_orders", woId, { status: newStatus }, jobId);
-    setWorkOrders((prev) =>
-      prev.map((wo) => (wo.work_order_id === woId ? { ...wo, status: newStatus } : wo))
-    );
+    const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { status: newStatus }, jobId, expectedAt);
+    if (result.conflict) {
+      toast.warning("This work order was modified — reloading");
+      await loadAll();
+    } else {
+      setWorkOrders((prev) =>
+        prev.map((w) => (w.work_order_id === woId ? { ...w, status: newStatus, updated_at: result.data?.updated_at } : w))
+      );
+    }
   };
 
   const deleteWO = async (woId: number) => {
@@ -343,61 +363,82 @@ export default function ScopeWorkOrdersPage() {
   };
 
   const voidWO = async (woId: number, reason: string) => {
-    await supabase
-      .from("tbl_work_orders")
-      .update({ status: "Voided", void_reason: reason })
-      .eq("work_order_id", woId);
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.work_order_id === woId ? { ...wo, status: "Voided", void_reason: reason } : wo
-      )
-    );
+    const wo = workOrders.find((w) => w.work_order_id === woId);
+    const expectedAt = (wo as any)?.updated_at ?? null;
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { status: "Voided", void_reason: reason }, jobId, expectedAt);
+    if (result.conflict) {
+      toast.warning("This work order was modified — reloading");
+      await loadAll();
+    } else {
+      setWorkOrders((prev) =>
+        prev.map((w) =>
+          w.work_order_id === woId ? { ...w, status: "Voided", void_reason: reason, updated_at: result.data?.updated_at } : w
+        )
+      );
+    }
     setVoidDialog(null);
     setVoidReason("");
   };
 
   const updatePlannedLead = async (woId: number, freelancerId: number | null) => {
-    await supabase
-      .from("tbl_work_orders")
-      .update({ planned_lead_id: freelancerId })
-      .eq("work_order_id", woId);
+    const wo = workOrders.find((w) => w.work_order_id === woId);
+    const expectedAt = (wo as any)?.updated_at ?? null;
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { planned_lead_id: freelancerId }, jobId, expectedAt);
 
-    const leadName = freelancerId
-      ? freelancers.find((f) => f.freelancer_id === freelancerId)?.freelancer_name || null
-      : null;
-
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.work_order_id === woId
-          ? { ...wo, planned_lead_id: freelancerId, lead_name: leadName }
-          : wo
-      )
-    );
+    if (result.conflict) {
+      toast.warning("This work order was modified — reloading");
+      await loadAll();
+    } else {
+      const leadName = freelancerId
+        ? freelancers.find((f) => f.freelancer_id === freelancerId)?.freelancer_name || null
+        : null;
+      setWorkOrders((prev) =>
+        prev.map((w) =>
+          w.work_order_id === woId
+            ? { ...w, planned_lead_id: freelancerId, lead_name: leadName, updated_at: result.data?.updated_at }
+            : w
+        )
+      );
+    }
   };
 
   const updateEstimatedHrs = async (woId: number, hrs: string) => {
     const val = hrs ? parseFloat(hrs) : null;
-    await supabase
-      .from("tbl_work_orders")
-      .update({ estimated_duration_hrs: val })
-      .eq("work_order_id", woId);
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.work_order_id === woId ? { ...wo, estimated_duration_hrs: val } : wo
-      )
-    );
+    const wo = workOrders.find((w) => w.work_order_id === woId);
+    const expectedAt = (wo as any)?.updated_at ?? null;
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { estimated_duration_hrs: val }, jobId, expectedAt);
+
+    if (result.conflict) {
+      toast.warning("Estimated hours conflict — reloading");
+      await loadAll();
+    } else {
+      setWorkOrders((prev) =>
+        prev.map((w) =>
+          w.work_order_id === woId ? { ...w, estimated_duration_hrs: val, updated_at: result.data?.updated_at } : w
+        )
+      );
+    }
   };
 
   const updateWODescription = async (woId: number, desc: string) => {
-    await supabase
-      .from("tbl_work_orders")
-      .update({ description: desc || null })
-      .eq("work_order_id", woId);
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.work_order_id === woId ? { ...wo, description: desc || null } : wo
-      )
-    );
+    const wo = workOrders.find((w) => w.work_order_id === woId);
+    const expectedAt = (wo as any)?.updated_at ?? null;
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { description: desc || null }, jobId, expectedAt);
+
+    if (result.conflict) {
+      toast.warning("Description was modified by someone else — reloading");
+      await loadAll();
+    } else {
+      setWorkOrders((prev) =>
+        prev.map((w) =>
+          w.work_order_id === woId ? { ...w, description: desc || null, updated_at: result.data?.updated_at } : w
+        )
+      );
+    }
   };
 
   // ============================================================
@@ -414,21 +455,18 @@ export default function ScopeWorkOrdersPage() {
   const selectMaterial = async (mat: (typeof materials)[0]) => {
     if (!addingBomTo) return;
 
-    const { data } = await supabase
-      .from("tbl_wo_bom")
-      .insert({
-        work_order_id: addingBomTo,
-        job_id: jobId,
-        material_id: mat.material_id,
-        material_category: mat.material_category,
-        item_description: mat.material_name,
-        unit: mat.unit,
-        unit_cost: mat.current_unit_cost,
-        quantity: 1,
-        needs_ordering: "false",
-      })
-      .select("*")
-      .single();
+    const ctx = await getAuditContext(supabase);
+    const { data } = await auditedInsert(ctx, "tbl_wo_bom", {
+      work_order_id: addingBomTo,
+      job_id: jobId,
+      material_id: mat.material_id,
+      material_category: mat.material_category,
+      item_description: mat.material_name,
+      unit: mat.unit,
+      unit_cost: mat.current_unit_cost,
+      quantity: 1,
+      needs_ordering: "false",
+    }, jobId);
 
     if (data) {
       setBomRows((prev) => [...prev, data as BomRow]);
@@ -440,17 +478,15 @@ export default function ScopeWorkOrdersPage() {
 
   const addCustomBomRow = async () => {
     if (!addingBomTo) return;
-    const { data } = await supabase
-      .from("tbl_wo_bom")
-      .insert({
-        work_order_id: addingBomTo,
-        job_id: jobId,
-        item_description: matSearch.trim() || "New material",
-        quantity: 1,
-        needs_ordering: "true",
-      })
-      .select("*")
-      .single();
+
+    const ctx = await getAuditContext(supabase);
+    const { data } = await auditedInsert(ctx, "tbl_wo_bom", {
+      work_order_id: addingBomTo,
+      job_id: jobId,
+      item_description: matSearch.trim() || "New material",
+      quantity: 1,
+      needs_ordering: "true",
+    }, jobId);
 
     if (data) {
       setBomRows((prev) => [...prev, data as BomRow]);
@@ -461,11 +497,18 @@ export default function ScopeWorkOrdersPage() {
   };
 
   const updateBomField = async (bomId: number, field: string, value: string | number | null) => {
+    const row = bomRows.find((r) => r.bom_id === bomId);
+    const expectedAt = (row as any)?.updated_at ?? null;
     const ctx = await getAuditContext(supabase);
-    await auditedUpdate(ctx, "tbl_wo_bom", bomId, { [field]: value }, jobId);
-    setBomRows((prev) =>
-      prev.map((r) => (r.bom_id === bomId ? { ...r, [field]: value } : r))
-    );
+    const result = await auditedUpdate(ctx, "tbl_wo_bom", bomId, { [field]: value }, jobId, expectedAt);
+    if (result.conflict) {
+      toast.warning("BOM row was modified — reloading");
+      if (expandedWO) loadBOM(expandedWO);
+    } else {
+      setBomRows((prev) =>
+        prev.map((r) => (r.bom_id === bomId ? { ...r, [field]: value, updated_at: result.data?.updated_at } : r))
+      );
+    }
   };
 
   const deleteBomRow = async (bomId: number) => {
@@ -521,14 +564,17 @@ export default function ScopeWorkOrdersPage() {
 
   return (
     <div className="space-y-5">
-      {/* Back */}
-      <Link
-        href={`/jobs/${jobId}/scope/${scopeId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Scope Item
-      </Link>
+      {/* Back + presence */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/jobs/${jobId}/scope/${scopeId}`}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Scope Item
+        </Link>
+        <PresenceAvatars others={presenceOthers} />
+      </div>
 
       {/* Context bar */}
       <div className="card px-6 py-4">
@@ -1132,6 +1178,17 @@ export default function ScopeWorkOrdersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Conflict dialog for concurrent edits */}
+      {conflictInfo && conflictResolve && (
+        <ConflictDialog
+          open={true}
+          conflict={conflictInfo}
+          onUseMine={conflictResolve.onMine}
+          onUseTheirs={conflictResolve.onTheirs}
+          onCancel={() => { setConflictInfo(null); setConflictResolve(null); }}
+        />
       )}
     </div>
   );

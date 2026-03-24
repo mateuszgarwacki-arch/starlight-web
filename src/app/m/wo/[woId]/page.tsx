@@ -9,7 +9,7 @@ import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import Link from "next/link";
-import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 
 interface WODetail {
   work_order_id: number;
@@ -145,16 +145,16 @@ export default function MobileWODetail() {
     const now = new Date().toISOString();
 
     // Create time entry
-    await supabase.from("tbl_wo_time_entries").insert({
+    const ctx = await getAuditContext(supabase);
+    await auditedInsert(ctx, "tbl_wo_time_entries", {
       work_order_id: woId,
       freelancer_id: myId,
       system_start_timestamp: now,
       actual_start_timestamp: now,
-    });
+    }, wo?.job_id);
 
     // Move WO to In-Progress if Ready
     if (wo?.status === "Ready") {
-      const ctx = await getAuditContext(supabase);
       await auditedUpdate(ctx, "tbl_work_orders", woId, { status: "In-Progress" }, wo?.job_id);
     }
 
@@ -175,12 +175,13 @@ export default function MobileWODetail() {
     setActing(true);
     const now = new Date().toISOString();
 
-    await supabase.from("tbl_wo_time_entries").insert({
+    const ctx = await getAuditContext(supabase);
+    await auditedInsert(ctx, "tbl_wo_time_entries", {
       work_order_id: woId,
       freelancer_id: myId,
       system_start_timestamp: now,
       actual_start_timestamp: now,
-    });
+    }, wo?.job_id);
 
     await loadWO();
     setActing(false);
