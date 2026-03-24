@@ -65,7 +65,7 @@ export default function DashboardPage() {
         supabase.from("qry_dash_upcoming_jobs").select("*"),
         supabase.from("qry_manpower_demand").select("*"),
         supabase.from("qry_procurement_needed").select("*").limit(15),
-        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, flag_note, actual_hours, entry_cost, system_start_timestamp").not("flag_note", "is", null).order("system_start_timestamp", { ascending: false }).limit(10),
+        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, flag_note, actual_hours, entry_cost, system_start_timestamp").not("flag_note", "is", null).is("archived_at", null).order("system_start_timestamp", { ascending: false }).limit(10),
         supabase.from("tbl_invoices").select("invoice_id, supplier, invoice_number, invoice_date, total_value, status").eq("status", "Processed").order("uploaded_at", { ascending: false }).limit(5),
         supabase.from("tbl_production_plan").select("job_id, job_status"),
       ]);
@@ -126,7 +126,8 @@ export default function DashboardPage() {
       // Get currently active workers (open time entries)
       const { data: openEntries } = await supabase.from("tbl_wo_time_entries")
         .select("entry_id, freelancer_id, work_order_id, system_start_timestamp")
-        .is("system_end_timestamp", null);
+        .is("system_end_timestamp", null)
+        .is("archived_at", null);
       if (openEntries && openEntries.length > 0) {
         const fIds = [...new Set(openEntries.map((e: any) => e.freelancer_id))];
         const { data: names } = await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds);

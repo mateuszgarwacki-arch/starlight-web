@@ -66,7 +66,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
     let actLabour = 0, actMatsPlanned = 0, actMatsReconciled = 0;
     if (woIds.length > 0) {
       const [timeRes, bomRes] = await Promise.all([
-        supabase.from("tbl_wo_time_entries").select("entry_cost").in("work_order_id", woIds),
+        supabase.from("tbl_wo_time_entries").select("entry_cost").in("work_order_id", woIds).is("archived_at", null),
         supabase.from("tbl_wo_bom").select("quantity, unit_cost, actual_unit_cost").in("work_order_id", woIds),
       ]);
       actLabour = (timeRes.data || []).reduce((s: number, r: any) => s + (r.entry_cost || 0), 0);

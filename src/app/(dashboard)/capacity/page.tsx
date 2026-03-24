@@ -125,7 +125,7 @@ export default function CapacityPage() {
     const woIds = wos.map((w: any) => w.work_order_id);
     let timeMap: Record<number, number> = {};
     if (woIds.length > 0) {
-      const { data: timeData } = await supabase.from("tbl_wo_time_entries").select("work_order_id, actual_hours").in("work_order_id", woIds);
+      const { data: timeData } = await supabase.from("tbl_wo_time_entries").select("work_order_id, actual_hours").in("work_order_id", woIds).is("archived_at", null);
       (timeData || []).forEach((t: any) => {
         timeMap[t.work_order_id] = (timeMap[t.work_order_id] || 0) + (t.actual_hours || 0);
       });
@@ -229,7 +229,7 @@ export default function CapacityPage() {
     (scopes || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name; });
 
     const woIds = wos.map((w: any) => w.work_order_id);
-    const { data: times } = await supabase.from("tbl_wo_time_entries").select("work_order_id, actual_hours").in("work_order_id", woIds);
+    const { data: times } = await supabase.from("tbl_wo_time_entries").select("work_order_id, actual_hours").in("work_order_id", woIds).is("archived_at", null);
     const timeMap: Record<number, number> = {};
     (times || []).forEach((t: any) => { timeMap[t.work_order_id] = (timeMap[t.work_order_id] || 0) + (t.actual_hours || 0); });
 

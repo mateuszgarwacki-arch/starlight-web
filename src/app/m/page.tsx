@@ -59,7 +59,7 @@ export default function MobileTaskList() {
       supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       supabase.from("tbl_scope_items").select("scope_item_id, item_name, quote_line_id").in("scope_item_id", scopeIds),
       supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds),
-      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_end_timestamp").in("work_order_id", woIds),
+      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_end_timestamp").in("work_order_id", woIds).is("archived_at", null),
     ]);
 
     // Load lookups for activity names

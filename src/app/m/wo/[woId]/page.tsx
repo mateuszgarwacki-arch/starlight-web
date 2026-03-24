@@ -80,7 +80,7 @@ export default function MobileWODetail() {
       supabase.from("tbl_scope_items").select("item_name").eq("scope_item_id", woData.scope_item_id).single(),
       supabase.from("tbl_production_plan").select("job_name, job_number").eq("job_id", woData.job_id).single(),
       supabase.from("tbl_wo_activities").select("activity_id, sequence").eq("work_order_id", woId).order("sequence"),
-      supabase.from("tbl_wo_time_entries").select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours").eq("work_order_id", woId).order("system_start_timestamp"),
+      supabase.from("tbl_wo_time_entries").select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours").eq("work_order_id", woId).is("archived_at", null).order("system_start_timestamp"),
     ]);
 
     // Activity label

@@ -102,7 +102,7 @@ export default function ReviewPage() {
     setLoading(true);
     const [costRes, timeRes, accRes, matRes] = await Promise.all([
       supabase.from("qry_job_cost_summary").select("*").order("event_date"),
-      supabase.from("tbl_wo_time_entries").select("*").order("system_start_timestamp", { ascending: false }).limit(50),
+      supabase.from("tbl_wo_time_entries").select("*").is("archived_at", null).order("system_start_timestamp", { ascending: false }).limit(50),
       supabase.from("qry_estimate_vs_actual").select("*"),
       supabase.from("qry_material_summary_by_job").select("*"),
     ]);

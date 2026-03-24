@@ -66,7 +66,7 @@ export default function WorkshopPage() {
       supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
       supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", jobIds),
-      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, flag_note").in("work_order_id", woIds),
+      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, flag_note").in("work_order_id", woIds).is("archived_at", null),
       supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name"),
     ]);
 
@@ -180,6 +180,7 @@ export default function WorkshopPage() {
       .from("tbl_wo_time_entries")
       .select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, applied_hourly_rate, entry_cost, flag_note")
       .eq("work_order_id", woId)
+      .is("archived_at", null)
       .order("system_start_timestamp");
     // Enrich with names
     const fIds = [...new Set((data || []).map((e: any) => e.freelancer_id))];
