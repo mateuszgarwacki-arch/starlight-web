@@ -10,6 +10,7 @@ import { PromptPanel } from "@/components/prompt-panel";
 import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
+import { ScopeOptions } from "@/components/scope-options";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -299,6 +300,9 @@ export default function ScopeDetailPage() {
         </div>
 
       </div>
+
+      {/* Build options */}
+      <ScopeOptions scopeItemId={scope.scope_item_id} jobId={jobId} quotedValue={scope.line_value || undefined} />
 
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} />

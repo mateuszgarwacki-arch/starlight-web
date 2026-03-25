@@ -9,6 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
+import { CostWaterfall } from "@/components/cost-waterfall";
 import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -1007,6 +1008,9 @@ export default function JobDetailPage() {
 
       {/* Job Cost Analysis */}
       <CostBreakdown jobId={jobId} quotedValue={totalValue || undefined} />
+
+      {/* Cost Waterfall — per scope item cost progression */}
+      <CostWaterfall jobId={jobId} />
 
       {/* Main tabs: Quote Lines / Scope Items */}
       <div className="flex gap-1 border-b border-gray-200">
