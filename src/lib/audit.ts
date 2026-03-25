@@ -18,7 +18,7 @@ export async function getAuditContext(supabase: SupabaseClient): Promise<AuditCo
     supabase,
     userId: user?.id,
     userName: user?.user_metadata?.name || user?.email || "Unknown",
-    userRole: user?.user_metadata?.role || "unknown",
+    userRole: user?.app_metadata?.role || user?.user_metadata?.role || "unknown",
   };
 }
 

@@ -75,7 +75,7 @@ export default function FreelancerDetailPage() {
   const loadData = useCallback(async () => {
     // Check current user role
     const { data: { user } } = await supabase.auth.getUser();
-    const role = user?.user_metadata?.role || "freelancer";
+    const role = user?.app_metadata?.role || user?.user_metadata?.role || "freelancer";
     setIsAdmin(role === "admin");
 
     // Load freelancer

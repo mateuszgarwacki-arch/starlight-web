@@ -37,7 +37,7 @@ export default function SettingsPage() {
     ]);
     if (rateRes.data) setRates(rateRes.data);
     if (settRes.data) setSettings(settRes.data);
-    const role = userRes.data?.user?.user_metadata?.role || "freelancer";
+    const role = userRes.data?.user?.app_metadata?.role || userRes.data?.user?.user_metadata?.role || "freelancer";
     setCurrentUserRole(role);
 
     // Load staff users (admin/PM only)

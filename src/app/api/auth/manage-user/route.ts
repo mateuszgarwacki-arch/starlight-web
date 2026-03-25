@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await userSupabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const callerRole = user.user_metadata?.role || "freelancer";
+  const callerRole = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
   const isAdmin = callerRole === "admin";
   const isPM = ["production_manager", "Production-Manager"].includes(callerRole);
   if (!isAdmin && !isPM) {
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       password,
       email_confirm: true,
       user_metadata: { freelancer_id, role: targetRole, name: name || "" },
+      app_metadata: { role: targetRole },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ status: "created", auth_id: data.user.id });
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
 
     const { error } = await admin.auth.admin.updateUserById(auth_user_id, {
       user_metadata: { role: new_role },
+      app_metadata: { role: new_role },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -92,14 +94,14 @@ export async function POST(request: NextRequest) {
     // Return only non-freelancer accounts (staff)
     const staff = (data.users || [])
       .filter((u: any) => {
-        const r = u.user_metadata?.role || "freelancer";
+        const r = u.app_metadata?.role || u.user_metadata?.role || "freelancer";
         return ["admin", "production_manager", "Production-Manager", "foreman"].includes(r);
       })
       .map((u: any) => ({
         auth_id: u.id,
         email: u.email,
         name: u.user_metadata?.name || "",
-        role: u.user_metadata?.role || "unknown",
+        role: u.app_metadata?.role || u.user_metadata?.role || "unknown",
         freelancer_id: u.user_metadata?.freelancer_id || null,
         created_at: u.created_at,
         last_sign_in: u.last_sign_in_at,

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   if (!freelancerId) return NextResponse.json({ error: "Missing freelancer_id" }, { status: 400 });
 
   // Freelancers can only generate tokens for themselves
-  const role = user.user_metadata?.role || "freelancer";
+  const role = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
   if (role === "freelancer" && Number(freelancerId) !== Number(user.user_metadata?.freelancer_id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

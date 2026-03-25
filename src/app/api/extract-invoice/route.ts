@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = user.user_metadata?.role || "freelancer";
+  const role = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
   if (role === "freelancer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

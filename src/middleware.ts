@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Role-based route protection
-  const role = user.user_metadata?.role || "freelancer";
+  const role = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
 
   // Freelancers can only access /m/* (mobile) routes
   if (role === "freelancer" && !pathname.startsWith("/m") && !pathname.startsWith("/api")) {

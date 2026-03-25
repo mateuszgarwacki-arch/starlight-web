@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await userSupabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = user.user_metadata?.role || "freelancer";
-  if (role !== "production_manager" && role !== "Production-Manager") {
-    return NextResponse.json({ error: "Only production managers can manage crew auth" }, { status: 403 });
+  const role = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
+  if (role !== "admin" && role !== "production_manager" && role !== "Production-Manager") {
+    return NextResponse.json({ error: "Only PMs and admins can manage crew auth" }, { status: 403 });
   }
 
   // Now proceed with admin operations
@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     const { error } = await admin.auth.admin.updateUserById(existing.id, {
       password: pin,
       user_metadata: { freelancer_id, role: userRole, name: name || "" },
+      app_metadata: { role: userRole },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ status: "updated", auth_id: existing.id });
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       password: pin,
       email_confirm: true,
       user_metadata: { freelancer_id, role: userRole, name: name || "" },
+      app_metadata: { role: userRole },
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ status: "created", auth_id: data.user.id });
