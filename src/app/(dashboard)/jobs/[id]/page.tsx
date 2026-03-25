@@ -127,6 +127,7 @@ export default function JobDetailPage() {
   // --- INLINE EDIT state ---
   const [editingLineCell, setEditingLineCell] = useState<{ lineId: number; field: string } | null>(null);
   const [expandedPmEst, setExpandedPmEst] = useState<number | null>(null);
+  const [defaultDayRate, setDefaultDayRate] = useState(250);
   const [editLineCellValue, setEditLineCellValue] = useState("");
 
   // Presence — show who else is viewing this job
@@ -140,13 +141,20 @@ export default function JobDetailPage() {
   } | null>(null);
 
   const loadData = useCallback(async () => {
-    const [jobRes, quotesRes, linesRes, scopesRes, contractorRes] = await Promise.all([
+    const [jobRes, quotesRes, linesRes, scopesRes, contractorRes, rateCardRes, settingsRes] = await Promise.all([
       supabase.from("tbl_production_plan").select("*").eq("job_id", jobId).single(),
       supabase.from("tbl_quotes").select("*").eq("job_id", jobId),
       supabase.from("tbl_quote_lines").select("*").eq("job_id", jobId).order("import_sequence"),
       supabase.from("tbl_scope_items").select("*").eq("job_id", jobId).order("created_at"),
       supabase.from("qry_quote_lines_with_contractors").select("quote_line_id, contractor_id, contractor_name, contractor_quote_value, contractor_description").eq("job_id", jobId),
+      supabase.from("tbl_rate_card").select("rate_per_hour").eq("complexity", 1).single(),
+      supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "standard_day_hours").single(),
     ]);
+
+    // Calculate default day rate from rate card
+    const stdHours = parseFloat(settingsRes.data?.setting_value) || 10;
+    const straightforwardRate = rateCardRes.data?.rate_per_hour || 25;
+    setDefaultDayRate(straightforwardRate * stdHours);
 
     if (jobRes.data) setJob(jobRes.data);
     if (quotesRes.data) setQuotes(quotesRes.data);
@@ -485,8 +493,7 @@ export default function JobDetailPage() {
 
   // PM Estimate Level 2/3 save
   const savePmEstBreakdown = async (lineId: number, labourDays: number | null, materialCost: number | null, rateOverride: number | null, notes: string | null) => {
-    const defaultRate = 250; // fallback day rate
-    const rate = rateOverride || defaultRate;
+    const rate = rateOverride || defaultDayRate;
     const labourCost = (labourDays || 0) * rate;
     const totalCost = labourCost + (materialCost || 0);
     const changes: Record<string, any> = {
@@ -562,13 +569,12 @@ export default function JobDetailPage() {
   // ================================================================
   // PM ESTIMATE SUB-ROW (Level 2/3)
   // ================================================================
-  function PmEstSubRow({ line, onSave }: { line: QuoteLine; onSave: (lineId: number, labourDays: number | null, materialCost: number | null, rateOverride: number | null, notes: string | null) => Promise<void> }) {
+  function PmEstSubRow({ line, onSave, defaultRate }: { line: QuoteLine; onSave: (lineId: number, labourDays: number | null, materialCost: number | null, rateOverride: number | null, notes: string | null) => Promise<void>; defaultRate: number }) {
     const [labourDays, setLabourDays] = useState(line.pm_est_labour_days ?? "");
     const [materialCost, setMaterialCost] = useState(line.pm_est_material_cost ?? "");
     const [rateOverride, setRateOverride] = useState(line.pm_est_rate_override ?? "");
     const [notes, setNotes] = useState(line.pm_est_notes ?? "");
     const [saving, setSaving] = useState(false);
-    const defaultRate = 250;
     const rate = Number(rateOverride) || defaultRate;
     const calcLabour = (Number(labourDays) || 0) * rate;
     const calcTotal = calcLabour + (Number(materialCost) || 0);
@@ -851,7 +857,7 @@ export default function JobDetailPage() {
         </td>
       </tr>
       {expandedPmEst === line.quote_line_id && (
-        <PmEstSubRow line={line} onSave={savePmEstBreakdown} />
+        <PmEstSubRow line={line} onSave={savePmEstBreakdown} defaultRate={defaultDayRate} />
       )}
       </Fragment>
     );

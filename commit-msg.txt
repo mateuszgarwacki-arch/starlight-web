@@ -1,1 +1,1 @@
-PM Est UX polish: dashed placeholder for empty, value aligned with row, chevron as square button
+PM Est default day rate from rate card: straightforward rate x standard day hours
