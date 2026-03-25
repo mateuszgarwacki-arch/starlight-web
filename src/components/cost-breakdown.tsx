@@ -11,6 +11,9 @@ interface QuoteLine {
   line_value: number | null;
   event_zone: string | null;
   category: string | null;
+  pmEstCost: number;
+  pmEstLabour: number;
+  pmEstMaterial: number;
   estLabour: number;
   estMaterial: number;
   estTotal: number;
@@ -37,6 +40,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
   const [quoteLines, setQuoteLines] = useState<QuoteLine[]>([]);
   const [d, setD] = useState({
     quotedTotal: 0, quotedWorkshop: 0,
+    pmEstTotal: 0, pmEstLabour: 0, pmEstMaterials: 0,
     estLabour: 0, estMaterials: 0,
     actLabour: 0, actMatsPlanned: 0, actMatsReconciled: 0,
     targetMarginPct: 40, woCount: 0, completedWOs: 0,
@@ -50,13 +54,16 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
     const val = scopeItemId || jobId;
     if (!val) return;
 
-    const [settRes, estRes, woRes] = await Promise.all([
+    const [settRes, estRes, woRes, rateRes, dayHrsRes] = await Promise.all([
       supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "default_target_margin_pct").single(),
       supabase.from("qry_wo_estimated_cost").select("*").eq(col, val),
       supabase.from("tbl_work_orders").select("work_order_id, status").eq(col, val).not("status", "eq", "Voided"),
+      supabase.from("tbl_rate_card").select("rate_per_hour").eq("complexity", 1).single(),
+      supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "standard_day_hours").single(),
     ]);
 
     const targetPct = parseFloat(settRes.data?.setting_value || "40");
+    const defaultDayRate = (rateRes.data?.rate_per_hour || 25) * (parseFloat(dayHrsRes.data?.setting_value) || 10);
     const estRows = estRes.data || [];
     const wos = woRes.data || [];
     const woIds = wos.map((w: any) => w.work_order_id);
@@ -84,7 +91,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
 
     if (jobId && !scopeItemId) {
       const [qlRes, scopeRes, marginRes] = await Promise.all([
-        supabase.from("tbl_quote_lines").select("quote_line_id, line_number, line_text, line_value, event_zone, category").eq("job_id", jobId),
+        supabase.from("tbl_quote_lines").select("quote_line_id, line_number, line_text, line_value, event_zone, category, pm_est_cost, pm_est_labour_days, pm_est_material_cost").eq("job_id", jobId),
         supabase.from("tbl_scope_items").select("scope_item_id, quote_line_id").eq("job_id", jobId),
         supabase.from("qry_quoteline_margin").select("*").eq("job_id", jobId),
       ]);
@@ -120,10 +127,15 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
       for (const ql of qlRows) {
         const margin = marginMap[ql.quote_line_id];
         const est = estByLine[ql.quote_line_id];
+        const pmLabourCost = (ql.pm_est_labour_days || 0) * (defaultDayRate);
+        const pmMatCost = ql.pm_est_material_cost || 0;
         lineData.push({
           quote_line_id: ql.quote_line_id,
           line_number: ql.line_number, line_text: ql.line_text,
           line_value: ql.line_value, event_zone: ql.event_zone, category: ql.category,
+          pmEstCost: ql.pm_est_cost || 0,
+          pmEstLabour: pmLabourCost,
+          pmEstMaterial: pmMatCost,
           estLabour: est?.labour || 0, estMaterial: est?.material || 0,
           estTotal: (est?.labour || 0) + (est?.material || 0),
           actLabour: margin?.actual_labour || 0, actMaterial: margin?.actual_material || 0,
@@ -133,9 +145,18 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
       }
     }
 
+    // PM estimate totals (workshop lines only)
+    const workshopCatsLower = ["workshop build", "workshop"];
+    const pmWsLines = lineData.filter(l => workshopCatsLower.some(c => (l.category || "").toLowerCase().includes(c)));
+    const pmEstLabour = pmWsLines.reduce((s, l) => s + l.pmEstLabour, 0);
+    const pmEstMaterials = pmWsLines.reduce((s, l) => s + l.pmEstMaterial, 0);
+    const pmEstTotal = pmWsLines.reduce((s, l) => s + l.pmEstCost, 0);
+
     setQuoteLines(lineData);
     setD({
-      quotedTotal, quotedWorkshop, estLabour, estMaterials,
+      quotedTotal, quotedWorkshop,
+      pmEstTotal, pmEstLabour, pmEstMaterials,
+      estLabour, estMaterials,
       actLabour, actMatsPlanned: actMatsPlanned, actMatsReconciled,
       targetMarginPct: targetPct, woCount: wos.length,
       completedWOs: wos.filter((w: any) => w.status === "Complete").length,
@@ -186,6 +207,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
               {showBothQuoted && <span className="text-gray-400 ml-1">(of {fmt(d.quotedTotal)})</span>}
             </span>
           )}
+          {d.pmEstTotal > 0 && <span className="text-gray-500">PM Est. <span className="font-semibold text-orange-700">{fmt(d.pmEstTotal)}</span></span>}
           {estTotal > 0 && <span className="text-gray-500">Est. <span className="font-semibold text-gray-800">{fmt(estTotal)}</span></span>}
           {committedTotal > 0 && <span className="text-gray-500">Actual <span className="font-semibold text-gray-800">{fmt(committedTotal)}</span></span>}
           {q > 0 && (estTotal > 0 || committedTotal > 0) && (
@@ -214,6 +236,19 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                 {fmt(q)}{showBothQuoted && <span className="block text-[10px] text-gray-400 font-normal">of {fmt(d.quotedTotal)} total</span>}
               </div>
               <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
+            </>)}
+
+            {/* PM Estimate */}
+            {d.pmEstTotal > 0 && (<>
+              <div className="py-2 border-t border-gray-100 font-medium text-orange-700 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-orange-400"></span>PM Estimate
+              </div>
+              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{d.pmEstLabour > 0 ? fmt(d.pmEstLabour) : "—"}</div>
+              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{d.pmEstMaterials > 0 ? fmt(d.pmEstMaterials) : "—"}</div>
+              <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">{fmt(d.pmEstTotal)}</div>
+              <div className={`py-2 border-t border-gray-100 text-right font-semibold ${mc(q > 0 ? ((q - d.pmEstTotal) / q) * 100 : 0)}`}>
+                {q > 0 ? `${(((q - d.pmEstTotal) / q) * 100).toFixed(1)}%` : "—"}
+              </div>
             </>)}
 
             {/* Estimated */}
@@ -287,6 +322,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                       <th className="px-3 py-2 font-medium">Line</th>
                       <th className="px-3 py-2 font-medium text-center w-14">Scopes</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Quoted</th>
+                      <th className="px-3 py-2 font-medium text-right w-20">PM Est</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Labour</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Material</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Total</th>
@@ -315,6 +351,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                               : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-gray-600">{l.line_value ? fmt(l.line_value) : "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono text-orange-600">{l.pmEstCost > 0 ? fmt(l.pmEstCost) : "—"}</td>
                           <td className={`px-3 py-2 text-right font-mono ${clr}`}>
                             {labour > 0 ? fmt(labour) : "—"}{isEst && labour > 0 && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
                           </td>

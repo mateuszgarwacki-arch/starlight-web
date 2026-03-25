@@ -1,1 +1,8 @@
-PM Est default day rate from rate card: straightforward rate x standard day hours
+PM Estimate wired into Cost Analysis: layer row, header summary, per-quote-line column
+
+- Orange "PM Estimate" layer row between Quoted and Estimated in cost grid
+- Shows PM est labour, materials, total, and margin % (colour-coded)
+- PM Est appears in collapsed header bar summary
+- PM Est column in workshop quote lines table (orange text)
+- Default day rate calculated from rate card (straightforward rate x standard day hours)
+- Only shows when PM estimates exist (progressive - no empty rows)
