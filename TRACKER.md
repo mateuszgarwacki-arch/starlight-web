@@ -577,13 +577,12 @@ Every user-facing action that changes state should generate a notification AND a
 - Admin role set via: `UPDATE auth.users SET raw_user_meta_data = jsonb_set(raw_user_meta_data, '{role}', '"admin"') WHERE email = '...'`
 
 ### Outstanding Work (prioritised)
-1. **Wire `presenceSetEditing`** into individual field focus/blur handlers — enables full field-highlight effect (optional polish, infrastructure deployed)
-2. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
-3. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
+1. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
+2. **Scope options UI** — tbl_scope_options exists, needs cards on scope breakdown page (add/select/reject)
+3. **Cost waterfall component** — qry_cost_waterfall view exists, needs standalone UI or integration into scope page
 4. **Quote import from real source** — currently manual entry only
-5. **Add `updated_at?: string` to TS interfaces** — Job, QuoteLine, WORow, BomRow (cleanup, not blocking)
-6. **Wire useRealtimeRefresh** into Me tab + /review/inbox for live updates when tasks/requests change
-7. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
+5. **Schedule `audit_retention_cycle()`** — function created, needs pg_cron on Pro plan (monthly)
+6. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
 ### New Files (Session 9)
 | File | Purpose |
@@ -672,3 +671,82 @@ Every user-facing action that changes state should generate a notification AND a
 - `session10-part2-views.sql`: qry_freelancer_hours_summary, qry_review_inbox
 - `ALTER PUBLICATION supabase_realtime ADD TABLE tbl_tasks, tbl_workshop_requests`
 - `ALTER TABLE tbl_freelancers DROP COLUMN IF EXISTS pin`
+
+
+### Session 10b (25 Mar 2026) — Polish + PM Estimates + Cost Analysis
+~6 commits, 12 files changed. Cleanup, presence wiring, PM estimate feature, cost analysis integration.
+
+**Cleanup & Polish:**
+- `tbl_freelancers.pin` column dropped (ALTER TABLE DROP COLUMN)
+- Realtime publication: tbl_tasks + tbl_workshop_requests added (now 6 tables in supabase_realtime)
+- `audit_retention_cycle()` SQL function created — hot (0-3mo, undo enabled), warm (3-12mo, undo disabled), cold (12mo+, deleted for closed jobs). Run manually or schedule via pg_cron
+- `useRealtimeRefresh` wired into Me tab (tbl_tasks + tbl_workshop_requests) and /review/inbox
+- `presenceSetEditing` wired into all inline edits: job header (start/save/cancel), quote line cells (start/save/cancel), scope page (name textarea, event_zone, description), WO page (description, est_hrs), BOM rows (description, qty, unit_cost)
+- TS interfaces: `updated_at?: string | null` added to Job, Quote, QuoteLine, ScopeItem, WorkOrder, WoBom. `pin` removed from Freelancer. `ScopeOption` interface added
+- Crew page: removed all `f.pin` references (column no longer exists)
+
+**PM Estimate on Quote Lines (new feature):**
+- 5 new columns on tbl_quote_lines: pm_est_cost, pm_est_labour_days, pm_est_material_cost, pm_est_rate_override, pm_est_notes
+- Progressive disclosure UI: Level 1 (single cost number inline), Level 2 (expand → labour days + materials), Level 3 (+ rate override + basis notes)
+- "PM Est" column in quote lines table with click-to-edit (same pattern as value/qty/unit_price)
+- Dashed "Est..." placeholder for empty values, square chevron button to expand breakdown
+- Margin % indicator below value (green ≥20%, amber 0-20%, red negative)
+- PmEstSubRow component: labour days, day rate, materials, notes, auto-calculated total, Save button
+- Default day rate calculated from rate card: `straightforward_rate_per_hour × standard_day_hours` (not hardcoded)
+- savePmEstBreakdown handler: auto-calculates pm_est_cost from breakdown, saves via auditedUpdate with concurrency
+
+**Scope Options Table (schema only, UI pending):**
+- `tbl_scope_options` created with RLS (PM+ write, foreman+ read)
+- Fields: option_label, description, pros, cons, est_labour_days, est_material_cost, est_total_cost, impact_on_quote, status (proposed/selected/rejected)
+- ON DELETE CASCADE from scope_item_id
+
+**Cost Analysis Integration:**
+- Orange "PM Estimate" layer row in cost analysis grid (between Quoted and Estimated)
+- Shows PM est labour, materials, total, margin % — colour-coded against target
+- PM Est in collapsed header bar summary
+- "PM Est" column in workshop quote lines per-line table (orange text)
+- PM totals calculated from workshop-category lines only (consistent with existing logic)
+- Default day rate loaded from tbl_rate_card + tbl_business_settings (not hardcoded)
+- Layer only appears when PM estimates exist (progressive disclosure)
+
+**Cost Waterfall View (SQL only, UI pending):**
+- `qry_cost_waterfall` view: per scope item, 4-layer comparison — Quoted → PM Est → Workshop Est → Actual
+- Joins: tbl_scope_items → tbl_quote_lines (PM est) → qry_scope_estimated_cost (workshop) → qry_scopeitem_cost_summary (actuals) → tbl_scope_options (selected option)
+- Margin % calculated for each layer against quoted value
+
+### New/Modified Files (Session 10b)
+| File | Purpose |
+|------|---------|
+| `src/components/cost-breakdown.tsx` | PM Estimate layer row + per-line column in cost analysis |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | PM Est column, PmEstSubRow, expandedPmEst state, default day rate from rate card |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | presenceSetEditing on name, zone, description |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | presenceSetEditing on WO desc, est hrs, BOM fields |
+| `src/app/(dashboard)/crew/page.tsx` | Removed pin references |
+| `src/app/(dashboard)/review/inbox/page.tsx` | useRealtimeRefresh added |
+| `src/app/m/me/page.tsx` | useRealtimeRefresh + refreshKey added |
+| `src/lib/types.ts` | updated_at on 6 interfaces, pin removed, ScopeOption + pm_est fields added |
+
+### SQL Already Run (Session 10b)
+- PM estimate columns: `ALTER TABLE tbl_quote_lines ADD COLUMN pm_est_cost, pm_est_labour_days, pm_est_material_cost, pm_est_rate_override, pm_est_notes`
+- `CREATE TABLE tbl_scope_options` with RLS, index, ON DELETE CASCADE
+- `CREATE VIEW qry_cost_waterfall` — 4-layer cost comparison per scope item
+- `CREATE FUNCTION audit_retention_cycle()` — monthly hot/warm/cold lifecycle
+- Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE tbl_tasks, tbl_workshop_requests`
+- Cleanup: `ALTER TABLE tbl_freelancers DROP COLUMN IF EXISTS pin`
+
+### Database Tables (now 33)
+Migrated from Access (21) + Added by web app (12):
+tbl_tasks (NEW), tbl_workshop_requests (NEW), tbl_scope_options (NEW) + existing 10
+
+### Views (now 30+)
+New: qry_freelancer_hours_summary, qry_review_inbox, qry_cost_waterfall
+
+### Conventions Added (Session 10)
+- **Always check `information_schema.columns`** before writing SQL that references column names. Never trust documentation or memory
+- **Split SQL into tables + views** so table creation succeeds even if view creation fails (Supabase runs as transaction)
+- **PG UNION ORDER BY**: can't use expressions — wrap in subquery: `SELECT * FROM (...) sub ORDER BY expr`
+- **cmd git commit**: always use `-F commit-msg.txt` to avoid shell quoting issues
+- **uploadToOneDrive** signature: `(file, folder, fileName?)` — no supabase param
+- **Mobile layout**: use `shrink-0` fixed width for compact controls (hours stepper), `flex-1` for expanding controls (date picker)
+- **Default day rate**: calculated from `tbl_rate_card` (complexity=1, rate_per_hour) × `tbl_business_settings` (standard_day_hours). Never hardcode
+- **PM estimate auto-calc**: UI always writes `pm_est_cost` — either directly (Level 1) or calculated from breakdown (Level 2+). View just reads it
