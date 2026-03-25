@@ -7,7 +7,7 @@ import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   TrendingUp, TrendingDown, Clock, AlertTriangle,
   ChevronDown, ChevronRight, DollarSign, BarChart3,
-  Flag, RefreshCw, Package,
+  Flag, RefreshCw, Package, Inbox,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -92,6 +92,7 @@ export default function ReviewPage() {
   const [flags, setFlags] = useState<TimeEntryRow[]>([]);
   const [accuracy, setAccuracy] = useState<EstVsActual[]>([]);
   const [matSummary, setMatSummary] = useState<MatSummary[]>([]);
+  const [inboxCount, setInboxCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [expandedJob, setExpandedJob] = useState<number | null>(null);
   const [scopeCosts, setScopeCosts] = useState<any[]>([]);
@@ -100,13 +101,16 @@ export default function ReviewPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [costRes, timeRes, accRes, matRes] = await Promise.all([
+    const [costRes, timeRes, accRes, matRes, taskCountRes, reqCountRes] = await Promise.all([
       supabase.from("qry_job_cost_summary").select("*").order("event_date"),
       supabase.from("tbl_wo_time_entries").select("*").is("archived_at", null).order("system_start_timestamp", { ascending: false }).limit(50),
       supabase.from("qry_estimate_vs_actual").select("*"),
       supabase.from("qry_material_summary_by_job").select("*"),
+      supabase.from("tbl_tasks").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("tbl_workshop_requests").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
     ]);
 
+    setInboxCount((taskCountRes.count || 0) + (reqCountRes.count || 0));
     if (costRes.data) setJobCosts(costRes.data);
     if (matRes.data) setMatSummary(matRes.data);
 
@@ -220,6 +224,20 @@ export default function ReviewPage() {
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
+
+      {/* Inbox banner */}
+      {inboxCount > 0 && (
+        <Link href="/review/inbox" className="card px-5 py-3 border-l-4 border-l-starlight-amber flex items-center justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-3">
+            <Inbox className="h-5 w-5 text-starlight-amber" />
+            <div>
+              <p className="text-sm font-semibold text-navy">{inboxCount} item{inboxCount !== 1 ? "s" : ""} in Workshop Inbox</p>
+              <p className="text-[10px] text-gray-400">Pending tasks and open requests from freelancers</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-gray-400" />
+        </Link>
+      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

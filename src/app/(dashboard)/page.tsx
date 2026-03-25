@@ -7,7 +7,7 @@ import { DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Briefcase, ClipboardList, Package, Users, AlertCircle,
   Flag, FileText, Clock, RefreshCw, ShoppingCart, Zap, Printer,
-  Bell, AlertOctagon,
+  Bell, AlertOctagon, Inbox,
 } from "lucide-react";
 import Link from "next/link";
 import type { DashUpcomingJob, ManpowerDemand } from "@/lib/types";
@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [staleTravellers, setStaleTravellers] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [inboxCount, setInboxCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -91,6 +92,13 @@ export default function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(8);
       setNotifications(notifData || []);
+
+      // Inbox count (pending tasks + open requests)
+      const [taskCountRes, requestCountRes] = await Promise.all([
+        supabase.from("tbl_tasks").select("*", { count: "exact", head: true }).eq("status", "pending"),
+        supabase.from("tbl_workshop_requests").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
+      ]);
+      setInboxCount((taskCountRes.count || 0) + (requestCountRes.count || 0));
 
       // Enrich flags with context
       const rawFlags = flagsRes.data || [];
@@ -155,11 +163,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <StatCard label="Active Jobs" value={jobs.length} icon={Briefcase} color="text-starlight-blue" href="/jobs" />
         <StatCard label="Active Work Orders" value={activeWos} icon={ClipboardList} color="text-starlight-amber" href="/workshop" />
         <StatCard label="Items to Order" value={procurement.length} icon={Package} color={procurement.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/orders" />
         <StatCard label="Unread Flags" value={flags.length} icon={Flag} color={flags.length > 0 ? "text-starlight-red" : "text-gray-400"} href="/review?tab=flags" />
+        <StatCard label="Workshop Inbox" value={inboxCount} icon={Inbox} color={inboxCount > 0 ? "text-starlight-amber" : "text-gray-400"} href="/review/inbox" />
         <StatCard label="Outstanding Hours" value={`${Math.round(totalHrs)}h`} icon={Users} color="text-starlight-green" href="/capacity" />
       </div>
 

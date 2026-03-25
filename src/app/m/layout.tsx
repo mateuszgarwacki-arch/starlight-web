@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ClipboardList, CalendarDays, Camera, User, Star } from "lucide-react";
+import { FloatingActionButton } from "@/components/floating-action-button";
 
 const tabs = [
   { href: "/m", icon: ClipboardList, label: "Tasks" },
@@ -31,6 +32,9 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
       <main className="flex-1 overflow-y-auto pb-20">
         <div className="px-4 py-4">{children}</div>
       </main>
+
+      {/* FAB */}
+      <FloatingActionButton />
 
       {/* Bottom tab bar */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 z-50">

@@ -14,7 +14,11 @@ export type NotificationType =
   | "wo_completed"
   | "scope_change"
   | "wo_overrun"
-  | "material_needed";
+  | "material_needed"
+  | "task_submitted"
+  | "task_reviewed"
+  | "workshop_request"
+  | "request_resolved";
 
 export type NotificationSeverity = "info" | "warning" | "urgent";
 
