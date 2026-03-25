@@ -1,1 +1,8 @@
-Update TRACKER.md with Session 10 details, remove pin from outstanding list
+Polish: presence field editing, realtime on Me+inbox, TS interfaces, crew pin cleanup
+
+- Presence: presenceSetEditing wired into job header edits, quote line cell edits,
+  scope name/zone/description, WO description/est_hrs, BOM desc/qty/cost
+- Realtime: useRealtimeRefresh on Me tab and review inbox (tbl_tasks + tbl_workshop_requests)
+- TS interfaces: updated_at added to Job, Quote, QuoteLine, ScopeItem, WorkOrder, WoBom
+- pin removed from Freelancer interface, crew page pin references cleaned up
+- Audit retention: SQL function audit_retention_cycle() created separately

@@ -776,9 +776,11 @@ export default function ScopeWorkOrdersPage() {
                         <input
                           type="text"
                           defaultValue={wo.description || ""}
-                          onBlur={(e) =>
-                            updateWODescription(wo.work_order_id, e.target.value)
-                          }
+                          onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_description`)}
+                          onBlur={(e) => {
+                            presenceSetEditing(null);
+                            updateWODescription(wo.work_order_id, e.target.value);
+                          }}
                           className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                           placeholder="What needs doing..."
                         />
@@ -791,9 +793,11 @@ export default function ScopeWorkOrdersPage() {
                           type="number"
                           step="0.5"
                           defaultValue={wo.estimated_duration_hrs ?? ""}
-                          onBlur={(e) =>
-                            updateEstimatedHrs(wo.work_order_id, e.target.value)
-                          }
+                          onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_est_hrs`)}
+                          onBlur={(e) => {
+                            presenceSetEditing(null);
+                            updateEstimatedHrs(wo.work_order_id, e.target.value);
+                          }}
                           className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         />
                       </div>
@@ -961,13 +965,15 @@ export default function ScopeWorkOrdersPage() {
                                       <input
                                         type="text"
                                         defaultValue={row.item_description || ""}
-                                        onBlur={(e) =>
+                                        onFocus={() => presenceSetEditing(`bom_${row.bom_id}_desc`)}
+                                        onBlur={(e) => {
+                                          presenceSetEditing(null);
                                           updateBomField(
                                             row.bom_id,
                                             "item_description",
                                             e.target.value || null
-                                          )
-                                        }
+                                          );
+                                        }}
                                         className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm bg-transparent focus:bg-white focus:outline-none"
                                       />
                                     </td>
@@ -976,13 +982,15 @@ export default function ScopeWorkOrdersPage() {
                                         type="number"
                                         step="0.01"
                                         defaultValue={row.quantity ?? ""}
-                                        onBlur={(e) =>
+                                        onFocus={() => presenceSetEditing(`bom_${row.bom_id}_qty`)}
+                                        onBlur={(e) => {
+                                          presenceSetEditing(null);
                                           updateBomField(
                                             row.bom_id,
                                             "quantity",
                                             e.target.value ? parseFloat(e.target.value) : null
-                                          )
-                                        }
+                                          );
+                                        }}
                                         className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-white focus:outline-none font-mono"
                                       />
                                     </td>
@@ -994,13 +1002,15 @@ export default function ScopeWorkOrdersPage() {
                                         type="number"
                                         step="0.01"
                                         defaultValue={cost || ""}
-                                        onBlur={(e) =>
+                                        onFocus={() => presenceSetEditing(`bom_${row.bom_id}_cost`)}
+                                        onBlur={(e) => {
+                                          presenceSetEditing(null);
                                           updateBomField(
                                             row.bom_id,
                                             "unit_cost",
                                             e.target.value ? parseFloat(e.target.value) : null
-                                          )
-                                        }
+                                          );
+                                        }}
                                         className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-white focus:outline-none font-mono"
                                       />
                                     </td>

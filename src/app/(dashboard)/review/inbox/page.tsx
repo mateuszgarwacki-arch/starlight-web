@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuditContext, auditedInsert } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { formatDate } from "@/lib/utils";
 import { ArrowLeft, Clock, Package, Wrench, Archive, AlertTriangle, MessageSquare, Check, X, CornerDownRight, RefreshCw, ChevronDown, Search, Image } from "lucide-react";
 import Link from "next/link";
@@ -32,6 +33,7 @@ export default function ReviewInboxPage() {
 
   const loadInbox = useCallback(async () => { setLoading(true); const { data } = await supabase.from("qry_review_inbox").select("*"); setItems(data || []); setLoading(false); }, []);
   useEffect(() => { loadInbox(); }, [loadInbox]);
+  useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], loadInbox);
 
   const openRouteModal = async (task: InboxItem) => {
     setRoutingTask(task); setRouteHours(String(task.claimed_hours || "")); setRouteNote(""); setSelectedWo(null); setWoSearch("");

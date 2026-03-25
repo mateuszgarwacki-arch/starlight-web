@@ -182,8 +182,10 @@ export default function ScopeDetailPage() {
             </p>
             <textarea
               defaultValue={scope.line_text || scope.item_name || `Scope Item #${scope.scope_item_id}`}
+              onFocus={() => presenceSetEditing("item_name")}
               onBlur={async (e) => {
                 const val = e.target.value.trim();
+                presenceSetEditing(null);
                 if (val && val !== scope.item_name) {
                   const ctx = await getAuditContext(supabase);
                   await auditedUpdate(ctx, "tbl_scope_items", scope.scope_item_id, { item_name: val }, jobId);
@@ -273,7 +275,8 @@ export default function ScopeDetailPage() {
               onChange={(e) =>
                 setScope((prev) => (prev ? { ...prev, event_zone: e.target.value } : null))
               }
-              onBlur={(e) => updateField("event_zone", e.target.value || null)}
+              onFocus={() => presenceSetEditing("event_zone")}
+              onBlur={(e) => { presenceSetEditing(null); updateField("event_zone", e.target.value || null); }}
               className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             />
           </div>
@@ -287,7 +290,8 @@ export default function ScopeDetailPage() {
             onChange={(e) =>
               setScope((prev) => (prev ? { ...prev, description: e.target.value } : null))
             }
-            onBlur={(e) => updateField("description", e.target.value || null)}
+            onFocus={() => presenceSetEditing("description")}
+            onBlur={(e) => { presenceSetEditing(null); updateField("description", e.target.value || null); }}
             rows={2}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             placeholder="Describe the scope item..."

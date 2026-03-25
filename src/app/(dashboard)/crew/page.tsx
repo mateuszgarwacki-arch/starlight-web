@@ -65,9 +65,9 @@ export default function CrewPage() {
   // ============================================================
   const openPinDialog = (f: FreelancerRow) => {
     setPinDialog({ id: f.freelancer_id, name: f.freelancer_name || "" });
-    setNewPin(f.pin || "");
+    setNewPin("");
     setPinResult(null);
-    setShowPin(!!f.pin);
+    setShowPin(false);
   };
 
   const generatePin = () => {
@@ -237,15 +237,11 @@ export default function CrewPage() {
                     <td className="px-4 py-3 text-right font-mono text-gray-700">{hourlyRate ? formatCurrency(hourlyRate) : "—"}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {f.pin ? (
-                          <span className="font-mono text-xs text-navy bg-gray-100 px-2 py-0.5 rounded">{f.pin}</span>
-                        ) : (
-                          <span className="text-xs text-gray-300 italic">No PIN</span>
-                        )}
+                        <span className="text-xs text-gray-300 italic">Auth</span>
                         <button
                           onClick={() => openPinDialog(f)}
-                          className={"p-1 rounded transition-colors " + (f.pin ? "text-gray-300 hover:text-navy hover:bg-gray-100" : "text-starlight-amber hover:bg-amber-50")}
-                          title={f.pin ? "Change PIN" : "Set PIN"}
+                          className="p-1 rounded transition-colors text-gray-300 hover:text-navy hover:bg-gray-100"
+                          title="Set/Change PIN"
                         >
                           <Key className="h-3.5 w-3.5" />
                         </button>

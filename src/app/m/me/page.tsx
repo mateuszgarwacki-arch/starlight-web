@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare } from "lucide-react";
 import { notify } from "@/lib/notifications";
+import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 
 interface HoursSummary { hours_this_week: number; hours_this_month: number; }
@@ -54,6 +55,10 @@ export default function MobileProfilePage() {
   const [logHours, setLogHours] = useState("");
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [, setTick] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Live updates when tasks/requests change
+  useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], () => setRefreshKey((k) => k + 1));
 
   useEffect(() => {
     const load = async () => {
@@ -97,7 +102,7 @@ export default function MobileProfilePage() {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => { if (!activeTimer) return; const interval = setInterval(() => setTick((t) => t + 1), 30000); return () => clearInterval(interval); }, [activeTimer]);
 

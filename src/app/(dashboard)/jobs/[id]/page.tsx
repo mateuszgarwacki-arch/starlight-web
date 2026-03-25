@@ -269,6 +269,7 @@ export default function JobDetailPage() {
   const startEdit = (field: string, currentValue: string | null) => {
     setEditingField(field);
     setEditValue(currentValue || "");
+    presenceSetEditing(field);
   };
 
   const saveJobField = async () => {
@@ -285,9 +286,10 @@ export default function JobDetailPage() {
     }
     setEditingField(null);
     setEditValue("");
+    presenceSetEditing(null);
   };
 
-  const cancelEdit = () => { setEditingField(null); setEditValue(""); };
+  const cancelEdit = () => { setEditingField(null); setEditValue(""); presenceSetEditing(null); };
 
   // ================================================================
   // UPDATE HANDLERS
@@ -448,6 +450,7 @@ export default function JobDetailPage() {
   const startLineEdit = (lineId: number, field: string, currentValue: string | number | null) => {
     setEditingLineCell({ lineId, field });
     setEditLineCellValue(String(currentValue ?? ""));
+    presenceSetEditing(`line_${lineId}_${field}`);
   };
 
   const saveLineEdit = async () => {
@@ -474,9 +477,10 @@ export default function JobDetailPage() {
 
     setEditingLineCell(null);
     setEditLineCellValue("");
+    presenceSetEditing(null);
   };
 
-  const cancelLineEdit = () => { setEditingLineCell(null); setEditLineCellValue(""); };
+  const cancelLineEdit = () => { setEditingLineCell(null); setEditLineCellValue(""); presenceSetEditing(null); };
 
   // ================================================================
   // COMPUTED VALUES

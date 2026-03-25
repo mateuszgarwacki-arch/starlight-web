@@ -17,6 +17,7 @@ export interface Job {
   created_by: number | null;
   created_at: string | null;
   job_status: string | null;
+  updated_at?: string | null;
 }
 
 export interface Quote {
@@ -31,6 +32,7 @@ export interface Quote {
   notes: string | null;
   imported_at: string | null;
   imported_by: number | null;
+  updated_at?: string | null;
 }
 
 export interface QuoteLine {
@@ -50,6 +52,7 @@ export interface QuoteLine {
   interpretation_complete: string | null; // "true"/"false" via ODBC
   kit_list_exported: string | null;
   imported_at: string | null;
+  updated_at?: string | null;
 }
 
 export interface ScopeItem {
@@ -73,6 +76,7 @@ export interface ScopeItem {
   created_at: string | null;
   modified_at: string | null;
   photo_path: string | null;
+  updated_at?: string | null;
 }
 
 export interface WorkOrder {
@@ -93,6 +97,7 @@ export interface WorkOrder {
   system_complete_timestamp: string | null;
   actual_complete_timestamp: string | null;
   completion_photo_path: string | null;
+  updated_at?: string | null;
 }
 
 export interface JobItem {
@@ -126,7 +131,6 @@ export interface Freelancer {
   system_access: string | null;
   notes: string | null;
   created_at: string | null;
-  pin: string | null;
 }
 
 export interface TimeEntry {
@@ -161,6 +165,7 @@ export interface WoBom {
   ordered_at: string | null;
   ordered_by: number | null;
   notes: string | null;
+  updated_at?: string | null;
 }
 
 export interface MasterLookup {
