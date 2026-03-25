@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface QuoteLine {
   quote_line_id: number;
@@ -23,6 +23,21 @@ interface QuoteLine {
   scopeCount: number;
 }
 
+interface WaterfallRow {
+  scope_item_id: number;
+  scope_name: string | null;
+  scope_status: string | null;
+  quoted_value: number | null;
+  pm_est_cost: number | null;
+  ws_est_labour_cost: number | null;
+  ws_est_material_cost: number | null;
+  ws_est_total: number | null;
+  actual_labour_cost: number | null;
+  actual_material_cost: number | null;
+  actual_total: number | null;
+  selected_option: string | null;
+}
+
 interface Props {
   scopeItemId?: number;
   jobId?: number;
@@ -38,6 +53,8 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [quoteLines, setQuoteLines] = useState<QuoteLine[]>([]);
+  const [expandedLineId, setExpandedLineId] = useState<number | null>(null);
+  const [waterfallCache, setWaterfallCache] = useState<Record<number, WaterfallRow[]>>({});
   const [d, setD] = useState({
     quotedTotal: 0, quotedWorkshop: 0,
     pmEstTotal: 0, pmEstLabour: 0, pmEstMaterials: 0,
@@ -162,6 +179,15 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
       completedWOs: wos.filter((w: any) => w.status === "Complete").length,
     });
     setLoading(false);
+  };
+
+  const toggleLineExpand = async (lineId: number) => {
+    if (expandedLineId === lineId) { setExpandedLineId(null); return; }
+    setExpandedLineId(lineId);
+    if (!waterfallCache[lineId]) {
+      const { data } = await supabase.from("qry_cost_waterfall").select("*").eq("quote_line_id", lineId);
+      setWaterfallCache(prev => ({ ...prev, [lineId]: data || [] }));
+    }
   };
 
   if (loading) return <div className="text-xs text-gray-400 py-4">Loading cost analysis...</div>;
@@ -339,9 +365,20 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                       const margin = (l.line_value || 0) - cost;
                       const marginPct = (l.line_value || 0) > 0 ? (margin / (l.line_value || 1)) * 100 : 0;
                       const clr = isEst ? "text-blue-500" : "text-gray-800";
+                      const hasScopes = l.scopeCount > 0;
+                      const isLineExpanded = expandedLineId === l.quote_line_id;
+                      const wfRows = waterfallCache[l.quote_line_id] || [];
                       return (
-                        <tr key={l.quote_line_id} className="border-t border-gray-100">
-                          <td className="px-3 py-2 text-gray-400 font-mono">{l.line_number}</td>
+                        <Fragment key={l.quote_line_id}>
+                        <tr className={`border-t border-gray-100 ${hasScopes ? "cursor-pointer hover:bg-gray-50/50" : ""}`}
+                          onClick={hasScopes ? () => toggleLineExpand(l.quote_line_id) : undefined}>
+                          <td className="px-3 py-2 text-gray-400 font-mono">
+                            {hasScopes && (isLineExpanded
+                              ? <ChevronDown className="h-3 w-3 inline mr-0.5 text-gray-400" />
+                              : <ChevronRight className="h-3 w-3 inline mr-0.5 text-gray-400" />
+                            )}
+                            {l.line_number}
+                          </td>
                           <td className="px-3 py-2 text-gray-700 max-w-[300px]">
                             <span className="line-clamp-2">{l.line_text || "—"}</span>
                           </td>
@@ -368,6 +405,56 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                             {cost > 0 && l.line_value ? `${marginPct.toFixed(0)}%` : "—"}
                           </td>
                         </tr>
+                        {/* Waterfall sub-rows for scope items */}
+                        {isLineExpanded && wfRows.length > 0 && wfRows.map(w => {
+                          const wBest = w.actual_total || w.ws_est_total || w.pm_est_cost || 0;
+                          const wQuoted = w.quoted_value || 0;
+                          const wMarginPct = wQuoted > 0 ? ((wQuoted - wBest) / wQuoted) * 100 : null;
+                          return (
+                            <tr key={w.scope_item_id} className="bg-gray-50/70 border-t border-gray-100/50">
+                              <td className="px-3 py-1.5"></td>
+                              <td className="px-3 py-1.5 text-[11px] text-gray-600 pl-6">
+                                <span className="text-gray-400 mr-1">↳</span>
+                                {w.scope_name || `Scope #${w.scope_item_id}`}
+                                {w.selected_option && (
+                                  <span className="ml-1.5 text-[9px] bg-green-50 text-starlight-green px-1 py-0.5 rounded">{w.selected_option}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-1.5"></td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-gray-500">
+                                {wQuoted > 0 ? fmt(wQuoted) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-orange-500">
+                                {w.pm_est_cost ? fmt(w.pm_est_cost) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-blue-500">
+                                {w.ws_est_labour_cost ? fmt(w.ws_est_labour_cost) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-blue-500">
+                                {w.ws_est_material_cost ? fmt(w.ws_est_material_cost) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] font-medium text-gray-600">
+                                {wBest > 0 ? fmt(wBest) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5"></td>
+                              <td className={`px-3 py-1.5 text-right font-mono text-[11px] ${
+                                wMarginPct === null ? "text-gray-300" :
+                                wMarginPct >= 20 ? "text-starlight-green" :
+                                wMarginPct >= 0 ? "text-amber-500" : "text-starlight-red"
+                              }`}>
+                                {wMarginPct !== null ? `${wMarginPct.toFixed(0)}%` : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {isLineExpanded && wfRows.length === 0 && (
+                          <tr className="bg-gray-50/70">
+                            <td colSpan={10} className="px-3 py-2 text-[11px] text-gray-400 pl-6">
+                              Loading scope items...
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
