@@ -579,10 +579,10 @@ Every user-facing action that changes state should generate a notification AND a
 ### Outstanding Work (prioritised)
 1. **Wire `presenceSetEditing`** into individual field focus/blur handlers — enables full field-highlight effect (optional polish, infrastructure deployed)
 2. **Audit log retention** — monthly cleanup of closed job entries (hot→warm→cold lifecycle)
-3. **Drop tbl_freelancers.pin column** — code references removed Session 7, confirm nothing breaks then `ALTER TABLE DROP COLUMN`
-4. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
-5. **Quote import from real source** — currently manual entry only
-6. **Add `updated_at?: string` to TS interfaces** — Job, QuoteLine, WORow, BomRow (cleanup, not blocking)
+3. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
+4. **Quote import from real source** — currently manual entry only
+5. **Add `updated_at?: string` to TS interfaces** — Job, QuoteLine, WORow, BomRow (cleanup, not blocking)
+6. **Wire useRealtimeRefresh** into Me tab + /review/inbox for live updates when tasks/requests change
 7. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
 ### New Files (Session 9)
@@ -603,3 +603,72 @@ Every user-facing action that changes state should generate a notification AND a
 8. **Audit inserts (BOM)**: Add a BOM row from material catalogue → check audit log → verify "insert" entry
 9. **Audit inserts (scope)**: Create a scope item → check audit log → verify "insert" entry
 10. **Audit inserts (quote line)**: Add a quote line → check audit log → verify "insert" entry
+
+
+### Session 10 (25 Mar 2026) — Ad-Hoc Tasks, Workshop Requests, Me Tab, FAB, Review Inbox
+3 commits, 9 files changed, 768 insertions, 154 deletions. Three interconnected features for freelancer engagement + PM review workflow.
+
+**Database (SQL run in Supabase):**
+- `tbl_tasks`: ad-hoc work logging with timer support. Categories: job_work, maintenance, workshop_general, other. Statuses: in_progress → pending → routed/approved_overhead/rejected. Timer fields: started_at, logged_at. PM routing: routed_to_wo_id, routed_hours
+- `tbl_workshop_requests`: freelancer-raised requests. Categories: order_material, repair_equipment, restock, safety, general. Urgency: normal/urgent. Photo support via OneDrive. Statuses: open → acknowledged → in_progress → resolved/dismissed
+- RLS: freelancers see own rows, PM/admin see all. Freelancers can update own in_progress tasks only
+- `qry_freelancer_hours_summary`: unions WO time entries + approved tasks for Me tab totals
+- `qry_review_inbox`: unified view — pending tasks + open/acknowledged requests, sorted urgent-first
+- Realtime: REPLICA IDENTITY FULL + added to supabase_realtime publication (now 6 tables)
+- `tbl_freelancers.pin` column dropped (was deprecated Session 7, code refs removed, now column gone)
+
+**Mobile — FAB:**
+- `FloatingActionButton` component: red "+" bottom-right, expands to "Log Task" + "Raise Request"
+- Hidden on `/m/wo/[woId]` (WO detail has own primary actions) and `/m/login`
+- Added to mobile layout between content and tab bar
+
+**Mobile — /m/task (Log a Task):**
+- Two modes: Quick Log (enter hours + date) or Start Timer (creates in_progress task)
+- Category pills (4 options), optional job picker (searchable active jobs)
+- Soft warning if WO session already active (doesn't block — user chose this)
+- Blocks starting timer if another task timer is already active (one timer at a time)
+- Submits with notify() → task_submitted notification to PM
+- Hours stepper: shrink-0 130px with w-12 input (fits 10.5), date picker gets flex-1
+
+**Mobile — /m/request (Raise a Request):**
+- 5 category pills with icons (Package, Wrench, Archive, AlertTriangle, MessageSquare)
+- Urgency toggle (Normal / Urgent — urgent gets red highlight + urgent notification severity)
+- Optional job picker, optional description, optional photo capture (OneDrive upload)
+- Submits with notify() → workshop_request notification
+
+**Mobile — /m/me (Me Tab Rebuild):**
+- Profile header with logout
+- Active timer banner: pulsing icon, elapsed time, "Log Hours" button → bottom sheet with pre-calculated hours
+- Hours summary cards: This Week / This Month (from qry_freelancer_hours_summary view)
+- Quick action buttons: Log Task + Raise Request (duplicated from FAB for discoverability)
+- Recent Entries: merged list of WO time entries + ad-hoc tasks, sorted by date. Tasks show "Ad-hoc" tag + status badge
+- My Requests: open requests with status badges + resolution notes when resolved
+- My Tasks: pending + recently reviewed tasks with status badges + review notes
+
+**Desktop — /review/inbox (Workshop Inbox):**
+- Unified list from qry_review_inbox view. Cards show type badge, category, title, freelancer, job, hours, urgency
+- Task actions: Route to WO (modal with WO search, hour adjustment, rate calculation → creates tbl_wo_time_entries), Approve as Overhead, Reject (requires reason)
+- Request actions: Acknowledge, Resolve (requires note), Dismiss (requires reason)
+- All actions fire notify() back to freelancer and call loadInbox() to refresh
+- Route to WO: fetches freelancer day_rate/standard_day_hours, calculates hourly rate, creates audited time entry
+
+**Desktop — Dashboard + Review integration:**
+- Dashboard: new "Workshop Inbox" stat card with count (pending tasks + open requests), links to /review/inbox
+- Review page: amber inbox banner with count when items pending, links to /review/inbox
+- Both load counts from tbl_tasks (status=pending) + tbl_workshop_requests (status IN open, acknowledged)
+
+**Notification types added:** task_submitted, task_reviewed, workshop_request, request_resolved
+
+### New Files (Session 10)
+| File | Purpose |
+|------|---------|
+| `src/components/floating-action-button.tsx` | Mobile FAB with expand/collapse, auto-hide on WO detail |
+| `src/app/m/task/page.tsx` | Task form: quick log + start timer |
+| `src/app/m/request/page.tsx` | Request form: 5 categories, urgency, photo |
+| `src/app/(dashboard)/review/inbox/page.tsx` | Unified PM inbox with routing + action modals |
+
+### SQL Already Run (Session 10)
+- `session10-part1-tables.sql`: tbl_tasks, tbl_workshop_requests, indexes, RLS, REPLICA IDENTITY FULL
+- `session10-part2-views.sql`: qry_freelancer_hours_summary, qry_review_inbox
+- `ALTER PUBLICATION supabase_realtime ADD TABLE tbl_tasks, tbl_workshop_requests`
+- `ALTER TABLE tbl_freelancers DROP COLUMN IF EXISTS pin`
