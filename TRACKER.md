@@ -766,25 +766,20 @@ New: qry_freelancer_hours_summary, qry_review_inbox, qry_cost_waterfall
 - [x] Placed on scope breakdown page between header card and CostBreakdown
 - [x] `tbl_scope_options` added to AUDITED_TABLES in audit.ts
 
-**Cost Waterfall (`<CostWaterfall>` component):**
-- [x] `src/components/cost-waterfall.tsx` — reads from `qry_cost_waterfall` view
-- [x] Collapsible card on job detail page, between CostBreakdown and tabs
-- [x] Table: one row per scope item, columns = Quoted / PM Est / Workshop Est / Actual / Margin / Trend
-- [x] Columns auto-hide when no data in that layer (e.g. no PM estimates → column hidden)
-- [x] Expandable detail per row: labour vs materials breakdown at each layer with margin badges
-- [x] Totals row at bottom aggregating all scope items
-- [x] Colour coding: green (actual < quoted), amber (within 10%), red (over)
-- [x] Trend icons: TrendingDown (green, under budget), Minus (amber), TrendingUp (red, over)
-- [x] Selected scope option label shown as green tag on each row
-- [x] Scope item names link to scope breakdown page
-
-**NOTE: qry_cost_waterfall column names need verification** — view was created in Supabase SQL editor (Session 10b) and column names may not match component interface. Run `SELECT column_name FROM information_schema.columns WHERE table_name = 'qry_cost_waterfall'` to verify.
+**Cost Waterfall → Merged into Cost Analysis (refactored):**
+- [x] Standalone `<CostWaterfall>` card removed from job page
+- [x] Waterfall drill-down integrated into `<CostBreakdown>` workshop quote lines table
+- [x] Quote line rows with scope items (scopeCount > 0) are now expandable — click to see scope items underneath
+- [x] Scope sub-rows show: name, selected option tag, quoted, PM est, workshop est (labour + material), total, margin %
+- [x] Lazy-loads from `qry_cost_waterfall` per quote_line_id with client-side cache
+- [x] Eliminates redundancy — one place for all cost data, not two overlapping panels
 
 ### New/Modified Files (Session 11)
 | File | Purpose |
 |------|---------|
 | `src/components/scope-options.tsx` | Build options CRUD on scope breakdown page |
-| `src/components/cost-waterfall.tsx` | Per-scope-item cost progression table on job page |
-| `src/app/(dashboard)/jobs/[id]/page.tsx` | Added CostWaterfall import + placement |
+| `src/components/cost-waterfall.tsx` | RETAINED but no longer imported — waterfall logic merged into cost-breakdown |
+| `src/components/cost-breakdown.tsx` | Waterfall drill-down added: expandable quote lines show scope items |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Removed CostWaterfall import + placement |
 | `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Added ScopeOptions import + placement |
 | `src/lib/audit.ts` | Added tbl_scope_options to AUDITED_TABLES |
