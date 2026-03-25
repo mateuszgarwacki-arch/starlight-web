@@ -1,1 +1,1 @@
-Fix task form: hours 40% width, date gets remaining space
+Fix hours input width: 130px container, w-12 input for 3-digit decimals like 10.5
