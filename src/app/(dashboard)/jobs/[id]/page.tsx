@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -126,6 +126,7 @@ export default function JobDetailPage() {
 
   // --- INLINE EDIT state ---
   const [editingLineCell, setEditingLineCell] = useState<{ lineId: number; field: string } | null>(null);
+  const [expandedPmEst, setExpandedPmEst] = useState<number | null>(null);
   const [editLineCellValue, setEditLineCellValue] = useState("");
 
   // Presence — show who else is viewing this job
@@ -482,6 +483,27 @@ export default function JobDetailPage() {
 
   const cancelLineEdit = () => { setEditingLineCell(null); setEditLineCellValue(""); presenceSetEditing(null); };
 
+  // PM Estimate Level 2/3 save
+  const savePmEstBreakdown = async (lineId: number, labourDays: number | null, materialCost: number | null, rateOverride: number | null, notes: string | null) => {
+    const defaultRate = 250; // fallback day rate
+    const rate = rateOverride || defaultRate;
+    const labourCost = (labourDays || 0) * rate;
+    const totalCost = labourCost + (materialCost || 0);
+    const changes: Record<string, any> = {
+      pm_est_labour_days: labourDays,
+      pm_est_material_cost: materialCost,
+      pm_est_rate_override: rateOverride,
+      pm_est_notes: notes,
+      pm_est_cost: totalCost > 0 ? totalCost : null,
+    };
+    const ctx = await getAuditContext(supabase);
+    const line = lines.find(l => l.quote_line_id === lineId);
+    const expectedAt = (line as any)?.updated_at ?? null;
+    const result = await auditedUpdate(ctx, "tbl_quote_lines", lineId, changes, job?.job_id || null, expectedAt);
+    if (result.conflict) { toast.warning("Line modified by another user — reloading"); await loadData(); }
+    else { setLines(prev => prev.map(l => l.quote_line_id === lineId ? { ...l, ...changes, updated_at: (result.data as any)?.updated_at } : l)); toast.success("PM estimate saved"); }
+  };
+
   // ================================================================
   // COMPUTED VALUES
   // ================================================================
@@ -538,6 +560,50 @@ export default function JobDetailPage() {
   }
 
   // ================================================================
+  // PM ESTIMATE SUB-ROW (Level 2/3)
+  // ================================================================
+  function PmEstSubRow({ line, onSave }: { line: QuoteLine; onSave: (lineId: number, labourDays: number | null, materialCost: number | null, rateOverride: number | null, notes: string | null) => Promise<void> }) {
+    const [labourDays, setLabourDays] = useState(line.pm_est_labour_days ?? "");
+    const [materialCost, setMaterialCost] = useState(line.pm_est_material_cost ?? "");
+    const [rateOverride, setRateOverride] = useState(line.pm_est_rate_override ?? "");
+    const [notes, setNotes] = useState(line.pm_est_notes ?? "");
+    const [saving, setSaving] = useState(false);
+    const defaultRate = 250;
+    const rate = Number(rateOverride) || defaultRate;
+    const calcLabour = (Number(labourDays) || 0) * rate;
+    const calcTotal = calcLabour + (Number(materialCost) || 0);
+    return (
+      <tr className="bg-blue-50/30 border-t border-blue-100">
+        <td colSpan={10} className="px-6 py-3">
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Labour Days</label>
+              <input type="number" step="0.5" value={labourDays} onChange={(e) => setLabourDays(e.target.value)} className="w-20 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Day Rate</label>
+              <input type="number" step="1" value={rateOverride} onChange={(e) => setRateOverride(e.target.value)} className="w-20 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder={String(defaultRate)} />
+            </div>
+            <div className="text-xs text-gray-400 pb-2">= {formatCurrency(calcLabour)} labour</div>
+            <div>
+              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Materials</label>
+              <input type="number" step="0.01" value={materialCost} onChange={(e) => setMaterialCost(e.target.value)} className="w-24 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
+            </div>
+            <div className="text-sm font-semibold text-navy pb-2">= {formatCurrency(calcTotal)} total</div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Basis / Notes</label>
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="e.g. Similar to Claridge's job..." />
+            </div>
+            <button disabled={saving} onClick={async () => { setSaving(true); await onSave(line.quote_line_id, Number(labourDays) || null, Number(materialCost) || null, Number(rateOverride) || null, notes.trim() || null); setSaving(false); }} className="px-3 py-1.5 text-xs font-medium bg-navy text-white rounded hover:bg-navy/90 disabled:opacity-40">
+              {saving ? "..." : "Save"}
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  // ================================================================
   // RENDER A SINGLE QUOTE LINE ROW
   // ================================================================
   function renderLineRow(line: QuoteLine) {
@@ -550,8 +616,8 @@ export default function JobDetailPage() {
     const contractorInfo = contractorMap[line.quote_line_id];
 
     return (
+      <Fragment key={line.quote_line_id}>
       <tr
-        key={line.quote_line_id}
         className={`border-t border-gray-100 transition-colors ${
           isUninterpreted
             ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
@@ -686,6 +752,33 @@ export default function JobDetailPage() {
           )}
         </td>
 
+        {/* PM Est — Level 1 inline + expand chevron */}
+        <td className="px-3 py-2.5 text-right">
+          <div className="flex items-center justify-end gap-1">
+            {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "pm_est_cost" ? (
+              <input type="number" step="0.01" value={editLineCellValue}
+                onChange={(e) => setEditLineCellValue(e.target.value)}
+                onBlur={saveLineEdit}
+                onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+                autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+            ) : (
+              <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", line.pm_est_cost)}
+                className="text-sm tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-500">
+                {line.pm_est_cost != null ? formatCurrency(line.pm_est_cost) : <span className="text-gray-300">—</span>}
+              </span>
+            )}
+            <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
+              className="p-0.5 text-gray-300 hover:text-navy transition-colors" title="Estimate breakdown">
+              <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
+            </button>
+          </div>
+          {line.pm_est_cost != null && line.line_value != null && line.line_value > 0 && (
+            <div className={"text-[10px] tabular-nums mt-0.5 " + (((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 20 ? "text-starlight-green" : ((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 0 ? "text-starlight-amber" : "text-starlight-red")}>
+              {Math.round((line.line_value - line.pm_est_cost) / line.line_value * 100)}% margin
+            </div>
+          )}
+        </td>
+
         {/* Done — hybrid: shows auto-tick state + manual override */}
         <td className="px-3 py-2.5 text-center">
           {config.showDoneCheckbox ? (
@@ -744,6 +837,10 @@ export default function JobDetailPage() {
           )}
         </td>
       </tr>
+      {expandedPmEst === line.quote_line_id && (
+        <PmEstSubRow line={line} onSave={savePmEstBreakdown} />
+      )}
+      </Fragment>
     );
   }
 
@@ -760,6 +857,7 @@ export default function JobDetailPage() {
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Qty</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Unit Price</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-gray-500 w-28 text-right">PM Est</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Done</th>
         <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
       </tr>

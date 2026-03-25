@@ -1,8 +1,8 @@
-Polish: presence field editing, realtime on Me+inbox, TS interfaces, crew pin cleanup
+PM estimate on quote lines: inline Level 1 + expandable Level 2/3 sub-row
 
-- Presence: presenceSetEditing wired into job header edits, quote line cell edits,
-  scope name/zone/description, WO description/est_hrs, BOM desc/qty/cost
-- Realtime: useRealtimeRefresh on Me tab and review inbox (tbl_tasks + tbl_workshop_requests)
-- TS interfaces: updated_at added to Job, Quote, QuoteLine, ScopeItem, WorkOrder, WoBom
-- pin removed from Freelancer interface, crew page pin references cleaned up
-- Audit retention: SQL function audit_retention_cycle() created separately
+- PM Est column in quote lines table with inline click-to-edit (same pattern as value/qty)
+- Margin % indicator below PM est (green >20%, amber 0-20%, red negative)
+- Expand chevron reveals sub-row: labour days, day rate, materials, notes, calculated total
+- savePmEstBreakdown handler: auto-calculates pm_est_cost from breakdown, saves via auditedUpdate
+- TS types: QuoteLine gains pm_est_* fields, ScopeOption interface added
+- Fragment wrapper on renderLineRow to support sub-row rendering

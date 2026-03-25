@@ -53,6 +53,11 @@ export interface QuoteLine {
   kit_list_exported: string | null;
   imported_at: string | null;
   updated_at?: string | null;
+  pm_est_cost: number | null;
+  pm_est_labour_days: number | null;
+  pm_est_material_cost: number | null;
+  pm_est_rate_override: number | null;
+  pm_est_notes: string | null;
 }
 
 export interface ScopeItem {
@@ -77,6 +82,24 @@ export interface ScopeItem {
   modified_at: string | null;
   photo_path: string | null;
   updated_at?: string | null;
+}
+
+export interface ScopeOption {
+  option_id: number;
+  scope_item_id: number;
+  option_label: string;
+  description: string | null;
+  pros: string | null;
+  cons: string | null;
+  est_labour_days: number | null;
+  est_material_cost: number | null;
+  est_total_cost: number | null;
+  impact_on_quote: number | null;
+  status: string;
+  selected_by: string | null;
+  selected_at: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface WorkOrder {
