@@ -126,17 +126,17 @@ export default function MobileTaskPage() {
       </button>
       <div className="flex items-center gap-3"><div className="flex-1 h-px bg-gray-200" /><span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">or log completed work</span><div className="flex-1 h-px bg-gray-200" /></div>
       <div className="flex gap-3">
-        <div className="flex-1">
+        <div className="w-[40%]">
           <label className="text-xs font-medium text-gray-500 mb-1.5 block">Hours</label>
           <div className="flex items-center gap-0 bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <button onClick={() => adjustHours(-0.5)} className="px-3 py-3 text-gray-400 active:bg-gray-50 border-r border-gray-200"><Minus className="h-4 w-4" /></button>
+            <button onClick={() => adjustHours(-0.5)} className="px-2.5 py-3 text-gray-400 active:bg-gray-50 border-r border-gray-200"><Minus className="h-4 w-4" /></button>
             <input type="number" value={hours} onChange={(e) => setHours(Math.max(0, parseFloat(e.target.value) || 0))} step="0.5" className="flex-1 text-center py-3 text-sm font-semibold text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-            <button onClick={() => adjustHours(0.5)} className="px-3 py-3 text-gray-400 active:bg-gray-50 border-l border-gray-200"><Plus className="h-4 w-4" /></button>
+            <button onClick={() => adjustHours(0.5)} className="px-2.5 py-3 text-gray-400 active:bg-gray-50 border-l border-gray-200"><Plus className="h-4 w-4" /></button>
           </div>
         </div>
         <div className="flex-1">
           <label className="text-xs font-medium text-gray-500 mb-1.5 block">When</label>
-          <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+          <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-3 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
         </div>
       </div>
       <div>

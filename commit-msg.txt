@@ -1,0 +1,1 @@
+Fix task form: hours 40% width, date gets remaining space
