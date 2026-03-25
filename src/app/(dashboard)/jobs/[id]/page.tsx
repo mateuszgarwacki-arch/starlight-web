@@ -754,27 +754,40 @@ export default function JobDetailPage() {
 
         {/* PM Est — Level 1 inline + expand chevron */}
         <td className="px-3 py-2.5 text-right">
-          <div className="flex items-center justify-end gap-1">
-            {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "pm_est_cost" ? (
-              <input type="number" step="0.01" value={editLineCellValue}
-                onChange={(e) => setEditLineCellValue(e.target.value)}
-                onBlur={saveLineEdit}
-                onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-                autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-            ) : (
-              <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", line.pm_est_cost)}
-                className="text-sm tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-500">
-                {line.pm_est_cost != null ? formatCurrency(line.pm_est_cost) : <span className="text-gray-300">—</span>}
+          {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "pm_est_cost" ? (
+            <input type="number" step="0.01" value={editLineCellValue}
+              onChange={(e) => setEditLineCellValue(e.target.value)}
+              onBlur={saveLineEdit}
+              onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
+              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+          ) : line.pm_est_cost != null ? (
+            <div>
+              <div className="flex items-center justify-end gap-1.5">
+                <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", line.pm_est_cost)}
+                  className="text-sm font-medium tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-700">
+                  {formatCurrency(line.pm_est_cost)}
+                </span>
+                <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
+                  className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200")} title="Breakdown">
+                  <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
+                </button>
+              </div>
+              {line.line_value != null && line.line_value > 0 && (
+                <div className={"text-[10px] tabular-nums mt-0.5 text-right " + (((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 20 ? "text-starlight-green" : ((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 0 ? "text-starlight-amber" : "text-starlight-red")}>
+                  {Math.round((line.line_value - line.pm_est_cost) / line.line_value * 100)}% margin
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-1.5">
+              <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", null)}
+                className="inline-block px-2 py-0.5 text-xs text-gray-300 border border-dashed border-gray-200 rounded cursor-pointer hover:border-starlight-blue hover:text-starlight-blue transition-colors">
+                Est...
               </span>
-            )}
-            <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
-              className="p-0.5 text-gray-300 hover:text-navy transition-colors" title="Estimate breakdown">
-              <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
-            </button>
-          </div>
-          {line.pm_est_cost != null && line.line_value != null && line.line_value > 0 && (
-            <div className={"text-[10px] tabular-nums mt-0.5 " + (((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 20 ? "text-starlight-green" : ((line.line_value - line.pm_est_cost) / line.line_value * 100) >= 0 ? "text-starlight-amber" : "text-starlight-red")}>
-              {Math.round((line.line_value - line.pm_est_cost) / line.line_value * 100)}% margin
+              <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
+                className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200")} title="Breakdown">
+                <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
+              </button>
             </div>
           )}
         </td>
