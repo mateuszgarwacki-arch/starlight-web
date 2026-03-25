@@ -750,3 +750,41 @@ New: qry_freelancer_hours_summary, qry_review_inbox, qry_cost_waterfall
 - **Mobile layout**: use `shrink-0` fixed width for compact controls (hours stepper), `flex-1` for expanding controls (date picker)
 - **Default day rate**: calculated from `tbl_rate_card` (complexity=1, rate_per_hour) × `tbl_business_settings` (standard_day_hours). Never hardcode
 - **PM estimate auto-calc**: UI always writes `pm_est_cost` — either directly (Level 1) or calculated from breakdown (Level 2+). View just reads it
+
+### Session 11 (25 Mar 2026) — Scope Options UI + Cost Waterfall
+1 commit, 5 files changed. Both features have backend done (Session 10b), this is pure UI.
+
+**Scope Options (`<ScopeOptions>` component):**
+- [x] `src/components/scope-options.tsx` — full CRUD for build approach options per scope item
+- [x] Progressive disclosure: if no options exist, shows subtle "+ Add build options" link (not empty card)
+- [x] Inline add form (not modal) — label, description, pros/cons, labour days, materials, auto-calc total
+- [x] Day rate from rate card (complexity 1 × standard day hours), never hardcoded
+- [x] Card per option: label, status badge (proposed/selected/rejected), cost total, margin %, impact vs quoted
+- [x] Expandable detail: description, pros/cons, labour × day rate breakdown, materials
+- [x] Select/Reject/Revert/Delete actions — all through `auditedInsert`/`auditedUpdate`
+- [x] Selected options get green border + sorted to top. Rejected are greyed with strikethrough
+- [x] Placed on scope breakdown page between header card and CostBreakdown
+- [x] `tbl_scope_options` added to AUDITED_TABLES in audit.ts
+
+**Cost Waterfall (`<CostWaterfall>` component):**
+- [x] `src/components/cost-waterfall.tsx` — reads from `qry_cost_waterfall` view
+- [x] Collapsible card on job detail page, between CostBreakdown and tabs
+- [x] Table: one row per scope item, columns = Quoted / PM Est / Workshop Est / Actual / Margin / Trend
+- [x] Columns auto-hide when no data in that layer (e.g. no PM estimates → column hidden)
+- [x] Expandable detail per row: labour vs materials breakdown at each layer with margin badges
+- [x] Totals row at bottom aggregating all scope items
+- [x] Colour coding: green (actual < quoted), amber (within 10%), red (over)
+- [x] Trend icons: TrendingDown (green, under budget), Minus (amber), TrendingUp (red, over)
+- [x] Selected scope option label shown as green tag on each row
+- [x] Scope item names link to scope breakdown page
+
+**NOTE: qry_cost_waterfall column names need verification** — view was created in Supabase SQL editor (Session 10b) and column names may not match component interface. Run `SELECT column_name FROM information_schema.columns WHERE table_name = 'qry_cost_waterfall'` to verify.
+
+### New/Modified Files (Session 11)
+| File | Purpose |
+|------|---------|
+| `src/components/scope-options.tsx` | Build options CRUD on scope breakdown page |
+| `src/components/cost-waterfall.tsx` | Per-scope-item cost progression table on job page |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Added CostWaterfall import + placement |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Added ScopeOptions import + placement |
+| `src/lib/audit.ts` | Added tbl_scope_options to AUDITED_TABLES |

@@ -1,1 +1,1 @@
-Update TRACKER.md: session 10 wrap-up with polish, PM estimates, cost analysis, schema changes
+scope-options-and-cost-waterfall  

@@ -16,17 +16,24 @@ function pct(cost: number, quoted: number): number | null {
 
 interface WaterfallRow {
   scope_item_id: number;
-  item_name: string | null;
-  status: string | null;
+  scope_name: string | null;
+  scope_status: string | null;
+  job_id: number;
   quoted_value: number | null;
   pm_est_cost: number | null;
-  workshop_est_labour: number | null;
-  workshop_est_material: number | null;
-  workshop_est_total: number | null;
-  actual_labour: number | null;
-  actual_material: number | null;
+  pm_est_labour_days: number | null;
+  pm_est_material_cost: number | null;
+  ws_est_labour_cost: number | null;
+  ws_est_material_cost: number | null;
+  ws_est_total: number | null;
+  actual_labour_cost: number | null;
+  actual_material_cost: number | null;
   actual_total: number | null;
+  pm_margin_pct: number | null;
+  ws_margin_pct: number | null;
+  actual_margin_pct: number | null;
   selected_option: string | null;
+  selected_option_est: number | null;
 }
 
 interface Props {
@@ -77,7 +84,7 @@ export function CostWaterfall({ jobId }: Props) {
   const totals = rows.reduce((acc, r) => ({
     quoted: acc.quoted + (r.quoted_value || 0),
     pmEst: acc.pmEst + (r.pm_est_cost || 0),
-    workshopEst: acc.workshopEst + (r.workshop_est_total || 0),
+    workshopEst: acc.workshopEst + (r.ws_est_total || 0),
     actual: acc.actual + (r.actual_total || 0),
   }), { quoted: 0, pmEst: 0, workshopEst: 0, actual: 0 });
 
@@ -126,7 +133,7 @@ export function CostWaterfall({ jobId }: Props) {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const bestActual = r.actual_total || r.workshop_est_total || r.pm_est_cost || 0;
+                  const bestActual = r.actual_total || r.ws_est_total || r.pm_est_cost || 0;
                   const isRowExpanded = expandedRow === r.scope_item_id;
                   return (
                     <Fragment key={r.scope_item_id}>
@@ -144,7 +151,7 @@ export function CostWaterfall({ jobId }: Props) {
                               onClick={(e) => e.stopPropagation()}
                               className="text-navy hover:text-starlight-blue transition-colors font-medium truncate max-w-[280px]"
                             >
-                              {r.item_name || `Scope #${r.scope_item_id}`}
+                              {r.scope_name || `Scope #${r.scope_item_id}`}
                             </Link>
                             {r.selected_option && (
                               <span className="text-[10px] bg-green-50 text-starlight-green px-1.5 py-0.5 rounded shrink-0">
@@ -163,7 +170,7 @@ export function CostWaterfall({ jobId }: Props) {
                         )}
                         {hasWorkshopEst && (
                           <td className="text-right py-2.5 px-2 font-mono text-starlight-blue">
-                            {r.workshop_est_total ? fmt(r.workshop_est_total) : "—"}
+                            {r.ws_est_total ? fmt(r.ws_est_total) : "—"}
                           </td>
                         )}
                         {hasActuals && (
@@ -197,20 +204,20 @@ export function CostWaterfall({ jobId }: Props) {
                                   <MarginBadge cost={r.pm_est_cost} quoted={r.quoted_value} />
                                 </div>
                               )}
-                              {r.workshop_est_total != null && (
+                              {r.ws_est_total != null && (
                                 <div>
                                   <p className="font-medium text-starlight-blue mb-1">Workshop Estimate</p>
-                                  <p className="font-mono">Labour: {fmt(r.workshop_est_labour || 0)}</p>
-                                  <p className="font-mono">Material: {fmt(r.workshop_est_material || 0)}</p>
-                                  <p className="font-mono font-semibold mt-0.5">{fmt(r.workshop_est_total)}</p>
-                                  <MarginBadge cost={r.workshop_est_total} quoted={r.quoted_value} />
+                                  <p className="font-mono">Labour: {fmt(r.ws_est_labour_cost || 0)}</p>
+                                  <p className="font-mono">Material: {fmt(r.ws_est_material_cost || 0)}</p>
+                                  <p className="font-mono font-semibold mt-0.5">{fmt(r.ws_est_total)}</p>
+                                  <MarginBadge cost={r.ws_est_total} quoted={r.quoted_value} />
                                 </div>
                               )}
                               {r.actual_total != null && r.actual_total > 0 && (
                                 <div>
                                   <p className="font-medium text-navy mb-1">Actual</p>
-                                  <p className="font-mono">Labour: {fmt(r.actual_labour || 0)}</p>
-                                  <p className="font-mono">Material: {fmt(r.actual_material || 0)}</p>
+                                  <p className="font-mono">Labour: {fmt(r.actual_labour_cost || 0)}</p>
+                                  <p className="font-mono">Material: {fmt(r.actual_material_cost || 0)}</p>
                                   <p className="font-mono font-semibold mt-0.5">{fmt(r.actual_total)}</p>
                                   <MarginBadge cost={r.actual_total} quoted={r.quoted_value} />
                                 </div>
