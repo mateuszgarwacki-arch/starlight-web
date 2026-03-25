@@ -782,4 +782,44 @@ New: qry_freelancer_hours_summary, qry_review_inbox, qry_cost_waterfall
 | `src/components/cost-breakdown.tsx` | Waterfall drill-down added: expandable quote lines show scope items |
 | `src/app/(dashboard)/jobs/[id]/page.tsx` | Removed CostWaterfall import + placement |
 | `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Added ScopeOptions import + placement |
-| `src/lib/audit.ts` | Added tbl_scope_options to AUDITED_TABLES |
+| `src/lib/audit.ts` | Added tbl_scope_options to AUDITED_TABLES + app_metadata role |
+
+**Chunked Upload for Large Files (up to 100MB+):**
+- [x] `/api/onedrive/upload-session` — new API route creates pre-authenticated OneDrive upload session
+- [x] `onedrive-client.ts` — files ≤3.5MB proxy through Vercel (existing), files >3.5MB upload direct to OneDrive in ~3MB chunks
+- [x] Browser never sees Graph API token — only gets scoped, time-limited, single-file upload URL
+- [x] `microsoft-graph.ts` — also updated with server-side chunked upload (for any future server-side uploads)
+
+**Security Hardening — Role in app_metadata:**
+- [x] All role checks now read `app_metadata?.role` first, fall back to `user_metadata?.role`
+- [x] `get_my_role()` PG function updated to read from `app_metadata` (not user-editable)
+- [x] `audit_read_pm` and `audit_revert_admin` policies rebuilt using `get_my_role()`
+- [x] All 53 views switched to `SECURITY INVOKER` (was SECURITY DEFINER bypassing RLS)
+- [x] All API routes patched: manage-user, freelancer-sync, extract-cutlist, extract-invoice, calendar/token
+- [x] middleware.ts, audit.ts, settings page, crew detail page — all patched
+- [x] New user creation writes role to both `user_metadata` AND `app_metadata`
+- [x] Existing users migrated: `raw_app_meta_data` populated from `raw_user_meta_data`
+- [x] `tbl_quote_line_contractors` RLS fixed — was missing admin role, had two conflicting policies
+- [x] Supabase Security Advisor: 0 issues
+
+**Bug Fix — Supplier Assignment:**
+- [x] `tbl_quote_line_contractors` had two RLS policies neither allowing admin — replaced with single `pm_admin_full_access` policy
+
+### SQL Already Run (Session 11)
+- 53× `ALTER VIEW ... SET (security_invoker = on)` — all qry_ and vw_ views
+- `UPDATE auth.users SET raw_app_meta_data = jsonb_set(...)` — migrate roles to app_metadata
+- `CREATE OR REPLACE FUNCTION get_my_role()` — reads from app_metadata
+- DROP + CREATE policies on `tbl_audit_log` — audit_read_pm, audit_revert_admin
+- DROP + CREATE policy on `tbl_quote_line_contractors` — pm_admin_full_access
+
+### New Files (Session 11)
+| File | Purpose |
+|------|---------|
+| `src/components/scope-options.tsx` | Build options CRUD on scope breakdown page |
+| `src/app/api/onedrive/upload-session/route.ts` | Pre-authenticated upload session for large files |
+
+### Conventions Added (Session 11)
+- **Role reading pattern**: Always `app_metadata?.role || user_metadata?.role || "freelancer"` — never just user_metadata (user-editable, insecure)
+- **New user creation**: Must set role in BOTH `user_metadata` (for display) and `app_metadata` (for security/RLS)
+- **Large file upload**: Files >3.5MB go browser→OneDrive direct via upload session. Small files still proxy through Vercel
+- **View security**: All views must be SECURITY INVOKER. Add `ALTER VIEW ... SET (security_invoker = on)` to new view checklist
