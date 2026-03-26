@@ -3,7 +3,7 @@
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — 30 tables, 27+ views, fully migrated from Access.
+**Backend:** Supabase (PostgreSQL) — 33 tables, 34 views, 6 RPC functions, 115 indexes.
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
 **Auth:** Supabase Auth (email+password for PM/foreman, phone+PIN for freelancers). Three-layer security: middleware session validation + API route auth + RLS on all tables. See Security conventions below.
@@ -144,14 +144,57 @@
 
 ## Database Tables (30)
 
-### Migrated from Access (21)
-tbl_production_plan, tbl_quotes, tbl_quote_lines, tbl_scope_items, tbl_scope_item_categories, tbl_category_prompts, tbl_job_items, tbl_jobitem_workorder, tbl_work_orders, tbl_wo_bom, tbl_wo_time_entries, tbl_freelancers, tbl_freelancer_schedule, tbl_materials, tbl_material_prices, tbl_material_spec_defs, tbl_master_lookups, tbl_suppliers, tbl_job_attachments, tbl_dummy_source_quote, tbl_dummy_stock_items
+## Database Schema (verified 26 Mar 2026)
 
-### Added by web app (11)
-tbl_contractors (DEPRECATED — merged into tbl_suppliers), tbl_quote_line_contractors, tbl_wo_activities, tbl_material_aliases, tbl_invoices, tbl_invoice_lines, tbl_wo_documents, tbl_rate_card, tbl_business_settings, tbl_notifications, tbl_audit_log
+### Tables (33 active)
 
-### Key Views (27+)
-qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_breakdown, qry_manpower_demand, qry_procurement_needed, qry_job_cost_summary, qry_scopeitem_cost_summary, qry_wo_cost_summary, qry_estimate_vs_actual, qry_jobitems_withcoverage, qry_today_roster, qry_supplier_summary, qry_material_reconciliation, qry_material_summary_by_job, qry_quoteline_margin, qry_job_quote_margin, qry_wo_estimated_cost, qry_scope_estimated_cost, qry_job_estimated_cost
+| Table | Key Columns |
+|-------|-------------|
+| `tbl_production_plan` | job_id, job_number, job_name, client_name, event_date, event_location, budget_allowance, job_status, pm_note |
+| `tbl_quotes` | quote_id, job_id, quote_reference, quote_version, quote_value, status |
+| `tbl_quote_lines` | quote_line_id, quote_id, job_id, line_number, line_text, line_value, category, event_zone, pm_est_cost, pm_est_labour_days, pm_est_material_cost, interpretation_complete |
+| `tbl_quote_line_contractors` | id, quote_line_id, contractor_id, contractor_quote_value, supplier_id |
+| `tbl_scope_items` | scope_item_id, job_id, quote_line_id, item_name, category_id, description, event_zone, complexity_construction, finish_relative, status |
+| `tbl_scope_item_categories` | category_id, category_name, description, active |
+| `tbl_scope_options` | option_id, scope_item_id, option_label, description, pros, cons, est_labour_days, est_material_cost, est_total_cost, status |
+| `tbl_work_orders` | work_order_id, job_id, scope_item_id, activity_verb, description, estimated_duration_hrs, complexity_construction, finish_relative, planned_lead_id, status, wo_sequence, traveller_printed_at |
+| `tbl_wo_activities` | id, work_order_id, activity_id, sequence, notes |
+| `tbl_wo_bom` | bom_id, work_order_id, scope_item_id, job_id, material_id, stock_item_id, item_description, quantity, unit, unit_cost, needs_ordering, stock_reference |
+| `tbl_wo_time_entries` | entry_id, work_order_id, freelancer_id, actual_hours, applied_hourly_rate, entry_cost, archived_at |
+| `tbl_wo_documents` | doc_id, work_order_id, scope_item_id, job_id, doc_type, file_name, onedrive_path, onedrive_item_id, extraction_status, extracted_data |
+| `tbl_job_items` | item_id, job_id, scope_item_id, description, item_type, stock_reference, stock_item_id, item_source, quantity, finish_required, notes |
+| `tbl_jobitem_workorder` | junction_id, job_item_id, work_order_id |
+| `tbl_job_attachments` | attachment_id, job_id, scope_item_id, file_path, file_type, file_name, file_category |
+| `tbl_stock_items` | stock_id, product_code, description, stock_quantity, location, weight_kg, hire_cost_day, hire_cost_week, thumbnail_url, active, category |
+| `tbl_freelancers` | freelancer_id, freelancer_name, phone, email, role, speciality, day_rate, standard_day_hours, active |
+| `tbl_freelancer_schedule` | schedule_id, freelancer_id, scheduled_date, status, job_id, booking_group, notified_at |
+| `tbl_materials` | material_id, material_name, material_category, unit, standard_length, standard_sheet_size, current_unit_cost, primary_supplier, spec_val_1/2/3, spec_text_1/2, paint_finish, active |
+| `tbl_material_prices` | price_id, material_id, unit_cost, effective_date, supplier, source |
+| `tbl_material_aliases` | alias_id, material_id, alias_text, supplier |
+| `tbl_material_spec_defs` | spec_def_id, category_name, slot, label, unit |
+| `tbl_master_lookups` | lookup_id, category, lookup_value, display_order, phase_number, phase_label, active |
+| `tbl_category_prompts` | prompt_id, category_id, description, typical_item_type, display_order |
+| `tbl_suppliers` | supplier_id, supplier_name, phone, email, contact_name, speciality, payment_terms, active |
+| `tbl_invoices` | invoice_id, supplier, invoice_number, invoice_date, total_value, job_id, status, supplier_id |
+| `tbl_invoice_lines` | line_id, invoice_id, line_number, raw_description, quantity, unit, unit_cost, line_total, material_id, match_status, job_id |
+| `tbl_notifications` | notification_id, type, title, detail, severity, source_freelancer_id, source_job_id, source_wo_id, read_at, dismissed_at, action_url |
+| `tbl_tasks` | task_id, freelancer_id, title, description, category, job_id, hours, worked_date, status, routed_to_wo_id |
+| `tbl_workshop_requests` | request_id, freelancer_id, category, title, description, urgency, job_id, work_order_id, status |
+| `tbl_rate_card` | id, complexity, label, rate_per_hour, description |
+| `tbl_business_settings` | id, setting_key, setting_value, description |
+| `tbl_audit_log` | audit_id, user_id, user_name, user_role, table_name, record_id, field_name, old_value, new_value, changed_at, job_id, action_type, reverted_at |
+
+### Views (34)
+qry_dash_quote_stats, qry_dash_upcoming_jobs, qry_dash_wo_stats, qry_estimate_vs_actual, qry_freelancer_hours_summary, qry_job_accepted_quote, qry_job_cost_summary, qry_job_estimated_cost, qry_job_execution_list, qry_job_quote_margin, qry_jobitems_withcoverage, qry_manpower_demand, qry_material_reconciliation, qry_material_summary_by_job, qry_materials_list, qry_procurement_needed, qry_quote_lines_with_contractors, qry_quote_scopes, qry_quoteline_margin, qry_recent_orders, qry_review_inbox, qry_scope_breakdown, qry_scope_context, qry_scope_estimated_cost, qry_scope_wo_stats, qry_scopeitem_cost_summary, qry_stale_travellers, qry_supplier_summary, qry_wo_cost_labour, qry_wo_cost_material, qry_wo_cost_summary, qry_wo_estimated_cost, qry_wo_phase_ordered, qry_wo_with_activities
+
+### RPC Functions (6)
+rpc_dashboard_data, rpc_workshop_data, rpc_review_data, rpc_capacity_data(date,date), rpc_job_detail_data(job_id), rpc_report_job_financial(job_id)
+
+### Utility Functions (7)
+audit_retention_cycle, get_my_freelancer_id, get_my_role, rls_auto_enable, trigger_set_updated_at, user_freelancer_id, user_role
+
+### Indexes (115)
+Full index coverage across all tables. Key indexes: partial indexes on archived_at (time entries), status fields (WOs, requests, tasks), FTS on materials + stock items, composite indexes on schedule (freelancer+date), audit log (table+record, changed_at).
 
 ## Key Files
 
@@ -163,14 +206,14 @@ qry_dash_upcoming_jobs, qry_wo_phase_ordered, qry_scope_context, qry_scope_break
 | `src/lib/supabase-admin.ts` | Server-side Supabase client (service role) |
 | `src/lib/microsoft-graph.ts` | Microsoft Graph client: auth, upload, download, sharing |
 | `src/lib/onedrive-client.ts` | Browser-side OneDrive upload/download helper |
-| `src/components/sidebar.tsx` | Main navigation (13 items incl. Settings) |
+| `src/components/sidebar.tsx` | Main navigation (15 items incl. Stock, Reports, Settings) |
 | `src/components/ui/badges.tsx` | StatusBadge, DaysRemainingBadge, PhasePill |
 | `src/components/ui/lookup-combo.tsx` | Reusable dropdown bound to tbl_master_lookups |
 | `src/components/cost-breakdown.tsx` | Unified 5-layer cost analysis (replaces quote-margin-panel) |
 | `src/components/create-scope-dialog.tsx` | Modal for scope creation (full quote line text) |
 | `src/components/contractor-picker.tsx` | Inline supplier assignment (reads tbl_suppliers) |
 | `src/components/prompt-panel.tsx` | Category-driven component suggestions |
-| `src/components/job-items-table.tsx` | Job items grid with stock search, auto-expanding textareas |
+| `src/components/job-items-table.tsx` | Job items: stock picker + bespoke dialogs, promote to stock |
 | `src/components/create-wo-dialog.tsx` | Multi-activity WO creation dialog |
 | `src/components/booking-calendar.tsx` | Week grid booking calendar |
 | `src/components/wo-documents-panel.tsx` | WO file management: drawings, references, cut lists, models |
