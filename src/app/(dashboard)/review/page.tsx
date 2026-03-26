@@ -101,30 +101,33 @@ export default function ReviewPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [costRes, timeRes, accRes, matRes, taskCountRes, reqCountRes] = await Promise.all([
-      supabase.from("qry_job_cost_summary").select("*").order("event_date"),
-      supabase.from("tbl_wo_time_entries").select("*").is("archived_at", null).order("system_start_timestamp", { ascending: false }).limit(50),
-      supabase.from("qry_estimate_vs_actual").select("*"),
-      supabase.from("qry_material_summary_by_job").select("*"),
-      supabase.from("tbl_tasks").select("*", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("tbl_workshop_requests").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
-    ]);
 
-    setInboxCount((taskCountRes.count || 0) + (reqCountRes.count || 0));
-    if (costRes.data) setJobCosts(costRes.data);
-    if (matRes.data) setMatSummary(matRes.data);
+    // Single RPC replaces 16+ individual queries
+    const { data: d, error } = await supabase.rpc("rpc_review_data");
+    if (error || !d) { console.error("Review RPC failed:", error); setLoading(false); return; }
 
-    if (accRes.data) {
-      const scopeIds = accRes.data.map((a: any) => a.scope_item_id).filter(Boolean);
-      const [scopeRes, jobRes] = await Promise.all([
-        supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", [...new Set(scopeIds)]),
-        supabase.from("tbl_production_plan").select("job_id, job_number"),
-      ]);
-      const sMap: Record<number, string> = {};
-      (scopeRes.data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
-      const jMap: Record<number, string> = {};
-      (jobRes.data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
-      setAccuracy(accRes.data.map((a: any) => ({
+    setInboxCount(d.inbox_count || 0);
+    if (d.job_costs) setJobCosts(d.job_costs);
+    if (d.material_summary) setMatSummary(d.material_summary);
+
+    // Build lookup maps from pre-fetched data
+    const sMap: Record<number, string> = {};
+    (d.scope_items || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
+    const jMap: Record<number, string> = {};
+    (d.jobs || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
+    const lkMap: Record<number, string> = {};
+    (d.activity_lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = l.lookup_value; });
+
+    // Build WO activity labels
+    const woActLabel: Record<number, string> = {};
+    (d.wo_activities || []).forEach((a: any) => {
+      const label = lkMap[a.activity_id] || "?";
+      woActLabel[a.work_order_id] = woActLabel[a.work_order_id] ? woActLabel[a.work_order_id] + " + " + label : label;
+    });
+
+    // Enrich accuracy data
+    if (d.estimate_vs_actual) {
+      setAccuracy(d.estimate_vs_actual.map((a: any) => ({
         ...a,
         activity_label: a.verb_name || "—",
         scope_name: sMap[a.scope_item_id] || "—",
@@ -132,54 +135,16 @@ export default function ReviewPage() {
       })));
     }
 
-    if (timeRes.data && timeRes.data.length > 0) {
-      const fIds = [...new Set(timeRes.data.map((t: any) => t.freelancer_id))];
-      const woIds = [...new Set(timeRes.data.map((t: any) => t.work_order_id))];
-      const [fRes, woRes, actRes] = await Promise.all([
-        supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds),
-        supabase.from("tbl_work_orders").select("work_order_id, scope_item_id, job_id, description").in("work_order_id", woIds),
-        supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
-      ]);
-      const fMap: Record<number, string> = {};
-      (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
-      const woMap: Record<number, any> = {};
-      (woRes.data || []).forEach((w: any) => { woMap[w.work_order_id] = w; });
-
-      // Build activity labels: "CUT + COVER" style
-      const allActIds = [...new Set((actRes.data || []).map((a: any) => a.activity_id))];
-      const { data: lookups } = allActIds.length > 0
-        ? await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", allActIds)
-        : { data: [] };
-      const lkMap: Record<number, string> = {};
-      (lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = l.lookup_value; });
-
-      const woActLabel: Record<number, string> = {};
-      (actRes.data || []).forEach((a: any) => {
-        const label = lkMap[a.activity_id] || "?";
-        woActLabel[a.work_order_id] = woActLabel[a.work_order_id] ? woActLabel[a.work_order_id] + " + " + label : label;
-      });
-
-      // Scope names and job numbers
-      const scopeIds = [...new Set(Object.values(woMap).map((w: any) => w.scope_item_id).filter(Boolean))];
-      const jobIds = [...new Set(Object.values(woMap).map((w: any) => w.job_id).filter(Boolean))];
-      const [scRes, jbRes] = await Promise.all([
-        scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
-        jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
-      ]);
-      const scMap: Record<number, string> = {};
-      ((scRes as any).data || []).forEach((s: any) => { scMap[s.scope_item_id] = s.item_name; });
-      const jbMap: Record<number, string> = {};
-      ((jbRes as any).data || []).forEach((j: any) => { jbMap[j.job_id] = j.job_number; });
-
-      const enriched = timeRes.data.map((t: any) => {
-        const wo = woMap[t.work_order_id];
-        const actLabel = woActLabel[t.work_order_id] || wo?.description || "—";
+    // Enrich time entries (pre-joined with freelancer_name, wo data from RPC)
+    const rawTime = d.time_entries || [];
+    if (rawTime.length > 0) {
+      const enriched = rawTime.map((t: any) => {
+        const actLabel = woActLabel[t.work_order_id] || "—";
         return {
           ...t,
-          freelancer_name: fMap[t.freelancer_id] || "Unknown",
-          activity_label: actLabel + (wo?.description ? " — " + wo.description : ""),
-          scope_name: wo ? scMap[wo.scope_item_id] || "—" : "—",
-          job_number: wo ? jbMap[wo.job_id] || "—" : "—",
+          activity_label: actLabel + (t.wo_description ? " — " + t.wo_description : ""),
+          scope_name: t.scope_item_id ? sMap[t.scope_item_id] || "—" : "—",
+          job_number: t.job_id ? jMap[t.job_id] || "—" : "—",
         };
       });
       setTimeEntries(enriched);

@@ -51,50 +51,31 @@ export default function WorkshopPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const { data: woData } = await supabase
-      .from("tbl_work_orders")
-      .select("*")
-      .not("status", "eq", "Voided");
 
-    if (!woData || woData.length === 0) { setWos([]); setLoading(false); return; }
+    // Single RPC replaces 7+ individual queries
+    const { data: d, error } = await supabase.rpc("rpc_workshop_data");
+    if (error || !d) { console.error("Workshop RPC failed:", error); setWos([]); setLoading(false); return; }
 
-    const woIds = woData.map((w: any) => w.work_order_id);
-    const scopeIds = [...new Set(woData.map((w: any) => w.scope_item_id).filter(Boolean))];
-    const jobIds = [...new Set(woData.map((w: any) => w.job_id).filter(Boolean))];
-
-    const [actRes, scopeRes, jobRes, timeRes, flRes] = await Promise.all([
-      supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
-      supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
-      supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", jobIds),
-      supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours, flag_note").in("work_order_id", woIds).is("archived_at", null),
-      supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name"),
-    ]);
-
-    const allActIds = [...new Set([
-      ...(actRes.data || []).map((a: any) => a.activity_id),
-      ...woData.map((w: any) => w.activity_verb).filter(Boolean),
-    ])];
-    const { data: lookups } = allActIds.length > 0
-      ? await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").in("lookup_id", allActIds)
-      : { data: [] };
+    const woData = d.work_orders || [];
+    if (woData.length === 0) { setWos([]); setLoading(false); return; }
 
     const lk: Record<number, { v: string; p: number | null }> = {};
-    (lookups || []).forEach((l: any) => { lk[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
+    (d.lookups || []).forEach((l: any) => { lk[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
     const actByWO: Record<number, any[]> = {};
-    (actRes.data || []).forEach((a: any) => {
+    (d.activities || []).forEach((a: any) => {
       if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = [];
       actByWO[a.work_order_id].push(a);
     });
 
     const scopeMap: Record<number, string> = {};
-    (scopeRes.data || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name || "Scope #" + s.scope_item_id; });
+    (d.scope_items || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name || "Scope #" + s.scope_item_id; });
     const jobMap: Record<number, { name: string; number: string; date: string | null }> = {};
-    (jobRes.data || []).forEach((j: any) => { jobMap[j.job_id] = { name: j.job_name, number: j.job_number, date: j.event_date }; });
+    (d.jobs || []).forEach((j: any) => { jobMap[j.job_id] = { name: j.job_name, number: j.job_number, date: j.event_date }; });
     const fMap: Record<number, string> = {};
-    (flRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
+    (d.freelancers || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
 
     const timeByWO: Record<number, any[]> = {};
-    (timeRes.data || []).forEach((t: any) => {
+    (d.time_entries || []).forEach((t: any) => {
       if (!timeByWO[t.work_order_id]) timeByWO[t.work_order_id] = [];
       timeByWO[t.work_order_id].push(t);
     });

@@ -1,1 +1,4 @@
-Fix cutlist extraction: useEffect was overwriting fresh data with stale props
+Session 12b: Workshop + Review pages use single RPC calls
+
+- Workshop: 7+ queries replaced with rpc_workshop_data()
+- Review: 16+ queries replaced with rpc_review_data()
