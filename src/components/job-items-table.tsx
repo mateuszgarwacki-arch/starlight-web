@@ -22,7 +22,7 @@ interface JobItemRow {
 
 interface StockItem {
   stock_id: number;
-  stock_ref: string | null;
+  product_code: string | null;
   description: string | null;
   category: string | null;
 }
@@ -60,8 +60,9 @@ export function JobItemsTable({
     loadItems();
     // Load stock items for search
     supabase
-      .from("tbl_dummy_stock_items")
-      .select("stock_id, stock_ref, description, category")
+      .from("tbl_stock_items")
+      .select("stock_id, product_code, description, category")
+      .eq("active", true)
       .order("description")
       .then(({ data }) => {
         if (data) setStockItems(data);
@@ -144,7 +145,7 @@ export function JobItemsTable({
     await supabase
       .from("tbl_job_items")
       .update({
-        stock_reference: stock.stock_ref,
+        stock_reference: stock.product_code,
         description: stock.description,
         item_type: stock.category === "Stock" ? "Stock" : "Stock-Needs-Work",
       })
@@ -158,7 +159,7 @@ export function JobItemsTable({
     (s) =>
       !stockSearch ||
       (s.description || "").toLowerCase().includes(stockSearch.toLowerCase()) ||
-      (s.stock_ref || "").toLowerCase().includes(stockSearch.toLowerCase()) ||
+      (s.product_code || "").toLowerCase().includes(stockSearch.toLowerCase()) ||
       (s.category || "").toLowerCase().includes(stockSearch.toLowerCase())
   );
 
@@ -333,7 +334,7 @@ export function JobItemsTable({
                                   className="w-full px-3 py-2 text-left hover:bg-blue-50 text-xs border-b border-gray-50"
                                 >
                                   <span className="font-mono text-gray-400">
-                                    {stock.stock_ref}
+                                    {stock.product_code}
                                   </span>
                                   <span className="ml-2 text-gray-700">
                                     {stock.description}

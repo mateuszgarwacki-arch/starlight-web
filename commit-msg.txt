@@ -1,7 +1,5 @@
-Session 12d: Scope-level materials (BOM without work orders)
+Session 12e: Stock import - 2743 items from PDF extraction
 
-- New ScopeBom component on scope breakdown page
-- tbl_wo_bom now supports scope_item_id (nullable work_order_id)
-- Cost rollup views rebuilt to include scope-level materials
-- Install category enabled for scope creation
-- WoBom type updated with scope_item_id field
+- tbl_stock_items replaces tbl_dummy_stock_items
+- job-items-table reads from new table with product_code field
+- FTS index ready for search
