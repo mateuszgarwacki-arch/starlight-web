@@ -1,1 +1,1 @@
-Stock page: live search with 300ms debounce, remove Search button
+Reduce stock search debounce to 150ms

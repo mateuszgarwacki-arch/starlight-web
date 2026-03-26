@@ -100,7 +100,7 @@ export default function StockPage() {
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setSearch(val), 300);
+    debounceRef.current = setTimeout(() => setSearch(val), 150);
   };
 
   const startEdit = (item: StockItem) => {
