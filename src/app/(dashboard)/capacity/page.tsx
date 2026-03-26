@@ -90,6 +90,8 @@ export default function CapacityPage() {
 
   const [expandedJob, setExpandedJob] = useState<number | null>(null);
   const [woDetails, setWoDetails] = useState<any[]>([]);
+  const [allBookedSupplyHours, setAllBookedSupplyHours] = useState(0);
+  const [generalWorkshopHours, setGeneralWorkshopHours] = useState(0);
 
   const today = new Date();
   const fourWeeksOut = new Date(today);
@@ -138,13 +140,23 @@ export default function CapacityPage() {
 
     const jobBookedDays: Record<number, number> = {};
     const jobBookedHours: Record<number, number> = {};
+    let totalSupplyHours = 0;
+    let generalHours = 0;
     bookData.forEach((b: Booking) => {
-      if (b.job_id && (b.status === "Booked" || b.status === "Confirmed" || b.status === "Notified")) {
+      const isActive = b.status === "Booked" || b.status === "Confirmed" || b.status === "Notified";
+      if (!isActive) return;
+      const person = crewMap[b.freelancer_id];
+      const dayHours = person?.standard_day_hours || 8;
+      totalSupplyHours += dayHours;
+      if (b.job_id) {
         jobBookedDays[b.job_id] = (jobBookedDays[b.job_id] || 0) + 1;
-        const person = crewMap[b.freelancer_id];
-        jobBookedHours[b.job_id] = (jobBookedHours[b.job_id] || 0) + (person?.standard_day_hours || 8);
+        jobBookedHours[b.job_id] = (jobBookedHours[b.job_id] || 0) + dayHours;
+      } else {
+        generalHours += dayHours;
       }
     });
+    setAllBookedSupplyHours(totalSupplyHours);
+    setGeneralWorkshopHours(generalHours);
 
     const demands: JobDemand[] = Object.entries(byJob)
       .map(([jobIdStr, wos]) => {
@@ -259,7 +271,7 @@ export default function CapacityPage() {
   const totalEstimated = jobDemands.reduce((s, j) => s + j.total_estimated, 0);
   const totalActual = jobDemands.reduce((s, j) => s + j.total_actual, 0);
   const totalRemaining = jobDemands.reduce((s, j) => s + j.remaining, 0);
-  const totalBookedHours = jobDemands.reduce((s, j) => s + j.booked_hours, 0);
+  const totalBookedHours = allBookedSupplyHours;
   const gap = totalBookedHours - totalRemaining;
   const gapTier = gap >= 0 ? "green" : gap > -40 ? "amber" : "red";
 
@@ -323,6 +335,9 @@ export default function CapacityPage() {
         <div className="card px-4 py-3">
           <p className="text-[10px] text-gray-400 uppercase tracking-wider">Booked (4 wks)</p>
           <p className="text-lg font-semibold text-starlight-blue font-mono">{Math.round(totalBookedHours)}h</p>
+          {generalWorkshopHours > 0 && (
+            <p className="text-[10px] text-gray-400 mt-0.5">{Math.round(generalWorkshopHours)}h general</p>
+          )}
         </div>
         <div className={"card px-4 py-3 border-l-4 " + (gapTier === "green" ? "border-l-starlight-green" : gapTier === "amber" ? "border-l-starlight-amber" : "border-l-starlight-red")}>
           <p className="text-[10px] text-gray-400 uppercase tracking-wider">Gap</p>

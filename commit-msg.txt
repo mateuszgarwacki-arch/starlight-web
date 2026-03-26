@@ -1,1 +1,5 @@
-TRACKER.md: verified full schema from Supabase dump (33 tables, 34 views, 6 RPCs, 115 indexes)
+fix: capacity planning now counts general workshop bookings as supply
+
+General workshop bookings (job_id=null) were invisible to the supply
+calculation. Total booked hours now computed independently of job
+assignment. Booked card shows general hours breakdown.
