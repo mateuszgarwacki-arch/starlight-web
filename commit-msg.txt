@@ -1,1 +1,1 @@
-Stock page: replace pagination with infinite scroll
+Stock page: live search with 300ms debounce, remove Search button

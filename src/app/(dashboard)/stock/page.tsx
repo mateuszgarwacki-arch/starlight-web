@@ -38,6 +38,7 @@ export default function StockPage() {
   const [searchInput, setSearchInput] = useState("");
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [locations, setLocations] = useState<string[]>([]);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<StockItem>>({});
   const [showAdd, setShowAdd] = useState(false);
@@ -96,7 +97,11 @@ export default function StockPage() {
       });
   }, []);
 
-  const handleSearch = () => { setSearch(searchInput); };
+  const handleSearchInput = (val: string) => {
+    setSearchInput(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearch(val), 300);
+  };
 
   const startEdit = (item: StockItem) => {
     setEditing(item.stock_id);
@@ -174,12 +179,10 @@ export default function StockPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
-          <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          <input type="text" value={searchInput} onChange={(e) => handleSearchInput(e.target.value)}
             placeholder="Search by name or product code..."
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
         </div>
-        <button onClick={handleSearch} className="px-4 py-2 bg-navy text-white text-sm rounded-lg hover:bg-navy/90 transition-colors">Search</button>
         {search && <button onClick={() => { setSearch(""); setSearchInput(""); }} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>}
         <select value={locationFilter} onChange={(e) => { setLocationFilter(e.target.value); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
