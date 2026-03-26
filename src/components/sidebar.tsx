@@ -38,6 +38,7 @@ const navItems = [
   { href: "/invoices", label: "Invoices", icon: FileText, zone: 1 },
   { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
+  { href: "/reports", label: "Reports", icon: FileText, zone: 1 },
   { href: "/notifications", label: "Notifications", icon: Bell, zone: 1, hasBadge: true },
   { href: "/settings", label: "Settings", icon: Settings, zone: 1 },
 ];
