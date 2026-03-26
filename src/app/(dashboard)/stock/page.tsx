@@ -44,7 +44,7 @@ export default function StockPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ product_code: "", description: "", stock_quantity: "0", location: "", weight_kg: "", hire_cost_day: "", hire_cost_week: "", category: "" });
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
 
   const buildQuery = useCallback(() => {

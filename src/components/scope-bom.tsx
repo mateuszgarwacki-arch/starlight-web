@@ -20,9 +20,13 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
   const [materials, setMaterials] = useState<
     { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null }[]
   >([]);
+  const [stockItems, setStockItems] = useState<
+    { stock_id: number; product_code: string; description: string; stock_quantity: number; hire_cost_day: number | null; thumbnail_url: string | null }[]
+  >([]);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<typeof materials>([]);
+  const [stockResults, setStockResults] = useState<typeof stockItems>([]);
 
   const loadBom = useCallback(async () => {
     const { data } = await supabase
@@ -43,16 +47,24 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
       .eq("active", true)
       .order("material_name")
       .then(({ data }) => setMaterials(data || []));
+    supabase
+      .from("tbl_stock_items")
+      .select("stock_id, product_code, description, stock_quantity, hire_cost_day, thumbnail_url")
+      .eq("active", true)
+      .order("description")
+      .then(({ data }) => setStockItems(data || []));
   }, [loadBom]);
 
   useEffect(() => {
     if (search.length >= 2) {
       const lower = search.toLowerCase();
-      setSearchResults(materials.filter((m) => m.material_name.toLowerCase().includes(lower)).slice(0, 8));
+      setSearchResults(materials.filter((m) => m.material_name.toLowerCase().includes(lower)).slice(0, 6));
+      setStockResults(stockItems.filter((s) => s.description.toLowerCase().includes(lower) || s.product_code.toLowerCase().includes(lower)).slice(0, 6));
     } else {
       setSearchResults([]);
+      setStockResults([]);
     }
-  }, [search, materials]);
+  }, [search, materials, stockItems]);
 
   const selectMaterial = async (mat: (typeof materials)[0]) => {
     const ctx = await getAuditContext(supabase);

@@ -118,7 +118,7 @@ export default function CrewPage() {
   // Add / Edit
   // ============================================================
   const openAdd = () => {
-    setForm({ freelancer_name: "", phone: "", email: "", role: "Freelancer", speciality: "", day_rate: "", standard_day_hours: "10", notes: "" });
+    setForm({ freelancer_name: "", phone: "", email: "", role: "Freelancer", speciality: "", day_rate: "", standard_day_hours: "10", notes: "", pin: "" });
     setEditingId(null);
     setShowAddDialog(true);
   };
@@ -133,6 +133,7 @@ export default function CrewPage() {
       day_rate: f.day_rate ? String(f.day_rate) : "",
       standard_day_hours: f.standard_day_hours ? String(f.standard_day_hours) : "10",
       notes: f.notes || "",
+      pin: "",
     });
     setEditingId(f.freelancer_id);
     setShowAddDialog(true);
@@ -158,11 +159,37 @@ export default function CrewPage() {
       data.active = true;
       data.system_access = true;
       data.created_at = new Date().toISOString();
-      await supabase.from("tbl_freelancers").insert(data);
+      const { data: inserted } = await supabase.from("tbl_freelancers").insert(data).select("freelancer_id").single();
+
+      // Auto-create auth account if PIN provided
+      if (inserted && form.pin.trim()) {
+        try {
+          const authH = await getAuthHeaders();
+          const res = await fetch("/api/auth/freelancer-sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authH },
+            body: JSON.stringify({
+              freelancer_id: inserted.freelancer_id,
+              phone: data.phone,
+              pin: form.pin.trim(),
+              role: (data.role || "Freelancer").toLowerCase().replace(" ", "_").replace("-", "_"),
+              name: data.freelancer_name,
+            }),
+          });
+          const json = await res.json();
+          if (json.error) {
+            toast.error("Freelancer created but PIN failed: " + json.error);
+          } else {
+            toast.success("Freelancer added with mobile login");
+          }
+        } catch { toast.error("Freelancer created but auth sync failed"); }
+      } else {
+        toast.success("Freelancer added" + (form.pin.trim() ? "" : " — no PIN set, they can't log in yet"));
+      }
     }
     setShowAddDialog(false);
     loadCrew();
-    toast.success(editingId ? "Freelancer updated" : "Freelancer added");
+    if (editingId) toast.success("Freelancer updated");
   };
 
   const toggleActive = async (id: number, current: string | boolean | null) => {
@@ -399,6 +426,14 @@ export default function CrewPage() {
                   <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Skills, availability notes..." />
                 </div>
+                {!editingId && (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">PIN (for mobile login)</label>
+                    <input type="text" value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="4-6 digit PIN" inputMode="numeric" maxLength={6} />
+                    <p className="text-[10px] text-gray-400 mt-1">Leave blank to add later. They&apos;ll need this to clock in on their phone.</p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-3">

@@ -1,1 +1,4 @@
-Stock page: card grid view with detail modal, grid/list toggle, click to view/edit
+Crew: PIN field in Add Freelancer dialog, auto-creates auth account on creation
+
+Also: Stock page default view changed to list
+Stock Pick category enabled for scope creation

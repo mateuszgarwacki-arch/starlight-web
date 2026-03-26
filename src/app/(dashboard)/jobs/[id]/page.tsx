@@ -34,7 +34,7 @@ const CATEGORY_CONFIG: Record<string, {
   "Workshop":                  { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
   "Workshop Build":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
   "Stock-and-Hire":            { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
-  "Stock Pick":                { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: true,  showDoneCheckbox: true,  autoComplete: "manual" },
+  "Stock Pick":                { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: true,  showDoneCheckbox: true,  autoComplete: "scope" },
   "Subcontracted":             { canCreateScope: false, showAmber: false, showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "contractor" },
   "Subcontracted (Partial)":   { canCreateScope: true,  showAmber: true,  showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope+contractor" },
   "Install":                   { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },

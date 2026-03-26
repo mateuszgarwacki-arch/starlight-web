@@ -177,6 +177,7 @@ export interface WoBom {
   scope_item_id: number | null;
   job_id: number | null;
   material_id: number | null;
+  stock_item_id: number | null;
   material_category: number | null;
   item_description: string | null;
   stock_reference: string | null;
