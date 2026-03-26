@@ -205,7 +205,7 @@ export default function MaterialsPage() {
 
     // For sheets, store thickness in spec_val_1
     const isSheet = selectedCategoryName === "Sheet";
-    const isTimber = selectedCategoryName === "Timber" || selectedCategoryName === "Metal";
+    const isTimber = selectedCategoryName === "Timber" || selectedCategoryName === "Metal" || selectedCategoryName === "Steel";
 
     const payload: Record<string, any> = {
       material_name: form.material_name.trim(),
@@ -314,7 +314,7 @@ export default function MaterialsPage() {
     ? categories.find((c) => c.lookup_id === Number(form.material_category))?.lookup_value
     : null;
 
-  const showLength = selectedCategoryName === "Timber" || selectedCategoryName === "Metal" || selectedCategoryName === "Fabric";
+  const showLength = selectedCategoryName === "Timber" || selectedCategoryName === "Metal" || selectedCategoryName === "Steel" || selectedCategoryName === "Fabric";
   const showSheetSize = selectedCategoryName === "Sheet";
 
   // ============================================================

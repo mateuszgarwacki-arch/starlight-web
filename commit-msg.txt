@@ -1,1 +1,1 @@
-Job items: fix stock detection for legacy items, add inline notes field
+Materials: add Steel category alongside Timber/Metal for spec fields and standard length
