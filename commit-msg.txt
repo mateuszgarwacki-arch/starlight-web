@@ -1,1 +1,1 @@
-Stock page: add thumbnail column with base64 data URIs from PDF extraction
+Stock thumbnails: 1960 images as static files in public/stock-thumbs/
