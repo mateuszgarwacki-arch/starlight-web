@@ -1,1 +1,1 @@
-Reports: fix job_reference -> job_number column name throughout
+Reports: fix event_zone -> event_location on job table

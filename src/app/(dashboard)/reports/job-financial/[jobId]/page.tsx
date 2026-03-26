@@ -28,7 +28,7 @@ interface ReportLine {
 }
 
 interface ReportData {
-  job: { job_id: number; job_number: string; job_name: string; client_name: string; event_date: string; event_zone: string };
+  job: { job_id: number; job_number: string; job_name: string; client_name: string; event_date: string; event_location: string };
   target_margin_pct: number;
   generated_at: string;
   lines: ReportLine[];
@@ -97,7 +97,7 @@ export default function JobFinancialReport() {
           </div>
           <div className="text-right text-xs text-gray-400">
             <p>{job.event_date ? new Date(job.event_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "No date"}</p>
-            <p>{job.event_zone || "—"}</p>
+            <p>{job.event_location || "—"}</p>
             <p className="mt-2 text-[10px]">Generated {new Date(data.generated_at).toLocaleDateString("en-GB")} {new Date(data.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
           </div>
         </div>
