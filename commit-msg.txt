@@ -1,5 +1,8 @@
-Stock Pick wiring: ScopeBom searches both materials and stock items with thumbnails
+Job Items redesign: stock picker + bespoke dialogs, promote to stock
 
-- Stock items appear with thumbnail, qty in stock, hire rate in search results
-- Stock badge on BOM rows linked to stock items
-- stock_item_id FK on tbl_wo_bom
+- Two distinct add buttons: Add Stock Item (shopping picker) + Add Bespoke Item (form)
+- Stock picker: live search with thumbnails, qty available, location, hire rate
+- Bespoke form: description, qty, finish required, promote-to-stock checkbox
+- Item list shows source badges (Stock/Bespoke/Promoted)
+- Promote to Stock button on bespoke items creates stock catalogue entry
+- stock_item_id + item_source columns on tbl_job_items
