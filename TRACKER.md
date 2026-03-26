@@ -568,20 +568,17 @@ Every user-facing action that changes state should generate a notification AND a
 - **Real-time presence** live on job detail, scope breakdown, WO pages
 - **Optimistic concurrency** live on all audited update paths with conflict dialog
 - **All creation paths audited** — WOs, scopes, BOM rows, quote lines, time entries
-
-### SQL Already Run (Session 8 — no new SQL in Session 9)
-- `sql/add-quote-line-qty.sql`: quantity + unit_price columns on tbl_quote_lines
-- `sql/session8-multiuser.sql`: tbl_audit_log, updated_at triggers on 6 tables, RLS on audit log
-- `sql/session8-time-entry-archive.sql`: archived_at/by/reason on tbl_wo_time_entries, 4 cost views rebuilt with archive filter, today_roster rebuilt
-- `sql/seed-grosvenor.sql`: Grosvenor Hotel Wedding job + quote + 89 lines
-- Admin role set via: `UPDATE auth.users SET raw_user_meta_data = jsonb_set(raw_user_meta_data, '{role}', '"admin"') WHERE email = '...'`
+- **Scope options** live on scope breakdown page — add/select/reject build approaches with cost estimates
+- **Cost waterfall** integrated as drill-down inside cost analysis — expand quote lines to see scope items
+- **Chunked upload** live — files up to 100MB+ upload directly to OneDrive from browser
+- **Security: 0 Supabase advisor issues** — all views SECURITY INVOKER, roles in app_metadata, RLS clean
 
 ### Outstanding Work (prioritised)
 1. **Supabase Pro upgrade** — CRITICAL before inviting PMs. Enables daily backups + PITR
-2. **Scope options UI** — tbl_scope_options exists, needs cards on scope breakdown page (add/select/reject)
-3. **Cost waterfall component** — qry_cost_waterfall view exists, needs standalone UI or integration into scope page
-4. **Quote import from real source** — currently manual entry only
-5. **Schedule `audit_retention_cycle()`** — function created, needs pg_cron on Pro plan (monthly)
+2. **Quote import from real source** — currently manual entry only
+3. **Schedule `audit_retention_cycle()`** — function created, needs pg_cron on Pro plan (monthly)
+4. **Clean up vw_ views** — 18 legacy views duplicating qry_ views. Verify nothing uses them, then DROP
+5. **Repo transfer** — move from personal GitHub to company account, update Vercel git connection
 6. Job templating, precedent search, 2D sheet nesting, cross-job analytics (Tier 3)
 
 ### New Files (Session 9)
