@@ -1,1 +1,6 @@
-chunked-upload-for-large-files-up-to-100MB  
+Session 12: DB cleanup + dashboard RPC performance
+
+- Dashboard: 16+ queries replaced with single rpc_dashboard_data() call
+- Dropped: 18 vw_ views, 2 dead tables, 1 unused qry_, 7 orphaned functions
+- Added: 18 performance indexes, qry_stale_travellers view, FTS index for materials
+- Scheduled: audit_retention_cycle via pg_cron (monthly)

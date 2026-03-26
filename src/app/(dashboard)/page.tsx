@@ -62,87 +62,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [jobsRes, manpowerRes, procRes, flagsRes, invoiceRes, jobStatusRes] = await Promise.all([
-        supabase.from("qry_dash_upcoming_jobs").select("*"),
-        supabase.from("qry_manpower_demand").select("*"),
-        supabase.from("qry_procurement_needed").select("*").limit(15),
-        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, flag_note, actual_hours, entry_cost, system_start_timestamp").not("flag_note", "is", null).is("archived_at", null).order("system_start_timestamp", { ascending: false }).limit(10),
-        supabase.from("tbl_invoices").select("invoice_id, supplier, invoice_number, invoice_date, total_value, status").eq("status", "Processed").order("uploaded_at", { ascending: false }).limit(5),
-        supabase.from("tbl_production_plan").select("job_id, job_status"),
-      ]);
+      // Single RPC call replaces 16+ individual queries
+      const { data, error } = await supabase.rpc("rpc_dashboard_data");
 
-      // Filter out deleted jobs and empty jobs
-      const deletedJobIds = new Set((jobStatusRes.data || []).filter((j: any) => j.job_status === "Deleted").map((j: any) => j.job_id));
-      const activeJobs = (jobsRes.data || []).filter((j: any) => !deletedJobIds.has(j.job_id));
-      if (activeJobs) setJobs(activeJobs);
-      if (manpowerRes.data) setManpower(manpowerRes.data);
-      setProcurement(procRes.data || []);
-      setRecentInvoices(invoiceRes.data || []);
-
-      // Stale travellers
-      const { data: staleData } = await supabase.from("qry_stale_travellers").select("*");
-      setStaleTravellers(staleData || []);
-
-      // Recent unread notifications
-      const { data: notifData } = await supabase
-        .from("tbl_notifications")
-        .select("notification_id, type, title, detail, severity, action_url, created_at, read_at")
-        .is("dismissed_at", null)
-        .is("read_at", null)
-        .order("created_at", { ascending: false })
-        .limit(8);
-      setNotifications(notifData || []);
-
-      // Inbox count (pending tasks + open requests)
-      const [taskCountRes, requestCountRes] = await Promise.all([
-        supabase.from("tbl_tasks").select("*", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("tbl_workshop_requests").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
-      ]);
-      setInboxCount((taskCountRes.count || 0) + (requestCountRes.count || 0));
-
-      // Enrich flags with context
-      const rawFlags = flagsRes.data || [];
-      if (rawFlags.length > 0) {
-        const woIds = [...new Set(rawFlags.map((f: any) => f.work_order_id))];
-        const fIds = [...new Set(rawFlags.map((f: any) => f.freelancer_id))];
-        const [woRes, fRes] = await Promise.all([
-          supabase.from("tbl_work_orders").select("work_order_id, job_id, scope_item_id, description").in("work_order_id", woIds),
-          supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds),
-        ]);
-        const woMap: Record<number, any> = {};
-        (woRes.data || []).forEach((w: any) => { woMap[w.work_order_id] = w; });
-        const fMap: Record<number, string> = {};
-        (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
-        // Get job + scope names
-        const jobIds = [...new Set(Object.values(woMap).map((w: any) => w.job_id).filter(Boolean))];
-        const scopeIds = [...new Set(Object.values(woMap).map((w: any) => w.scope_item_id).filter(Boolean))];
-        const [jobNamesRes, scopeNamesRes] = await Promise.all([
-          jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds) : { data: [] },
-          scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
-        ]);
-        const jobNameMap: Record<number, any> = {};
-        (jobNamesRes.data || []).forEach((j: any) => { jobNameMap[j.job_id] = j; });
-        const scopeNameMap: Record<number, string> = {};
-        (scopeNamesRes.data || []).forEach((s: any) => { scopeNameMap[s.scope_item_id] = s.item_name; });
-        setFlags(rawFlags.map((f: any) => {
-          const wo = woMap[f.work_order_id] || {};
-          const job = jobNameMap[wo.job_id] || {};
-          return { ...f, freelancer_name: fMap[f.freelancer_id] || "Unknown", wo_description: wo.description || "", job_name: job.job_name || "", job_number: job.job_number || "", scope_name: scopeNameMap[wo.scope_item_id] || "" };
-        }));
+      if (error || !data) {
+        console.error("Dashboard RPC failed:", error);
+        setLoading(false);
+        return;
       }
 
-      // Get currently active workers (open time entries)
-      const { data: openEntries } = await supabase.from("tbl_wo_time_entries")
-        .select("entry_id, freelancer_id, work_order_id, system_start_timestamp")
-        .is("system_end_timestamp", null)
-        .is("archived_at", null);
-      if (openEntries && openEntries.length > 0) {
-        const fIds = [...new Set(openEntries.map((e: any) => e.freelancer_id))];
-        const { data: names } = await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds);
-        const nameMap: Record<number, string> = {};
-        (names || []).forEach((n: any) => { nameMap[n.freelancer_id] = n.freelancer_name; });
-        setActiveWorkers(openEntries.map((e: any) => ({ ...e, name: nameMap[e.freelancer_id] || "Unknown" })));
-      }
+      setJobs(data.jobs || []);
+      setManpower(data.manpower || []);
+      setProcurement(data.procurement || []);
+      setFlags(data.flags || []);
+      setRecentInvoices(data.recentInvoices || []);
+      setStaleTravellers(data.staleTravellers || []);
+      setNotifications(data.notifications || []);
+      setInboxCount(data.inboxCount || 0);
+      setActiveWorkers(data.activeWorkers || []);
       setLoading(false);
     }
     load();
