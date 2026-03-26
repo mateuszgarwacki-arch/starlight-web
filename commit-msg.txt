@@ -1,4 +1,4 @@
-Session 12b: Workshop + Review pages use single RPC calls
+Session 12c: Capacity + Job Detail pages use single RPC calls
 
-- Workshop: 7+ queries replaced with rpc_workshop_data()
-- Review: 16+ queries replaced with rpc_review_data()
+- Capacity: 5+ queries replaced with rpc_capacity_data()
+- Job Detail: 10+ queries replaced with rpc_job_detail_data()

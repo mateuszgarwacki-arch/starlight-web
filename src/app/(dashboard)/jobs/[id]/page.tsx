@@ -141,55 +141,36 @@ export default function JobDetailPage() {
   } | null>(null);
 
   const loadData = useCallback(async () => {
-    const [jobRes, quotesRes, linesRes, scopesRes, contractorRes, rateCardRes, settingsRes] = await Promise.all([
-      supabase.from("tbl_production_plan").select("*").eq("job_id", jobId).single(),
-      supabase.from("tbl_quotes").select("*").eq("job_id", jobId),
-      supabase.from("tbl_quote_lines").select("*").eq("job_id", jobId).order("import_sequence"),
-      supabase.from("tbl_scope_items").select("*").eq("job_id", jobId).order("created_at"),
-      supabase.from("qry_quote_lines_with_contractors").select("quote_line_id, contractor_id, contractor_name, contractor_quote_value, contractor_description").eq("job_id", jobId),
-      supabase.from("tbl_rate_card").select("rate_per_hour").eq("complexity", 1).single(),
-      supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "standard_day_hours").single(),
-    ]);
+    // Single RPC replaces 10+ individual queries
+    const { data: d, error } = await supabase.rpc("rpc_job_detail_data", { p_job_id: jobId });
+    if (error || !d) { console.error("Job detail RPC failed:", error); setLoading(false); return; }
 
     // Calculate default day rate from rate card
-    const stdHours = parseFloat(settingsRes.data?.setting_value) || 10;
-    const straightforwardRate = rateCardRes.data?.rate_per_hour || 25;
+    const stdHours = parseFloat(d.standard_day_hours) || 10;
+    const straightforwardRate = d.rate_card?.rate_per_hour || 25;
     setDefaultDayRate(straightforwardRate * stdHours);
 
-    if (jobRes.data) setJob(jobRes.data);
-    if (quotesRes.data) setQuotes(quotesRes.data);
-    if (linesRes.data) setLines(linesRes.data);
-    if (scopesRes.data) setScopes(scopesRes.data);
+    if (d.job) setJob(d.job);
+    if (d.quotes) setQuotes(d.quotes);
+    if (d.lines) setLines(d.lines);
+    if (d.scopes) setScopes(d.scopes);
 
-    // Load WO data with activity labels
-    const { data: wos } = await supabase
-      .from("qry_wo_phase_ordered")
-      .select("*")
-      .eq("job_id", jobId);
-
-    if (wos && wos.length > 0) {
-      // Enrich with activity junction labels + scope names
-      const woIds = wos.map((w: any) => w.work_order_id);
-      const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
-
-      const [actRes, lookupRes] = await Promise.all([
-        supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
-        supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").eq("category", "ACTIVITY"),
-      ]);
-
+    // Enrich WO data with activity labels
+    const wos = d.work_orders || [];
+    if (wos.length > 0) {
       const lkMap: Record<number, { v: string; p: number | null }> = {};
-      (lookupRes.data || []).forEach((l: any) => { lkMap[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
+      (d.activity_lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
 
       const actByWO: Record<number, any[]> = {};
-      (actRes.data || []).forEach((a: any) => {
+      (d.wo_activities || []).forEach((a: any) => {
         if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = [];
         actByWO[a.work_order_id].push(a);
       });
 
       const scopeMap: Record<number, string> = {};
-      if (scopesRes.data) {
-        scopesRes.data.forEach((s: any) => {
-          const line = linesRes.data?.find((l: any) => l.quote_line_id === s.quote_line_id);
+      if (d.scopes) {
+        d.scopes.forEach((s: any) => {
+          const line = d.lines?.find((l: any) => l.quote_line_id === s.quote_line_id);
           scopeMap[s.scope_item_id] = line?.line_text || s.item_name || "Scope #" + s.scope_item_id;
         });
       }
@@ -226,9 +207,9 @@ export default function JobDetailPage() {
       setWoData([]);
     }
 
-    if (contractorRes.data) {
+    if (d.contractors) {
       const map: Record<number, ContractorInfo> = {};
-      contractorRes.data.forEach((row: any) => {
+      d.contractors.forEach((row: any) => {
         if (row.contractor_id) {
           map[row.quote_line_id] = {
             contractor_id: row.contractor_id,

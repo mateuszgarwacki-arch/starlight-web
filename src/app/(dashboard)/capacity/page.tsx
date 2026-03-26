@@ -104,32 +104,25 @@ export default function CapacityPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
 
-    const [woRes, crewRes, bookRes, jobRes] = await Promise.all([
-      supabase.from("tbl_work_orders").select("work_order_id, job_id, scope_item_id, description, status, estimated_duration_hrs, planned_lead_id").not("status", "eq", "Voided"),
-      supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name, speciality, day_rate, standard_day_hours").eq("active", true).order("freelancer_name"),
-      supabase.from("tbl_freelancer_schedule").select("*").gte("scheduled_date", todayStr).lte("scheduled_date", futureStr),
-      supabase.from("tbl_production_plan").select("job_id, job_number, job_name, event_date").order("event_date"),
-    ]);
+    // Single RPC replaces 5+ individual queries
+    const { data: d, error } = await supabase.rpc("rpc_capacity_data", { p_date_from: todayStr, p_date_to: futureStr });
+    if (error || !d) { console.error("Capacity RPC failed:", error); setLoading(false); return; }
 
-    const wos = woRes.data || [];
-    const crewData = crewRes.data || [];
-    const bookData = bookRes.data || [];
-    const jobData = jobRes.data || [];
+    const wos = d.work_orders || [];
+    const crewData = d.crew || [];
+    const bookData = d.bookings || [];
+    const jobData = d.jobs || [];
 
     setWorkOrders(wos);
     setCrew(crewData);
     setBookings(bookData);
     setJobs(jobData);
 
-    // Get actual hours totals per WO from time entries
-    const woIds = wos.map((w: any) => w.work_order_id);
+    // Build time map from pre-aggregated data
     let timeMap: Record<number, number> = {};
-    if (woIds.length > 0) {
-      const { data: timeData } = await supabase.from("tbl_wo_time_entries").select("work_order_id, actual_hours").in("work_order_id", woIds).is("archived_at", null);
-      (timeData || []).forEach((t: any) => {
-        timeMap[t.work_order_id] = (timeMap[t.work_order_id] || 0) + (t.actual_hours || 0);
-      });
-    }
+    (d.time_hours_by_wo || []).forEach((t: any) => {
+      timeMap[t.work_order_id] = parseFloat(t.total_hours) || 0;
+    });
 
     const jobMap: Record<number, any> = {};
     jobData.forEach((j: any) => { jobMap[j.job_id] = j; });
