@@ -40,68 +40,48 @@ export async function POST(request: NextRequest) {
 NAMING CONVENTIONS USED IN THIS WORKSHOP:
 - Part names often use material prefixes: "2x1_upright" means a 2x1 PAR Softwood part called "upright"
 - "2x1" = 2x1 PAR Softwood (cross-section 44mm x 19mm, any length). Match to "2x1 PAR Softwood" in catalogue.
+- "3x1" = 3x1 PAR Softwood (cross-section 70mm x 19mm, any length).
 - "MDF18" or "mdf18" prefix = 18mm MDF sheet material. Match to "18mm MDF" in catalogue.
-- "ply18" or "ply_" prefix = 18mm Plywood. "ply12" = 12mm Plywood. Match accordingly.
+- "ply18" or "ply_" prefix = 18mm Plywood. "ply12" = 12mm Plywood. "ply9" = 9mm Plywood. Match accordingly.
 - "bendy_ply" = flexible/bending plywood (usually 5mm or 3mm)
 - Numbers in prefixes usually indicate thickness in mm for sheet goods, or cross-section for timber
 - The part description IS the item name. The material must be INFERRED from the prefix and dimensions.
 ${materialsSection}
-CRITICAL RULES FOR SHEET GOODS AND TIMBER:
-1. For SHEET materials (Plywood, MDF, acrylic etc.):
-   - Standard sheet size is 2440mm x 1220mm unless catalogue says otherwise
-   - Calculate how many standard sheets are needed to cut ALL parts of this material
-   - Use simple nesting: fit parts on sheets by area with 10% waste factor
-   - Return "sheet_count" = number of standard sheets to ORDER
-   
-2. For TIMBER (PAR, CLS, battens etc.):
-   - Standard length is 4800mm (or as specified in catalogue)
-   - Calculate how many standard lengths are needed to cut all pieces
-   - Simple linear: total cut length / standard length, rounded up, +10% waste
-   - Return "standard_length_count" = number of standard lengths to ORDER
+YOUR ONLY JOB: Extract the individual parts list. Do NOT attempt to calculate sheet counts, standard lengths, or totals — the frontend will compute these.
 
-3. Group parts by material type — all "mdf18" parts share the same standard sheets
+For material_category use EXACTLY ONE of: Timber, Sheet, Metal, Fabric, Hardware, Other.
+- Timber = PAR, CLS, battens, dimensional lumber (has a meaningful length, small cross-section)
+- Sheet = Plywood, MDF, acrylic, any sheet material (has length AND width, thin thickness)
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with no preamble:
 
 {
   "lines": [
     {
       "line_number": 1,
       "description": "The part name exactly as written in the cut list",
-      "material": "The matched material from catalogue, or best guess (e.g. '18mm MDF', '2x1 PAR Softwood')",
+      "material": "The matched material from catalogue, or best guess (e.g. '18mm General Plywood 8x4', '3x1 PAR')",
       "material_category": "Timber|Sheet|Metal|Fabric|Hardware|Other",
       "length_mm": 1200,
       "width_mm": 600,
       "thickness_mm": 18,
       "quantity": 2,
-      "unit": "Each|Sheet|Metre|Length",
-      "notes": "Any grain, edge banding, or special notes",
-      "sheet_count": null,
-      "standard_length_count": null
-    }
-  ],
-  "material_summary": [
-    {
-      "material": "18mm MDF",
-      "total_parts": 3,
-      "total_area_sqm": 0.54,
-      "standard_sheet_size": "2440x1220",
-      "sheets_needed": 1,
-      "waste_pct": 63
+      "unit": "Each",
+      "notes": "Any grain, edge banding, or special notes from the source"
     }
   ],
   "summary": {
     "total_parts": 12,
-    "material_types": ["18mm MDF", "2x1 PAR Softwood"],
-    "source_format": "OpenCutList CSV"
+    "material_types": ["18mm General Plywood 8x4", "3x1 PAR"],
+    "source_format": "OpenCutList PDF"
   }
 }
 
 IMPORTANT:
-- sheet_count and standard_length_count go on the FIRST line of each material group only
-- Other lines of the same material get null for these fields
-- Every part gets its own line with full dimensions
-- If you can't determine the material, set material_category to "Other"`;
+- Every part gets its own line with full dimensions and quantity
+- If the source has a totals/summary section, IGNORE it — only extract individual parts
+- If you can't determine the material, set material_category to "Other"
+- quantity must reflect the ACTUAL count of this part from the source document`;
 
   try {
     let messages: any[];

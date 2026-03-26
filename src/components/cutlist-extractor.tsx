@@ -47,11 +47,12 @@ interface CutListExtractorProps {
 }
 
 /* ============================================================
-   Post-processing: client-side bin-packing + anomaly detection
+   Post-processing: client-side bin-packing calculations
    ============================================================ */
 
+// --- 1D bin packing for timber (First-Fit Decreasing) ---
+
 function binPackLengths(pieceLengths: number[], standardLength: number): number {
-  // First-Fit Decreasing bin packing
   const sorted = [...pieceLengths].sort((a, b) => b - a);
   const bins: number[] = [];
   for (const piece of sorted) {
@@ -68,86 +69,221 @@ function binPackLengths(pieceLengths: number[], standardLength: number): number 
   return bins.length;
 }
 
-function recalcMaterialSummary(
-  parts: ExtractedLine[],
-  aiSummary: MaterialSummary[],
-  catalogueMaterials: any[]
-): MaterialSummary[] {
-  // Group parts by material name (lowercase match)
-  const groups: Record<string, ExtractedLine[]> = {};
-  for (const p of parts) {
-    const key = (p.material || "unknown").toLowerCase();
-    if (!groups[key]) groups[key] = [];
-    // Expand by quantity
-    for (let i = 0; i < (p.quantity || 1); i++) groups[key].push(p);
+// --- 2D guillotine bin packing for sheets ---
+// Models how a table saw actually works: each placed part splits
+// remaining space into two rectangles via a guillotine cut.
+
+interface Rect { w: number; h: number; }
+interface FreeRect { x: number; y: number; w: number; h: number; }
+
+function guillotinePack(parts: Rect[], sheetW: number, sheetH: number): { sheets: number; placements: number } {
+  // Sort parts by area descending (largest first = better packing)
+  const sorted = [...parts].sort((a, b) => (b.w * b.h) - (a.w * a.h));
+  const sheets: FreeRect[][] = [];
+  let totalPlaced = 0;
+
+  for (const part of sorted) {
+    let placed = false;
+
+    // Try each existing sheet
+    for (const freeRects of sheets) {
+      const idx = findBestFit(freeRects, part.w, part.h);
+      if (idx !== -1) {
+        splitRect(freeRects, idx, part.w, part.h);
+        totalPlaced++;
+        placed = true;
+        break;
+      }
+      // Try rotated (swap w/h)
+      if (part.w !== part.h) {
+        const idxR = findBestFit(freeRects, part.h, part.w);
+        if (idxR !== -1) {
+          splitRect(freeRects, idxR, part.h, part.w);
+          totalPlaced++;
+          placed = true;
+          break;
+        }
+      }
+    }
+
+    if (!placed) {
+      // Open a new sheet
+      const newSheet: FreeRect[] = [{ x: 0, y: 0, w: sheetW, h: sheetH }];
+      const idx = findBestFit(newSheet, part.w, part.h);
+      if (idx !== -1) {
+        splitRect(newSheet, idx, part.w, part.h);
+        totalPlaced++;
+      } else if (part.w !== part.h) {
+        const idxR = findBestFit(newSheet, part.h, part.w);
+        if (idxR !== -1) {
+          splitRect(newSheet, idxR, part.h, part.w);
+          totalPlaced++;
+        }
+        // If still can't fit, part is oversized — sheet still opened, counted as waste
+      }
+      sheets.push(newSheet);
+    }
   }
 
-  return aiSummary.map(mat => {
-    const matKey = (mat.material || "").toLowerCase();
-    const matParts = groups[matKey] || [];
+  return { sheets: sheets.length, placements: totalPlaced };
+}
+
+function findBestFit(freeRects: FreeRect[], pw: number, ph: number): number {
+  // Best Short Side Fit: minimise leftover on the shorter remaining side
+  let bestIdx = -1;
+  let bestShortSide = Infinity;
+
+  for (let i = 0; i < freeRects.length; i++) {
+    const r = freeRects[i];
+    if (pw <= r.w && ph <= r.h) {
+      const shortSide = Math.min(r.w - pw, r.h - ph);
+      if (shortSide < bestShortSide) {
+        bestShortSide = shortSide;
+        bestIdx = i;
+      }
+    }
+  }
+  return bestIdx;
+}
+
+function splitRect(freeRects: FreeRect[], idx: number, pw: number, ph: number) {
+  const r = freeRects[idx];
+  // Remove the used rect
+  freeRects.splice(idx, 1);
+
+  // Split along the shorter leftover axis (Shorter Axis Split rule)
+  const remainW = r.w - pw;
+  const remainH = r.h - ph;
+
+  if (remainW > 0 || remainH > 0) {
+    if (remainW < remainH) {
+      // Horizontal split: right strip is narrow, bottom strip is wide
+      if (remainW > 0) freeRects.push({ x: r.x + pw, y: r.y, w: remainW, h: ph });
+      if (remainH > 0) freeRects.push({ x: r.x, y: r.y + ph, w: r.w, h: remainH });
+    } else {
+      // Vertical split: bottom strip is narrow, right strip is tall
+      if (remainW > 0) freeRects.push({ x: r.x + pw, y: r.y, w: remainW, h: r.h });
+      if (remainH > 0) freeRects.push({ x: r.x, y: r.y + ph, w: pw, h: remainH });
+    }
+  }
+
+  // Merge adjacent free rects where possible (simple pass)
+  mergeFreeRects(freeRects);
+}
+
+function mergeFreeRects(rects: FreeRect[]) {
+  // Remove rects fully contained within another
+  for (let i = rects.length - 1; i >= 0; i--) {
+    for (let j = 0; j < rects.length; j++) {
+      if (i === j || i >= rects.length) continue;
+      const a = rects[i], b = rects[j];
+      if (a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h) {
+        rects.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+// --- Parse sheet size string ---
+
+function parseSheetSize(sizeStr?: string | null): { w: number; h: number } | null {
+  if (!sizeStr) return null;
+  const m = sizeStr.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (m) return { w: parseInt(m[1]), h: parseInt(m[2]) };
+  return null;
+}
+
+// --- Build material summary from extracted parts ---
+
+function buildMaterialSummary(
+  parts: ExtractedLine[],
+  catalogueMaterials: any[]
+): MaterialSummary[] {
+  // Group parts by material name (case-insensitive)
+  const groups: Record<string, { parts: ExtractedLine[]; category: string }> = {};
+  for (const p of parts) {
+    const key = (p.material || "unknown").toLowerCase();
+    if (!groups[key]) groups[key] = { parts: [], category: (p.material_category || "Other").toLowerCase() };
+    groups[key].parts.push(p);
+  }
+
+  return Object.entries(groups).map(([matKey, { parts: matParts, category }]) => {
+    const materialName = matParts[0]?.material || matKey;
     const catMat = catalogueMaterials.find(m =>
       (m.material_name || "").toLowerCase() === matKey ||
       matKey.includes((m.material_name || "").toLowerCase()) ||
       (m.material_name || "").toLowerCase().includes(matKey)
     );
     const anomalies: string[] = [];
+    const totalParts = matParts.reduce((s, p) => s + (p.quantity || 1), 0);
 
-    // Derive category from parts (AI summary often missing it) or catalogue
-    const partsCat = matParts.length > 0 ? (matParts[0].material_category || "").toLowerCase() : "";
-    const effectiveCat = (mat.material_category || "").toLowerCase() || partsCat;
-
-    console.log(`[CutList][recalc] material="${mat.material}" cat="${effectiveCat}" (fromSummary="${mat.material_category}" fromParts="${partsCat}") partsFound=${matParts.length} catMatMatch=${!!catMat}`);
-
-    if (effectiveCat === "timber") {
-      // Collect individual piece lengths
-      const pieceLengths = matParts
-        .map(p => p.length_mm || 0)
-        .filter(l => l > 0);
-
-      console.log(`[CutList][timber] pieceLengths=${JSON.stringify(pieceLengths)} stdLen=${catMat?.standard_length || mat.standard_length_mm || 4800}`);
-
+    if (category === "timber") {
+      const pieceLengths: number[] = [];
+      for (const p of matParts) {
+        const l = p.length_mm || 0;
+        if (l > 0) { for (let i = 0; i < (p.quantity || 1); i++) pieceLengths.push(l); }
+      }
       const totalLinearMm = pieceLengths.reduce((a, b) => a + b, 0);
-      const stdLen = catMat?.standard_length || mat.standard_length_mm || 4800;
-
-      // Bin-pack to find actual lengths needed
+      const stdLen = catMat?.standard_length || 4800;
       const lengthsNeeded = pieceLengths.length > 0
         ? binPackLengths(pieceLengths, stdLen)
-        : Math.ceil(totalLinearMm / stdLen) || 1;
-
+        : Math.max(1, Math.ceil(totalLinearMm / stdLen));
       const usedMm = lengthsNeeded * stdLen;
       const waste = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
 
-      // Anomaly: check for suspicious cross-sections on timber
-      // Timber width should typically be < 100mm for dimensional lumber
+      return {
+        material: materialName, material_category: "Timber",
+        total_parts: totalParts, total_linear_mm: totalLinearMm,
+        lengths_needed: lengthsNeeded, standard_length_mm: stdLen,
+        waste_pct: waste, piece_lengths: pieceLengths,
+        anomalies, _selected: true,
+      };
+    }
+
+    if (category === "sheet") {
+      const catSheet = parseSheetSize(catMat?.standard_sheet_size);
+      const sheetW = catSheet?.w || 2440;
+      const sheetH = catSheet?.h || 1220;
+
+      // Build rectangle list expanded by quantity
+      const rects: Rect[] = [];
       for (const p of matParts) {
+        const l = p.length_mm || 0;
         const w = p.width_mm || 0;
-        const t = p.thickness_mm || 0;
-        const crossSection = Math.max(w, t);
-        if (crossSection > 100 && (p.length_mm || 0) > 0) {
-          const msg = `${p.description}: width ${w}mm × thickness ${t}mm looks too wide for timber — rotated component?`;
+        if (l > 0 && w > 0) {
+          for (let i = 0; i < (p.quantity || 1); i++) rects.push({ w: l, h: w });
+        }
+      }
+
+      // Check for oversized parts
+      for (const p of matParts) {
+        const l = p.length_mm || 0;
+        const w = p.width_mm || 0;
+        const fits = (l <= sheetW && w <= sheetH) || (l <= sheetH && w <= sheetW);
+        if (l > 0 && w > 0 && !fits) {
+          const msg = `${p.description}: ${l}×${w}mm does not fit on ${sheetW}×${sheetH}mm sheet in any orientation`;
           if (!anomalies.includes(msg)) anomalies.push(msg);
         }
       }
 
+      const { sheets, placements } = guillotinePack(rects, sheetW, sheetH);
+      const sheetArea = sheetW * sheetH;
+      const partArea = rects.reduce((s, r) => s + r.w * r.h, 0);
+      const wastePct = sheets > 0 ? Math.round((1 - partArea / (sheets * sheetArea)) * 100) : 0;
+
       return {
-        ...mat,
-        total_parts: matParts.length,
-        total_linear_mm: totalLinearMm,
-        lengths_needed: lengthsNeeded,
-        standard_length_mm: stdLen,
-        waste_pct: waste,
-        piece_lengths: pieceLengths,
-        anomalies,
-        _selected: mat._selected,
+        material: materialName, material_category: "Sheet",
+        total_parts: totalParts, sheets_needed: sheets,
+        standard_sheet_size: `${sheetW}x${sheetH}`,
+        waste_pct: wastePct, anomalies, _selected: true,
       };
     }
 
-    // Sheets — keep AI calculation but validate
-    if (mat.sheets_needed) {
-      return { ...mat, anomalies, _selected: mat._selected };
-    }
-
-    return { ...mat, anomalies, _selected: mat._selected };
+    return {
+      material: materialName, material_category: category,
+      total_parts: totalParts, anomalies, _selected: true,
+    };
   });
 }
 
@@ -159,28 +295,21 @@ export function CutListExtractor({
   const [extracting, setExtracting] = useState(false);
   const [status, setStatus] = useState(initialStatus || "pending");
   const [parts, setParts] = useState<ExtractedLine[]>(extractedData?.lines || []);
-  const [matSummary, setMatSummary] = useState<MaterialSummary[]>(
-    (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }))
-  );
+  const [matSummary, setMatSummary] = useState<MaterialSummary[]>([]);
   const [rawAiSummary, setRawAiSummary] = useState<any[]>(extractedData?.material_summary || []);
   const [summary, setSummary] = useState<any>(extractedData?.summary || null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showParts, setShowParts] = useState(false);
 
-  // Recalculate material summary with bin-packing whenever we have parts data
+  // Recalculate material summary from parts data whenever parts change
   useEffect(() => {
-    if (parts.length === 0 || rawAiSummary.length === 0 || status === "pending" || status === "confirmed") return;
+    if (parts.length === 0 || status === "pending") return;
     const recalc = async () => {
       const { data: catMats } = await supabase.from("tbl_materials")
         .select("material_id, material_name, standard_length, standard_sheet_size, unit")
         .eq("active", true);
-      const aiSummary = rawAiSummary.map((m: any) => ({ ...m, _selected: true }));
-      console.log("[CutList] recalc input — parts:", parts.length, "aiSummary:", JSON.stringify(aiSummary));
-      console.log("[CutList] parts sample:", JSON.stringify(parts.slice(0, 3)));
-      console.log("[CutList] catalogue materials:", JSON.stringify(catMats?.map(m => ({ name: m.material_name, stdLen: m.standard_length }))));
-      const recalced = recalcMaterialSummary(parts, aiSummary, catMats || []);
-      console.log("[CutList] recalc output:", JSON.stringify(recalced));
+      const recalced = buildMaterialSummary(parts, catMats || []);
       setMatSummary(recalced);
     };
     recalc();
@@ -238,14 +367,13 @@ export function CutListExtractor({
       setParts(extractedParts);
       setRawAiSummary(data.material_summary || []);
 
-      // Fetch catalogue materials for bin-packing reference
+      // Fetch catalogue materials for calculation reference
       const { data: catMats } = await supabase.from("tbl_materials")
         .select("material_id, material_name, standard_length, standard_sheet_size, unit")
         .eq("active", true);
 
-      // Client-side recalculation with bin-packing for timber
-      const aiSummary = (data.material_summary || []).map((m: any) => ({ ...m, _selected: true }));
-      const recalced = recalcMaterialSummary(extractedParts, aiSummary, catMats || []);
+      // Client-side calculation — all math done deterministically in JS
+      const recalced = buildMaterialSummary(extractedParts, catMats || []);
       setMatSummary(recalced);
       setSummary(data.summary || null);
       setStatus("extracted");
@@ -277,9 +405,12 @@ export function CutListExtractor({
       .select("material_id, material_name, unit, current_unit_cost, material_category, standard_length, standard_sheet_size")
       .eq("active", true);
 
-    // Recalculate inline from parts — don't trust matSummary state
-    const recalced = recalcMaterialSummary(parts, selected, materials || []);
-    console.log("[CutList][addToBom] recalced inline:", JSON.stringify(recalced.map(m => ({ mat: m.material, cat: m.material_category, totalMm: m.total_linear_mm, lengths: m.lengths_needed, sheets: m.sheets_needed }))));
+    // Recalculate inline from parts — deterministic JS math
+    const recalced = buildMaterialSummary(parts, materials || []);
+    // Apply user's checkbox selections from matSummary state
+    const selectedMats = new Set(matSummary.filter(m => m._selected).map(m => (m.material || "").toLowerCase()));
+    for (const m of recalced) { m._selected = selectedMats.has((m.material || "").toLowerCase()); }
+    console.log("[CutList][addToBom] recalced:", JSON.stringify(recalced.map(m => ({ mat: m.material, cat: m.material_category, totalMm: m.total_linear_mm, lengths: m.lengths_needed, sheets: m.sheets_needed }))));
 
     for (const mat of recalced) {
       if (!mat._selected) continue;

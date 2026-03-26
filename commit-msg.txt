@@ -1,6 +1,9 @@
-fix: PDF extraction — add anthropic-beta header + robust JSON parsing
+fix: proper 2D guillotine bin packing for sheet material calculation
 
-PDF documents sent to Claude API require the pdfs-2024-09-25 beta
-header. Also hardened JSON parsing in both extract-cutlist and
-extract-invoice routes to handle Claude responses with surrounding
-text (extract first { to last } fallback).
+Area-based sheet counting was completely wrong — a 1830x865mm part on
+a 2440x1220mm sheet can only fit once (865+865>1220), but area math
+said 2 sheets for 6 parts. Now uses guillotine bin packing algorithm
+that places actual rectangles on sheets with rotation support,
+splitting remaining space via guillotine cuts. Timber still uses 1D
+FFD bin packing. All math is deterministic JS — Claude only extracts
+the raw parts list.
