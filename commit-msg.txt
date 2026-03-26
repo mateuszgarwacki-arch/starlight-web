@@ -1,5 +1,6 @@
-Session 12e: Stock import - 2743 items from PDF extraction
+Session 12f: Stock management page with search, pagination, inline edit, add
 
-- tbl_stock_items replaces tbl_dummy_stock_items
-- job-items-table reads from new table with product_code field
-- FTS index ready for search
+- New /stock page with search, location filter, pagination (50/page)
+- Inline editing, add dialog, archive
+- Sidebar: Stock entry with Warehouse icon
+- 2743 items searchable
