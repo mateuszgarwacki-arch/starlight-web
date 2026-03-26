@@ -433,22 +433,20 @@ export function CutListExtractor({
         : "";
 
       // Determine BOM values based on recalculated data
-      // Timber: cost whole standard lengths (overestimate > underestimate)
-      // Description shows actual total + length count for context
+      // Timber: order by number of standard lengths needed
       const isTimber = mat.total_linear_mm != null && mat.total_linear_mm > 0;
       const stdLen = mat.standard_length_mm || 4800;
       const lengthsNeeded = mat.lengths_needed || 1;
       const totalMm = mat.total_linear_mm || 0;
       const totalMetresActual = Math.ceil(totalMm / 100) / 10; // round up to 0.1m
-      const wholeMetres = (lengthsNeeded * stdLen) / 1000; // full lengths in metres for costing
-      const bomQty = isTimber ? wholeMetres
+      const bomQty = isTimber ? lengthsNeeded
         : mat.sheets_needed || mat.lengths_needed || 1;
-      const bomUnit = isTimber ? "Metre"
+      const bomUnit = isTimber ? "Length"
         : mat.sheets_needed ? "Sheet"
         : mat.lengths_needed ? "Length"
         : (matched?.unit || "Each");
       const bomDesc = isTimber
-        ? `${mat.material} - ${totalMetresActual}m Total (${lengthsNeeded} length${lengthsNeeded > 1 ? "s" : ""})`
+        ? `${mat.material} - ${totalMetresActual}m actual (${lengthsNeeded}× ${stdLen / 1000}m)`
         : mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
 
       console.log(`[CutList][addToBom] inserting: ${bomDesc} qty=${bomQty} unit=${bomUnit}`);

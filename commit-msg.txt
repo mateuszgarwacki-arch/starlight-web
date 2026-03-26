@@ -1,9 +1,4 @@
-fix: proper 2D guillotine bin packing for sheet material calculation
+fix: timber BOM uses Length count not Metres
 
-Area-based sheet counting was completely wrong — a 1830x865mm part on
-a 2440x1220mm sheet can only fit once (865+865>1220), but area math
-said 2 sheets for 6 parts. Now uses guillotine bin packing algorithm
-that places actual rectangles on sheets with rotation support,
-splitting remaining space via guillotine cuts. Timber still uses 1D
-FFD bin packing. All math is deterministic JS — Claude only extracts
-the raw parts list.
+3x1 PAR was showing qty 43.2 Metre instead of 9 Length. You order
+timber by the number of standard lengths, not total metres.
