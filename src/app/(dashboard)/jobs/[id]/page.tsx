@@ -37,7 +37,7 @@ const CATEGORY_CONFIG: Record<string, {
   "Stock Pick":                { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: true,  showDoneCheckbox: true,  autoComplete: "manual" },
   "Subcontracted":             { canCreateScope: false, showAmber: false, showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "contractor" },
   "Subcontracted (Partial)":   { canCreateScope: true,  showAmber: true,  showContractor: true,  showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope+contractor" },
-  "Install":                   { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "manual" },
+  "Install":                   { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
   "Provisional":               { canCreateScope: false, showAmber: false, showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "never" },
   "Shared Departments":        { canCreateScope: true,  showAmber: true,  showContractor: false, showStockTag: false, showDoneCheckbox: true,  autoComplete: "scope" },
 };

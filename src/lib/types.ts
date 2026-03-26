@@ -174,6 +174,7 @@ export interface TimeEntry {
 export interface WoBom {
   bom_id: number;
   work_order_id: number | null;
+  scope_item_id: number | null;
   job_id: number | null;
   material_id: number | null;
   material_category: number | null;

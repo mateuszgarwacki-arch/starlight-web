@@ -11,6 +11,7 @@ import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
+import { ScopeBom } from "@/components/scope-bom";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -303,6 +304,9 @@ export default function ScopeDetailPage() {
 
       {/* Build options */}
       <ScopeOptions scopeItemId={scope.scope_item_id} jobId={jobId} quotedValue={scope.line_value || undefined} />
+
+      {/* Scope-level materials (no WO needed) */}
+      <ScopeBom scopeItemId={scope.scope_item_id} jobId={jobId} />
 
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} />

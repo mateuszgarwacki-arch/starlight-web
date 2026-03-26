@@ -1,4 +1,7 @@
-Session 12c: Capacity + Job Detail pages use single RPC calls
+Session 12d: Scope-level materials (BOM without work orders)
 
-- Capacity: 5+ queries replaced with rpc_capacity_data()
-- Job Detail: 10+ queries replaced with rpc_job_detail_data()
+- New ScopeBom component on scope breakdown page
+- tbl_wo_bom now supports scope_item_id (nullable work_order_id)
+- Cost rollup views rebuilt to include scope-level materials
+- Install category enabled for scope creation
+- WoBom type updated with scope_item_id field
