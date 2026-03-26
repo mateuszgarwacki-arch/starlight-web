@@ -208,7 +208,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
         <div className="card overflow-hidden divide-y divide-gray-100">
           {items.map((item) => {
             const hasWo = item.has_wo === "true";
-            const isStock = item.item_source === "stock" || item.item_source === "promoted";
+            const isStock = item.item_source === "stock" || item.item_source === "promoted" || (item.stock_reference && item.item_source !== "bespoke");
             const isSelected = selected.has(item.item_id);
 
             return (
@@ -246,6 +246,10 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                   {item.finish_required && (
                     <p className="text-xs text-gray-400 mt-0.5">Finish: {item.finish_required}</p>
                   )}
+                  <input type="text" defaultValue={item.notes || ""}
+                    onBlur={(e) => { const val = e.target.value.trim() || null; if (val !== (item.notes || null)) updateItem(item.item_id, "notes", val); }}
+                    placeholder="Add a note..."
+                    className="mt-1 w-full text-xs text-gray-400 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none px-0 py-0.5 placeholder:text-gray-300" />
                 </div>
 
                 {/* Qty */}

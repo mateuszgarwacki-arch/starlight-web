@@ -1,8 +1,1 @@
-Job Items redesign: stock picker + bespoke dialogs, promote to stock
-
-- Two distinct add buttons: Add Stock Item (shopping picker) + Add Bespoke Item (form)
-- Stock picker: live search with thumbnails, qty available, location, hire rate
-- Bespoke form: description, qty, finish required, promote-to-stock checkbox
-- Item list shows source badges (Stock/Bespoke/Promoted)
-- Promote to Stock button on bespoke items creates stock catalogue entry
-- stock_item_id + item_source columns on tbl_job_items
+Job items: fix stock detection for legacy items, add inline notes field
