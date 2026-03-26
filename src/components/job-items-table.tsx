@@ -163,9 +163,8 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   };
   const selectAll = () => {
-    const noWo = items.filter((i) => i.has_wo !== "true");
-    if (selected.size === noWo.length) setSelected(new Set());
-    else setSelected(new Set(noWo.map((i) => i.item_id)));
+    if (selected.size === items.length) setSelected(new Set());
+    else setSelected(new Set(items.map((i) => i.item_id)));
   };
 
   // Expose addFromPrompt for parent
@@ -212,15 +211,13 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
             const isSelected = selected.has(item.item_id);
 
             return (
-              <div key={item.item_id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${isSelected ? "bg-blue-50/50" : ""} ${hasWo ? "opacity-60" : ""}`}>
+              <div key={item.item_id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}>
                 {/* Select */}
                 <div className="pt-1 shrink-0">
-                  {!hasWo ? (
-                    <button onClick={() => toggleSelect(item.item_id)}
-                      className={`transition-colors ${isSelected ? "text-starlight-blue" : "text-gray-300 hover:text-gray-400"}`}>
-                      {isSelected ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-                    </button>
-                  ) : <span className="text-gray-200 text-xs">✓</span>}
+                  <button onClick={() => toggleSelect(item.item_id)}
+                    className={`transition-colors ${isSelected ? "text-starlight-blue" : "text-gray-300 hover:text-gray-400"}`}>
+                    {isSelected ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+                  </button>
                 </div>
 
                 {/* Source badge + Description */}

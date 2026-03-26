@@ -1,5 +1,6 @@
-fix: capacity planning now counts general workshop bookings as supply
+feat: allow creating multiple WOs from same job item
 
-General workshop bookings (job_id=null) were invisible to the supply
-calculation. Total booked hours now computed independently of job
-assignment. Booked card shows general hours breakdown.
+Job items with existing WO coverage can now be selected for additional
+WO creation (e.g. BUILD then PAINT). Removed opacity dimming and
+static checkmark — items are always selectable. Delete still blocked
+for items with WOs.
