@@ -122,9 +122,16 @@ IMPORTANT:
       return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
     }
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    };
+    if (isPdf) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      headers,
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages }),
     });
 
@@ -139,7 +146,16 @@ IMPORTANT:
 
     let parsed;
     try { parsed = JSON.parse(clean); } catch {
-      return NextResponse.json({ error: "Failed to parse AI response", raw: clean }, { status: 500 });
+      // Try extracting JSON object from surrounding text
+      const firstBrace = clean.indexOf("{");
+      const lastBrace = clean.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { parsed = JSON.parse(clean.slice(firstBrace, lastBrace + 1)); } catch {
+          return NextResponse.json({ error: "Failed to parse AI response", raw: clean.slice(0, 500) }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ error: "Failed to parse AI response", raw: clean.slice(0, 500) }, { status: 500 });
+      }
     }
 
     return NextResponse.json(parsed);

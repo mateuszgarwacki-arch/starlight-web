@@ -1,6 +1,6 @@
-feat: allow creating multiple WOs from same job item
+fix: PDF extraction — add anthropic-beta header + robust JSON parsing
 
-Job items with existing WO coverage can now be selected for additional
-WO creation (e.g. BUILD then PAINT). Removed opacity dimming and
-static checkmark — items are always selectable. Delete still blocked
-for items with WOs.
+PDF documents sent to Claude API require the pdfs-2024-09-25 beta
+header. Also hardened JSON parsing in both extract-cutlist and
+extract-invoice routes to handle Claude responses with surrounding
+text (extract first { to last } fallback).

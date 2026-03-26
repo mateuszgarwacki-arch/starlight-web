@@ -39,13 +39,16 @@ export async function POST(request: NextRequest) {
     : { type: "image" as const, source: { type: "base64" as const, media_type: media_type as "image/jpeg", data: file_data } };
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    };
+    if (isPdf) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers,
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 4000,
@@ -102,7 +105,18 @@ Rules:
       .join("");
 
     const clean = (text || "").replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try { parsed = JSON.parse(clean); } catch {
+      const firstBrace = clean.indexOf("{");
+      const lastBrace = clean.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { parsed = JSON.parse(clean.slice(firstBrace, lastBrace + 1)); } catch {
+          return NextResponse.json({ error: "Failed to parse AI response", detail: clean.slice(0, 500) }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ error: "Failed to parse AI response", detail: clean.slice(0, 500) }, { status: 500 });
+      }
+    }
 
     return NextResponse.json(parsed);
   } catch (err: any) {
