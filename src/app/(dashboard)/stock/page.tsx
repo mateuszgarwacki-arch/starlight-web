@@ -203,7 +203,8 @@ export default function StockPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
-                  <th className="px-4 py-2.5 font-medium w-20">Code</th>
+                  <th className="px-3 py-2.5 font-medium w-12"></th>
+                  <th className="px-3 py-2.5 font-medium w-20">Code</th>
                   <th className="px-4 py-2.5 font-medium">Description</th>
                   <th className="px-4 py-2.5 font-medium text-right w-16">Qty</th>
                   <th className="px-4 py-2.5 font-medium w-24">Location</th>
@@ -220,7 +221,8 @@ export default function StockPage() {
                   if (isEditing) {
                     return (
                       <tr key={item.stock_id} className="border-t border-gray-100 bg-starlight-blue/5">
-                        <td className="px-4 py-1.5"><input type="text" value={editForm.product_code || ""} onChange={(e) => setEditForm({...editForm, product_code: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
+                        <td className="px-3 py-1.5">{item.thumbnail_url && <img src={item.thumbnail_url} alt="" className="w-10 h-8 object-contain rounded" />}</td>
+                        <td className="px-3 py-1.5"><input type="text" value={editForm.product_code || ""} onChange={(e) => setEditForm({...editForm, product_code: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
                         <td className="px-4 py-1.5"><input type="text" value={editForm.description || ""} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
                         <td className="px-4 py-1.5"><input type="number" value={editForm.stock_quantity ?? ""} onChange={(e) => setEditForm({...editForm, stock_quantity: parseInt(e.target.value) || 0})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" /></td>
                         <td className="px-4 py-1.5"><input type="text" value={editForm.location || ""} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
@@ -237,7 +239,16 @@ export default function StockPage() {
                   }
                   return (
                     <tr key={item.stock_id} className="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.product_code}</td>
+                      <td className="px-3 py-2">
+                        {item.thumbnail_url ? (
+                          <img src={item.thumbnail_url} alt="" className="w-10 h-8 object-contain rounded" />
+                        ) : (
+                          <div className="w-10 h-8 bg-gray-100 rounded flex items-center justify-center">
+                            <Warehouse className="h-3 w-3 text-gray-300" />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{item.product_code}</td>
                       <td className="px-4 py-2.5 text-navy font-medium">{item.description}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-navy">{item.stock_quantity}</td>
                       <td className="px-4 py-2.5 text-xs text-gray-500">{item.location || "—"}</td>

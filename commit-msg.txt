@@ -1,1 +1,1 @@
-Reduce stock search debounce to 150ms
+Stock page: add thumbnail column with base64 data URIs from PDF extraction
