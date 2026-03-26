@@ -1,4 +1,5 @@
-fix: timber BOM uses Length count not Metres
+fix: timber BOM unit cost = price/m × standard length
 
-3x1 PAR was showing qty 43.2 Metre instead of 9 Length. You order
-timber by the number of standard lengths, not total metres.
+Catalogue stores timber at per-metre rate (e.g. £1.10/m). When BOM
+orders by Length, unit cost must be price × standard_length_in_metres
+(e.g. 4.8m × £1.10 = £5.28/length). 9 lengths × £5.28 = £47.52.

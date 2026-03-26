@@ -451,6 +451,13 @@ export function CutListExtractor({
 
       console.log(`[CutList][addToBom] inserting: ${bomDesc} qty=${bomQty} unit=${bomUnit}`);
 
+      // For timber sold by metre but ordered by length: unit_cost = price/m × standard_length_m
+      const catUnitCost = matched?.current_unit_cost || null;
+      let bomUnitCost = catUnitCost;
+      if (isTimber && catUnitCost && matched?.unit?.toLowerCase() === "metre") {
+        bomUnitCost = Math.round(catUnitCost * (stdLen / 1000) * 100) / 100;
+      }
+
       await supabase.from("tbl_wo_bom").insert({
         work_order_id: workOrderId,
         job_id: jobId,
@@ -459,7 +466,7 @@ export function CutListExtractor({
         item_description: bomDesc,
         quantity: bomQty,
         unit: bomUnit,
-        unit_cost: matched?.current_unit_cost || null,
+        unit_cost: bomUnitCost,
         needs_ordering: matched ? "false" : "true",
         notes: partsNote || null,
       });
