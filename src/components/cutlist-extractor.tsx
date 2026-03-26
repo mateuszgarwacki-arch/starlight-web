@@ -162,6 +162,7 @@ export function CutListExtractor({
   const [matSummary, setMatSummary] = useState<MaterialSummary[]>(
     (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }))
   );
+  const [rawAiSummary, setRawAiSummary] = useState<any[]>(extractedData?.material_summary || []);
   const [summary, setSummary] = useState<any>(extractedData?.summary || null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -169,12 +170,12 @@ export function CutListExtractor({
 
   // Recalculate material summary with bin-packing whenever we have parts data
   useEffect(() => {
-    if (parts.length === 0 || status === "pending" || status === "confirmed") return;
+    if (parts.length === 0 || rawAiSummary.length === 0 || status === "pending" || status === "confirmed") return;
     const recalc = async () => {
       const { data: catMats } = await supabase.from("tbl_materials")
         .select("material_id, material_name, standard_length, standard_sheet_size, unit")
         .eq("active", true);
-      const aiSummary = (extractedData?.material_summary || []).map((m: any) => ({ ...m, _selected: true }));
+      const aiSummary = rawAiSummary.map((m: any) => ({ ...m, _selected: true }));
       console.log("[CutList] recalc input — parts:", parts.length, "aiSummary:", JSON.stringify(aiSummary));
       console.log("[CutList] parts sample:", JSON.stringify(parts.slice(0, 3)));
       console.log("[CutList] catalogue materials:", JSON.stringify(catMats?.map(m => ({ name: m.material_name, stdLen: m.standard_length }))));
@@ -235,6 +236,7 @@ export function CutListExtractor({
       const data = await extractRes.json();
       const extractedParts = data.lines || [];
       setParts(extractedParts);
+      setRawAiSummary(data.material_summary || []);
 
       // Fetch catalogue materials for bin-packing reference
       const { data: catMats } = await supabase.from("tbl_materials")
