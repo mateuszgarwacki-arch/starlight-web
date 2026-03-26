@@ -44,6 +44,7 @@ export default function CrewPage() {
     day_rate: "",
     standard_day_hours: "10",
     notes: "",
+    pin: "",
   });
 
   const loadCrew = useCallback(async () => {

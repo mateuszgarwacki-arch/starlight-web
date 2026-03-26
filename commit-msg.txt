@@ -1,4 +1,1 @@
-Crew: PIN field in Add Freelancer dialog, auto-creates auth account on creation
-
-Also: Stock page default view changed to list
-Stock Pick category enabled for scope creation
+fix: add pin to form state type
