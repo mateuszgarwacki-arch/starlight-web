@@ -820,3 +820,130 @@ New: qry_freelancer_hours_summary, qry_review_inbox, qry_cost_waterfall
 - **New user creation**: Must set role in BOTH `user_metadata` (for display) and `app_metadata` (for security/RLS)
 - **Large file upload**: Files >3.5MB go browser→OneDrive direct via upload session. Small files still proxy through Vercel
 - **View security**: All views must be SECURITY INVOKER. Add `ALTER VIEW ... SET (security_invoker = on)` to new view checklist
+
+
+### Session 12 (26 Mar 2026) — Stock Catalogue, Job Items Redesign, Reports Engine
+
+#### DB Cleanup ✅
+- [x] Dropped 27 orphaned objects (18 legacy views, 2 test tables, 7 unused functions)
+- [x] Created `qry_stale_travellers` view
+- [x] `audit_retention_cycle()` scheduled via pg_cron (1st of month, 3am UTC)
+- [x] Fixed duplicate UNIT entries in `tbl_master_lookups` + added `m²`
+- [x] Fixed cutlist extractor state bug (`useEffect` overwriting fresh extraction data)
+
+#### Performance Optimization ✅
+- [x] 5 RPC functions replace 50+ individual queries: `rpc_dashboard_data`, `rpc_workshop_data`, `rpc_review_data`, `rpc_capacity_data`, `rpc_job_detail_data`
+- [x] 18 performance indexes (partial indexes on archived_at, status fields, FTS on materials)
+- [x] **Convention**: All pages with 5+ queries MUST use PostgreSQL RPC functions
+
+#### Scope-Level BOM ✅
+- [x] `tbl_wo_bom.scope_item_id` (nullable FK) — materials attach directly to scope items without WOs
+- [x] CHECK constraint: at least one parent (work_order_id OR scope_item_id)
+- [x] `<ScopeBom>` component: search materials + stock items, inline edit, delete with audit
+- [x] Cost rollup views rebuilt: `qry_wo_cost_summary` → `qry_scopeitem_cost_summary` → `qry_job_cost_summary`
+
+#### Stock Catalogue Import ✅
+- [x] `tbl_stock_items` table: product_code, description, stock_quantity, location, weight_kg, hire_cost_day/week, thumbnail_url, active
+- [x] 2,743 items imported from 3 PDFs (502 pages total)
+- [x] 1,960 thumbnail images extracted, resized to 120px width JPEG, stored in `public/stock-thumbs/{code}.jpg`
+- [x] Served from Vercel CDN with browser caching
+
+#### Stock Management Page ✅ (`/stock`)
+- [x] Grid view (cards with square thumbnails) and List view (compact rows) — list is default
+- [x] Grid/List toggle in header
+- [x] Live search with 150ms debounce (no Search button)
+- [x] Location filter dropdown
+- [x] Infinite scroll (IntersectionObserver, 50 items per batch, 200px rootMargin)
+- [x] Click any item → detail modal with large image, stats, metadata
+- [x] Edit mode in modal (all fields editable)
+- [x] Add Item dialog, Archive (soft delete)
+- [x] Warehouse icon in sidebar
+
+#### Stock Pick Wiring ✅
+- [x] `tbl_wo_bom.stock_item_id` FK → `tbl_stock_items`
+- [x] ScopeBom search shows two sections: Stock Items (with thumbnails, qty, hire rate) and Materials
+- [x] Stock badge (amber "Stock" tag) on BOM rows linked to stock items
+- [x] Stock Pick category enabled for scope creation (`canCreateScope: true`, `autoComplete: "scope"`)
+
+#### Job Items Redesign ✅
+- [x] Two distinct add buttons: **"+ Add Stock Item"** (amber picker) and **"+ Add Bespoke Item"** (blue form)
+- [x] Stock picker dialog: full search with thumbnails, available qty, location, hire rate. Multiple picks before closing
+- [x] Bespoke dialog: description textarea, quantity, finish required, "Add to stock catalogue when complete" checkbox
+- [x] `tbl_job_items.stock_item_id` FK → `tbl_stock_items`, `item_source` column (stock/bespoke/promoted)
+- [x] Card-style item display with source badges (Stock/Bespoke/Promoted)
+- [x] Inline notes field on every job item
+- [x] **Promote to Stock**: green arrow button on bespoke items creates `tbl_stock_items` entry and links back
+
+#### Freelancer Auth Fix ✅
+- [x] PIN field added to Add Freelancer dialog — auto-creates Supabase Auth user on creation
+- [x] Toast confirms "Freelancer added with mobile login" or warns if no PIN set
+- [x] Eliminates two-step creation (add freelancer → separately set PIN)
+
+#### Cost Analysis Fixes ✅
+- [x] "Estimate vs Budget" metric: compares estimate to budget (not committed to estimated)
+- [x] Budget now includes Stock Pick + Stock-and-Hire lines (not just Workshop)
+- [x] Header label: "Internal £X (of £Y total)" instead of "Workshop"
+- [x] Per-line table includes all internal categories
+
+#### RLS Policy Fix ✅
+- [x] Added `admin` role to ALL 30 modify policies (Session 11 security hardening missed admin)
+- [x] Fixed `tbl_notifications` policy (referenced non-existent `user_id` column)
+
+#### Materials — Steel Category ✅
+- [x] Steel behaves identically to Timber/Metal: spec value fields, standard length visible
+
+#### Reports Engine ✅
+- [x] `/reports` page with report cards, job selector, generate button
+- [x] `/reports/job-financial/[jobId]` — Pre-Build Financial Review
+- [x] `rpc_report_job_financial(p_job_id)` — single RPC returns all report data
+- [x] Summary metrics: Internal Quoted, Estimated Cost, Estimated Margin, Target Margin
+- [x] Alert banner: "X of Y lines below target margin — review lines N, N"
+- [x] Line-by-line analysis table: sorted worst-margin-first, RAG status icons
+- [x] Other Quote Lines section (Install, Subcontracted — not costed internally)
+- [x] Print / PDF button with print-friendly CSS
+- [x] Future report placeholders: Post-Build Reconciliation, Workshop Utilisation
+
+### New/Modified Files (Session 12)
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/stock/page.tsx` | Stock management page: grid/list view, search, edit, add |
+| `src/app/(dashboard)/reports/page.tsx` | Reports index: report cards with job selector |
+| `src/app/(dashboard)/reports/job-financial/[jobId]/page.tsx` | Pre-Build Financial Review report |
+| `src/components/scope-bom.tsx` | Scope-level materials panel: stock + material search |
+| `src/components/job-items-table.tsx` | Rewritten: stock picker + bespoke dialogs, promote to stock |
+| `src/components/cost-breakdown.tsx` | Budget includes stock lines, estimate vs budget fix |
+| `src/components/sidebar.tsx` | Added Stock (Warehouse icon), Reports (FileText icon) |
+| `src/app/(dashboard)/crew/page.tsx` | PIN field in Add Freelancer dialog |
+| `src/app/(dashboard)/materials/page.tsx` | Steel category alongside Timber/Metal |
+| `src/lib/types.ts` | WoBom: scope_item_id, stock_item_id added |
+| `public/stock-thumbs/*.jpg` | 1,960 stock item thumbnail images |
+
+### SQL Run (Session 12)
+- DB cleanup: 27 objects dropped, `qry_stale_travellers` created, pg_cron scheduled
+- 5 RPC functions: dashboard, workshop, review, capacity, job_detail
+- 18 performance indexes
+- `tbl_wo_bom`: scope_item_id, stock_item_id columns + CHECK constraint
+- `tbl_stock_items`: full table creation + 2,743 items imported
+- Stock thumbnail URL updates (10 SQL files)
+- `tbl_job_items`: stock_item_id, item_source columns
+- `rpc_report_job_financial()` function
+- RLS fix: admin role added to all 30 modify policies
+- Duplicate UNIT cleanup in master_lookups
+
+### Database Tables (now 34)
+Previous (30) + Added: tbl_stock_items, tbl_tasks, tbl_workshop_requests, tbl_scope_options
+
+### Key Views (30+)
+Added: qry_stale_travellers
+Removed: 18 legacy vw_ views
+
+### RPC Functions (6)
+rpc_dashboard_data, rpc_workshop_data, rpc_review_data, rpc_capacity_data(date,date), rpc_job_detail_data(job_id), rpc_report_job_financial(job_id)
+
+### Conventions Added (Session 12)
+- **RPC for heavy pages**: All pages with 5+ queries MUST use PostgreSQL RPC functions (single server call)
+- **Supabase SQL is transactional**: If ANY statement fails, entire script rolls back. Nothing gets applied. Always verify column names before writing SQL
+- **Stock thumbnails**: Served as static files from `public/stock-thumbs/{code}.jpg` — not stored in DB
+- **Freelancer creation**: Should include PIN in one step (auto-creates auth user)
+- **Always check `information_schema.columns`** before writing RPC functions or views. Column name mismatches cause full script rollback
+- **Fan-out prevention**: Never join labour and material calculations in the same CTE. Separate into `wo_labour` (no BOM join) and `wo_materials` (BOM join only)
