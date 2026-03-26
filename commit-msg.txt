@@ -1,6 +1,1 @@
-Session 12f: Stock management page with search, pagination, inline edit, add
-
-- New /stock page with search, location filter, pagination (50/page)
-- Inline editing, add dialog, archive
-- Sidebar: Stock entry with Warehouse icon
-- 2743 items searchable
+Stock page: replace pagination with infinite scroll

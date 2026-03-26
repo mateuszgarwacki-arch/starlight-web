@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import {
   Warehouse, Plus, Search, Pencil, X, Check,
-  RefreshCw, ChevronLeft, ChevronRight, Trash2, MapPin,
+  RefreshCw, Trash2, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,36 +32,60 @@ export default function StockPage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [page, setPage] = useState(0);
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [locations, setLocations] = useState<string[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<StockItem>>({});
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ product_code: "", description: "", stock_quantity: "0", location: "", weight_kg: "", hire_cost_day: "", hire_cost_week: "", category: "" });
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const buildQuery = useCallback(() => {
     let query = supabase.from("tbl_stock_items").select("*", { count: "exact" }).eq("active", true);
-
-    if (search) {
-      query = query.or(`description.ilike.%${search}%,product_code.ilike.%${search}%`);
-    }
+    if (search) query = query.or(`description.ilike.%${search}%,product_code.ilike.%${search}%`);
     if (locationFilter !== "all") {
       if (locationFilter === "none") query = query.is("location", null);
       else query = query.eq("location", locationFilter);
     }
+    return query.order("product_code");
+  }, [search, locationFilter]);
 
-    query = query.order("product_code").range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    const { data, count } = await query;
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const { data, count } = await buildQuery().range(0, PAGE_SIZE - 1);
     setItems((data as StockItem[]) || []);
     setTotalCount(count || 0);
+    setHasMore((data?.length || 0) >= PAGE_SIZE);
     setLoading(false);
-  }, [search, page, locationFilter]);
+  }, [buildQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const offset = items.length;
+    const { data } = await buildQuery().range(offset, offset + PAGE_SIZE - 1);
+    const newItems = (data as StockItem[]) || [];
+    setItems(prev => [...prev, ...newItems]);
+    setHasMore(newItems.length >= PAGE_SIZE);
+    setLoadingMore(false);
+  }, [buildQuery, items.length, loadingMore, hasMore]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore(); },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   // Load unique locations once
   useEffect(() => {
@@ -72,7 +96,7 @@ export default function StockPage() {
       });
   }, []);
 
-  const handleSearch = () => { setPage(0); setSearch(searchInput); };
+  const handleSearch = () => { setSearch(searchInput); };
 
   const startEdit = (item: StockItem) => {
     setEditing(item.stock_id);
@@ -124,7 +148,6 @@ export default function StockPage() {
     loadData();
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const totalQty = items.reduce((s, i) => s + (i.stock_quantity || 0), 0);
 
   return (
@@ -157,8 +180,8 @@ export default function StockPage() {
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
         </div>
         <button onClick={handleSearch} className="px-4 py-2 bg-navy text-white text-sm rounded-lg hover:bg-navy/90 transition-colors">Search</button>
-        {search && <button onClick={() => { setSearch(""); setSearchInput(""); setPage(0); }} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>}
-        <select value={locationFilter} onChange={(e) => { setLocationFilter(e.target.value); setPage(0); }}
+        {search && <button onClick={() => { setSearch(""); setSearchInput(""); }} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>}
+        <select value={locationFilter} onChange={(e) => { setLocationFilter(e.target.value); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
           <option value="all">All locations</option>
           <option value="none">No location</option>
@@ -233,21 +256,11 @@ export default function StockPage() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs text-gray-400">
-              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
-            </span>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-                className="p-1.5 text-gray-400 hover:text-navy disabled:opacity-30 transition-colors"><ChevronLeft className="h-4 w-4" /></button>
-              <span className="text-xs text-gray-500">Page {page + 1} of {totalPages}</span>
-              <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-                className="p-1.5 text-gray-400 hover:text-navy disabled:opacity-30 transition-colors"><ChevronRight className="h-4 w-4" /></button>
-            </div>
-          </div>
-        )}
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} className="px-4 py-3 border-t border-gray-100 text-center">
+          {loadingMore && <span className="text-xs text-gray-400 animate-pulse">Loading more...</span>}
+          {!hasMore && items.length > 0 && <span className="text-xs text-gray-300">Showing all {totalCount} items</span>}
+        </div>
       </div>
 
       {/* Add Item Dialog */}
