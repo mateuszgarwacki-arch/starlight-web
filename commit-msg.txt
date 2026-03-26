@@ -1,1 +1,5 @@
-fix: add pin to form state type
+Stock Pick wiring: ScopeBom searches both materials and stock items with thumbnails
+
+- Stock items appear with thumbnail, qty in stock, hire rate in search results
+- Stock badge on BOM rows linked to stock items
+- stock_item_id FK on tbl_wo_bom

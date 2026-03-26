@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import { getAuditContext, auditedInsert, auditedUpdate } from "@/lib/audit";
-import { Plus, Trash2, Search, Package, X } from "lucide-react";
+import { Plus, Trash2, Search, Package, X, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import type { WoBom } from "@/lib/types";
 
@@ -75,6 +75,18 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
       unit_cost: mat.current_unit_cost, quantity: 1, needs_ordering: "true",
     }, jobId);
     if (data) { setRows((prev) => [...prev, data as WoBom]); toast.success("Material added"); }
+    setShowSearch(false); setSearch("");
+  };
+
+  const selectStockItem = async (stock: (typeof stockItems)[0]) => {
+    const ctx = await getAuditContext(supabase);
+    const { data } = await auditedInsert(ctx, "tbl_wo_bom", {
+      scope_item_id: scopeItemId, work_order_id: null, job_id: jobId,
+      stock_item_id: stock.stock_id,
+      item_description: stock.description, unit: "Each",
+      unit_cost: stock.hire_cost_day, quantity: 1, needs_ordering: "false",
+    }, jobId);
+    if (data) { setRows((prev) => [...prev, data as WoBom]); toast.success("Stock item added"); }
     setShowSearch(false); setSearch("");
   };
 
@@ -162,9 +174,12 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                 return (
                   <tr key={row.bom_id} className="border-b border-gray-100 last:border-0">
                     <td className="py-1.5 px-4">
-                      <input type="text" defaultValue={row.item_description || ""}
-                        onBlur={(e) => { if (e.target.value !== row.item_description) updateField(row.bom_id, "item_description", e.target.value); }}
-                        className="w-full text-sm text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 -ml-1" />
+                      <div className="flex items-center gap-1.5">
+                        {row.stock_item_id && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-starlight-amber/10 text-starlight-amber text-[9px] font-medium rounded shrink-0"><Warehouse className="h-2.5 w-2.5" />Stock</span>}
+                        <input type="text" defaultValue={row.item_description || ""}
+                          onBlur={(e) => { if (e.target.value !== row.item_description) updateField(row.bom_id, "item_description", e.target.value); }}
+                          className="w-full text-sm text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 -ml-1" />
+                      </div>
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       <input type="number" defaultValue={row.quantity ?? ""}
@@ -200,28 +215,57 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
           <div className="flex items-center gap-2 mb-2">
             <Search className="h-4 w-4 text-gray-400" />
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search materials catalogue..."
+              placeholder="Search materials or stock items..."
               className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               autoFocus />
             <button onClick={() => { setShowSearch(false); setSearch(""); }} className="p-1 text-gray-400 hover:text-gray-600">
               <X className="h-4 w-4" />
             </button>
           </div>
-          {searchResults.length > 0 && (
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {searchResults.map((m) => (
-                <button key={m.material_id} onClick={() => selectMaterial(m)}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-starlight-blue/5 transition-colors flex items-center justify-between">
-                  <span className="text-xs text-navy font-medium">{m.material_name}</span>
-                  <span className="text-[10px] text-gray-400">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "no price"}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="max-h-64 overflow-y-auto space-y-2">
+            {/* Stock items section */}
+            {stockResults.length > 0 && (
+              <div>
+                <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1 px-1">Stock Items</p>
+                <div className="space-y-0.5">
+                  {stockResults.map((s) => (
+                    <button key={s.stock_id} onClick={() => selectStockItem(s)}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-starlight-amber/5 transition-colors flex items-center gap-3">
+                      {s.thumbnail_url ? (
+                        <img src={s.thumbnail_url} alt="" className="w-8 h-8 object-contain rounded shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center shrink-0"><Package className="h-3 w-3 text-gray-300" /></div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-navy font-medium truncate">{s.description}</p>
+                        <p className="text-[10px] text-gray-400 font-mono">{s.product_code} · {s.stock_quantity} in stock</p>
+                      </div>
+                      {s.hire_cost_day && <span className="text-[10px] text-gray-400 shrink-0">{formatCurrency(s.hire_cost_day)}/day</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Materials section */}
+            {searchResults.length > 0 && (
+              <div>
+                <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1 px-1">Materials</p>
+                <div className="space-y-0.5">
+                  {searchResults.map((m) => (
+                    <button key={m.material_id} onClick={() => selectMaterial(m)}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-starlight-blue/5 transition-colors flex items-center justify-between">
+                      <span className="text-xs text-navy font-medium">{m.material_name}</span>
+                      <span className="text-[10px] text-gray-400">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "no price"}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {search.length >= 2 && (
             <button onClick={addCustomRow}
               className="mt-2 w-full text-left px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-starlight-blue hover:bg-starlight-blue/5 transition-colors text-xs text-gray-500">
-              + Add &quot;<span className="font-medium text-navy">{search}</span>&quot; as custom material
+              + Add &quot;<span className="font-medium text-navy">{search}</span>&quot; as custom item
             </button>
           )}
         </div>
