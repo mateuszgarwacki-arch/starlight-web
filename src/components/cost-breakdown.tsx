@@ -204,6 +204,9 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
   const liveMargin = q > 0 ? q - committedTotal : 0;
   const liveMarginPct = q > 0 ? (liveMargin / q) * 100 : 0;
   const accuracy = estTotal > 0 ? ((committedTotal / estTotal) * 100) : 0;
+  const budget = q > 0 ? q * (1 - d.targetMarginPct / 100) : 0;
+  const estVsBudget = budget > 0 && estTotal > 0 ? ((estTotal / budget) * 100) : 0;
+  const estOverUnder = estVsBudget > 0 ? Math.abs(estVsBudget - 100) : 0;
 
   const mc = (pct: number) =>
     pct >= d.targetMarginPct ? "text-starlight-green" :
@@ -323,11 +326,11 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
               <p className="text-[10px] text-gray-400">{q > 0 ? `Budget: ${fmt(q * (1 - d.targetMarginPct / 100))}` : "No quote linked"}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimate accuracy</p>
-              <p className={`text-lg font-bold ${accuracy === 0 ? "text-gray-400" : accuracy <= 110 && accuracy >= 90 ? "text-starlight-green" : accuracy <= 130 && accuracy >= 70 ? "text-amber-500" : "text-starlight-red"}`}>
-                {committedTotal > 0 && estTotal > 0 ? `${accuracy.toFixed(0)}%` : "—"}
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimate vs budget</p>
+              <p className={`text-lg font-bold ${estVsBudget === 0 ? "text-gray-400" : estVsBudget <= 100 ? "text-starlight-green" : estVsBudget <= 115 ? "text-amber-500" : "text-starlight-red"}`}>
+                {budget > 0 && estTotal > 0 ? `${estOverUnder.toFixed(0)}%` : "—"}
               </p>
-              <p className="text-[10px] text-gray-400">{accuracy > 0 ? (accuracy > 100 ? "Over budget" : "Under budget") : "No actuals yet"}</p>
+              <p className="text-[10px] text-gray-400">{budget > 0 && estTotal > 0 ? (estVsBudget > 100 ? "Over budget" : "Under budget") : "No data yet"}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">{bestLabel}</p>

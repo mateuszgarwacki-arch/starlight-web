@@ -1,1 +1,1 @@
-Materials: add Steel category alongside Timber/Metal for spec fields and standard length
+Cost analysis: fix Estimate vs Budget to compare estimate to budget, not committed to estimate
