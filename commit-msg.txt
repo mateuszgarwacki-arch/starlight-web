@@ -1,1 +1,1 @@
-Cost analysis: fix Estimate vs Budget to compare estimate to budget, not committed to estimate
+Cost analysis: include Stock Pick and Stock-and-Hire lines in budget calculation

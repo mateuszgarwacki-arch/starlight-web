@@ -115,7 +115,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
 
       const qlRows = qlRes.data || [];
       quotedTotal = qlRows.reduce((s: number, l: any) => s + (l.line_value || 0), 0);
-      const workshopCats = ["workshop build", "workshop"];
+      const workshopCats = ["workshop build", "workshop", "stock pick", "stock-and-hire"];
       quotedWorkshop = qlRows.filter((l: any) => workshopCats.some(c => (l.category || "").toLowerCase().includes(c)))
         .reduce((s: number, l: any) => s + (l.line_value || 0), 0);
 
@@ -216,9 +216,11 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
   const bestMargin = committedTotal > 0 ? liveMargin : plannedMargin;
   const bestLabel = committedTotal > 0 ? "Live margin" : "Planned margin";
 
-  // Workshop lines only for the per-line table
-  const workshopLines = quoteLines.filter(l =>
-    (l.category || "").toLowerCase().includes("workshop"));
+  // Workshop + stock lines for the per-line table
+  const workshopLines = quoteLines.filter(l => {
+    const cat = (l.category || "").toLowerCase();
+    return cat.includes("workshop") || cat.includes("stock pick") || cat.includes("stock-and-hire");
+  });
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -232,7 +234,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
         <div className="flex items-center gap-4 text-xs">
           {q > 0 && (
             <span className="text-gray-500">
-              {showBothQuoted ? "Workshop " : "Quoted "}<span className="font-semibold text-gray-800">{fmt(q)}</span>
+              {showBothQuoted ? "Internal " : "Quoted "}<span className="font-semibold text-gray-800">{fmt(q)}</span>
               {showBothQuoted && <span className="text-gray-400 ml-1">(of {fmt(d.quotedTotal)})</span>}
             </span>
           )}
@@ -257,7 +259,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
 
             {q > 0 && (<>
               <div className="py-2 border-t border-gray-100 font-medium text-purple-700 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-purple-400"></span>{showBothQuoted ? "Quoted (workshop)" : "Quoted"}
+                <span className="w-2 h-2 rounded-full bg-purple-400"></span>{showBothQuoted ? "Quoted (workshop + stock)" : "Quoted"}
               </div>
               <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
               <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
@@ -342,7 +344,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
           {/* Per-line breakdown — job level only */}
           {workshopLines.length > 0 && (
             <div className="pt-3 border-t border-gray-200">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Workshop quote lines</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Workshop &amp; stock quote lines</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
