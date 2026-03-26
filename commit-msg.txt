@@ -1,1 +1,1 @@
-Stock thumbnails: 1960 images as static files in public/stock-thumbs/
+Stock page: card grid view with detail modal, grid/list toggle, click to view/edit

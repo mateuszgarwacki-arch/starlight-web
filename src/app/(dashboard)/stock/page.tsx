@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import {
   Warehouse, Plus, Search, Pencil, X, Check,
-  RefreshCw, Trash2, MapPin,
+  RefreshCw, Trash2, MapPin, LayoutGrid, List,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +44,8 @@ export default function StockPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ product_code: "", description: "", stock_quantity: "0", location: "", weight_kg: "", hire_cost_day: "", hire_cost_week: "", category: "" });
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
 
   const buildQuery = useCallback(() => {
     let query = supabase.from("tbl_stock_items").select("*", { count: "exact" }).eq("active", true);
@@ -166,10 +168,14 @@ export default function StockPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white shadow-sm text-navy" : "text-gray-400 hover:text-gray-600"}`}><LayoutGrid className="h-4 w-4" /></button>
+            <button onClick={() => setViewMode("list")} className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-navy" : "text-gray-400 hover:text-gray-600"}`}><List className="h-4 w-4" /></button>
+          </div>
           <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
             <Plus className="h-4 w-4" /> Add Item
           </button>
-          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={loadData} className="p-2 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
@@ -192,90 +198,155 @@ export default function StockPage() {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
-        {loading ? (
-          <div className="px-6 py-12 text-center text-gray-400 text-sm animate-pulse">Loading stock...</div>
-        ) : items.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-400 text-sm">No items found</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
-                  <th className="px-3 py-2.5 font-medium w-12"></th>
-                  <th className="px-3 py-2.5 font-medium w-20">Code</th>
-                  <th className="px-4 py-2.5 font-medium">Description</th>
-                  <th className="px-4 py-2.5 font-medium text-right w-16">Qty</th>
-                  <th className="px-4 py-2.5 font-medium w-24">Location</th>
-                  <th className="px-4 py-2.5 font-medium text-right w-20">Weight</th>
-                  <th className="px-4 py-2.5 font-medium text-right w-24">Day £</th>
-                  <th className="px-4 py-2.5 font-medium text-right w-24">Week £</th>
-                  <th className="px-4 py-2.5 font-medium w-24">Category</th>
-                  <th className="w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const isEditing = editing === item.stock_id;
-                  if (isEditing) {
-                    return (
-                      <tr key={item.stock_id} className="border-t border-gray-100 bg-starlight-blue/5">
-                        <td className="px-3 py-1.5">{item.thumbnail_url && <img src={item.thumbnail_url} alt="" className="w-10 h-8 object-contain rounded" />}</td>
-                        <td className="px-3 py-1.5"><input type="text" value={editForm.product_code || ""} onChange={(e) => setEditForm({...editForm, product_code: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
-                        <td className="px-4 py-1.5"><input type="text" value={editForm.description || ""} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
-                        <td className="px-4 py-1.5"><input type="number" value={editForm.stock_quantity ?? ""} onChange={(e) => setEditForm({...editForm, stock_quantity: parseInt(e.target.value) || 0})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" /></td>
-                        <td className="px-4 py-1.5"><input type="text" value={editForm.location || ""} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
-                        <td className="px-4 py-1.5"><input type="number" step="0.01" value={editForm.weight_kg ?? ""} onChange={(e) => setEditForm({...editForm, weight_kg: parseFloat(e.target.value) || null})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" /></td>
-                        <td className="px-4 py-1.5"><input type="number" step="0.01" value={editForm.hire_cost_day ?? ""} onChange={(e) => setEditForm({...editForm, hire_cost_day: parseFloat(e.target.value) || null})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" /></td>
-                        <td className="px-4 py-1.5"><input type="number" step="0.01" value={editForm.hire_cost_week ?? ""} onChange={(e) => setEditForm({...editForm, hire_cost_week: parseFloat(e.target.value) || null})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" /></td>
-                        <td className="px-4 py-1.5"><input type="text" value={editForm.category || ""} onChange={(e) => setEditForm({...editForm, category: e.target.value})} className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" /></td>
-                        <td className="px-4 py-1.5 flex items-center gap-1">
-                          <button onClick={saveEdit} className="p-1 text-starlight-green hover:bg-green-50 rounded"><Check className="h-3.5 w-3.5" /></button>
-                          <button onClick={cancelEdit} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="h-3.5 w-3.5" /></button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return (
-                    <tr key={item.stock_id} className="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-3 py-2">
-                        {item.thumbnail_url ? (
-                          <img src={item.thumbnail_url} alt="" className="w-10 h-8 object-contain rounded" />
-                        ) : (
-                          <div className="w-10 h-8 bg-gray-100 rounded flex items-center justify-center">
-                            <Warehouse className="h-3 w-3 text-gray-300" />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{item.product_code}</td>
-                      <td className="px-4 py-2.5 text-navy font-medium">{item.description}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-navy">{item.stock_quantity}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500">{item.location || "—"}</td>
-                      <td className="px-4 py-2.5 text-right text-xs font-mono text-gray-500">{item.weight_kg ? `${item.weight_kg}kg` : "—"}</td>
-                      <td className="px-4 py-2.5 text-right text-xs font-mono text-gray-600">{item.hire_cost_day ? formatCurrency(item.hire_cost_day) : "—"}</td>
-                      <td className="px-4 py-2.5 text-right text-xs font-mono text-gray-600">{item.hire_cost_week ? formatCurrency(item.hire_cost_week) : "—"}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-400">{item.category || "—"}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => startEdit(item)} className="p-1 text-gray-300 hover:text-starlight-blue transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
-                          <button onClick={() => archiveItem(item.stock_id)} className="p-1 text-gray-300 hover:text-starlight-red transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Infinite scroll sentinel */}
-        <div ref={sentinelRef} className="px-4 py-3 border-t border-gray-100 text-center">
-          {loadingMore && <span className="text-xs text-gray-400 animate-pulse">Loading more...</span>}
-          {!hasMore && items.length > 0 && <span className="text-xs text-gray-300">Showing all {totalCount} items</span>}
+      {/* Content */}
+      {loading ? (
+        <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading stock...</div>
+      ) : items.length === 0 ? (
+        <div className="card px-6 py-12 text-center text-gray-400 text-sm">No items found</div>
+      ) : viewMode === "grid" ? (
+        /* ===== GRID VIEW ===== */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {items.map((item) => (
+            <div key={item.stock_id} onClick={() => setSelectedItem(item)}
+              className="card overflow-hidden cursor-pointer hover:shadow-md hover:border-starlight-blue/30 transition-all group">
+              {/* Thumbnail */}
+              <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+                {item.thumbnail_url ? (
+                  <img src={item.thumbnail_url} alt="" className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform" />
+                ) : (
+                  <Warehouse className="h-8 w-8 text-gray-200" />
+                )}
+              </div>
+              {/* Info */}
+              <div className="px-3 py-2.5">
+                <p className="text-xs font-medium text-navy leading-tight line-clamp-2">{item.description}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[10px] font-mono text-gray-400">{item.product_code}</span>
+                  <span className="text-xs font-semibold text-navy">{item.stock_quantity}<span className="text-[10px] text-gray-400 font-normal ml-0.5">in stock</span></span>
+                </div>
+                {(item.hire_cost_day || item.location) && (
+                  <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400">
+                    {item.location && <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{item.location}</span>}
+                    {item.hire_cost_day && <span>{formatCurrency(item.hire_cost_day)}/day</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
+      ) : (
+        /* ===== LIST VIEW ===== */
+        <div className="card overflow-hidden">
+          <div className="divide-y divide-gray-100">
+            {items.map((item) => (
+              <div key={item.stock_id} onClick={() => setSelectedItem(item)}
+                className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors">
+                <div className="w-14 h-14 shrink-0 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden">
+                  {item.thumbnail_url ? (
+                    <img src={item.thumbnail_url} alt="" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    <Warehouse className="h-5 w-5 text-gray-200" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-navy">{item.description}</p>
+                  <div className="flex items-center gap-3 mt-0.5 text-[10px] text-gray-400">
+                    <span className="font-mono">{item.product_code}</span>
+                    {item.location && <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{item.location}</span>}
+                    {item.weight_kg ? <span>{item.weight_kg}kg</span> : null}
+                    {item.category && <span className="bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-navy">{item.stock_quantity}</p>
+                  <p className="text-[10px] text-gray-400">in stock</p>
+                </div>
+                {item.hire_cost_day && (
+                  <div className="text-right shrink-0 w-20">
+                    <p className="text-xs font-mono text-gray-600">{formatCurrency(item.hire_cost_day)}</p>
+                    <p className="text-[10px] text-gray-400">/day</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Infinite scroll sentinel */}
+      <div ref={sentinelRef} className="py-3 text-center">
+        {loadingMore && <span className="text-xs text-gray-400 animate-pulse">Loading more...</span>}
+        {!hasMore && items.length > 0 && <span className="text-xs text-gray-300">Showing all {totalCount} items</span>}
       </div>
+
+      {/* Detail / Edit Dialog */}
+      {selectedItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setSelectedItem(null); setEditing(null); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            {/* Image header */}
+            <div className="relative bg-gray-50 rounded-t-xl flex items-center justify-center h-48 overflow-hidden">
+              {selectedItem.thumbnail_url ? (
+                <img src={selectedItem.thumbnail_url} alt="" className="max-h-full max-w-full object-contain p-4" />
+              ) : (
+                <Warehouse className="h-16 w-16 text-gray-200" />
+              )}
+              <button onClick={() => { setSelectedItem(null); setEditing(null); }}
+                className="absolute top-3 right-3 p-1.5 bg-white/80 backdrop-blur rounded-lg text-gray-500 hover:text-gray-700"><X className="h-4 w-4" /></button>
+            </div>
+
+            {/* Content */}
+            <div className="px-5 py-4">
+              {editing === selectedItem.stock_id ? (
+                /* Edit mode */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Code</label><input type="text" value={editForm.product_code || ""} onChange={(e) => setEditForm({...editForm, product_code: e.target.value})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                    <div className="col-span-2"><label className="block text-[10px] text-gray-400 mb-0.5">Quantity</label><input type="number" value={editForm.stock_quantity ?? ""} onChange={(e) => setEditForm({...editForm, stock_quantity: parseInt(e.target.value) || 0})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                  </div>
+                  <div><label className="block text-[10px] text-gray-400 mb-0.5">Description</label><input type="text" value={editForm.description || ""} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Location</label><input type="text" value={editForm.location || ""} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Weight (kg)</label><input type="number" step="0.01" value={editForm.weight_kg ?? ""} onChange={(e) => setEditForm({...editForm, weight_kg: parseFloat(e.target.value) || null})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Category</label><input type="text" value={editForm.category || ""} onChange={(e) => setEditForm({...editForm, category: e.target.value})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Day rate (£)</label><input type="number" step="0.01" value={editForm.hire_cost_day ?? ""} onChange={(e) => setEditForm({...editForm, hire_cost_day: parseFloat(e.target.value) || null})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                    <div><label className="block text-[10px] text-gray-400 mb-0.5">Week rate (£)</label><input type="number" step="0.01" value={editForm.hire_cost_week ?? ""} onChange={(e) => setEditForm({...editForm, hire_cost_week: parseFloat(e.target.value) || null})} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={() => { cancelEdit(); }} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                    <button onClick={async () => { await saveEdit(); setSelectedItem(null); }} className="px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-blue-700">Save</button>
+                  </div>
+                </div>
+              ) : (
+                /* View mode */
+                <>
+                  <h2 className="text-base font-semibold text-navy">{selectedItem.description}</h2>
+                  <p className="text-xs font-mono text-gray-400 mt-0.5">#{selectedItem.product_code}</p>
+
+                  <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div className="text-center"><p className="text-2xl font-bold text-navy">{selectedItem.stock_quantity}</p><p className="text-[10px] text-gray-400 mt-0.5">In Stock</p></div>
+                    <div className="text-center"><p className="text-lg font-semibold text-gray-600">{selectedItem.hire_cost_day ? formatCurrency(selectedItem.hire_cost_day) : "—"}</p><p className="text-[10px] text-gray-400 mt-0.5">Day Rate</p></div>
+                    <div className="text-center"><p className="text-lg font-semibold text-gray-600">{selectedItem.hire_cost_week ? formatCurrency(selectedItem.hire_cost_week) : "—"}</p><p className="text-[10px] text-gray-400 mt-0.5">Week Rate</p></div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 mt-4 text-xs">
+                    <div className="flex justify-between"><span className="text-gray-400">Location</span><span className="text-navy font-medium">{selectedItem.location || "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Weight</span><span className="text-navy font-medium">{selectedItem.weight_kg ? `${selectedItem.weight_kg}kg` : "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Category</span><span className="text-navy font-medium">{selectedItem.category || "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Last Checked</span><span className="text-navy font-medium">{selectedItem.last_checked ? new Date(selectedItem.last_checked).toLocaleDateString("en-GB") : "—"}</span></div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                    <button onClick={() => archiveItem(selectedItem.stock_id).then(() => setSelectedItem(null))} className="px-3 py-2 text-xs text-gray-400 hover:text-starlight-red hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Archive</button>
+                    <button onClick={() => startEdit(selectedItem)} className="px-4 py-2 bg-navy text-white text-xs font-medium rounded-lg hover:bg-navy/90 transition-colors flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Item Dialog */}
       {showAdd && (
