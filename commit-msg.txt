@@ -1,5 +1,6 @@
-fix: timber BOM unit cost = price/m × standard length
+feat: PM Queries — ask questions during scope breakdown, aggregate at job level
 
-Catalogue stores timber at per-metre rate (e.g. £1.10/m). When BOM
-orders by Length, unit cost must be price × standard_length_in_metres
-(e.g. 4.8m × £1.10 = £5.28/length). 9 lengths × £5.28 = £47.52.
+New tbl_pm_queries table. Scope detail page gets inline query input
+below description. Job detail page gets aggregated panel with
+"Copy all open" for pasting to PM via email/WhatsApp. Queries can
+be answered inline with recorded responses.

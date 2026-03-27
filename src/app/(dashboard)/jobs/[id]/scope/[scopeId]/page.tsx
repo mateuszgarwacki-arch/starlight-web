@@ -11,6 +11,7 @@ import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
+import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { ScopeBom } from "@/components/scope-bom";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
@@ -299,6 +300,9 @@ export default function ScopeDetailPage() {
             placeholder="Describe the scope item..."
           />
         </div>
+
+        {/* PM Queries */}
+        <PmQueriesPanel scopeItemId={scope.scope_item_id} jobId={jobId} />
 
       </div>
 
