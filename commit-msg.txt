@@ -1,6 +1,7 @@
-feat: PM Queries — ask questions during scope breakdown, aggregate at job level
+feat: PM Queries — editable questions, photo attachments, share with photos
 
-New tbl_pm_queries table. Scope detail page gets inline query input
-below description. Job detail page gets aggregated panel with
-"Copy all open" for pasting to PM via email/WhatsApp. Queries can
-be answered inline with recorded responses.
+Scope panel: click question text to edit, camera button to attach
+photos (resized to 800px, stored as base64 in DB), delete/dismiss.
+Job panel: "Share with photos" opens formatted HTML in new tab with
+embedded images — printable or saveable as PDF. "Copy text" still
+available for quick clipboard paste.
