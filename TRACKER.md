@@ -990,3 +990,76 @@ rpc_dashboard_data, rpc_workshop_data, rpc_review_data, rpc_capacity_data(date,d
 - **Freelancer creation**: Should include PIN in one step (auto-creates auth user)
 - **Always check `information_schema.columns`** before writing RPC functions or views. Column name mismatches cause full script rollback
 - **Fan-out prevention**: Never join labour and material calculations in the same CTE. Separate into `wo_labour` (no BOM join) and `wo_materials` (BOM join only)
+
+
+### Session 13 (27 Mar 2026) — Bugfixes, Cut List Overhaul, PM Queries, Job Item Reuse
+
+#### Bugfixes ✅
+- [x] **Capacity planning**: General workshop bookings (job_id=null) now count toward supply. Independent supply counter, "Xh general" subtitle on Booked card
+- [x] **Multi-WO from job items**: Items with existing WO coverage can be selected for additional WOs (e.g. BUILD then PAINT). Removed opacity dimming and static checkmark
+- [x] **PDF extraction**: Added `anthropic-beta: pdfs-2024-09-25` header to both extract-cutlist and extract-invoice API routes. Hardened JSON parsing with first-brace/last-brace fallback
+
+#### Cut List Extraction Overhaul ✅
+- [x] **Prompt simplified**: Claude only extracts raw parts list (dimensions, quantities, materials). No more asking LLM to do math
+- [x] **2D guillotine bin packing**: Sheet materials now use proper rectangle packing algorithm (Best Short Side Fit, rotation support, Shorter Axis Split). Area-based calculation was completely wrong (1830×865 part: area says 2 sheets for 6 parts, packing correctly says 6)
+- [x] **1D bin packing**: Timber uses First-Fit Decreasing for standard lengths (unchanged, was already correct)
+- [x] **Timber BOM**: Orders by Length count (not Metres). Unit cost = price_per_metre × standard_length_in_metres
+- [x] **Material groups built from parts**: No longer depends on Claude's `material_summary` — groups are derived deterministically from extracted parts data
+- [x] **Oversized part detection**: Anomaly warning when a part doesn't fit any orientation on standard sheet
+
+#### PM Queries ✅
+- [x] **tbl_pm_queries** table: job_id, scope_item_id, question, answer, status, photo_url
+- [x] **Scope-level panel**: Collapsible section below description. Type question → Enter → saved. Badge count for open queries
+- [x] **Editable questions**: Click text to edit inline, Enter to save
+- [x] **Photo attachments**: Camera button, client-side resize to 800px max, stored as base64 in DB
+- [x] **Job-level aggregation**: Panel on job detail page showing all open queries across scopes
+- [x] **Copy text**: Clipboard paste grouped by scope item for WhatsApp/email
+- [x] **Share with photos**: Opens formatted HTML page in new tab with embedded images — printable/saveable as PDF
+- [x] **Answer inline**: Record PM responses on job page with timestamp
+
+#### In Progress — Copy Bespoke Item from Same Job 🔧
+Feature: When adding a bespoke item to a scope, option to copy an existing bespoke item from another scope in the same job. Avoids retyping identical items when same design appears across multiple quote lines.
+
+**SQL needed (not yet run):**
+```sql
+ALTER TABLE tbl_job_items ADD COLUMN IF NOT EXISTS source_item_id INTEGER REFERENCES tbl_job_items(item_id);
+CREATE INDEX IF NOT EXISTS idx_job_items_source ON tbl_job_items(source_item_id) WHERE source_item_id IS NOT NULL;
+```
+
+**Steps to complete:**
+- [x] Run SQL above in Supabase (confirmed 27 Mar)
+- [ ] Update `job-items-table.tsx` bespoke dialog: add "Copy from this job" section at top
+  - Query `tbl_job_items` WHERE `job_id = currentJobId` AND `scope_item_id != currentScopeId` AND `item_source = 'bespoke'`
+  - Show matching items with scope name, description, finish, quantity
+  - Click item → pre-fills description, finish_required, notes fields
+  - `source_item_id` set to original item's `item_id`
+  - Quantity left editable (main thing that changes between scopes)
+- [ ] In job items list: show small link icon on items with `source_item_id` — "Same as {original scope name}"
+- [ ] Optional: when original item gets "promoted to stock", consider auto-updating linked items' `stock_item_id`
+
+### New/Modified Files (Session 13)
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/capacity/page.tsx` | General workshop booking supply fix |
+| `src/components/job-items-table.tsx` | Multi-WO selection enabled |
+| `src/app/api/extract-cutlist/route.ts` | PDF beta header, simplified prompt, robust JSON parsing |
+| `src/app/api/extract-invoice/route.ts` | PDF beta header, robust JSON parsing |
+| `src/components/cutlist-extractor.tsx` | Full rewrite: guillotine bin packing, deterministic math |
+| `src/components/pm-queries-panel.tsx` | Scope-level PM queries with edit + photos |
+| `src/components/pm-queries-job-panel.tsx` | Job-level query aggregation + share |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | PM queries panel wired in |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | PM queries job panel wired in |
+
+### SQL Run (Session 13)
+- `tbl_pm_queries`: New table with RLS policies + indexes
+- `tbl_pm_queries.photo_url`: TEXT column for base64 images
+
+### Database Tables (now 35)
+Previous (34) + Added: tbl_pm_queries
+
+### Conventions Added (Session 13)
+- **Cut list extraction**: Claude extracts parts only. ALL math (sheet counting, timber lengths) done client-side in JS
+- **Sheet calculation**: 2D guillotine bin packing — never area-based division (see memory: "Area-based sheet calculation is invalid")
+- **Timber BOM**: qty = number of standard lengths, unit = "Length", unit_cost = price_per_metre × standard_length_in_metres
+- **PDF API calls**: Always include `anthropic-beta: pdfs-2024-09-25` header when sending PDF documents
+- **JSON parse hardening**: Always use first-brace/last-brace fallback when parsing Claude API responses

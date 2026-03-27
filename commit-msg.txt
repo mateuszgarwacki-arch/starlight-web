@@ -1,7 +1,1 @@
-feat: PM Queries — editable questions, photo attachments, share with photos
-
-Scope panel: click question text to edit, camera button to attach
-photos (resized to 800px, stored as base64 in DB), delete/dismiss.
-Job panel: "Share with photos" opens formatted HTML in new tab with
-embedded images — printable or saveable as PDF. "Copy text" still
-available for quick clipboard paste.
+Copy-bespoke-item-from-same-job-plus-linked-badge  

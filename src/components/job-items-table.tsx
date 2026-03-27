@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import {
   Plus, Trash2, CheckCircle2, Circle, Search, X,
-  Warehouse, Paintbrush, ArrowUpCircle, MapPin,
+  Warehouse, Paintbrush, ArrowUpCircle, MapPin, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ interface JobItemRow {
   temp_selected: string | null;
   stock_item_id: number | null;
   item_source: string | null;
+  source_item_id: number | null;
 }
 
 interface StockItemResult {
@@ -57,7 +58,11 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
 
   // Bespoke dialog state
   const [showBespokeDialog, setShowBespokeDialog] = useState(false);
-  const [bespokeForm, setBespokeForm] = useState({ description: "", quantity: "1", finish_required: "", promote_to_stock: false });
+  const [bespokeForm, setBespokeForm] = useState({ description: "", quantity: "1", finish_required: "", promote_to_stock: false, source_item_id: null as number | null });
+  const [jobBespokeItems, setJobBespokeItems] = useState<{ item_id: number; description: string; quantity: number | null; finish_required: string | null; scope_name: string }[]>([]);
+
+  // Source item scope name resolution
+  const [sourceScopes, setSourceScopes] = useState<Record<number, string>>({});
 
   const loadItems = useCallback(async () => {
     const { data } = await supabase
@@ -70,6 +75,35 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   }, [scopeItemId]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+
+  // Resolve source_item_id → scope names for linked badges
+  useEffect(() => {
+    const resolve = async () => {
+      const sourceIds = items.filter(i => i.source_item_id).map(i => i.source_item_id!);
+      if (sourceIds.length === 0) { setSourceScopes({}); return; }
+      const { data: srcItems } = await supabase
+        .from("tbl_job_items")
+        .select("item_id, scope_item_id")
+        .in("item_id", sourceIds);
+      if (!srcItems || srcItems.length === 0) return;
+      const scopeIds = [...new Set(srcItems.map(s => s.scope_item_id).filter(Boolean))] as number[];
+      if (scopeIds.length === 0) return;
+      const { data: scopes } = await supabase
+        .from("tbl_scope_items")
+        .select("scope_item_id, item_name")
+        .in("scope_item_id", scopeIds);
+      const scopeMap: Record<number, string> = {};
+      (scopes || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name; });
+      const result: Record<number, string> = {};
+      srcItems.forEach((si: any) => {
+        if (si.scope_item_id && scopeMap[si.scope_item_id]) {
+          result[si.item_id] = scopeMap[si.scope_item_id];
+        }
+      });
+      setSourceScopes(result);
+    };
+    resolve();
+  }, [items]);
   useEffect(() => { onSelectionChange(Array.from(selected)); }, [selected]);
 
   // ============================================================
@@ -94,6 +128,30 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
     if (stockDebounce.current) clearTimeout(stockDebounce.current);
     stockDebounce.current = setTimeout(() => searchStock(val), 150);
   };
+
+  const loadJobBespokeItems = useCallback(async () => {
+    const { data } = await supabase
+      .from("tbl_job_items")
+      .select("item_id, description, quantity, finish_required, scope_item_id")
+      .eq("job_id", jobId)
+      .neq("scope_item_id", scopeItemId)
+      .eq("item_source", "bespoke")
+      .order("item_id");
+    if (!data || data.length === 0) { setJobBespokeItems([]); return; }
+    const scopeIds = [...new Set(data.map(d => d.scope_item_id).filter(Boolean))];
+    let scopeMap: Record<number, string> = {};
+    if (scopeIds.length > 0) {
+      const { data: scopes } = await supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds);
+      (scopes || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name; });
+    }
+    setJobBespokeItems(data.map(d => ({
+      item_id: d.item_id,
+      description: d.description || "",
+      quantity: d.quantity,
+      finish_required: d.finish_required,
+      scope_name: d.scope_item_id ? (scopeMap[d.scope_item_id] || `Scope #${d.scope_item_id}`) : "General",
+    })));
+  }, [jobId, scopeItemId]);
 
   const addStockItem = async (stock: StockItemResult) => {
     const { data } = await supabase.from("tbl_job_items").insert({
@@ -120,11 +178,12 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       quantity: parseInt(bespokeForm.quantity) || 1,
       finish_required: bespokeForm.finish_required.trim() || null,
       notes: bespokeForm.promote_to_stock ? "PROMOTE_TO_STOCK" : null,
+      source_item_id: bespokeForm.source_item_id || null,
       kit_list_exported: "false", temp_selected: "false",
       created_at: new Date().toISOString(),
     });
     toast.success("Bespoke item added");
-    setBespokeForm({ description: "", quantity: "1", finish_required: "", promote_to_stock: false });
+    setBespokeForm({ description: "", quantity: "1", finish_required: "", promote_to_stock: false, source_item_id: null });
     setShowBespokeDialog(false);
     loadItems();
   };
@@ -190,7 +249,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-starlight-amber bg-starlight-amber/10 hover:bg-starlight-amber/20 rounded-lg transition-colors">
             <Warehouse className="h-3.5 w-3.5" /> Add Stock Item
           </button>
-          <button onClick={() => setShowBespokeDialog(true)}
+          <button onClick={() => { setShowBespokeDialog(true); loadJobBespokeItems(); }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-starlight-blue bg-starlight-blue/10 hover:bg-starlight-blue/20 rounded-lg transition-colors">
             <Paintbrush className="h-3.5 w-3.5" /> Add Bespoke Item
           </button>
@@ -237,6 +296,15 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                     )}
                     {item.item_source === "promoted" && (
                       <span className="text-[9px] text-starlight-green font-medium">Promoted</span>
+                    )}
+                    {item.source_item_id && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] text-starlight-blue font-medium"
+                        title={sourceScopes[item.source_item_id] ? `Copied from: ${sourceScopes[item.source_item_id]}` : "Copied from another scope in this job"}>
+                        <Link2 className="h-2.5 w-2.5" />
+                        {sourceScopes[item.source_item_id]
+                          ? `Same as ${sourceScopes[item.source_item_id].length > 40 ? sourceScopes[item.source_item_id].substring(0, 40) + "…" : sourceScopes[item.source_item_id]}`
+                          : "Linked"}
+                      </span>
                     )}
                   </div>
                   <p className="text-sm text-navy font-medium">{item.description || "Untitled item"}</p>
@@ -382,6 +450,37 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
+              {/* Copy from this job */}
+              {jobBespokeItems.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Copy from this job</label>
+                  <div className="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {jobBespokeItems.map((jbi) => (
+                      <button key={jbi.item_id} type="button"
+                        onClick={() => setBespokeForm({
+                          ...bespokeForm,
+                          description: jbi.description,
+                          finish_required: jbi.finish_required || "",
+                          quantity: String(jbi.quantity || 1),
+                          source_item_id: jbi.item_id,
+                        })}
+                        className={"w-full text-left px-3 py-2 hover:bg-starlight-blue/5 transition-colors " + (bespokeForm.source_item_id === jbi.item_id ? "bg-starlight-blue/10" : "")}>
+                        <p className="text-xs text-navy font-medium">{jbi.description}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-gray-400">{jbi.scope_name}</span>
+                          {jbi.finish_required && <span className="text-[10px] text-gray-400">· {jbi.finish_required}</span>}
+                          <span className="text-[10px] text-gray-400">· qty {jbi.quantity || 1}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {bespokeForm.source_item_id && (
+                    <p className="text-[10px] text-starlight-blue mt-1 flex items-center gap-1">
+                      <Link2 className="h-2.5 w-2.5" /> Linked — adjust quantity below
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Description *</label>
                 <textarea value={bespokeForm.description} onChange={(e) => setBespokeForm({ ...bespokeForm, description: e.target.value })}
