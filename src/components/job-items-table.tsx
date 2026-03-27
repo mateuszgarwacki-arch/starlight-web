@@ -450,11 +450,16 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
-              {/* Copy from this job */}
+              {/* Copy from this job — collapsed by default */}
               {jobBespokeItems.length > 0 && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Copy from this job</label>
-                  <div className="max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  <button type="button" onClick={() => setBespokeForm(f => ({ ...f, _showCopy: !(f as any)._showCopy } as any))}
+                    className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-starlight-blue transition-colors">
+                    <Link2 className="h-3 w-3" />
+                    Copy from another scope ({jobBespokeItems.length})
+                    <span className="text-[9px]">{(bespokeForm as any)._showCopy ? '▾' : '▸'}</span>
+                  </button>
+                  {(bespokeForm as any)._showCopy && <div className="mt-1.5 max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
                     {jobBespokeItems.map((jbi) => (
                       <button key={jbi.item_id} type="button"
                         onClick={() => setBespokeForm({
@@ -473,7 +478,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                         </div>
                       </button>
                     ))}
-                  </div>
+                  </div>}
                   {bespokeForm.source_item_id && (
                     <p className="text-[10px] text-starlight-blue mt-1 flex items-center gap-1">
                       <Link2 className="h-2.5 w-2.5" /> Linked — adjust quantity below
