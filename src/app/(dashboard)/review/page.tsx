@@ -454,8 +454,8 @@ export default function ReviewPage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
-                            <th className="py-1.5 w-8"></th>
-                            <th className="text-left py-1.5 font-medium">Scope Item</th>
+                            <th className="py-1.5 w-10"></th>
+                            <th className="text-left py-1.5 pl-3 font-medium">Scope Item</th>
                             <th className="text-right py-1.5 px-2 font-medium">Quoted</th>
                             <th className="text-right py-1.5 px-2 font-medium">PM Est</th>
                             <th className="text-right py-1.5 px-2 font-medium">WS Est</th>
@@ -472,12 +472,12 @@ export default function ReviewPage() {
                             return (
                               <Fragment key={sc.scope_item_id}>
                               <tr className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-100/50" onClick={() => loadWoDetails(sc.scope_item_id)}>
-                                <td className="py-0 px-0 w-8">
-                                  <div className={"w-8 h-full flex items-center justify-center rounded-l " + (isScopeExpanded ? "bg-navy/10" : "bg-gray-100 hover:bg-navy/10")}>
+                                <td className="py-0 px-0 w-10">
+                                  <div className={"w-10 h-full min-h-[2.5rem] flex items-center justify-center " + (isScopeExpanded ? "bg-navy/10" : "bg-gray-100 hover:bg-navy/10")}>
                                     {isScopeExpanded ? <ChevronDown className="h-4 w-4 text-navy" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
                                   </div>
                                 </td>
-                                <td className="py-1.5 text-navy font-medium max-w-[280px]">
+                                <td className="py-1.5 pl-3 text-navy font-medium max-w-[280px]">
                                   <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
                                     {sc.scope_name || "—"}
                                   </Link>
