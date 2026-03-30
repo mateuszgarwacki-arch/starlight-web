@@ -49,7 +49,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.2;
+      renderer.toneMappingExposure = 1.5;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       container.appendChild(renderer.domElement);
@@ -64,24 +64,33 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
-      // Lighting — studio setup
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      // Lighting — bright studio setup for SketchUp models
+      // SketchUp exports lack proper PBR, so we push light levels high
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
       scene.add(ambientLight);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b0b0, 1.2);
+      hemiLight.position.set(0, 10, 0);
+      scene.add(hemiLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
       mainLight.position.set(5, 8, 5);
       mainLight.castShadow = true;
       mainLight.shadow.mapSize.width = 2048;
       mainLight.shadow.mapSize.height = 2048;
       scene.add(mainLight);
 
-      const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
       fillLight.position.set(-3, 4, -3);
       scene.add(fillLight);
 
-      const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
       rimLight.position.set(0, 2, -5);
       scene.add(rimLight);
+
+      const bottomFill = new THREE.DirectionalLight(0xffffff, 0.3);
+      bottomFill.position.set(0, -3, 0);
+      scene.add(bottomFill);
 
       // Ground plane — subtle grid
       const gridHelper = new THREE.GridHelper(10, 20, 0xcccccc, 0xe8e8e8);
@@ -106,11 +115,28 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
           // Position ground at bottom of model
           gridHelper.position.y = -size.y / 2;
 
-          // Enable shadows on all meshes
+          // Enable shadows + fix SketchUp materials on all meshes
           model.traverse((child: any) => {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              // SketchUp exports often have wrong PBR values (metalness=1, roughness=0)
+              // which makes everything look dark/reflective. Reset to sensible defaults.
+              if (child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach((mat: any) => {
+                  if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                    // Only fix if metalness is suspiciously high (SketchUp default)
+                    if (mat.metalness > 0.5 && !mat.metalnessMap) {
+                      mat.metalness = 0.0;
+                    }
+                    if (mat.roughness < 0.3 && !mat.roughnessMap) {
+                      mat.roughness = 0.7;
+                    }
+                    mat.needsUpdate = true;
+                  }
+                });
+              }
             }
           });
 
