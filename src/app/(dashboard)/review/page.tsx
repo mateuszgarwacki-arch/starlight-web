@@ -196,7 +196,8 @@ export default function ReviewPage() {
   const loadScopeCosts = async (jobId: number) => {
     if (expandedJob === jobId) { setExpandedJob(null); setScopeCosts([]); return; }
     setExpandedJob(jobId);
-    const { data } = await supabase.from("qry_scopeitem_cost_summary").select("*").eq("job_id", jobId);
+    // Use qry_cost_waterfall for reliable 4-layer cost data (same source as job page)
+    const { data } = await supabase.from("qry_cost_waterfall").select("*").eq("job_id", jobId);
     setScopeCosts(data || []);
   };
 
@@ -399,24 +400,42 @@ export default function ReviewPage() {
                         <thead>
                           <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
                             <th className="text-left py-1.5 font-medium">Scope Item</th>
-                            <th className="text-right py-1.5 px-2 font-medium">WOs</th>
-                            <th className="text-right py-1.5 px-2 font-medium">Est. Labour</th>
-                            <th className="text-right py-1.5 px-2 font-medium">Actual Labour</th>
-                            <th className="text-right py-1.5 px-2 font-medium">Materials</th>
-                            <th className="text-right py-1.5 px-2 font-medium">Total</th>
+                            <th className="text-right py-1.5 px-2 font-medium">Quoted</th>
+                            <th className="text-right py-1.5 px-2 font-medium">PM Est</th>
+                            <th className="text-right py-1.5 px-2 font-medium">WS Est</th>
+                            <th className="text-right py-1.5 px-2 font-medium">Actual</th>
+                            <th className="text-right py-1.5 px-2 font-medium">Margin</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {scopeCosts.map((sc: any) => (
-                            <tr key={sc.scope_item_id} className="border-b border-gray-100 last:border-0">
-                              <td className="py-1.5 text-navy font-medium">{sc.item_name || "—"}</td>
-                              <td className="py-1.5 px-2 text-right text-gray-600">{sc.wo_count}</td>
-                              <td className="py-1.5 px-2 text-right font-mono text-gray-500">{formatCurrency(sc.scope_est_labour_cost)}</td>
-                              <td className="py-1.5 px-2 text-right font-mono text-navy">{formatCurrency(sc.scope_actual_labour_cost)}</td>
-                              <td className="py-1.5 px-2 text-right font-mono text-navy">{formatCurrency(sc.scope_material_cost)}</td>
-                              <td className="py-1.5 px-2 text-right font-mono font-semibold text-navy">{formatCurrency(sc.scope_total_actual_cost)}</td>
-                            </tr>
-                          ))}
+                          {scopeCosts.map((sc: any) => {
+                            const best = sc.actual_total || sc.ws_est_total || sc.pm_est_cost || 0;
+                            const quoted = sc.quoted_value || 0;
+                            const marginPct = quoted > 0 && best > 0 ? ((quoted - best) / quoted) * 100 : null;
+                            return (
+                              <tr key={sc.scope_item_id} className="border-b border-gray-100 last:border-0">
+                                <td className="py-1.5 text-navy font-medium max-w-[280px]">
+                                  <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline">
+                                    {sc.scope_name || "—"}
+                                  </Link>
+                                  {sc.selected_option && (
+                                    <span className="ml-1.5 text-[9px] bg-green-50 text-starlight-green px-1 py-0.5 rounded">{sc.selected_option}</span>
+                                  )}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-gray-500">{quoted > 0 ? formatCurrency(quoted) : "—"}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-orange-500">{sc.pm_est_cost ? formatCurrency(sc.pm_est_cost) : "—"}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-blue-500">{sc.ws_est_total ? formatCurrency(sc.ws_est_total) : "—"}</td>
+                                <td className="py-1.5 px-2 text-right font-mono font-medium text-navy">{sc.actual_total ? formatCurrency(sc.actual_total) : "—"}</td>
+                                <td className={`py-1.5 px-2 text-right font-mono font-semibold ${
+                                  marginPct === null ? "text-gray-300" :
+                                  marginPct >= 40 ? "text-starlight-green" :
+                                  marginPct >= 20 ? "text-amber-500" : "text-starlight-red"
+                                }`}>
+                                  {marginPct !== null ? `${marginPct.toFixed(0)}%` : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     )}
