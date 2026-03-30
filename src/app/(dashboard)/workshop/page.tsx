@@ -7,10 +7,11 @@ import { isTruthy } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Hammer, Clock, Users, ChevronDown, ChevronRight,
-  Filter, Search, RefreshCw, Timer,
+  Filter, Search, RefreshCw, Timer, Square,
 } from "lucide-react";
 import Link from "next/link";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
+import { toast } from "sonner";
 
 interface WorkshopWO {
   work_order_id: number;
@@ -59,6 +60,11 @@ export default function WorkshopPage() {
   const [filterJob, setFilterJob] = useState<string>("all");
   const [searchText, setSearchText] = useState("");
   const [activeTasks, setActiveTasks] = useState<ActiveTask[]>([]);
+
+  // PM stop task controls
+  const [stoppingTask, setStoppingTask] = useState<number | null>(null);
+  const [stopHours, setStopHours] = useState("");
+  const [stopReason, setStopReason] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -186,6 +192,24 @@ export default function WorkshopPage() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // PM: stop an ad-hoc task with reason and hours override
+  const handleStopTask = async (taskId: number) => {
+    const hrs = parseFloat(stopHours);
+    if (!hrs || hrs <= 0) { toast.error("Enter valid hours"); return; }
+    if (!stopReason.trim()) { toast.error("Enter a reason"); return; }
+    await supabase.from("tbl_tasks").update({
+      status: "pending",
+      hours: hrs,
+      logged_at: new Date().toISOString(),
+      description: (stopReason.trim() ? `[PM stopped] ${stopReason.trim()}` : null),
+    }).eq("task_id", taskId);
+    toast.success("Task stopped — sent to review");
+    setStoppingTask(null);
+    setStopHours("");
+    setStopReason("");
+    loadAll();
+  };
 
   // Real-time: auto-refresh when WOs or time entries change
   useRealtimeRefresh(["tbl_work_orders", "tbl_wo_time_entries", "tbl_tasks"], loadAll, !loading);
@@ -330,23 +354,64 @@ export default function WorkshopPage() {
               const elapsedStr = elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed / 60)}h ${elapsed % 60}m`;
               const catLabel = task.category === "workshop_general" ? "General" : task.category === "maintenance" ? "Maintenance" : task.category === "job_work" ? "Job" : "Other";
               return (
-                <div key={task.task_id} className="px-4 py-2.5 flex items-center gap-3">
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                    task.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" :
-                    task.category === "job_work" ? "bg-starlight-blue/10 text-starlight-blue" :
-                    "bg-navy/10 text-navy"
-                  }`}>{catLabel}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-navy font-medium truncate">{task.title}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                      <span>{task.freelancer_name}</span>
-                      {task.job_number && <span className="font-mono">{task.job_number}</span>}
+                <div key={task.task_id} className="px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                      task.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" :
+                      task.category === "job_work" ? "bg-starlight-blue/10 text-starlight-blue" :
+                      "bg-navy/10 text-navy"
+                    }`}>{catLabel}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-navy font-medium truncate">{task.title}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span>{task.freelancer_name}</span>
+                        {task.job_number && <span className="font-mono">{task.job_number}</span>}
+                      </div>
                     </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-mono text-starlight-amber font-semibold">{elapsedStr}</p>
+                      <p className="text-[9px] text-gray-400">since {new Date(task.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (stoppingTask === task.task_id) { setStoppingTask(null); return; }
+                        const defHrs = Math.max(0.5, Math.round((elapsed / 60) * 2) / 2);
+                        setStoppingTask(task.task_id);
+                        setStopHours(String(defHrs));
+                        setStopReason("");
+                      }}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${stoppingTask === task.task_id ? "bg-red-50 text-red-500" : "text-gray-400 hover:text-red-500 hover:bg-red-50"}`}
+                      title="Stop this task">
+                      <Square className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs font-mono text-starlight-amber font-semibold">{elapsedStr}</p>
-                    <p className="text-[9px] text-gray-400">since {new Date(task.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
-                  </div>
+                  {stoppingTask === task.task_id && (
+                    <div className="mt-2 ml-16 flex items-end gap-2">
+                      <div className="w-20">
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                        <input type="number" step="0.5" min="0.5" value={stopHours}
+                          onChange={e => setStopHours(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                        <input type="text" value={stopReason}
+                          onChange={e => setStopReason(e.target.value)}
+                          placeholder="e.g. Forgot to stop, moved to WO, end of day"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400"
+                          autoFocus />
+                      </div>
+                      <button onClick={() => handleStopTask(task.task_id)}
+                        disabled={!stopReason.trim() || !stopHours}
+                        className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 disabled:opacity-50 shrink-0">
+                        Stop
+                      </button>
+                      <button onClick={() => setStoppingTask(null)}
+                        className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
