@@ -36,7 +36,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
 
       // Scene
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xe8e8ec);
+      scene.background = new THREE.Color(0x4a6741);
       sceneRef.current = scene;
 
       // Camera
