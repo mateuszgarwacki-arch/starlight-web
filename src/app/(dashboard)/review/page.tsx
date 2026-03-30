@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
@@ -108,6 +108,9 @@ export default function ReviewPage() {
   const [matDetails, setMatDetails] = useState<MatDetail[]>([]);
   const [overheadTasks, setOverheadTasks] = useState<any[]>([]);
   const [overheadTotal, setOverheadTotal] = useState(0);
+  const [workshopMargins, setWorkshopMargins] = useState<Record<number, any>>({});
+  const [expandedScope, setExpandedScope] = useState<number | null>(null);
+  const [woDetails, setWoDetails] = useState<any[]>([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -188,6 +191,13 @@ export default function ReviewPage() {
       setOverheadTasks([]);
       setOverheadTotal(0);
     }
+    // Workshop quote margins per job (from qry_job_quote_margin)
+    const { data: wmData } = await supabase.from("qry_job_quote_margin").select("*");
+    if (wmData) {
+      const map: Record<number, any> = {};
+      wmData.forEach((m: any) => { map[m.job_id] = m; });
+      setWorkshopMargins(map);
+    }
     setLoading(false);
   }, []);
 
@@ -206,6 +216,45 @@ export default function ReviewPage() {
     setExpandedMatJob(jobId);
     const { data } = await supabase.from("qry_material_reconciliation").select("*").eq("job_id", jobId);
     setMatDetails(data || []);
+  };
+
+  const loadWoDetails = async (scopeItemId: number) => {
+    if (expandedScope === scopeItemId) { setExpandedScope(null); setWoDetails([]); return; }
+    setExpandedScope(scopeItemId);
+    const [woRes, estRes] = await Promise.all([
+      supabase.from("tbl_work_orders").select("work_order_id, description, status, estimated_duration_hrs, wo_sequence").eq("scope_item_id", scopeItemId).not("status", "eq", "Voided").order("wo_sequence"),
+      supabase.from("qry_wo_estimated_cost").select("work_order_id, estimated_labour_cost, estimated_material_cost, estimated_total_cost").eq("scope_item_id", scopeItemId),
+    ]);
+    const wos = woRes.data || [];
+    const woIds = wos.map((w: any) => w.work_order_id);
+    const estMap: Record<number, any> = {};
+    (estRes.data || []).forEach((e: any) => { estMap[e.work_order_id] = e; });
+    let actMap: Record<number, { labour: number; hours: number }> = {};
+    let matMap: Record<number, number> = {};
+    if (woIds.length > 0) {
+      const [timeRes, bomRes] = await Promise.all([
+        supabase.from("tbl_wo_time_entries").select("work_order_id, entry_cost, actual_hours").in("work_order_id", woIds).is("archived_at", null),
+        supabase.from("tbl_wo_bom").select("work_order_id, quantity, unit_cost, actual_unit_cost").in("work_order_id", woIds),
+      ]);
+      for (const t of timeRes.data || []) {
+        if (!actMap[t.work_order_id]) actMap[t.work_order_id] = { labour: 0, hours: 0 };
+        actMap[t.work_order_id].labour += t.entry_cost || 0;
+        actMap[t.work_order_id].hours += t.actual_hours || 0;
+      }
+      for (const b of bomRes.data || []) {
+        matMap[b.work_order_id] = (matMap[b.work_order_id] || 0) + (b.quantity || 0) * (b.actual_unit_cost || b.unit_cost || 0);
+      }
+    }
+    setWoDetails(wos.map((wo: any) => ({
+      ...wo,
+      est_labour: estMap[wo.work_order_id]?.estimated_labour_cost || 0,
+      est_material: estMap[wo.work_order_id]?.estimated_material_cost || 0,
+      est_total: estMap[wo.work_order_id]?.estimated_total_cost || 0,
+      act_hours: actMap[wo.work_order_id]?.hours || 0,
+      act_labour: actMap[wo.work_order_id]?.labour || 0,
+      act_material: matMap[wo.work_order_id] || 0,
+      act_total: (actMap[wo.work_order_id]?.labour || 0) + (matMap[wo.work_order_id] || 0),
+    })));
   };
 
   // Helper: resolve field names (view uses quote_total, RPC may alias differently)
@@ -384,11 +433,17 @@ export default function ReviewPage() {
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">Event: {formatDate(job.event_date)}</p>
                   </div>
-                  <div className="grid grid-cols-4 gap-4 text-right w-96 shrink-0">
+                  <div className="grid grid-cols-5 gap-3 text-right w-[500px] shrink-0">
                     <div><p className="text-[10px] text-gray-400">Quote</p><p className="text-sm font-mono text-navy">{formatCurrency(getQuote(job))}</p></div>
+                    <div><p className="text-[10px] text-gray-400">WS Quote</p><p className="text-sm font-mono text-navy">{formatCurrency(workshopMargins[job.job_id]?.total_quoted || 0)}</p></div>
                     <div><p className="text-[10px] text-gray-400">Labour</p><p className="text-sm font-mono text-navy">{formatCurrency(getLabour(job))}</p></div>
                     <div><p className="text-[10px] text-gray-400">Material</p><p className="text-sm font-mono text-navy">{formatCurrency(getMaterial(job))}</p></div>
-                    <div><p className="text-[10px] text-gray-400">Margin</p><p className={"text-sm font-mono font-semibold " + (getMargin(job) >= 0 ? "text-starlight-green" : "text-starlight-red")}>{formatCurrency(getMargin(job))}</p></div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">WS Margin</p>
+                      {(() => { const wm = workshopMargins[job.job_id]; const m = wm ? wm.total_margin : getMargin(job); return (
+                        <p className={"text-sm font-mono font-semibold " + (m >= 0 ? "text-starlight-green" : "text-starlight-red")}>{formatCurrency(m)}</p>
+                      ); })()}
+                    </div>
                   </div>
                 </div>
                 {expandedJob === job.job_id && (
@@ -412,12 +467,17 @@ export default function ReviewPage() {
                             const best = sc.actual_total || sc.ws_est_total || sc.pm_est_cost || 0;
                             const quoted = sc.quoted_value || 0;
                             const marginPct = quoted > 0 && best > 0 ? ((quoted - best) / quoted) * 100 : null;
+                            const isScopeExpanded = expandedScope === sc.scope_item_id;
                             return (
-                              <tr key={sc.scope_item_id} className="border-b border-gray-100 last:border-0">
+                              <Fragment key={sc.scope_item_id}>
+                              <tr className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-100/50" onClick={() => loadWoDetails(sc.scope_item_id)}>
                                 <td className="py-1.5 text-navy font-medium max-w-[280px]">
-                                  <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline">
-                                    {sc.scope_name || "—"}
-                                  </Link>
+                                  <span className="inline-flex items-center gap-1">
+                                    {isScopeExpanded ? <ChevronDown className="h-3 w-3 text-gray-400 shrink-0" /> : <ChevronRight className="h-3 w-3 text-gray-400 shrink-0" />}
+                                    <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                                      {sc.scope_name || "—"}
+                                    </Link>
+                                  </span>
                                   {sc.selected_option && (
                                     <span className="ml-1.5 text-[9px] bg-green-50 text-starlight-green px-1 py-0.5 rounded">{sc.selected_option}</span>
                                   )}
@@ -434,6 +494,57 @@ export default function ReviewPage() {
                                   {marginPct !== null ? `${marginPct.toFixed(0)}%` : "—"}
                                 </td>
                               </tr>
+                              {isScopeExpanded && woDetails.length > 0 && (
+                                <>
+                                <tr className="bg-white/80">
+                                  <td colSpan={6} className="px-0 py-0">
+                                    <table className="w-full text-[11px]">
+                                      <thead>
+                                        <tr className="text-[9px] text-gray-400 uppercase tracking-wider border-b border-gray-200/60">
+                                          <th className="text-left py-1 pl-8 font-medium">Work Order</th>
+                                          <th className="text-center py-1 px-1 font-medium">Status</th>
+                                          <th className="text-right py-1 px-1 font-medium">Est Hrs</th>
+                                          <th className="text-right py-1 px-1 font-medium">Act Hrs</th>
+                                          <th className="text-right py-1 px-1 font-medium">Est Cost</th>
+                                          <th className="text-right py-1 px-1 font-medium">Act Labour</th>
+                                          <th className="text-right py-1 px-1 font-medium">Material</th>
+                                          <th className="text-right py-1 pr-2 font-medium">Total</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {woDetails.map((wo: any) => {
+                                          const hasActuals = wo.act_total > 0;
+                                          return (
+                                            <tr key={wo.work_order_id} className="border-b border-gray-100/50 last:border-0">
+                                              <td className="py-1 pl-8 text-gray-600 max-w-[220px] truncate">{wo.description || "—"}</td>
+                                              <td className="py-1 px-1 text-center">
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                                                  wo.status === "Complete" ? "bg-starlight-green/10 text-starlight-green" :
+                                                  wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" :
+                                                  "bg-gray-100 text-gray-500"
+                                                }`}>{wo.status}</span>
+                                              </td>
+                                              <td className="py-1 px-1 text-right font-mono text-gray-500">{wo.estimated_duration_hrs ? `${wo.estimated_duration_hrs}h` : "—"}</td>
+                                              <td className={`py-1 px-1 text-right font-mono ${wo.act_hours > 0 ? (wo.act_hours > (wo.estimated_duration_hrs || 999) ? "text-starlight-red font-medium" : "text-navy") : "text-gray-300"}`}>
+                                                {wo.act_hours > 0 ? `${Math.round(wo.act_hours * 10) / 10}h` : "—"}
+                                              </td>
+                                              <td className="py-1 px-1 text-right font-mono text-blue-400">{wo.est_total > 0 ? formatCurrency(wo.est_total) : "—"}</td>
+                                              <td className="py-1 px-1 text-right font-mono text-navy">{wo.act_labour > 0 ? formatCurrency(wo.act_labour) : "—"}</td>
+                                              <td className="py-1 px-1 text-right font-mono text-navy">{wo.act_material > 0 ? formatCurrency(wo.act_material) : "—"}</td>
+                                              <td className="py-1 pr-2 text-right font-mono font-medium text-navy">{hasActuals ? formatCurrency(wo.act_total) : "—"}</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                                </>
+                              )}
+                              {isScopeExpanded && woDetails.length === 0 && (
+                                <tr className="bg-white/80"><td colSpan={6} className="py-1.5 pl-8 text-[11px] text-gray-400">No work orders</td></tr>
+                              )}
+                              </Fragment>
                             );
                           })}
                         </tbody>
