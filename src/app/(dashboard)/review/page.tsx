@@ -472,8 +472,10 @@ export default function ReviewPage() {
                               <Fragment key={sc.scope_item_id}>
                               <tr className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-100/50" onClick={() => loadWoDetails(sc.scope_item_id)}>
                                 <td className="py-1.5 text-navy font-medium max-w-[280px]">
-                                  <span className="inline-flex items-center gap-1">
-                                    {isScopeExpanded ? <ChevronDown className="h-3 w-3 text-gray-400 shrink-0" /> : <ChevronRight className="h-3 w-3 text-gray-400 shrink-0" />}
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-gray-200 shrink-0 transition-colors">
+                                      {isScopeExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-500" />}
+                                    </span>
                                     <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
                                       {sc.scope_name || "—"}
                                     </Link>
