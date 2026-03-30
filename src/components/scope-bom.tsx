@@ -18,7 +18,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
   const [rows, setRows] = useState<WoBom[]>([]);
   const [loading, setLoading] = useState(true);
   const [materials, setMaterials] = useState<
-    { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null }[]
+    { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_length: number | null }[]
   >([]);
   const [stockItems, setStockItems] = useState<
     { stock_id: number; product_code: string; description: string; stock_quantity: number; hire_cost_day: number | null; thumbnail_url: string | null }[]
@@ -43,7 +43,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
     loadBom();
     supabase
       .from("tbl_materials")
-      .select("material_id, material_name, unit, current_unit_cost, material_category")
+      .select("material_id, material_name, unit, current_unit_cost, material_category, standard_length")
       .eq("active", true)
       .order("material_name")
       .then(({ data }) => setMaterials(data || []));
@@ -123,10 +123,21 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
     toast.success("Material removed");
   };
 
-  const totalCost = rows.reduce((s, r) => {
-    const cost = r.actual_unit_cost ?? r.unit_cost ?? 0;
-    return s + (r.quantity || 0) * cost;
-  }, 0);
+  // Lookup: material_id → standard_length (in mm)
+  const stdLengthMap: Record<number, number> = {};
+  (materials || []).forEach((m) => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
+
+  // Compute row total — handles "Length" mode: qty × (stdLen_mm / 1000) × unit_cost
+  const rowTotal = (row: WoBom) => {
+    const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
+    const qty = row.quantity || 0;
+    if (row.unit === "Length" && row.material_id && stdLengthMap[row.material_id]) {
+      return qty * (stdLengthMap[row.material_id] / 1000) * cost;
+    }
+    return qty * cost;
+  };
+
+  const totalCost = rows.reduce((s, r) => s + rowTotal(r), 0);
 
   if (loading) return null;
 
@@ -170,7 +181,10 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
             <tbody>
               {rows.map((row) => {
                 const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
-                const total = (row.quantity || 0) * cost;
+                const total = rowTotal(row);
+                const stdLen = row.material_id ? stdLengthMap[row.material_id] : null;
+                const isLengthMode = row.unit === "Length" && stdLen;
+                const canToggle = !!stdLen;
                 return (
                   <tr key={row.bom_id} className="border-b border-gray-100 last:border-0">
                     <td className="py-1.5 px-4">
@@ -187,9 +201,23 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                         className="w-16 text-right text-sm font-mono text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
                     </td>
                     <td className="py-1.5 px-2">
-                      <input type="text" defaultValue={row.unit || ""}
-                        onBlur={(e) => { if (e.target.value !== row.unit) updateField(row.bom_id, "unit", e.target.value); }}
-                        className="w-16 text-sm text-gray-600 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
+                      {canToggle ? (
+                        <button
+                          onClick={() => updateField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
+                          className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200")}
+                          title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
+                        >
+                          {isLengthMode ? "Length" : "Metre"}
+                          <span className="text-[9px] text-gray-400">⇄</span>
+                        </button>
+                      ) : (
+                        <input type="text" defaultValue={row.unit || ""}
+                          onBlur={(e) => { if (e.target.value !== row.unit) updateField(row.bom_id, "unit", e.target.value); }}
+                          className="w-16 text-sm text-gray-600 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
+                      )}
+                      {isLengthMode && (
+                        <p className="text-[9px] text-gray-400 mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                      )}
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       <input type="number" step="0.01" defaultValue={cost || ""}
