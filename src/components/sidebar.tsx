@@ -20,6 +20,7 @@ import {
   Settings,
   Bell,
   Warehouse,
+  Wrench,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -39,6 +40,7 @@ const navItems = [
   { href: "/suppliers", label: "Suppliers", icon: Truck, zone: 1 },
   { href: "/crew", label: "Crew", icon: Calendar, zone: 1 },
   { href: "/reports", label: "Reports", icon: FileText, zone: 1 },
+  { href: "/maintenance", label: "Maintenance", icon: Wrench, zone: 1 },
   { href: "/notifications", label: "Notifications", icon: Bell, zone: 1, hasBadge: true },
   { href: "/settings", label: "Settings", icon: Settings, zone: 1 },
 ];
