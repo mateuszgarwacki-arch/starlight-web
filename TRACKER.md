@@ -1063,3 +1063,126 @@ Previous (34) + Added: tbl_pm_queries
 - **Timber BOM**: qty = number of standard lengths, unit = "Length", unit_cost = price_per_metre × standard_length_in_metres
 - **PDF API calls**: Always include `anthropic-beta: pdfs-2024-09-25` header when sending PDF documents
 - **JSON parse hardening**: Always use first-brace/last-brace fallback when parsing Claude API responses
+
+
+### Session 14 (30 Mar 2026) — Maintenance System, Workshop UX, Cost Tracking Fixes
+12 commits. Major new feature: full maintenance system (desktop + mobile). Multiple Workshop page improvements. Cost tracking debugging.
+
+#### Copy Bespoke Item from Same Job ✅
+- [x] Bespoke dialog: collapsed "Copy from another scope (N)" link at top, expands on click
+- [x] Click item → pre-fills description, finish_required, quantity, sets `source_item_id`
+- [x] Link badge: "Same as {scope name}" with Link2 icon, two-hop scope name resolution
+- [x] Falls back to "Linked" if scope name can't be resolved, full name in tooltip
+
+#### Maintenance System ✅ (NEW)
+6 new tables, 2 views, desktop page, mobile page with timer.
+
+**Database:**
+- `tbl_maintenance_assets`: name, location, description, photo_onedrive_path, active
+- `tbl_maintenance_tasks`: asset_id FK, description, instructions, frequency (daily/weekly/fortnightly/monthly/quarterly/annually/as_needed), day_of_week, estimated_minutes, sort_order
+- `tbl_maintenance_logs`: asset_id FK, performed_by, work_order_id (nullable), started_at, completed_at, status, notes
+- `tbl_maintenance_checks`: log_id FK, task_id FK, completed_at, note, flagged, completed_by
+- `tbl_maintenance_flags`: asset_id FK, check_id (nullable), raised_by, severity (info/warning/urgent), title, description, photo_onedrive_path, status (open/acknowledged/resolved), resolution_notes
+- `tbl_maintenance_asset_photos`: asset_id FK, onedrive_path, file_name, caption, sort_order, uploaded_by
+- `qry_maintenance_task_status`: per-task due status (overdue/due_soon/done/no_schedule) derived from last completion + frequency
+- `qry_maintenance_asset_summary`: per-asset health (worst-case of tasks), task count, open flags, last maintained
+- MAINTENANCE_FREQUENCY values added to `tbl_master_lookups`
+- RLS: all tables readable by everyone, assets/tasks modifiable by PM/admin/foreman, logs/checks/flags modifiable by everyone
+
+**Desktop `/maintenance`:**
+- [x] Asset cards with RAG health dots (overdue/due soon/OK), open flags badge, task count, last maintained
+- [x] Summary bar: total assets, overdue count, due soon count, open flags
+- [x] Click to expand with 4 tabs: Checklist, Photos, History, Flags
+- [x] Checklist tab: tasks with frequency, due status, last completed, add/remove tasks
+- [x] Photos tab: OneDrive upload, grid display, editable captions, delete
+- [x] History tab: maintenance sessions with who, when, checks ticked, flags raised
+- [x] Flags tab: severity icons, acknowledge → resolve workflow with resolution notes
+- [x] Add Asset dialog, Edit/Archive asset inline
+- [x] Wrench icon in sidebar
+
+**Mobile `/m/maintenance`:**
+- [x] Wrench icon as 5th tab in bottom nav (Tasks, Schedule, Maint., Photos, Me)
+- [x] Asset list sorted by urgency: overdue first, then due soon, then OK
+- [x] Tap asset → Pre-start screen: asset info, reference photos, task preview, "Start Maintenance" button
+- [x] Active session: live timer (MM:SS), progress bar, tick items line by line
+- [x] Per-item duration derived from tick timestamps (time since previous tick)
+- [x] Optional note per item, flag button per item with severity selector
+- [x] "Complete Maintenance" button shows checked count + elapsed time
+- [x] Flagged items → PM notification via `notify()`
+
+#### Auto-Close Open Tasks on WO Start ✅
+- [x] `handleStart` and `handleJoin` in mobile WO detail now auto-close any open `tbl_tasks` (in_progress) for that freelancer
+- [x] Hours calculated from elapsed time (rounded to 0.5h, min 0.5h), status set to pending
+- [x] Toast confirms: "Auto-logged Xh for '{task title}'"
+- [x] Closed task goes to review inbox
+
+#### Workshop Page Improvements ✅
+- [x] **Active Tasks panel**: shows all in-progress ad-hoc tasks from `tbl_tasks` (not linked to WOs)
+- [x] **PM Stop button**: inline form per task — hours override (pre-filled from elapsed) + reason (required) + Stop
+- [x] **Workers banner enhanced**: shows WHO is on WHAT — person → WO activity + scope (blue arrow) or task title + category badge (amber arrow), with start time
+- [x] **WOs grouped by job**: Job header (number, name, WO done count, active count, days remaining) → scope groups within each job. Jobs sorted by event date nearest first
+- [x] Realtime subscription includes `tbl_tasks`
+
+#### Traveller Timber Qty Fix ✅
+- [x] BOM now stores unit="Length" (Session 13 convention). Traveller had old conversion logic dividing lengths by standard_length_mm → showed 0
+- [x] Fix: if unit is already "Length"/"Lengths", pass through qty directly. Legacy metre-based records still convert correctly
+
+#### 3D Model Viewer Lighting ✅
+- [x] HDR environment via Three.js `RoomEnvironment` (procedural studio, no file download)
+- [x] SketchUp material fix: metalness reset to 0, roughness to 0.85, envMapIntensity 0.6
+- [x] Green background (#4a6741) for white model contrast
+- [x] Key + fill directional lights for readable shadows
+- [x] Tone mapping exposure 0.7 (prevents blown-out whites)
+
+#### Review Page Cost Fixes ✅
+- [x] NaN in summary cards fixed: null-safe reduces with `|| 0`
+- [x] Job Costs field mapping: interface accepts both view column names (`quote_total`, `labour_cost`) and legacy aliases
+- [x] Helper functions `getQuote()`, `getLabour()`, `getMaterial()`, `getTotal()`, `getMargin()` resolve whichever field name the RPC returns
+- [x] Workshop Overhead panel: expandable section showing non-job tasks (general, maintenance, other) with person, hours, rate, cost
+- [x] "Workshop Overhead" summary card in amber
+- [x] "Loading scope items..." stuck message → "No scope item cost data for this line"
+- [x] `qry_cost_waterfall` view recreated (was dropped in Session 12 cleanup)
+
+#### Outstanding Cost Issues (next session)
+- [ ] Verify `qry_cost_waterfall` returns correct data for Chelsea In Bloom quote lines
+- [ ] Investigate £305 labour on Rocket frame (WO 17 has £35 time entry — may be test data to archive)
+- [ ] Review page `rpc_review_data` field names may not match updated `qry_job_cost_summary` — verify and fix
+- [ ] Committed summary row may be missing some time entries — compare direct query vs view totals
+
+### New/Modified Files (Session 14)
+| File | Purpose |
+|------|--------|
+| `src/components/job-items-table.tsx` | Copy bespoke from same job, collapsed section, linked badge |
+| `src/components/sidebar.tsx` | Wrench icon, Maintenance nav item |
+| `src/app/(dashboard)/maintenance/page.tsx` | Desktop maintenance: assets, checklists, photos, flags, history |
+| `src/app/m/maintenance/page.tsx` | Mobile maintenance: timer flow, checklist, flags |
+| `src/app/m/layout.tsx` | 5th bottom tab: Maint. |
+| `src/app/m/wo/[woId]/page.tsx` | Auto-close open tasks on START/JOIN |
+| `src/app/(dashboard)/workshop/page.tsx` | Active tasks panel, PM stop, workers detail, job grouping |
+| `src/app/traveller/page.tsx` | Timber qty fix (Length unit pass-through) |
+| `src/components/model-viewer.tsx` | HDR environment, material fix, green background |
+| `src/app/(dashboard)/review/page.tsx` | NaN fix, field mapping, overhead panel |
+| `src/components/cost-breakdown.tsx` | Loading message fix |
+
+### SQL Run (Session 14)
+- 6 maintenance tables: assets, tasks, logs, checks, flags, asset_photos
+- 2 maintenance views: qry_maintenance_task_status, qry_maintenance_asset_summary
+- MAINTENANCE_FREQUENCY lookup values
+- RLS policies on all 6 tables
+- Indexes on asset_id, log_id, task_id, status
+- `qry_cost_waterfall` view recreated
+
+### Database Tables (now 41)
+Previous (35) + Added: tbl_maintenance_assets, tbl_maintenance_tasks, tbl_maintenance_logs, tbl_maintenance_checks, tbl_maintenance_flags, tbl_maintenance_asset_photos
+
+### Views (now 37)
+Previous (34) + Added: qry_maintenance_task_status, qry_maintenance_asset_summary, qry_cost_waterfall (recreated)
+
+### Conventions Added (Session 14)
+- **Maintenance photos**: stored on OneDrive under `Maintenance/{AssetName}/`, multiple per asset with captions
+- **Maintenance timer**: freelancer taps Start, ticks items, per-item duration derived from tick timestamps (not manual entry)
+- **Auto-close tasks on WO start**: any open `tbl_tasks` entry auto-closes with calculated hours when freelancer starts/joins a WO
+- **Workshop overhead costs**: `tbl_tasks` with category workshop_general/maintenance/other are NOT job-linked. They appear in Review page's Workshop Overhead panel, separate from job cost chain
+- **Traveller timber unit**: if BOM unit is already "Length"/"Lengths", pass through qty directly (don't re-convert from metres)
+- **3D model viewer**: uses RoomEnvironment HDR for SketchUp models. Reset metalness=0, roughness=0.85, envMapIntensity=0.6
+- **Cost view column names**: `qry_job_cost_summary` uses `quote_total`, `labour_cost`, `material_cost`, `total_cost`, `margin_pct`. Frontend must accept both these and legacy aliases
