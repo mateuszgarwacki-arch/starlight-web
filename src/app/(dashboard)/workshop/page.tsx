@@ -280,13 +280,39 @@ export default function WorkshopPage() {
         </div>
       </div>
 
-      {/* Active workers banner */}
-      {stats.activeWorkerCount > 0 && (
-        <div className="bg-starlight-blue/5 border border-starlight-blue/20 rounded-lg px-4 py-3 flex items-center gap-3">
-          <Users className="h-4 w-4 text-starlight-blue" />
-          <p className="text-sm text-starlight-blue">
-            <span className="font-semibold">{stats.activeWorkerCount}</span> {stats.activeWorkerCount === 1 ? "person" : "people"} currently working
-          </p>
+      {/* Active workers banner — shows who's on what */}
+      {(stats.activeWorkerCount > 0 || activeTasks.length > 0) && (
+        <div className="bg-starlight-blue/5 border border-starlight-blue/20 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="h-4 w-4 text-starlight-blue" />
+            <p className="text-sm font-medium text-starlight-blue">
+              {stats.activeWorkerCount + activeTasks.length} {(stats.activeWorkerCount + activeTasks.length) === 1 ? "person" : "people"} currently working
+            </p>
+          </div>
+          <div className="space-y-1">
+            {/* WO workers */}
+            {wos.flatMap(w => w.active_workers.map(aw => (
+              <div key={`${w.work_order_id}-${aw.name}`} className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-navy w-28 truncate">{aw.name}</span>
+                <span className="text-starlight-blue">→</span>
+                <span className="text-gray-600 truncate flex-1">{w.activity_label} — {w.scope_name}</span>
+                <span className="text-[10px] font-mono text-gray-400 shrink-0">{w.job_number}</span>
+                <span className="text-[10px] text-gray-400 shrink-0">since {aw.since}</span>
+              </div>
+            )))}
+            {/* Ad-hoc task workers */}
+            {activeTasks.map(t => (
+              <div key={t.task_id} className="flex items-center gap-2 text-xs">
+                <span className="font-medium text-navy w-28 truncate">{t.freelancer_name}</span>
+                <span className="text-starlight-amber">→</span>
+                <span className="text-gray-600 truncate flex-1">{t.title}</span>
+                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${t.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" : "bg-navy/10 text-navy"}`}>
+                  {t.category === "maintenance" ? "Maint." : "General"}
+                </span>
+                <span className="text-[10px] text-gray-400 shrink-0">since {new Date(t.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
