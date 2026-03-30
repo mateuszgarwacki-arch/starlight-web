@@ -36,7 +36,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
 
       // Scene
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf4f5f7);
+      scene.background = new THREE.Color(0xe8e8ec);
       sceneRef.current = scene;
 
       // Camera
@@ -50,7 +50,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.0;
+      renderer.toneMappingExposure = 0.7;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       container.appendChild(renderer.domElement);
@@ -73,13 +73,18 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       scene.environment = envTexture;
       pmremGenerator.dispose();
 
-      // Keep subtle directional light for cast shadows only
-      const shadowLight = new THREE.DirectionalLight(0xffffff, 0.5);
-      shadowLight.position.set(5, 8, 5);
-      shadowLight.castShadow = true;
-      shadowLight.shadow.mapSize.width = 2048;
-      shadowLight.shadow.mapSize.height = 2048;
-      scene.add(shadowLight);
+      // Directional key light from upper-right for readable shadows
+      const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      keyLight.position.set(4, 10, 4);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.width = 2048;
+      keyLight.shadow.mapSize.height = 2048;
+      scene.add(keyLight);
+
+      // Soft fill from opposite side to prevent harsh shadows
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      fillLight.position.set(-3, 6, -2);
+      scene.add(fillLight);
 
       // Ground plane — subtle grid
       const gridHelper = new THREE.GridHelper(10, 20, 0xcccccc, 0xe8e8e8);
@@ -109,19 +114,15 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
-              // SketchUp exports often have wrong PBR values (metalness=1, roughness=0)
-              // which makes everything look dark/reflective. Reset to sensible defaults.
+              // SketchUp exports often have wrong PBR values
+              // Reset to matte non-metallic — works well under HDR environment
               if (child.material) {
                 const mats = Array.isArray(child.material) ? child.material : [child.material];
                 mats.forEach((mat: any) => {
                   if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-                    // Only fix if metalness is suspiciously high (SketchUp default)
-                    if (mat.metalness > 0.5 && !mat.metalnessMap) {
-                      mat.metalness = 0.0;
-                    }
-                    if (mat.roughness < 0.3 && !mat.roughnessMap) {
-                      mat.roughness = 0.7;
-                    }
+                    if (!mat.metalnessMap) mat.metalness = 0.0;
+                    if (!mat.roughnessMap) mat.roughness = 0.85;
+                    mat.envMapIntensity = 0.6; // tone down HDR reflections
                     mat.needsUpdate = true;
                   }
                 });

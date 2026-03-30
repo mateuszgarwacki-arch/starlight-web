@@ -1,1 +1,1 @@
-Model-viewer-HDR-RoomEnvironment-replaces-brute-force-lights  
+Model-viewer-HDR-tuned-exposure-0.7-roughness-0.85-envMap-0.6  
