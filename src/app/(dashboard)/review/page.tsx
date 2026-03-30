@@ -169,10 +169,10 @@ export default function ReviewPage() {
     setMatDetails(data || []);
   };
 
-  const totalQuoteValue = jobCosts.reduce((s, j) => s + j.accepted_quote_value, 0);
-  const totalActualCost = jobCosts.reduce((s, j) => s + j.job_total_actual_cost, 0);
+  const totalQuoteValue = jobCosts.reduce((s, j) => s + (j.accepted_quote_value || 0), 0);
+  const totalActualCost = jobCosts.reduce((s, j) => s + (j.job_total_actual_cost || 0), 0);
   const totalMargin = totalQuoteValue - totalActualCost;
-  const totalMatVariance = matSummary.reduce((s, m) => s + m.total_variance, 0);
+  const totalMatVariance = matSummary.reduce((s, m) => s + (m.total_variance || 0), 0);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading review data...</div>;
