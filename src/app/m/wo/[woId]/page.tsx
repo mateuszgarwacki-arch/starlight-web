@@ -140,9 +140,32 @@ export default function MobileWODetail() {
   // ACTIONS
   // ================================================================
 
+  // Auto-close any open ad-hoc tasks (tbl_tasks with in_progress)
+  const closeOpenTasks = async () => {
+    const { data: openTasks } = await supabase
+      .from("tbl_tasks")
+      .select("task_id, title, started_at")
+      .eq("freelancer_id", myId)
+      .eq("status", "in_progress");
+    if (!openTasks || openTasks.length === 0) return;
+    for (const task of openTasks) {
+      const startMs = new Date(task.started_at).getTime();
+      const elapsedHrs = Math.max(0.5, Math.round(((Date.now() - startMs) / 3600000) * 2) / 2);
+      await supabase.from("tbl_tasks").update({
+        status: "pending",
+        hours: elapsedHrs,
+        logged_at: new Date().toISOString(),
+      }).eq("task_id", task.task_id);
+      toast.success(`Auto-logged ${elapsedHrs}h for "${task.title}"`);
+    }
+  };
+
   const handleStart = async () => {
     setActing(true);
     const now = new Date().toISOString();
+
+    // Auto-close any open ad-hoc tasks
+    await closeOpenTasks();
 
     // Create time entry
     const ctx = await getAuditContext(supabase);
@@ -174,6 +197,9 @@ export default function MobileWODetail() {
   const handleJoin = async () => {
     setActing(true);
     const now = new Date().toISOString();
+
+    // Auto-close any open ad-hoc tasks
+    await closeOpenTasks();
 
     const ctx = await getAuditContext(supabase);
     await auditedInsert(ctx, "tbl_wo_time_entries", {
