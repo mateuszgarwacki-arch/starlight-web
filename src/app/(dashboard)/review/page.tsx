@@ -17,12 +17,20 @@ interface JobCost {
   job_name: string;
   event_date: string | null;
   budget_allowance: number | null;
-  accepted_quote_value: number;
-  job_est_labour_cost: number;
-  job_actual_labour_cost: number;
-  job_material_cost: number;
-  job_total_actual_cost: number;
-  job_margin: number;
+  // Match actual view column names from qry_job_cost_summary
+  quote_total: number;
+  labour_cost: number;
+  total_hours: number;
+  material_cost: number;
+  total_cost: number;
+  margin_pct: number | null;
+  // Legacy aliases (RPC may use either)
+  accepted_quote_value?: number;
+  job_actual_labour_cost?: number;
+  job_material_cost?: number;
+  job_total_actual_cost?: number;
+  job_margin?: number;
+  job_est_labour_cost?: number;
 }
 
 interface TimeEntryRow {
@@ -98,6 +106,8 @@ export default function ReviewPage() {
   const [scopeCosts, setScopeCosts] = useState<any[]>([]);
   const [expandedMatJob, setExpandedMatJob] = useState<number | null>(null);
   const [matDetails, setMatDetails] = useState<MatDetail[]>([]);
+  const [overheadTasks, setOverheadTasks] = useState<any[]>([]);
+  const [overheadTotal, setOverheadTotal] = useState(0);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -150,6 +160,34 @@ export default function ReviewPage() {
       setTimeEntries(enriched);
       setFlags(enriched.filter((t: any) => t.flag_note));
     }
+    // Load workshop overhead (non-job tasks)
+    const { data: ohData } = await supabase
+      .from("tbl_tasks")
+      .select("task_id, title, category, hours, worked_date, status, started_at, logged_at, freelancer_id")
+      .in("category", ["workshop_general", "maintenance", "other"])
+      .in("status", ["pending", "approved_overhead", "in_progress"])
+      .order("logged_at", { ascending: false });
+    if (ohData && ohData.length > 0) {
+      const fIds = [...new Set(ohData.map((t: any) => t.freelancer_id).filter(Boolean))];
+      const { data: frs } = fIds.length > 0
+        ? await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name, day_rate, standard_day_hours").in("freelancer_id", fIds)
+        : { data: [] };
+      const fMap: Record<number, { name: string; rate: number }> = {};
+      (frs || []).forEach((f: any) => {
+        const hourly = (f.day_rate || 0) / (f.standard_day_hours || 8);
+        fMap[f.freelancer_id] = { name: f.freelancer_name, rate: hourly };
+      });
+      const enriched = ohData.map((t: any) => {
+        const f = fMap[t.freelancer_id] || { name: "Unknown", rate: 0 };
+        const hrs = t.hours || 0;
+        return { ...t, freelancer_name: f.name, hourly_rate: f.rate, cost: hrs * f.rate };
+      });
+      setOverheadTasks(enriched);
+      setOverheadTotal(enriched.reduce((s: number, t: any) => s + t.cost, 0));
+    } else {
+      setOverheadTasks([]);
+      setOverheadTotal(0);
+    }
     setLoading(false);
   }, []);
 
@@ -169,8 +207,19 @@ export default function ReviewPage() {
     setMatDetails(data || []);
   };
 
-  const totalQuoteValue = jobCosts.reduce((s, j) => s + (j.accepted_quote_value || 0), 0);
-  const totalActualCost = jobCosts.reduce((s, j) => s + (j.job_total_actual_cost || 0), 0);
+  // Helper: resolve field names (view uses quote_total, RPC may alias differently)
+  const getQuote = (j: JobCost) => j.quote_total ?? j.accepted_quote_value ?? 0;
+  const getLabour = (j: JobCost) => j.labour_cost ?? j.job_actual_labour_cost ?? 0;
+  const getMaterial = (j: JobCost) => j.material_cost ?? j.job_material_cost ?? 0;
+  const getTotal = (j: JobCost) => j.total_cost ?? j.job_total_actual_cost ?? 0;
+  const getMargin = (j: JobCost) => {
+    const q = getQuote(j);
+    const t = getTotal(j);
+    return q > 0 ? q - t : j.job_margin ?? 0;
+  };
+
+  const totalQuoteValue = jobCosts.reduce((s, j) => s + getQuote(j), 0);
+  const totalActualCost = jobCosts.reduce((s, j) => s + getTotal(j), 0);
   const totalMargin = totalQuoteValue - totalActualCost;
   const totalMatVariance = matSummary.reduce((s, m) => s + (m.total_variance || 0), 0);
 
@@ -205,14 +254,18 @@ export default function ReviewPage() {
       )}
 
       {/* Summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <div className="card px-4 py-3">
           <p className="text-xs text-gray-400">Total Quote Value</p>
           <p className="text-lg font-semibold text-navy">{formatCurrency(totalQuoteValue)}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Total Actual Cost</p>
+          <p className="text-xs text-gray-400">Job Costs</p>
           <p className="text-lg font-semibold text-navy">{formatCurrency(totalActualCost)}</p>
+        </div>
+        <div className="card px-4 py-3">
+          <p className="text-xs text-gray-400">Workshop Overhead</p>
+          <p className={"text-lg font-semibold " + (overheadTotal > 0 ? "text-starlight-amber" : "text-navy")}>{formatCurrency(overheadTotal)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-xs text-gray-400">Margin</p>
@@ -231,6 +284,64 @@ export default function ReviewPage() {
           </p>
         </div>
       </div>
+
+      {/* Workshop Overhead panel */}
+      {overheadTasks.length > 0 && (
+        <details className="card overflow-hidden">
+          <summary className="px-5 py-3 cursor-pointer hover:bg-gray-50/50 flex items-center gap-3 list-none">
+            <ChevronRight className="h-4 w-4 text-gray-400 transition-transform [details[open]>&]:rotate-90" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-navy">Workshop Overhead</p>
+              <p className="text-[10px] text-gray-400">Non-job costs: general tasks, maintenance, cleaning</p>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-right w-64 shrink-0">
+              <div><p className="text-[10px] text-gray-400">Tasks</p><p className="text-sm font-mono text-navy">{overheadTasks.length}</p></div>
+              <div><p className="text-[10px] text-gray-400">Hours</p><p className="text-sm font-mono text-navy">{Math.round(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0) * 10) / 10}h</p></div>
+              <div><p className="text-[10px] text-gray-400">Cost</p><p className="text-sm font-mono text-starlight-amber font-semibold">{formatCurrency(overheadTotal)}</p></div>
+            </div>
+          </summary>
+          <div className="border-t border-gray-100">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200 bg-gray-50/30">
+                  <th className="text-left py-1.5 px-5 font-medium">Person</th>
+                  <th className="text-left py-1.5 px-2 font-medium">Task</th>
+                  <th className="text-left py-1.5 px-2 font-medium">Category</th>
+                  <th className="text-left py-1.5 px-2 font-medium">Date</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Hours</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Rate</th>
+                  <th className="text-right py-1.5 px-5 font-medium">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overheadTasks.map((t: any) => (
+                  <tr key={t.task_id} className="border-b border-gray-100 last:border-0">
+                    <td className="py-1.5 px-5 text-navy font-medium">{t.freelancer_name}</td>
+                    <td className="py-1.5 px-2 text-gray-600 max-w-[200px] truncate">{t.title}</td>
+                    <td className="py-1.5 px-2">
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                        t.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" : "bg-navy/10 text-navy"
+                      }`}>{t.category === "workshop_general" ? "General" : t.category === "maintenance" ? "Maintenance" : "Other"}</span>
+                    </td>
+                    <td className="py-1.5 px-2 text-xs text-gray-500 font-mono">{t.worked_date || (t.logged_at ? new Date(t.logged_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—")}</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{t.hours || "—"}h</td>
+                    <td className="py-1.5 px-2 text-right text-xs font-mono text-gray-500">{t.hourly_rate ? formatCurrency(t.hourly_rate) : "—"}</td>
+                    <td className="py-1.5 px-5 text-right font-mono font-semibold text-navy">{formatCurrency(t.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-200 bg-gray-50/30">
+                  <td colSpan={4} className="py-2 px-5 text-right text-xs font-medium text-gray-500">Total</td>
+                  <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">{Math.round(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0) * 10) / 10}h</td>
+                  <td className="py-2 px-2"></td>
+                  <td className="py-2 px-5 text-right text-sm font-semibold text-navy font-mono">{formatCurrency(overheadTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </details>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
@@ -273,10 +384,10 @@ export default function ReviewPage() {
                     <p className="text-xs text-gray-400 mt-0.5">Event: {formatDate(job.event_date)}</p>
                   </div>
                   <div className="grid grid-cols-4 gap-4 text-right w-96 shrink-0">
-                    <div><p className="text-[10px] text-gray-400">Quote</p><p className="text-sm font-mono text-navy">{formatCurrency(job.accepted_quote_value)}</p></div>
-                    <div><p className="text-[10px] text-gray-400">Labour</p><p className="text-sm font-mono text-navy">{formatCurrency(job.job_actual_labour_cost)}</p></div>
-                    <div><p className="text-[10px] text-gray-400">Material</p><p className="text-sm font-mono text-navy">{formatCurrency(job.job_material_cost)}</p></div>
-                    <div><p className="text-[10px] text-gray-400">Margin</p><p className={"text-sm font-mono font-semibold " + (job.job_margin >= 0 ? "text-starlight-green" : "text-starlight-red")}>{formatCurrency(job.job_margin)}</p></div>
+                    <div><p className="text-[10px] text-gray-400">Quote</p><p className="text-sm font-mono text-navy">{formatCurrency(getQuote(job))}</p></div>
+                    <div><p className="text-[10px] text-gray-400">Labour</p><p className="text-sm font-mono text-navy">{formatCurrency(getLabour(job))}</p></div>
+                    <div><p className="text-[10px] text-gray-400">Material</p><p className="text-sm font-mono text-navy">{formatCurrency(getMaterial(job))}</p></div>
+                    <div><p className="text-[10px] text-gray-400">Margin</p><p className={"text-sm font-mono font-semibold " + (getMargin(job) >= 0 ? "text-starlight-green" : "text-starlight-red")}>{formatCurrency(getMargin(job))}</p></div>
                   </div>
                 </div>
                 {expandedJob === job.job_id && (
