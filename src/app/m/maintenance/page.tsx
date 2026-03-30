@@ -1,0 +1,378 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase-browser";
+import { useRouter } from "next/navigation";
+import {
+  Wrench, ChevronLeft, CheckCircle2, Circle, Flag, AlertTriangle,
+  MapPin, Clock, Image, AlertCircle, Info, Camera, X, ChevronDown,
+} from "lucide-react";
+import { toast } from "sonner";
+import { uploadToOneDrive, getOneDriveUrl } from "@/lib/onedrive-client";
+import { notify } from "@/lib/notifications";
+
+interface Asset {
+  asset_id: number;
+  name: string;
+  location: string | null;
+  description: string | null;
+  task_count: number;
+  open_flags: number;
+  last_maintained: string | null;
+  health_status: string;
+}
+
+interface Task {
+  task_id: number;
+  asset_id: number;
+  description: string;
+  instructions: string | null;
+  frequency: string;
+  estimated_minutes: number | null;
+  due_status: string;
+  last_completed: string | null;
+}
+
+interface AssetPhoto {
+  photo_id: number;
+  onedrive_path: string;
+  caption: string | null;
+  url?: string;
+}
+
+interface CheckItem {
+  task_id: number;
+  checked: boolean;
+  note: string;
+  flagged: boolean;
+  flagTitle: string;
+  flagSeverity: string;
+}
+
+function healthDot(s: string) {
+  if (s === "overdue") return "bg-red-500";
+  if (s === "due_soon") return "bg-amber-500";
+  return "bg-green-500";
+}
+function healthLabel(s: string) {
+  if (s === "overdue") return "Overdue";
+  if (s === "due_soon") return "Due soon";
+  return "OK";
+}
+function dueLabel(s: string) {
+  if (s === "overdue") return "Overdue";
+  if (s === "due_soon") return "Due soon";
+  if (s === "no_schedule") return "As needed";
+  return "Done";
+}
+function dueDot(s: string) {
+  if (s === "overdue") return "bg-red-500";
+  if (s === "due_soon") return "bg-amber-400";
+  if (s === "no_schedule") return "bg-gray-300";
+  return "bg-green-500";
+}
+
+export default function MobileMaintenancePage() {
+  const supabase = createClient();
+  const router = useRouter();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [myId, setMyId] = useState<number>(0);
+
+  // Detail view
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [photos, setPhotos] = useState<AssetPhoto[]>([]);
+  const [showPhotos, setShowPhotos] = useState(false);
+  const [checks, setChecks] = useState<CheckItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [sessionNotes, setSessionNotes] = useState("");
+
+  // Flag photo upload
+  const [uploadingFlag, setUploadingFlag] = useState<number | null>(null);
+
+  const loadAssets = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/m/login"); return; }
+    setMyId(user.user_metadata?.freelancer_id || 0);
+    const { data } = await supabase.from("qry_maintenance_asset_summary").select("*").order("name");
+    if (data) {
+      // Sort: overdue first, then due_soon, then ok
+      const sorted = [...(data as Asset[])].sort((a, b) => {
+        const order = { overdue: 0, due_soon: 1, ok: 2 };
+        return (order[a.health_status as keyof typeof order] ?? 2) - (order[b.health_status as keyof typeof order] ?? 2);
+      });
+      setAssets(sorted);
+    }
+    setLoading(false);
+  }, []);
+
+  const openAsset = useCallback(async (asset: Asset) => {
+    setSelectedAsset(asset);
+    // Load tasks
+    const { data: taskData } = await supabase
+      .from("qry_maintenance_task_status").select("*")
+      .eq("asset_id", asset.asset_id).order("sort_order");
+    const t = (taskData || []) as Task[];
+    setTasks(t);
+    setChecks(t.map(tk => ({ task_id: tk.task_id, checked: false, note: "", flagged: false, flagTitle: "", flagSeverity: "warning" })));
+    // Load photos
+    const { data: photoData } = await supabase
+      .from("tbl_maintenance_asset_photos").select("*")
+      .eq("asset_id", asset.asset_id).order("sort_order");
+    if (photoData) {
+      const withUrls = await Promise.all(
+        (photoData as AssetPhoto[]).map(async (p) => {
+          try { const url = await getOneDriveUrl(p.onedrive_path); return { ...p, url }; }
+          catch { return p; }
+        })
+      );
+      setPhotos(withUrls);
+    }
+    setSessionNotes("");
+    setShowPhotos(false);
+  }, []);
+
+  useEffect(() => { loadAssets(); }, [loadAssets]);
+
+  const toggleCheck = (taskId: number) => {
+    setChecks(prev => prev.map(c => c.task_id === taskId ? { ...c, checked: !c.checked } : c));
+  };
+  const setCheckNote = (taskId: number, note: string) => {
+    setChecks(prev => prev.map(c => c.task_id === taskId ? { ...c, note } : c));
+  };
+  const toggleFlag = (taskId: number) => {
+    setChecks(prev => prev.map(c => c.task_id === taskId ? { ...c, flagged: !c.flagged, flagTitle: c.flagged ? "" : c.flagTitle } : c));
+  };
+  const setFlagTitle = (taskId: number, title: string) => {
+    setChecks(prev => prev.map(c => c.task_id === taskId ? { ...c, flagTitle: title } : c));
+  };
+
+  const completeMaintenance = async () => {
+    if (!selectedAsset) return;
+    const checkedItems = checks.filter(c => c.checked);
+    if (checkedItems.length === 0) { toast.error("Tick at least one item"); return; }
+    setSubmitting(true);
+    try {
+      // Create log
+      const { data: log } = await supabase.from("tbl_maintenance_logs").insert({
+        asset_id: selectedAsset.asset_id,
+        performed_by: myId || null,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        status: "completed",
+        notes: sessionNotes.trim() || null,
+      }).select("log_id").single();
+      if (!log) throw new Error("Failed to create log");
+
+      // Create checks
+      const checkRows = checkedItems.map(c => ({
+        log_id: log.log_id,
+        task_id: c.task_id,
+        completed_at: new Date().toISOString(),
+        note: c.note.trim() || null,
+        flagged: c.flagged,
+        completed_by: myId || null,
+      }));
+      const { data: insertedChecks } = await supabase.from("tbl_maintenance_checks").insert(checkRows).select("check_id, task_id");
+
+      // Create flags for flagged items
+      const flaggedItems = checkedItems.filter(c => c.flagged && c.flagTitle.trim());
+      for (const fi of flaggedItems) {
+        const checkRow = (insertedChecks || []).find((ic: any) => ic.task_id === fi.task_id);
+        await supabase.from("tbl_maintenance_flags").insert({
+          asset_id: selectedAsset.asset_id,
+          check_id: checkRow?.check_id || null,
+          raised_by: myId || null,
+          severity: fi.flagSeverity || "warning",
+          title: fi.flagTitle.trim(),
+          status: "open",
+          created_at: new Date().toISOString(),
+        });
+        // Notify PM
+        try {
+          await notify({
+            supabase,
+            type: "wo_flagged",
+            severity: fi.flagSeverity === "urgent" ? "urgent" : "warning",
+            title: `Maintenance flag: ${selectedAsset.name}`,
+            detail: fi.flagTitle.trim(),
+            actionUrl: "/maintenance",
+          });
+        } catch {}
+      }
+
+      toast.success(`Maintenance logged: ${checkedItems.length} item${checkedItems.length > 1 ? "s" : ""} completed${flaggedItems.length > 0 ? `, ${flaggedItems.length} flag${flaggedItems.length > 1 ? "s" : ""} raised` : ""}`);
+      setSelectedAsset(null);
+      loadAssets();
+    } catch (err: any) {
+      toast.error("Failed: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>;
+
+  // ── Detail view ──
+  if (selectedAsset) {
+    const checkedCount = checks.filter(c => c.checked).length;
+    return (
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => setSelectedAsset(null)} className="p-1 text-gray-400"><ChevronLeft className="h-5 w-5" /></button>
+          <div className="flex-1">
+            <h1 className="text-lg font-bold text-navy">{selectedAsset.name}</h1>
+            {selectedAsset.location && <p className="text-xs text-gray-400 flex items-center gap-1"><MapPin className="h-3 w-3" />{selectedAsset.location}</p>}
+          </div>
+          <div className={`w-3 h-3 rounded-full ${healthDot(selectedAsset.health_status)}`} />
+        </div>
+
+        {/* Photos toggle */}
+        {photos.length > 0 && (
+          <button onClick={() => setShowPhotos(!showPhotos)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border border-gray-200 text-left">
+            <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Image className="h-3.5 w-3.5 text-gray-400" />Reference photos ({photos.length})</span>
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showPhotos ? "rotate-180" : ""}`} />
+          </button>
+        )}
+        {showPhotos && photos.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {photos.map(p => (
+              <div key={p.photo_id} className="shrink-0 w-32">
+                {p.url ? (
+                  <a href={p.url} target="_blank" rel="noopener noreferrer">
+                    <img src={p.url} alt={p.caption || ""} className="w-32 h-24 object-cover rounded-lg border border-gray-200" />
+                  </a>
+                ) : <div className="w-32 h-24 bg-gray-100 rounded-lg flex items-center justify-center"><Image className="h-5 w-5 text-gray-300" /></div>}
+                {p.caption && <p className="text-[9px] text-gray-400 mt-1 truncate">{p.caption}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Checklist */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100">
+            <p className="text-xs font-semibold text-navy">Checklist ({checkedCount}/{tasks.length})</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {tasks.map((task, i) => {
+              const check = checks[i];
+              if (!check) return null;
+              return (
+                <div key={task.task_id} className="px-4 py-3">
+                  {/* Task row */}
+                  <div className="flex items-start gap-3">
+                    <button onClick={() => toggleCheck(task.task_id)} className="pt-0.5 shrink-0">
+                      {check.checked
+                        ? <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        : <Circle className="h-5 w-5 text-gray-300" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${check.checked ? "text-gray-400 line-through" : "text-navy font-medium"}`}>{task.description}</p>
+                      {task.instructions && <p className="text-[10px] text-gray-400 mt-0.5">{task.instructions}</p>}
+                      <div className="flex items-center gap-2 mt-1 text-[10px]">
+                        <span className={`flex items-center gap-0.5 ${task.due_status === "overdue" ? "text-red-500 font-medium" : task.due_status === "due_soon" ? "text-amber-500" : "text-gray-400"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${dueDot(task.due_status)}`} />
+                          {dueLabel(task.due_status)}
+                        </span>
+                        <span className="text-gray-300 capitalize">{task.frequency.replace("_", " ")}</span>
+                        {task.last_completed && <span className="text-gray-300">Last: {new Date(task.last_completed).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                      </div>
+                    </div>
+                    {/* Flag toggle */}
+                    <button onClick={() => toggleFlag(task.task_id)}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${check.flagged ? "bg-red-50 text-red-500" : "text-gray-300"}`}>
+                      <Flag className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {/* Note input (show when checked) */}
+                  {check.checked && (
+                    <input value={check.note} onChange={e => setCheckNote(task.task_id, e.target.value)}
+                      placeholder="Note (optional)..."
+                      className="mt-2 ml-8 w-[calc(100%-2rem)] text-xs px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-gray-50" />
+                  )}
+                  {/* Flag detail (show when flagged) */}
+                  {check.flagged && (
+                    <div className="mt-2 ml-8 space-y-1.5">
+                      <input value={check.flagTitle} onChange={e => setFlagTitle(task.task_id, e.target.value)}
+                        placeholder="What's the issue? *"
+                        className="w-[calc(100%-2rem)] text-xs px-3 py-1.5 border border-red-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-400 bg-red-50/30" />
+                      <div className="flex items-center gap-2">
+                        {(["info", "warning", "urgent"] as const).map(sev => (
+                          <button key={sev} onClick={() => setChecks(prev => prev.map(c => c.task_id === task.task_id ? { ...c, flagSeverity: sev } : c))}
+                            className={`px-2 py-0.5 text-[10px] rounded-full font-medium transition-colors ${check.flagSeverity === sev
+                              ? sev === "urgent" ? "bg-red-100 text-red-600" : sev === "warning" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
+                              : "bg-gray-100 text-gray-400"}`}>
+                            {sev}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Session notes */}
+        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+          <label className="block text-xs font-medium text-gray-500 mb-1">Session notes (optional)</label>
+          <textarea value={sessionNotes} onChange={e => setSessionNotes(e.target.value)} rows={2}
+            placeholder="Anything else to mention..."
+            className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-starlight-blue resize-none" />
+        </div>
+
+        {/* Complete button */}
+        <button onClick={completeMaintenance} disabled={submitting || checks.filter(c => c.checked).length === 0}
+          className="w-full py-3.5 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 active:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          <CheckCircle2 className="h-5 w-5" />
+          {submitting ? "Saving..." : `Complete Maintenance (${checkedCount} item${checkedCount !== 1 ? "s" : ""})`}
+        </button>
+      </div>
+    );
+  }
+
+  // ── Asset list view ──
+  return (
+    <div className="space-y-4">
+      <h1 className="text-lg font-bold text-navy flex items-center gap-2">
+        <Wrench className="h-5 w-5" /> Maintenance
+      </h1>
+
+      {assets.length === 0 ? (
+        <div className="text-center py-12 text-gray-300 text-sm">No maintenance assets set up yet</div>
+      ) : (
+        <div className="space-y-2">
+          {assets.map(asset => (
+            <button key={asset.asset_id} onClick={() => openAsset(asset)}
+              className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 active:bg-gray-50 transition-colors shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full shrink-0 ${healthDot(asset.health_status)}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-navy">{asset.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                    {asset.location && <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{asset.location}</span>}
+                    <span>{asset.task_count} task{asset.task_count !== 1 ? "s" : ""}</span>
+                    {asset.last_maintained && <span>Last: {new Date(asset.last_maintained).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                  </div>
+                </div>
+                {asset.open_flags > 0 && (
+                  <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-semibold rounded-full flex items-center gap-0.5">
+                    <Flag className="h-2.5 w-2.5" />{asset.open_flags}
+                  </span>
+                )}
+                <span className={`text-[10px] font-semibold ${asset.health_status === "overdue" ? "text-red-500" : asset.health_status === "due_soon" ? "text-amber-500" : "text-green-500"}`}>
+                  {healthLabel(asset.health_status)}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
