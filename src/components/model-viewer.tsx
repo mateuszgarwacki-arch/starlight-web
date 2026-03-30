@@ -28,6 +28,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       const THREE = await import("three");
       const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
       const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+      const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
 
       const container = containerRef.current;
       const width = container.clientWidth;
@@ -49,7 +50,7 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.5;
+      renderer.toneMappingExposure = 1.0;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       container.appendChild(renderer.domElement);
@@ -64,33 +65,21 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
-      // Lighting — bright studio setup for SketchUp models
-      // SketchUp exports lack proper PBR, so we push light levels high
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
-      scene.add(ambientLight);
+      // HDR Environment — procedural studio lighting via RoomEnvironment
+      // Gives materials something to reflect, creating natural depth on white geometry
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+      const envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = envTexture;
+      pmremGenerator.dispose();
 
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b0b0, 1.2);
-      hemiLight.position.set(0, 10, 0);
-      scene.add(hemiLight);
-
-      const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
-      mainLight.position.set(5, 8, 5);
-      mainLight.castShadow = true;
-      mainLight.shadow.mapSize.width = 2048;
-      mainLight.shadow.mapSize.height = 2048;
-      scene.add(mainLight);
-
-      const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      fillLight.position.set(-3, 4, -3);
-      scene.add(fillLight);
-
-      const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
-      rimLight.position.set(0, 2, -5);
-      scene.add(rimLight);
-
-      const bottomFill = new THREE.DirectionalLight(0xffffff, 0.3);
-      bottomFill.position.set(0, -3, 0);
-      scene.add(bottomFill);
+      // Keep subtle directional light for cast shadows only
+      const shadowLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      shadowLight.position.set(5, 8, 5);
+      shadowLight.castShadow = true;
+      shadowLight.shadow.mapSize.width = 2048;
+      shadowLight.shadow.mapSize.height = 2048;
+      scene.add(shadowLight);
 
       // Ground plane — subtle grid
       const gridHelper = new THREE.GridHelper(10, 20, 0xcccccc, 0xe8e8e8);

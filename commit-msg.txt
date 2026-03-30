@@ -1,1 +1,1 @@
-Model-viewer-bright-lighting-fix-SketchUp-dark-materials  
+Model-viewer-HDR-RoomEnvironment-replaces-brute-force-lights  
