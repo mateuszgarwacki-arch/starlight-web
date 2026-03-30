@@ -7,7 +7,7 @@ import { isTruthy } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Hammer, Clock, Users, ChevronDown, ChevronRight,
-  Filter, Search, RefreshCw,
+  Filter, Search, RefreshCw, Timer,
 } from "lucide-react";
 import Link from "next/link";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
@@ -39,6 +39,16 @@ interface WorkshopWO {
 
 type FilterStatus = "all" | "Not-Started" | "Ready" | "In-Progress" | "Complete" | "On-Hold";
 
+interface ActiveTask {
+  task_id: number;
+  title: string;
+  category: string;
+  freelancer_name: string;
+  started_at: string;
+  job_number: string | null;
+  job_name: string | null;
+}
+
 export default function WorkshopPage() {
   const supabase = createClient();
   const [wos, setWos] = useState<WorkshopWO[]>([]);
@@ -48,6 +58,7 @@ export default function WorkshopPage() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterJob, setFilterJob] = useState<string>("all");
   const [searchText, setSearchText] = useState("");
+  const [activeTasks, setActiveTasks] = useState<ActiveTask[]>([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -55,6 +66,36 @@ export default function WorkshopPage() {
     // Single RPC replaces 7+ individual queries
     const { data: d, error } = await supabase.rpc("rpc_workshop_data");
     if (error || !d) { console.error("Workshop RPC failed:", error); setWos([]); setLoading(false); return; }
+
+    // Load active ad-hoc tasks (not in RPC)
+    const { data: taskData } = await supabase
+      .from("tbl_tasks")
+      .select("task_id, title, category, freelancer_id, started_at, job_id")
+      .eq("status", "in_progress")
+      .order("started_at");
+    if (taskData && taskData.length > 0) {
+      const fIds = [...new Set(taskData.map((t: any) => t.freelancer_id).filter(Boolean))];
+      const jIds = [...new Set(taskData.map((t: any) => t.job_id).filter(Boolean))];
+      const [fRes, jRes] = await Promise.all([
+        fIds.length > 0 ? supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds) : { data: [] },
+        jIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jIds) : { data: [] },
+      ]);
+      const fMap: Record<number, string> = {};
+      (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
+      const jMap: Record<number, { name: string; number: string }> = {};
+      (jRes.data || []).forEach((j: any) => { jMap[j.job_id] = { name: j.job_name, number: j.job_number }; });
+      setActiveTasks(taskData.map((t: any) => ({
+        task_id: t.task_id,
+        title: t.title,
+        category: t.category,
+        freelancer_name: fMap[t.freelancer_id] || "Unknown",
+        started_at: t.started_at,
+        job_number: t.job_id ? jMap[t.job_id]?.number || null : null,
+        job_name: t.job_id ? jMap[t.job_id]?.name || null : null,
+      })));
+    } else {
+      setActiveTasks([]);
+    }
 
     const woData = d.work_orders || [];
     if (woData.length === 0) { setWos([]); setLoading(false); return; }
@@ -147,7 +188,7 @@ export default function WorkshopPage() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   // Real-time: auto-refresh when WOs or time entries change
-  useRealtimeRefresh(["tbl_work_orders", "tbl_wo_time_entries"], loadAll, !loading);
+  useRealtimeRefresh(["tbl_work_orders", "tbl_wo_time_entries", "tbl_tasks"], loadAll, !loading);
 
   // Expand to show time entries
   const toggleExpand = async (woId: number) => {
@@ -246,6 +287,44 @@ export default function WorkshopPage() {
           <p className="text-sm text-starlight-blue">
             <span className="font-semibold">{stats.activeWorkerCount}</span> {stats.activeWorkerCount === 1 ? "person" : "people"} currently working
           </p>
+        </div>
+      )}
+
+      {/* Active ad-hoc tasks */}
+      {activeTasks.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+            <Timer className="h-4 w-4 text-starlight-amber" />
+            <h3 className="text-xs font-semibold text-navy">Active Tasks ({activeTasks.length})</h3>
+            <span className="text-[10px] text-gray-400">Ad-hoc work in progress — not linked to work orders</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {activeTasks.map(task => {
+              const elapsed = Math.round((Date.now() - new Date(task.started_at).getTime()) / 60000);
+              const elapsedStr = elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed / 60)}h ${elapsed % 60}m`;
+              const catLabel = task.category === "workshop_general" ? "General" : task.category === "maintenance" ? "Maintenance" : task.category === "job_work" ? "Job" : "Other";
+              return (
+                <div key={task.task_id} className="px-4 py-2.5 flex items-center gap-3">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                    task.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" :
+                    task.category === "job_work" ? "bg-starlight-blue/10 text-starlight-blue" :
+                    "bg-navy/10 text-navy"
+                  }`}>{catLabel}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-navy font-medium truncate">{task.title}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                      <span>{task.freelancer_name}</span>
+                      {task.job_number && <span className="font-mono">{task.job_number}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-mono text-starlight-amber font-semibold">{elapsedStr}</p>
+                    <p className="text-[9px] text-gray-400">since {new Date(task.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
