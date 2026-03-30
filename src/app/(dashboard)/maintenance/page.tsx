@@ -6,9 +6,10 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Wrench, Plus, X, ChevronRight, ChevronDown, AlertTriangle,
   CheckCircle2, Clock, Flag, Trash2, GripVertical, Camera,
-  MapPin, Edit2, Save, Info, AlertCircle, Check,
+  MapPin, Edit2, Save, Info, AlertCircle, Check, Upload, Image,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadToOneDrive, getOneDriveUrl } from "@/lib/onedrive-client";
 
 interface Asset {
   asset_id: number;
@@ -62,6 +63,15 @@ interface LogEntry {
   checks: { task_desc: string; note: string | null; flagged: boolean }[];
 }
 
+interface AssetPhoto {
+  photo_id: number;
+  onedrive_path: string;
+  file_name: string | null;
+  caption: string | null;
+  uploaded_at: string;
+  url?: string;
+}
+
 const FREQUENCIES = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
@@ -101,7 +111,11 @@ export default function MaintenancePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [flags, setFlags] = useState<MFlag[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<"checklist" | "history" | "flags">("checklist");
+  const [activeTab, setActiveTab] = useState<"checklist" | "photos" | "history" | "flags">("checklist");
+
+  // Photos
+  const [photos, setPhotos] = useState<AssetPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Add asset dialog
   const [showAddAsset, setShowAddAsset] = useState(false);
@@ -145,6 +159,22 @@ export default function MaintenancePage() {
       .neq("status", "resolved")
       .order("created_at", { ascending: false });
     if (flagData) setFlags(flagData.map((f: any) => ({ ...f, raiser_name: f.raiser?.freelancer_name })));
+
+    // Photos
+    const { data: photoData } = await supabase
+      .from("tbl_maintenance_asset_photos")
+      .select("*")
+      .eq("asset_id", assetId)
+      .order("sort_order");
+    if (photoData) {
+      const withUrls = await Promise.all(
+        (photoData as AssetPhoto[]).map(async (p) => {
+          try { const url = await getOneDriveUrl(p.onedrive_path); return { ...p, url }; }
+          catch { return { ...p, url: undefined }; }
+        })
+      );
+      setPhotos(withUrls);
+    }
 
     // Recent logs
     const { data: logData } = await supabase
@@ -272,6 +302,41 @@ export default function MaintenancePage() {
     loadAssets();
   };
 
+  const uploadPhoto = async (assetId: number, assetName: string, file: File) => {
+    setUploading(true);
+    try {
+      const folder = `Maintenance/${assetName.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "-")}`;
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}.${ext}`;
+      const result = await uploadToOneDrive(file, folder, fileName);
+      await supabase.from("tbl_maintenance_asset_photos").insert({
+        asset_id: assetId,
+        onedrive_path: result.path,
+        file_name: file.name,
+        sort_order: photos.length,
+        uploaded_at: new Date().toISOString(),
+      });
+      toast.success("Photo uploaded");
+      loadAssetDetail(assetId);
+    } catch (err: any) {
+      toast.error(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const updateCaption = async (photoId: number, caption: string) => {
+    await supabase.from("tbl_maintenance_asset_photos").update({ caption: caption.trim() || null }).eq("photo_id", photoId);
+    setPhotos(prev => prev.map(p => p.photo_id === photoId ? { ...p, caption: caption.trim() || null } : p));
+  };
+
+  const deletePhoto = async (photoId: number) => {
+    if (!confirm("Delete this photo?")) return;
+    await supabase.from("tbl_maintenance_asset_photos").delete().eq("photo_id", photoId);
+    toast.success("Photo deleted");
+    if (expandedAsset) loadAssetDetail(expandedAsset);
+  };
+
   if (loading) return <div className="p-8 text-gray-400 animate-pulse">Loading maintenance assets...</div>;
 
   const currentAsset = assets.find(a => a.asset_id === expandedAsset);
@@ -381,10 +446,11 @@ export default function MaintenancePage() {
 
                   {/* Tabs */}
                   <div className="flex border-b border-gray-100">
-                    {(["checklist", "history", "flags"] as const).map(tab => (
+                    {(["checklist", "photos", "history", "flags"] as const).map(tab => (
                       <button key={tab} onClick={() => setActiveTab(tab)}
                         className={`px-5 py-2.5 text-xs font-medium transition-colors border-b-2 ${activeTab === tab ? "border-starlight-blue text-starlight-blue" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
                         {tab === "checklist" && `Checklist (${tasks.length})`}
+                        {tab === "photos" && `Photos (${photos.length})`}
                         {tab === "history" && `History (${logs.length})`}
                         {tab === "flags" && <>Flags {flags.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full text-[9px]">{flags.length}</span>}</>}
                       </button>
@@ -457,6 +523,59 @@ export default function MaintenancePage() {
                           className="w-full py-2 text-xs text-gray-400 hover:text-starlight-blue hover:bg-blue-50/50 rounded-lg transition-colors flex items-center justify-center gap-1">
                           <Plus className="h-3 w-3" /> Add maintenance task
                         </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Photos Tab */}
+                  {activeTab === "photos" && (
+                    <div className="px-5 py-3">
+                      {/* Upload button */}
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs text-gray-400">Reference photos for identification and instructions</p>
+                        <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${uploading ? "bg-gray-100 text-gray-400" : "bg-starlight-blue/10 text-starlight-blue hover:bg-starlight-blue/20"}`}>
+                          <Upload className="h-3.5 w-3.5" />
+                          {uploading ? "Uploading..." : "Upload Photo"}
+                          <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f && currentAsset) uploadPhoto(currentAsset.asset_id, currentAsset.name, f); e.target.value = ""; }} />
+                        </label>
+                      </div>
+                      {photos.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <Image className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                          <p className="text-xs text-gray-400">No photos yet</p>
+                          <p className="text-[10px] text-gray-300 mt-0.5">Upload photos showing equipment location, components, or reference images</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {photos.map(photo => (
+                            <div key={photo.photo_id} className="group relative border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                              {photo.url ? (
+                                <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                                  <img src={photo.url} alt={photo.caption || photo.file_name || ""} className="w-full h-36 object-cover" />
+                                </a>
+                              ) : (
+                                <div className="w-full h-36 flex items-center justify-center text-gray-300">
+                                  <Image className="h-6 w-6" />
+                                </div>
+                              )}
+                              <div className="px-2 py-1.5">
+                                <input
+                                  type="text"
+                                  defaultValue={photo.caption || ""}
+                                  onBlur={(e) => updateCaption(photo.photo_id, e.target.value)}
+                                  placeholder="Add caption..."
+                                  className="w-full text-[10px] text-gray-500 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none px-0 py-0.5 placeholder:text-gray-300"
+                                />
+                                <p className="text-[9px] text-gray-300 mt-0.5">{photo.file_name || "Photo"}</p>
+                              </div>
+                              <button onClick={() => deletePhoto(photo.photo_id)}
+                                className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   )}
