@@ -593,17 +593,25 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                 let unitDisplay = r.unit || "—";
 
                 if (r.mat_standard_length && r.quantity) {
-                  // BOM stores whole-length Metres for costing
-                  // Traveller shows length count for the workshop floor
+                  // BOM stores length count since Session 13 (unit = "Length")
+                  // Or older records store Metres — handle both
                   const uLower = unitDisplay.toLowerCase();
-                  const qtyMm = (uLower.startsWith("metre") || uLower === "m") ? r.quantity * 1000
-                    : uLower === "mm" ? r.quantity
-                    : r.quantity;
-                  const stdLenMm = r.mat_standard_length;
-                  const lengths = Math.round(qtyMm / stdLenMm);
-                  qtyDisplay = `${lengths}`;
-                  unitDisplay = lengths === 1 ? "Length" : "Lengths";
-                  stockPull = `${stdLenMm}mm each`;
+                  if (uLower === "length" || uLower === "lengths") {
+                    // Already in lengths — pass through
+                    qtyDisplay = `${r.quantity}`;
+                    unitDisplay = r.quantity === 1 ? "Length" : "Lengths";
+                    stockPull = `${r.mat_standard_length}mm each`;
+                  } else {
+                    // Legacy: BOM stores Metres, convert to lengths
+                    const qtyMm = (uLower.startsWith("metre") || uLower === "m") ? r.quantity * 1000
+                      : uLower === "mm" ? r.quantity
+                      : r.quantity;
+                    const stdLenMm = r.mat_standard_length;
+                    const lengths = Math.max(1, Math.round(qtyMm / stdLenMm));
+                    qtyDisplay = `${lengths}`;
+                    unitDisplay = lengths === 1 ? "Length" : "Lengths";
+                    stockPull = `${stdLenMm}mm each`;
+                  }
                 } else if (r.unit?.toLowerCase() === "mm" && r.quantity) {
                   qtyDisplay = `${Math.round(r.quantity)}mm`;
                   unitDisplay = "";
