@@ -455,32 +455,62 @@ export default function WorkshopPage() {
         </div>
       </div>
 
-      {/* WO List — grouped by scope item */}
-      <div className="space-y-4">
+      {/* WO List — grouped by job, then by scope item */}
+      <div className="space-y-6">
         {filtered.length === 0 ? (
           <div className="card px-6 py-12 text-center text-gray-400 text-sm">No work orders match your filters</div>
         ) : (
           Object.entries(
             filtered.reduce((groups: Record<string, typeof filtered>, wo) => {
-              const key = wo.scope_item_id + "";
+              const key = wo.job_id + "";
               if (!groups[key]) groups[key] = [];
               groups[key].push(wo);
               return groups;
             }, {})
-          ).map(([scopeKey, scopeWOs]) => {
-            scopeWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
-            const first = scopeWOs[0];
-            const doneCount = scopeWOs.filter(w => w.status === "Complete").length;
+          )
+          .sort(([, a], [, b]) => {
+            // Sort jobs by earliest event date
+            const dateA = a[0]?.event_date ? new Date(a[0].event_date).getTime() : Infinity;
+            const dateB = b[0]?.event_date ? new Date(b[0].event_date).getTime() : Infinity;
+            return dateA - dateB;
+          })
+          .map(([jobKey, jobWOs]) => {
+            const firstJob = jobWOs[0];
+            const jobDoneCount = jobWOs.filter(w => w.status === "Complete").length;
+            const jobActiveCount = jobWOs.filter(w => w.status === "In-Progress").length;
+            // Sub-group by scope
+            const scopeGroups = Object.entries(
+              jobWOs.reduce((sg: Record<string, typeof jobWOs>, wo) => {
+                const sk = wo.scope_item_id + "";
+                if (!sg[sk]) sg[sk] = [];
+                sg[sk].push(wo);
+                return sg;
+              }, {})
+            );
             return (
-              <div key={scopeKey}>
-                <div className="flex items-center gap-3 mb-1.5 px-1">
-                  <p className="text-xs font-semibold text-gray-500 truncate">{first.scope_name}</p>
-                  <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{first.job_number}</span>
-                  <span className="text-[10px] text-gray-400">{doneCount}/{scopeWOs.length} steps done</span>
-                  {first.event_date && <DaysRemainingBadge eventDate={first.event_date} />}
+              <div key={jobKey}>
+                {/* Job header */}
+                <div className="flex items-center gap-3 mb-2 px-1 border-b border-gray-200 pb-2">
+                  <span className="text-sm font-bold font-mono text-navy">{firstJob.job_number}</span>
+                  <p className="text-sm font-semibold text-navy truncate flex-1">{firstJob.job_name}</p>
+                  <span className="text-[10px] text-gray-400">{jobDoneCount}/{jobWOs.length} WOs done</span>
+                  {jobActiveCount > 0 && <span className="text-[10px] text-starlight-blue font-medium">{jobActiveCount} active</span>}
+                  {firstJob.event_date && <DaysRemainingBadge eventDate={firstJob.event_date} />}
                 </div>
-                <div className="card overflow-hidden divide-y divide-gray-100">
-                  {scopeWOs.map((wo, woIdx) => {
+                {/* Scope groups within job */}
+                <div className="space-y-3 ml-1">
+                  {scopeGroups.map(([scopeKey, scopeWOs]) => {
+                    scopeWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+                    const first = scopeWOs[0];
+                    const doneCount = scopeWOs.filter(w => w.status === "Complete").length;
+                    return (
+                      <div key={scopeKey}>
+                        <div className="flex items-center gap-3 mb-1.5 px-1">
+                          <p className="text-xs font-semibold text-gray-500 truncate">{first.scope_name}</p>
+                          <span className="text-[10px] text-gray-400">{doneCount}/{scopeWOs.length} steps done</span>
+                        </div>
+                        <div className="card overflow-hidden divide-y divide-gray-100">
+                          {scopeWOs.map((wo, woIdx) => {
             const isExpanded = expandedWO === wo.work_order_id;
             return (
               <div key={wo.work_order_id} className="card overflow-hidden">
@@ -509,7 +539,6 @@ export default function WorkshopPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
-                      <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{wo.job_number}</span>
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">
                       {wo.scope_name}{wo.description ? ` — ${wo.description}` : ""}
@@ -617,6 +646,10 @@ export default function WorkshopPage() {
               </div>
                   );
                 })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
