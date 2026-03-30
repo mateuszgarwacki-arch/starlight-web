@@ -454,6 +454,7 @@ export default function ReviewPage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                            <th className="py-1.5 w-8"></th>
                             <th className="text-left py-1.5 font-medium">Scope Item</th>
                             <th className="text-right py-1.5 px-2 font-medium">Quoted</th>
                             <th className="text-right py-1.5 px-2 font-medium">PM Est</th>
@@ -471,15 +472,15 @@ export default function ReviewPage() {
                             return (
                               <Fragment key={sc.scope_item_id}>
                               <tr className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-100/50" onClick={() => loadWoDetails(sc.scope_item_id)}>
+                                <td className="py-0 px-0 w-8">
+                                  <div className={"w-8 h-full flex items-center justify-center rounded-l " + (isScopeExpanded ? "bg-navy/10" : "bg-gray-100 hover:bg-navy/10")}>
+                                    {isScopeExpanded ? <ChevronDown className="h-4 w-4 text-navy" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                                  </div>
+                                </td>
                                 <td className="py-1.5 text-navy font-medium max-w-[280px]">
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-gray-200 shrink-0 transition-colors">
-                                      {isScopeExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-500" />}
-                                    </span>
-                                    <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
-                                      {sc.scope_name || "—"}
-                                    </Link>
-                                  </span>
+                                  <Link href={`/jobs/${job.job_id}/scope/${sc.scope_item_id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                                    {sc.scope_name || "—"}
+                                  </Link>
                                   {sc.selected_option && (
                                     <span className="ml-1.5 text-[9px] bg-green-50 text-starlight-green px-1 py-0.5 rounded">{sc.selected_option}</span>
                                   )}
@@ -499,7 +500,7 @@ export default function ReviewPage() {
                               {isScopeExpanded && woDetails.length > 0 && (
                                 <>
                                 <tr className="bg-white/80">
-                                  <td colSpan={6} className="px-0 py-0">
+                                  <td colSpan={7} className="px-0 py-0">
                                     <table className="w-full text-[11px]">
                                       <thead>
                                         <tr className="text-[9px] text-gray-400 uppercase tracking-wider border-b border-gray-200/60">
@@ -544,7 +545,7 @@ export default function ReviewPage() {
                                 </>
                               )}
                               {isScopeExpanded && woDetails.length === 0 && (
-                                <tr className="bg-white/80"><td colSpan={6} className="py-1.5 pl-8 text-[11px] text-gray-400">No work orders</td></tr>
+                                <tr className="bg-white/80"><td colSpan={7} className="py-1.5 pl-8 text-[11px] text-gray-400">No work orders</td></tr>
                               )}
                               </Fragment>
                             );
