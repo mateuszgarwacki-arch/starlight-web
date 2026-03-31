@@ -1,10 +1,8 @@
-feat: job invoices panel with inline allocation
+feat: job orders panel, invoices+orders side-by-side on job page
 
-- New JobInvoicesPanel component on job detail page
-- Shows all invoices for this job with expand/collapse
-- Expanded view: line items with material match status
-- Inline allocation controls per line (same as invoices page)
-- Scope item percentage split with running totals
-- Appears between PM Queries and the tabs
-- Auto-hides when job has no invoices
-- "Open Invoices" link to full invoices page
+- New JobOrdersPanel component showing BOM items needing ordering + already ordered
+- Outstanding items (amber) with material, scope, qty, cost
+- Ordered items (green) with supplier, date, scope context
+- Both panels in 2-column grid on lg+ screens
+- Both auto-hide when no data, link to full Orders/Invoices pages
+- h-full on both cards for matched heights

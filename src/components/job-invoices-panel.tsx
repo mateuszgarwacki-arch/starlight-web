@@ -126,7 +126,7 @@ export function JobInvoicesPanel({ jobId }: JobInvoicesPanelProps) {
   if (invoices.length === 0) return null;
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden h-full">
       {/* Header — collapsible */}
       <button
         onClick={() => setCollapsed(!collapsed)}

@@ -18,6 +18,7 @@ import { PresenceAvatars } from "@/components/presence-avatars";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 import { PmQueriesJobPanel } from "@/components/pm-queries-job-panel";
 import { JobInvoicesPanel } from "@/components/job-invoices-panel";
+import { JobOrdersPanel } from "@/components/job-orders-panel";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -994,8 +995,11 @@ export default function JobDetailPage() {
       {/* PM Queries aggregation */}
       <PmQueriesJobPanel jobId={jobId} jobName={job?.job_name || ""} />
 
-      {/* Job Invoices — allocation to scope items */}
-      <JobInvoicesPanel jobId={jobId} />
+      {/* Job Invoices & Orders — side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <JobInvoicesPanel jobId={jobId} />
+        <JobOrdersPanel jobId={jobId} />
+      </div>
 
       {/* Main tabs: Quote Lines / Scope Items */}
       <div className="flex gap-1 border-b border-gray-200">
