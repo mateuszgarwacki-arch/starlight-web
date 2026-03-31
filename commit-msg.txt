@@ -1,8 +1,10 @@
-feat: invoice allocation, stock-as-internal-cost, WO BOM unit toggle
+feat: job invoices panel with inline allocation
 
-- Invoice allocation: new tbl_invoice_allocations table, percentage split
-  UI on expanded invoice lines, scope item assignment with running totals
-- Stock-as-internal-cost: from_stock flag on BOM rows, auto-clears ordering,
-  auto-fills catalogue price, amber Stock badge on both scope-bom and WO BOM
-- WO BOM unit toggle: Length/Metre toggle for timber materials (same pattern
-  as scope-bom), Length-aware total calculation, conversion subtitle
+- New JobInvoicesPanel component on job detail page
+- Shows all invoices for this job with expand/collapse
+- Expanded view: line items with material match status
+- Inline allocation controls per line (same as invoices page)
+- Scope item percentage split with running totals
+- Appears between PM Queries and the tabs
+- Auto-hides when job has no invoices
+- "Open Invoices" link to full invoices page
