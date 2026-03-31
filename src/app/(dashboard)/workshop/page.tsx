@@ -7,7 +7,7 @@ import { isTruthy } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Hammer, Clock, Users, ChevronDown, ChevronRight,
-  Filter, Search, RefreshCw, Timer, Square,
+  Filter, Search, RefreshCw, Timer, Square, Paintbrush,
 } from "lucide-react";
 import Link from "next/link";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
@@ -36,9 +36,10 @@ interface WorkshopWO {
   total_logged_hrs: number;
   active_workers: { name: string; since: string }[];
   entry_count: number;
+  paint_notes: string | null;
 }
 
-type FilterStatus = "all" | "Not-Started" | "Ready" | "In-Progress" | "Complete" | "On-Hold";
+type FilterStatus = "all" | "Not-Started" | "Ready" | "In-Progress" | "Complete" | "On-Hold" | "painting";
 
 interface ActiveTask {
   task_id: number;
@@ -157,6 +158,7 @@ export default function WorkshopPage() {
         complexity_construction: wo.complexity_construction,
         finish_relative: wo.finish_relative,
         planned_lead_id: wo.planned_lead_id,
+        paint_notes: wo.paint_notes || null,
         activity_label: label,
         phase_number: phase,
         scope_name: scopeMap[wo.scope_item_id] || "—",
@@ -241,11 +243,14 @@ export default function WorkshopPage() {
   // Filtering
   const jobs = [...new Set(wos.map(w => w.job_number))].sort();
   const filtered = wos.filter(w => {
-    if (filterStatus !== "all" && w.status !== filterStatus) return false;
+    if (filterStatus === "painting") {
+      if (!w.paint_notes) return false;
+      if (w.status === "Complete" || w.status === "Voided") return false;
+    } else if (filterStatus !== "all" && w.status !== filterStatus) return false;
     if (filterJob !== "all" && w.job_number !== filterJob) return false;
     if (searchText) {
       const s = searchText.toLowerCase();
-      if (!w.activity_label.toLowerCase().includes(s) && !w.scope_name.toLowerCase().includes(s) && !(w.description || "").toLowerCase().includes(s)) return false;
+      if (!w.activity_label.toLowerCase().includes(s) && !w.scope_name.toLowerCase().includes(s) && !(w.description || "").toLowerCase().includes(s) && !(w.paint_notes || "").toLowerCase().includes(s)) return false;
     }
     return true;
   });
@@ -261,6 +266,7 @@ export default function WorkshopPage() {
     totalEstHrs: wos.reduce((s, w) => s + (w.estimated_duration_hrs || 0), 0),
     totalLoggedHrs: wos.reduce((s, w) => s + w.total_logged_hrs, 0),
     activeWorkerCount: new Set(wos.flatMap(w => w.active_workers.map(a => a.name))).size,
+    painting: wos.filter(w => w.paint_notes && w.status !== "Complete" && w.status !== "Voided").length,
   };
 
   if (loading) {
@@ -434,6 +440,16 @@ export default function WorkshopPage() {
               {s === "all" ? `All (${stats.total})` : `${s} (${wos.filter(w => w.status === s).length})`}
             </button>
           ))}
+          {stats.painting > 0 && (
+            <button
+              onClick={() => setFilterStatus(filterStatus === "painting" ? "all" : "painting")}
+              className={"px-3 py-1 rounded-full text-xs font-medium border transition-colors inline-flex items-center gap-1 " + (
+                filterStatus === "painting" ? "bg-starlight-amber text-white border-starlight-amber" : "bg-white text-starlight-amber border-starlight-amber/30 hover:border-starlight-amber"
+              )}
+            >
+              <Paintbrush className="h-3 w-3" /> Painting ({stats.painting})
+            </button>
+          )}
         </div>
         <select
           value={filterJob}
@@ -539,10 +555,14 @@ export default function WorkshopPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
+                      {wo.paint_notes && <span title="Has painting notes"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">
                       {wo.scope_name}{wo.description ? ` — ${wo.description}` : ""}
                     </p>
+                    {wo.paint_notes && filterStatus === "painting" && (
+                      <p className="text-xs text-starlight-amber bg-amber-50 rounded px-2 py-1 mt-1 whitespace-pre-wrap">{wo.paint_notes}</p>
+                    )}
                   </div>
 
                   {/* Hours: est vs logged */}

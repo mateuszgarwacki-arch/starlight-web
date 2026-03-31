@@ -25,6 +25,7 @@ import {
   ArrowUp,
   ArrowDown,
   Warehouse,
+  Paintbrush,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -53,6 +54,7 @@ interface WORow {
   finish_relative: string | null;
   wo_sequence: number | null;
   traveller_printed_at?: string | null;
+  paint_notes: string | null;
   sort_phase: number;
   // Enriched client-side
   activity_label?: string;
@@ -671,9 +673,12 @@ export default function ScopeWorkOrdersPage() {
 
                   {/* Activity label + description */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-navy truncate">
-                      {wo.activity_label}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-navy truncate">
+                        {wo.activity_label}
+                      </p>
+                      {wo.paint_notes && <span title="Has painting notes"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
+                    </div>
                     {wo.description && (
                       <p className="text-xs text-gray-400 truncate mt-0.5">
                         {wo.description}
@@ -896,6 +901,30 @@ export default function ScopeWorkOrdersPage() {
                       </div>
                     </div>
 
+                    </div>
+                    {/* Paint notes */}
+                    <div className="px-5 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Paintbrush className="h-3.5 w-3.5 text-starlight-amber" />
+                        <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Painting</label>
+                        {!wo.paint_notes && <span className="text-[9px] text-gray-300 italic">None — add notes if this WO needs painting</span>}
+                      </div>
+                      <textarea
+                        defaultValue={wo.paint_notes || ""}
+                        onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_paint`)}
+                        onBlur={async (e) => {
+                          presenceSetEditing(null);
+                          const val = e.target.value.trim() || null;
+                          if (val !== wo.paint_notes) {
+                            const ctx = await getAuditContext(supabase);
+                            await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, { paint_notes: val }, jobId);
+                            setWorkOrders(prev => prev.map(w => w.work_order_id === wo.work_order_id ? { ...w, paint_notes: val } : w));
+                          }
+                        }}
+                        rows={2}
+                        placeholder="e.g. Paint back panel RAL 9005, 2 coats primer + 1 topcoat on raw MDF edges"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none placeholder:text-gray-300"
+                      />
                     </div>
                     {/* Linked Job Items */}
                     {linkedItems.length > 0 && (

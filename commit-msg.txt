@@ -1,1 +1,9 @@
-fix: update finish options in create-wo-dialog (Raw/Good/Spotlight)
+feat: paint notes on WOs, painter filter on workshop, painting on traveller
+
+- New paint_notes text field on tbl_work_orders
+- WO detail: collapsible Painting section with free-text notes
+- WO row: amber paintbrush icon when paint notes exist
+- Workshop: "Painting" filter button (amber) shows all WOs with paint notes
+- Workshop: paint notes shown inline on WO cards when Painting filter active
+- Workshop: search includes paint notes text
+- Traveller: amber "Painting" section printed between description and BOM

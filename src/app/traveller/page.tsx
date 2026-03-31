@@ -27,6 +27,7 @@ interface TravellerWO {
   phase_number?: number | null;
   lead_name?: string | null;
   traveller_printed_at?: string | null;
+  paint_notes?: string | null;
 }
 
 interface BOM {
@@ -570,6 +571,17 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       </div>
 
       <hr className="border-gray-300" />
+
+      {/* Paint notes */}
+      {wo.paint_notes && (
+        <>
+          <div>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">🎨 Painting</p>
+            <p className="text-[13px] text-gray-800 bg-amber-50 px-3 py-2 rounded border border-amber-200 leading-snug break-words whitespace-pre-wrap">{wo.paint_notes}</p>
+          </div>
+          <hr className="border-gray-300" />
+        </>
+      )}
 
       {/* BOM */}
       <div>
