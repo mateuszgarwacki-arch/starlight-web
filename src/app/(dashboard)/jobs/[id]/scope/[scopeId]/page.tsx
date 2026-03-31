@@ -260,15 +260,29 @@ export default function ScopeDetailPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Complexity</label>
-            <p className="text-sm text-navy px-2 py-1.5">
-              {scope.complexity_construction || <span className="text-gray-300 italic">Set on WOs</span>}
-            </p>
+            <select
+              value={scope.complexity_construction || ""}
+              onChange={(e) => updateField("complexity_construction", e.target.value || null)}
+              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+            >
+              <option value="">Select...</option>
+              <option value="1 - Straightforward">1 - Straightforward</option>
+              <option value="2 - Skilled">2 - Skilled</option>
+              <option value="3 - Bespoke/Artistic">3 - Bespoke/Artistic</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Finish</label>
-            <p className="text-sm text-navy px-2 py-1.5">
-              {scope.finish_relative || <span className="text-gray-300 italic">Set on WOs</span>}
-            </p>
+            <select
+              value={scope.finish_relative || ""}
+              onChange={(e) => updateField("finish_relative", e.target.value || null)}
+              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+            >
+              <option value="">Select...</option>
+              <option value="Raw">Raw</option>
+              <option value="Good">Good</option>
+              <option value="Spotlight">Spotlight</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Event Zone</label>

@@ -1,8 +1,5 @@
-feat: job orders panel, invoices+orders side-by-side on job page
+feat: editable complexity/finish on scope, renamed finish categories
 
-- New JobOrdersPanel component showing BOM items needing ordering + already ordered
-- Outstanding items (amber) with material, scope, qty, cost
-- Ordered items (green) with supplier, date, scope context
-- Both panels in 2-column grid on lg+ screens
-- Both auto-hide when no data, link to full Orders/Invoices pages
-- h-full on both cards for matched heights
+- Scope page: complexity and finish now editable dropdowns (were read-only)
+- Finish categories renamed: Raw / Good / Spotlight (was Suits-the-form / Neutral / Harder-than-construction-warrants)
+- WO page finish dropdown updated to match
