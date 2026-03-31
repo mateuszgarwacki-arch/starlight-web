@@ -7,6 +7,7 @@ import { getAuditContext, auditedInsert, auditedUpdate } from "@/lib/audit";
 import { Plus, Trash2, Search, Package, X, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import type { WoBom } from "@/lib/types";
+import { isTruthy } from "@/lib/types";
 
 interface ScopeBomProps {
   scopeItemId: number;
@@ -175,6 +176,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                 <th className="text-left py-1.5 px-2 font-medium w-20">Unit</th>
                 <th className="text-right py-1.5 px-2 font-medium w-24">Unit £</th>
                 <th className="text-right py-1.5 px-2 font-medium w-24">Total</th>
+                <th className="text-center py-1.5 px-2 font-medium w-14">Stock</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -189,7 +191,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                   <tr key={row.bom_id} className="border-b border-gray-100 last:border-0">
                     <td className="py-1.5 px-4">
                       <div className="flex items-center gap-1.5">
-                        {row.stock_item_id && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-starlight-amber/10 text-starlight-amber text-[9px] font-medium rounded shrink-0"><Warehouse className="h-2.5 w-2.5" />Stock</span>}
+                        {(row.stock_item_id || isTruthy(row.from_stock)) && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-starlight-amber/10 text-starlight-amber text-[9px] font-medium rounded shrink-0"><Warehouse className="h-2.5 w-2.5" />Stock</span>}
                         <input type="text" defaultValue={row.item_description || ""}
                           onBlur={(e) => { if (e.target.value !== row.item_description) updateField(row.bom_id, "item_description", e.target.value); }}
                           className="w-full text-sm text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 -ml-1" />
@@ -225,6 +227,25 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                         className="w-20 text-right text-sm font-mono text-gray-600 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
                     </td>
                     <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{total > 0 ? formatCurrency(total) : "—"}</td>
+                    <td className="py-1.5 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isTruthy(row.from_stock)}
+                        onChange={async (e) => {
+                          const val = e.target.checked;
+                          await updateField(row.bom_id, "from_stock", val ? "true" : "false");
+                          if (val) {
+                            await updateField(row.bom_id, "needs_ordering", "false");
+                            if (!row.unit_cost && row.material_id) {
+                              const mat = materials.find(m => m.material_id === row.material_id);
+                              if (mat?.current_unit_cost) await updateField(row.bom_id, "unit_cost", mat.current_unit_cost);
+                            }
+                          }
+                        }}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber"
+                        title="From workshop stock (internal cost)"
+                      />
+                    </td>
                     <td className="py-1.5 px-1">
                       <button onClick={() => deleteRow(row.bom_id)} className="p-1 text-gray-300 hover:text-starlight-red transition-colors">
                         <Trash2 className="h-3.5 w-3.5" />

@@ -1,1 +1,8 @@
-Session-14-TRACKER-update  
+feat: invoice allocation, stock-as-internal-cost, WO BOM unit toggle
+
+- Invoice allocation: new tbl_invoice_allocations table, percentage split
+  UI on expanded invoice lines, scope item assignment with running totals
+- Stock-as-internal-cost: from_stock flag on BOM rows, auto-clears ordering,
+  auto-fills catalogue price, amber Stock badge on both scope-bom and WO BOM
+- WO BOM unit toggle: Length/Metre toggle for timber materials (same pattern
+  as scope-bom), Length-aware total calculation, conversion subtitle

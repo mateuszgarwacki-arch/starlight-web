@@ -190,6 +190,7 @@ export interface WoBom {
   ordered_at: string | null;
   ordered_by: number | null;
   notes: string | null;
+  from_stock: string | null;
   updated_at?: string | null;
 }
 

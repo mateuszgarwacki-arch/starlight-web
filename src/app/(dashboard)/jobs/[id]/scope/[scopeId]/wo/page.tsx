@@ -24,6 +24,7 @@ import {
   Link2,
   ArrowUp,
   ArrowDown,
+  Warehouse,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -89,7 +90,7 @@ export default function ScopeWorkOrdersPage() {
   const [bomRows, setBomRows] = useState<BomRow[]>([]);
   const [bomLoading, setBomLoading] = useState(false);
   const [materials, setMaterials] = useState<
-    { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null }[]
+    { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_length: number | null }[]
   >([]);
   const [matSearch, setMatSearch] = useState("");
   const [matResults, setMatResults] = useState<typeof materials>([]);
@@ -127,7 +128,7 @@ export default function ScopeWorkOrdersPage() {
         .order("freelancer_name"),
       supabase
         .from("tbl_materials")
-        .select("material_id, material_name, unit, current_unit_cost, material_category")
+        .select("material_id, material_name, unit, current_unit_cost, material_category, standard_length")
         .eq("active", true)
         .order("material_name"),
     ]);
@@ -540,11 +541,22 @@ export default function ScopeWorkOrdersPage() {
   // Render helpers
   // ============================================================
 
+  // Build standard_length lookup for unit toggle
+  const stdLengthMap: Record<number, number> = {};
+  (materials || []).forEach((m) => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
+
+  // Length-aware row total
+  const bomRowTotal = (row: BomRow) => {
+    const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
+    const qty = row.quantity || 0;
+    if (row.unit === "Length" && row.material_id && stdLengthMap[row.material_id]) {
+      return qty * (stdLengthMap[row.material_id] / 1000) * cost;
+    }
+    return qty * cost;
+  };
+
   const bomTotal = (rows: BomRow[]) =>
-    rows.reduce((sum, r) => {
-      const cost = r.actual_unit_cost ?? r.unit_cost ?? 0;
-      return sum + (r.quantity || 0) * cost;
-    }, 0);
+    rows.reduce((sum, r) => sum + bomRowTotal(r), 0);
 
   // ============================================================
   // Loading / not found
@@ -948,6 +960,7 @@ export default function ScopeWorkOrdersPage() {
                                 <th className="text-left py-1.5 px-2 font-medium w-20">Unit</th>
                                 <th className="text-right py-1.5 px-2 font-medium w-24">Unit £</th>
                                 <th className="text-right py-1.5 px-2 font-medium w-24">Total</th>
+                                <th className="text-center py-1.5 px-2 font-medium w-14">Stock</th>
                                 <th className="text-center py-1.5 px-2 font-medium w-16">Order</th>
                                 <th className="w-8"></th>
                               </tr>
@@ -955,27 +968,34 @@ export default function ScopeWorkOrdersPage() {
                             <tbody>
                               {bomRows.map((row) => {
                                 const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
-                                const total = (row.quantity || 0) * cost;
+                                const total = bomRowTotal(row);
+                                const stdLen = row.material_id ? stdLengthMap[row.material_id] : null;
+                                const isLengthMode = row.unit === "Length" && stdLen;
+                                const canToggle = !!stdLen;
+                                const isFromStock = isTruthy(row.from_stock);
                                 return (
                                   <tr
                                     key={row.bom_id}
                                     className="border-b border-gray-100 last:border-0"
                                   >
                                     <td className="py-1.5 pr-3">
-                                      <input
-                                        type="text"
-                                        defaultValue={row.item_description || ""}
-                                        onFocus={() => presenceSetEditing(`bom_${row.bom_id}_desc`)}
-                                        onBlur={(e) => {
-                                          presenceSetEditing(null);
-                                          updateBomField(
-                                            row.bom_id,
-                                            "item_description",
-                                            e.target.value || null
-                                          );
-                                        }}
-                                        className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm bg-transparent focus:bg-white focus:outline-none"
-                                      />
+                                      <div className="flex items-center gap-1.5">
+                                        {(row.stock_item_id || isFromStock) && (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-starlight-amber/10 text-starlight-amber text-[9px] font-medium rounded shrink-0">
+                                            <Warehouse className="h-2.5 w-2.5" />Stock
+                                          </span>
+                                        )}
+                                        <input
+                                          type="text"
+                                          defaultValue={row.item_description || ""}
+                                          onFocus={() => presenceSetEditing(`bom_${row.bom_id}_desc`)}
+                                          onBlur={(e) => {
+                                            presenceSetEditing(null);
+                                            updateBomField(row.bom_id, "item_description", e.target.value || null);
+                                          }}
+                                          className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm bg-transparent focus:bg-white focus:outline-none"
+                                        />
+                                      </div>
                                     </td>
                                     <td className="py-1.5 px-2">
                                       <input
@@ -994,8 +1014,24 @@ export default function ScopeWorkOrdersPage() {
                                         className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-white focus:outline-none font-mono"
                                       />
                                     </td>
-                                    <td className="py-1.5 px-2 text-xs text-gray-400">
-                                      {row.unit || "—"}
+                                    <td className="py-1.5 px-2">
+                                      {canToggle ? (
+                                        <div>
+                                          <button
+                                            onClick={() => updateBomField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
+                                            className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200")}
+                                            title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
+                                          >
+                                            {isLengthMode ? "Length" : "Metre"}
+                                            <span className="text-[9px] text-gray-400">⇄</span>
+                                          </button>
+                                          {isLengthMode && (
+                                            <p className="text-[9px] text-gray-400 mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">{row.unit || "—"}</span>
+                                      )}
                                     </td>
                                     <td className="py-1.5 px-2">
                                       <input
@@ -1020,7 +1056,30 @@ export default function ScopeWorkOrdersPage() {
                                     <td className="py-1.5 px-2 text-center">
                                       <input
                                         type="checkbox"
+                                        checked={isFromStock}
+                                        onChange={async (e) => {
+                                          const val = e.target.checked;
+                                          await updateBomField(row.bom_id, "from_stock", val ? "true" : "false");
+                                          if (val) {
+                                            await updateBomField(row.bom_id, "needs_ordering", "false");
+                                            // Auto-fill cost from catalogue if empty
+                                            if (!row.unit_cost && row.material_id) {
+                                              const mat = materials.find(m => m.material_id === row.material_id);
+                                              if (mat?.current_unit_cost) {
+                                                await updateBomField(row.bom_id, "unit_cost", mat.current_unit_cost);
+                                              }
+                                            }
+                                          }
+                                        }}
+                                        className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber"
+                                        title="From workshop stock (internal cost)"
+                                      />
+                                    </td>
+                                    <td className="py-1.5 px-2 text-center">
+                                      <input
+                                        type="checkbox"
                                         checked={isTruthy(row.needs_ordering)}
+                                        disabled={isFromStock}
                                         onChange={(e) =>
                                           updateBomField(
                                             row.bom_id,
@@ -1028,7 +1087,7 @@ export default function ScopeWorkOrdersPage() {
                                             e.target.checked ? "true" : "false"
                                           )
                                         }
-                                        className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber"
+                                        className={"h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber" + (isFromStock ? " opacity-30" : "")}
                                       />
                                     </td>
                                     <td className="py-1.5">
@@ -1047,7 +1106,7 @@ export default function ScopeWorkOrdersPage() {
                             <tfoot>
                               <tr className="border-t border-gray-200">
                                 <td
-                                  colSpan={4}
+                                  colSpan={5}
                                   className="py-2 text-right text-xs font-medium text-gray-500"
                                 >
                                   Material Total
@@ -1055,7 +1114,7 @@ export default function ScopeWorkOrdersPage() {
                                 <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">
                                   {formatCurrency(bomTotal(bomRows))}
                                 </td>
-                                <td colSpan={2}></td>
+                                <td colSpan={3}></td>
                               </tr>
                             </tfoot>
                           </table>
