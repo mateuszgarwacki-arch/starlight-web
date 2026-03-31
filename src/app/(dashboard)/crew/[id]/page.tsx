@@ -7,7 +7,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -71,6 +71,9 @@ export default function FreelancerDetailPage() {
   const [editHoursValue, setEditHoursValue] = useState("");
   const [archivingEntry, setArchivingEntry] = useState<number | null>(null);
   const [archiveReason, setArchiveReason] = useState("");
+  const [stoppingEntry, setStoppingEntry] = useState<number | null>(null);
+  const [stopHours, setStopHours] = useState("");
+  const [stopReason, setStopReason] = useState("");
 
   const loadData = useCallback(async () => {
     // Check current user role
@@ -275,6 +278,36 @@ export default function FreelancerDetailPage() {
     toast.success("Entry archived");
   };
 
+  // PM: Stop open timer and set hours
+  const handleStopTimer = async (entryId: number) => {
+    const hours = parseFloat(stopHours);
+    if (isNaN(hours) || hours <= 0) { toast.error("Enter valid hours"); return; }
+    if (!stopReason.trim()) { toast.error("Reason required"); return; }
+    const entry = timeEntries.find(e => e.entry_id === entryId);
+    const rate = person?.day_rate && person?.standard_day_hours ? person.day_rate / person.standard_day_hours : 0;
+    const cost = Math.round(hours * rate * 100) / 100;
+    const now = new Date().toISOString();
+
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, {
+      system_end_timestamp: now,
+      actual_end_timestamp: now,
+      actual_hours: hours,
+      applied_hourly_rate: rate,
+      entry_cost: cost,
+      flag_note: `PM override: ${stopReason.trim()}`,
+    }, entry?.job_id);
+
+    setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? {
+      ...e, system_end_timestamp: now, actual_hours: hours, entry_cost: cost,
+      flag_note: `PM override: ${stopReason.trim()}`,
+    } : e));
+    setStoppingEntry(null);
+    setStopHours("");
+    setStopReason("");
+    toast.success(`Timer stopped — ${hours}h logged`);
+  };
+
   const statusColor = (s: string | null) => {
     if (!s) return "bg-gray-100 text-gray-500";
     const m: Record<string, string> = {
@@ -348,6 +381,69 @@ export default function FreelancerDetailPage() {
           <p className="text-lg font-semibold text-navy">{stats.flagCount}</p>
         </div>
       </div>
+
+      {/* Active timers — open entries that haven't been closed */}
+      {(() => {
+        const openEntries = timeEntries.filter(e => !e.system_end_timestamp && !e.archived_at);
+        if (openEntries.length === 0) return null;
+        return (
+          <div className="bg-starlight-blue/5 border border-starlight-blue/20 rounded-xl px-5 py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="h-4 w-4 text-starlight-blue" />
+              <p className="text-sm font-semibold text-starlight-blue">Active Timer{openEntries.length > 1 ? "s" : ""}</p>
+            </div>
+            {openEntries.map(entry => {
+              const elapsed = entry.system_start_timestamp
+                ? Math.round(((Date.now() - new Date(entry.system_start_timestamp).getTime()) / 3600000) * 10) / 10
+                : 0;
+              const isStopping = stoppingEntry === entry.entry_id;
+              return (
+                <div key={entry.entry_id} className="bg-white rounded-lg border border-gray-100 px-4 py-3 mb-2 last:mb-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-starlight-blue animate-pulse shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-navy">{entry.activity_label || "WO"} — {entry.scope_name || "Unknown scope"}</p>
+                      <p className="text-xs text-gray-400 truncate">{entry.job_number} · {entry.job_name}{entry.wo_description ? ` — ${entry.wo_description}` : ""}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold text-navy font-mono">{elapsed}h</p>
+                      <p className="text-[9px] text-gray-400">since {entry.system_start_timestamp ? new Date(entry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
+                    </div>
+                    <button onClick={() => { setStoppingEntry(isStopping ? null : entry.entry_id); setStopHours(String(Math.max(0.5, Math.round(elapsed * 2) / 2))); setStopReason(""); }}
+                      className={"p-2 rounded-lg transition-colors " + (isStopping ? "bg-red-50 text-starlight-red" : "text-gray-400 hover:text-starlight-red hover:bg-red-50")}
+                      title="Stop timer & set hours">
+                      <Square className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {isStopping && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-end gap-2">
+                      <div className="w-20">
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                        <input type="number" step="0.5" min="0.5" value={stopHours}
+                          onChange={e => setStopHours(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" autoFocus />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                        <input type="text" value={stopReason} onChange={e => setStopReason(e.target.value)}
+                          placeholder="e.g. Forgot to log, end of day, left site"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" />
+                      </div>
+                      <button onClick={() => handleStopTimer(entry.entry_id)}
+                        disabled={!stopReason.trim() || !stopHours}
+                        className="px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded hover:bg-red-700 disabled:opacity-50 shrink-0">
+                        Stop & Log
+                      </button>
+                      <button onClick={() => setStoppingEntry(null)}
+                        className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 shrink-0">Cancel</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">

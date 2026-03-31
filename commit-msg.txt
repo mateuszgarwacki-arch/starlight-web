@@ -1,8 +1,8 @@
-feat: completion photo on desktop WO detail + Completed tab on review page
+feat: PM stop timer on freelancer detail page
 
-- WO detail: completion photo loads from OneDrive when expanding Complete WOs
-- WO detail: green "Completion Photo" section with image display
-- Review page: new "Completed" tab showing photo grid of finished work
-- Completed tab: grouped by job, 4-column grid, activity + scope + date
-- Photos load progressively in background from OneDrive
-- Each card links back to the WO page for context
+- Active Timer banner on crew/freelancer detail: shows open WO time entries
+- Live elapsed time display with task context (activity, scope, job)
+- Stop & Override: PM can close a timer with custom hours + mandatory reason
+- Flag note auto-prefixed with "PM override:" for audit trail
+- Uses freelancer's day rate for cost calculation
+- Blue pulsing dot + elapsed counter for visual urgency
