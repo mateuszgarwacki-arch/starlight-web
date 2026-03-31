@@ -3,7 +3,7 @@
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — 33 tables, 34 views, 6 RPC functions, 115 indexes.
+**Backend:** Supabase (PostgreSQL) — 41 tables, 37 views, 6 RPC functions, 115+ indexes.
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
 **Auth:** Supabase Auth (email+password for PM/foreman, phone+PIN for freelancers). Three-layer security: middleware session validation + API route auth + RLS on all tables. See Security conventions below.
@@ -1143,11 +1143,72 @@ Previous (34) + Added: tbl_pm_queries
 - [x] "Loading scope items..." stuck message → "No scope item cost data for this line"
 - [x] `qry_cost_waterfall` view recreated (was dropped in Session 12 cleanup)
 
-#### Outstanding Cost Issues (next session)
-- [ ] Verify `qry_cost_waterfall` returns correct data for Chelsea In Bloom quote lines
-- [ ] Investigate £305 labour on Rocket frame (WO 17 has £35 time entry — may be test data to archive)
-- [ ] Review page `rpc_review_data` field names may not match updated `qry_job_cost_summary` — verify and fix
-- [ ] Committed summary row may be missing some time entries — compare direct query vs view totals
+#### Cost Issues Resolved ✅ (Session 15)
+- [x] `qry_quoteline_margin` was missing `WHERE archived_at IS NULL` — archived test time entry inflated Rocket frame labour by £35 (£305 instead of £270)
+- [x] `qry_quoteline_margin` was missing 'Stock Pick' category — Stock Pick lines excluded from per-line margin table
+- [x] Both `qry_quoteline_margin` and `qry_job_quote_margin` recreated with `security_invoker = true` and archived filter
+- [x] Review page scope expansion rewired from `qry_scopeitem_cost_summary` (old view chain, returning nulls) to `qry_cost_waterfall`
+- [x] Cost waterfall verified working on Chelsea In Bloom — numbers match scope page
+
+### Session 15: Financial Visibility & UX Polish (31 Mar 2026)
+
+#### Review Page Overhaul ✅
+- [x] Scope expansion: switched from `qry_scopeitem_cost_summary` to `qry_cost_waterfall` — 4-layer waterfall (Quoted → PM Est → WS Est → Actual)
+- [x] Job header: replaced 4-col (Quote/Labour/Material/Margin) with 5-col (Quote/WS Quote/Labour/Material/WS Margin)
+- [x] WS Quote + WS Margin from `qry_job_quote_margin` — workshop-only numbers for real decision making
+- [x] Scope items expandable → WO drill-down with full financials (Est Hrs, Act Hrs, Est Cost, Act Labour, Material, Total)
+- [x] Three-level drill: Job → Scope Items (waterfall) → Work Orders (financials) all on one page
+- [x] Scope expand chevron: dedicated 40px column with bg highlight, separate from scope name link
+- [x] Scope names are links back to scope detail page
+- [x] Hours column goes red when actual > estimated (overrun flag)
+
+#### Cost Analysis: Spent vs Committed ✅
+- [x] Per-line table redesigned: columns now # / Line / Scopes / Quoted / Spent / Committed / Margin / %
+- [x] **Spent** = frozen costs (logged time entries + BOM material costs) — navy text, red bold when overrunning
+- [x] **Committed** = `max(Estimated, Spent)` — projected landing cost. Blue with "est" suffix when includes projections
+- [x] Margin always calculated against Committed ("where will we land?" number)
+- [x] Waterfall sub-rows use same Spent/Committed logic
+- [x] Layers grid: "Committed" renamed to "Spent", header bar shows "Spent" instead of "Actual"
+
+#### BOM Unit Toggle (Metre ↔ Length) ✅
+- [x] Materials with `standard_length` show a toggle button in Unit column instead of text input
+- [x] Click toggles between "Metre" and "Length" — saves to DB immediately
+- [x] Length mode: total = qty × (standard_length_mm / 1000) × unit_cost_per_metre
+- [x] Subtitle shows conversion: "3 × 4.8m = 14.4m"
+- [x] Materials without standard_length keep regular text input (no toggle)
+- [x] Applies on scope BOM (scope-bom.tsx). WO BOM uses same data model
+
+#### Drawing Drag-and-Drop Reorder ✅
+- [x] Drawing/reference thumbnails in WODocumentsPanel now draggable (HTML5 Drag and Drop API)
+- [x] Navy number badges (1, 2, 3...) show print sequence order
+- [x] Blue ring highlight on drop target during drag
+- [x] Optimistic reorder + persist to `sort_order` in `tbl_wo_documents`
+- [x] Traveller already renders drawings in `sort_order` — reorder flows through to print
+- [x] Cursor changes to grab/grabbing for discoverability
+
+#### Stock Data Fix ✅
+- [x] 7 ali deck stock items had truncated descriptions from original migration ("4 x", "6 x", "8 x")
+- [x] Updated: full descriptions, hire costs, weights, locations from stock list PDF
+
+### New/Modified Files (Session 15)
+| File | Purpose |
+|------|--------|
+| `src/app/(dashboard)/review/page.tsx` | WS Quote/Margin cols, scope→WO drill-down, waterfall data source |
+| `src/components/cost-breakdown.tsx` | Spent vs Committed columns, renamed layers, waterfall sub-rows |
+| `src/components/scope-bom.tsx` | Metre/Length unit toggle with standard_length calc |
+| `src/components/wo-documents-panel.tsx` | Drag-drop reorder, position badges, sort_order persist |
+
+### SQL Run (Session 15)
+- `qry_quoteline_margin` recreated: added `WHERE archived_at IS NULL`, added 'Stock Pick' category, `security_invoker = true`
+- `qry_job_quote_margin` recreated: `security_invoker = true` (dependency of quoteline_margin)
+- Stock item updates: 7 ali deck records fixed (descriptions, hire costs, weights)
+
+### Conventions Added (Session 15)
+- **Spent vs Committed**: Spent = frozen costs (time entries + ordered/stock materials). Committed = max(Estimated, Spent). Margin always against Committed
+- **BOM unit toggle**: materials with `standard_length` can switch Metre↔Length. Length mode: qty × (std_len_mm / 1000) × unit_cost. Stored as unit="Length" in DB
+- **Drawing order**: `sort_order` on `tbl_wo_documents` controls traveller print sequence. Drag-drop to reorder
+- **Review page data sources**: job headers from `qry_job_quote_margin` (workshop margins), scope expansion from `qry_cost_waterfall`, WO details from direct queries with archived_at filter
+- **Always filter archived time entries**: every new query on `tbl_wo_time_entries` MUST include `.is("archived_at", null)` or `WHERE archived_at IS NULL`
 
 ### New/Modified Files (Session 14)
 | File | Purpose |
