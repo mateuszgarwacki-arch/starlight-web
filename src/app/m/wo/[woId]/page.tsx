@@ -421,14 +421,14 @@ export default function MobileWODetail() {
           </button>
         )}
 
-        {/* JOIN — In-Progress, I have no open entry */}
-        {wo.status === "In-Progress" && !myOpenEntry && (
+        {/* JOIN — In-Progress or Complete, I have no open entry */}
+        {(wo.status === "In-Progress" || wo.status === "Complete") && !myOpenEntry && (
           <button
             onClick={handleJoin}
             disabled={acting}
             className="w-full py-4 bg-starlight-amber text-white text-lg font-semibold rounded-xl active:bg-amber-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
           >
-            <UserPlus className="h-6 w-6" /> JOIN
+            <UserPlus className="h-6 w-6" /> {wo.status === "Complete" ? "LOG TIME" : "JOIN"}
           </button>
         )}
 

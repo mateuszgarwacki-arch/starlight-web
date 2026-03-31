@@ -1,7 +1,8 @@
-feat: paint notes on mobile — task list filter + WO detail display
+feat: allow time logging on Complete WOs (painting, packing, touch-ups)
 
-- Mobile task list: Painting filter button (amber paintbrush icon + count)
-- Mobile task list: paint icon on cards with painting notes
-- Mobile task list: paint notes expanded inline in painting filter mode
-- Mobile WO detail: amber Painting section with notes shown prominently
-- Painter opens phone, taps Painting filter, sees all their work across jobs
+- Mobile WO detail: LOG TIME button shown on Complete WOs (JOIN without status change)
+- Mobile task list: Complete WOs with paint notes load alongside active WOs
+- Complete WOs only appear in Painting filter, not in All/My Tasks
+- "Built" green badge on Complete WO cards so painter knows build is done
+- Enables painting, packing, and touch-up work after build completion
+- Time entries still track against the WO for accurate costing

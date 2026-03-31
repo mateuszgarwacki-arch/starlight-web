@@ -43,11 +43,17 @@ export default function MobileTaskList() {
     setMyId(fId);
     setMyName(fName);
 
-    // Load Ready + In-Progress WOs
-    const { data: wos } = await supabase
+    // Load Ready + In-Progress WOs, plus Complete WOs with paint notes
+    const { data: activeWos } = await supabase
       .from("tbl_work_orders")
       .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
       .in("status", ["Ready", "In-Progress"]);
+    const { data: paintCompleteWos } = await supabase
+      .from("tbl_work_orders")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+      .eq("status", "Complete")
+      .not("paint_notes", "is", null);
+    const wos = [...(activeWos || []), ...(paintCompleteWos || [])];
 
     if (!wos || wos.length === 0) { setTasks([]); setLoading(false); return; }
 
@@ -151,12 +157,13 @@ export default function MobileTaskList() {
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
+  const activeTasks = tasks.filter(t => t.status !== "Complete");
   const paintingCount = tasks.filter(t => t.paint_notes).length;
   const filtered = filter === "mine"
-    ? tasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
+    ? activeTasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
     : filter === "painting"
     ? tasks.filter(t => t.paint_notes)
-    : tasks;
+    : activeTasks;
 
   const phaseColors: Record<number, string> = {
     1: "bg-phase-1", 2: "bg-phase-2", 3: "bg-phase-3", 4: "bg-phase-4", 5: "bg-phase-5",
@@ -176,7 +183,7 @@ export default function MobileTaskList() {
             onClick={() => setFilter("all")}
             className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "all" ? "bg-navy text-white" : "text-gray-500")}
           >
-            All ({tasks.length})
+            All ({activeTasks.length})
           </button>
           <button
             onClick={() => setFilter("mine")}
@@ -218,6 +225,9 @@ export default function MobileTaskList() {
                     {task.paint_notes && <span title="Painting"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
                     {task.status === "In-Progress" && (
                       <span className="text-[10px] bg-starlight-blue/10 text-starlight-blue px-1.5 py-0.5 rounded-full font-medium shrink-0">Live</span>
+                    )}
+                    {task.status === "Complete" && (
+                      <span className="text-[10px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium shrink-0">Built</span>
                     )}
                   </div>
                   <p className="text-xs text-gray-500 truncate mt-0.5">{task.scope_name}</p>
