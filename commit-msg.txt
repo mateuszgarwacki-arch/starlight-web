@@ -1,8 +1,5 @@
-feat: PM stop timer on freelancer detail page
+docs: update TRACKER.md and database schema for Session 16
 
-- Active Timer banner on crew/freelancer detail: shows open WO time entries
-- Live elapsed time display with task context (activity, scope, job)
-- Stop & Override: PM can close a timer with custom hours + mandatory reason
-- Flag note auto-prefixed with "PM override:" for audit trail
-- Uses freelancer's day rate for cost calculation
-- Blue pulsing dot + elapsed counter for visual urgency
+- TRACKER: Session 16 block with all features, files, SQL, conventions
+- Schema: session16 version with paint_notes, from_stock, tbl_invoice_allocations, qry_invoice_scope_costs
+- Table count: 42 (was 41), View count: 38 (was 37)

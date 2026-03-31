@@ -3,7 +3,7 @@
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — 41 tables, 37 views, 6 RPC functions, 115+ indexes.
+**Backend:** Supabase (PostgreSQL) — 42 tables, 38 views, 6 RPC functions, 115+ indexes.
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
 **Auth:** Supabase Auth (email+password for PM/foreman, phone+PIN for freelancers). Three-layer security: middleware session validation + API route auth + RLS on all tables. See Security conventions below.
@@ -1247,3 +1247,118 @@ Previous (34) + Added: qry_maintenance_task_status, qry_maintenance_asset_summar
 - **Traveller timber unit**: if BOM unit is already "Length"/"Lengths", pass through qty directly (don't re-convert from metres)
 - **3D model viewer**: uses RoomEnvironment HDR for SketchUp models. Reset metalness=0, roughness=0.85, envMapIntensity=0.6
 - **Cost view column names**: `qry_job_cost_summary` uses `quote_total`, `labour_cost`, `material_cost`, `total_cost`, `margin_pct`. Frontend must accept both these and legacy aliases
+
+### Session 16: Invoice Allocation, Paint Notes, Job Command Centre (31 Mar 2026)
+
+#### Invoice Allocation to Scope Items ✔
+- [x] `tbl_invoice_allocations` table: percentage split of invoice lines to scope items
+- [x] Inline allocation UI on expanded invoice lines (invoices page)
+- [x] Scope item dropdown, percentage input, running total, 100% shortcut
+- [x] Green badge when fully allocated, blue for partial
+- [x] `qry_invoice_scope_costs` view: aggregated allocated amounts per scope item
+- [x] RLS: PM-only access
+
+#### Stock-as-Internal-Cost on BOM ✔
+- [x] `from_stock` boolean on `tbl_wo_bom`
+- [x] Stock checkbox on scope-bom and WO BOM — auto-clears ordering, auto-fills catalogue price
+- [x] Amber "Stock" badge shows for both `stock_item_id` and `from_stock` items
+- [x] Cost still counts in all cost views (internal charge, not free)
+
+#### WO BOM Unit Toggle ✔
+- [x] `standard_length` added to materials query on WO page
+- [x] Length ↔ Metre toggle button on WO BOM (same pattern as scope-bom)
+- [x] Length-aware total calculation: qty × (std_len_mm / 1000) × unit_cost
+- [x] Conversion subtitle: "3 × 4.8m = 14.4m"
+
+#### Job Page: Invoices & Orders Panels ✔
+- [x] `<JobInvoicesPanel>` — job’s invoices with expandable lines + allocation controls
+- [x] `<JobOrdersPanel>` — outstanding (amber) + ordered (green) BOM items for job
+- [x] Side-by-side 2-column grid on desktop, stacked on mobile
+- [x] Both auto-hide when job has no data, link to full pages
+
+#### Editable Complexity & Finish on Scope ✔
+- [x] Complexity and Finish now editable dropdowns on scope detail page (were read-only)
+- [x] Finish categories renamed everywhere: Raw / Good / Spotlight
+- [x] Old values migrated via SQL UPDATE on tbl_scope_items + tbl_work_orders
+- [x] Create WO dialog updated to match
+
+#### Paint Notes System ✔
+- [x] `paint_notes` TEXT column on `tbl_work_orders`
+- [x] WO detail (desktop): collapsible Painting section with free-text textarea
+- [x] Amber paintbrush icon on WO rows with paint notes
+- [x] Workshop page: "Painting" filter (amber) shows WOs needing painting
+- [x] Workshop: paint notes expanded inline in painting filter mode
+- [x] Mobile task list: Painting filter button + paint notes on cards
+- [x] Mobile WO detail: amber Painting section displayed prominently
+- [x] Traveller: amber "🎨 Painting" section between description and BOM
+
+#### Time Logging on Complete WOs ✔
+- [x] Mobile WO detail: "LOG TIME" button on Complete WOs (JOIN without status change)
+- [x] Mobile task list: Complete WOs from active jobs shown in Done filter
+- [x] "Built" green badge on Complete WO cards
+- [x] Enables painting, packing, touch-up work after build completion
+
+#### Mobile Task Filters ✔
+- [x] Four filters: All | My Tasks | Done | Painting
+- [x] Done filter loads Complete WOs from all non-Closed jobs (not just ones with active WOs)
+- [x] Painting filter shows all WOs with paint_notes regardless of status
+- [x] Complete WOs excluded from All/My Tasks counts
+
+#### Completion Photo Visibility ✔
+- [x] Mobile WO detail: completion photo loaded from OneDrive, displayed with green label
+- [x] Desktop WO detail: completion photo in expanded panel (loads on expand)
+- [x] Review page: new "Completed" tab with photo grid grouped by job
+- [x] Photos load progressively from OneDrive, cards link to WO pages
+
+#### PM Timer Stop on Crew Page ✔
+- [x] Active Timer banner on freelancer detail page for open WO time entries
+- [x] Live elapsed time + task context (activity, scope, job)
+- [x] Stop & Override: PM sets hours + mandatory reason
+- [x] Flag note auto-prefixed with "PM override:" for audit trail
+- [x] Cost calculated from freelancer's day rate
+
+#### Stock Data ✔
+- [x] 15 steel deck items added (product codes 1744-2903) from stock list PDF
+
+### New/Modified Files (Session 16)
+| File | Purpose |
+|------|--------|
+| `src/components/job-invoices-panel.tsx` | NEW: Job-level invoice view with allocation controls |
+| `src/components/job-orders-panel.tsx` | NEW: Job-level orders view (outstanding + ordered) |
+| `src/components/completed-work-tab.tsx` | NEW: Completed work photo grid for review page |
+| `src/components/scope-bom.tsx` | Stock checkbox column, from_stock badge |
+| `src/app/(dashboard)/invoices/page.tsx` | Allocation UI on expanded lines, Split icon, handlers |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Import JobInvoicesPanel + JobOrdersPanel, 2-col grid |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Editable complexity/finish dropdowns |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Unit toggle, stock checkbox, paint notes, completion photo |
+| `src/app/(dashboard)/workshop/page.tsx` | Painting filter, paint icon on cards, paint_notes in enrichment |
+| `src/app/(dashboard)/review/page.tsx` | Completed tab |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | Active timer banner, PM stop/override |
+| `src/app/m/page.tsx` | Painting + Done filters, paint icon, Complete WO loading |
+| `src/app/m/wo/[woId]/page.tsx` | Paint notes, completion photo, LOG TIME on Complete WOs |
+| `src/app/traveller/page.tsx` | Paint notes section (amber) |
+| `src/lib/types.ts` | from_stock on WoBom |
+| `src/components/create-wo-dialog.tsx` | Finish options: Raw/Good/Spotlight |
+
+### SQL Run (Session 16)
+- `ALTER TABLE tbl_wo_bom ADD COLUMN from_stock BOOLEAN DEFAULT FALSE`
+- `ALTER TABLE tbl_work_orders ADD COLUMN paint_notes TEXT`
+- `CREATE TABLE tbl_invoice_allocations` with RLS, indexes, updated_at trigger
+- `CREATE VIEW qry_invoice_scope_costs` (security_invoker)
+- Finish value migration: 6 UPDATE statements on scope_items + work_orders
+- 15 steel deck stock items inserted
+
+### Database Tables (now 42)
+Previous (41) + Added: tbl_invoice_allocations
+
+### Views (now 38)
+Previous (37) + Added: qry_invoice_scope_costs
+
+### Conventions Added (Session 16)
+- **Invoice allocation**: percentage split per invoice line to scope items. Sum ≤ 100% per line. `allocated_amount = line_total × percentage / 100`
+- **from_stock on BOM**: tick = internal stock charge. Auto-clears ordering, auto-fills catalogue price. Cost still counts everywhere
+- **Finish categories**: Raw (easiest) / Good (standard) / Spotlight (highest). Replaces old Suits-the-form / Neutral / Harder-than-construction-warrants
+- **Paint notes**: free text on WOs. Presence = WO needs painting. Surfaces on: WO detail, workshop (filter), mobile (filter + detail), traveller (print)
+- **Time logging on Complete WOs**: JOIN/LOG TIME allowed. Status stays Complete. Enables post-build painting/packing/touch-ups
+- **PM timer stop**: from crew/freelancer detail page. Requires reason. Flag note prefixed "PM override:"
+- **ON CONFLICT requires unique constraint**: always verify unique constraints exist before using ON CONFLICT in SQL. `tbl_stock_items.product_code` has NO unique constraint — use plain INSERT

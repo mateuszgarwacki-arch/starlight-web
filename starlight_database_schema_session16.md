@@ -1,8 +1,8 @@
-# Starlight Database Schema — Session 15 (31 Mar 2026)
+# Starlight Database Schema — Session 16 (31 Mar 2026)
 
-Verified from live database. 41 tables, 37 views, 6 RPC functions, 7 utility functions, 115+ indexes.
+Verified from live database. 42 tables, 38 views, 6 RPC functions, 7 utility functions, 115+ indexes.
 
-## Tables (41)
+## Tables (42)
 
 ### Core Production
 - **tbl_production_plan**: job_id PK, job_number, external_project_ref, job_name, client_name, event_date, event_location, budget_allowance, pm_note, post_event_delivery, created_by, created_at, job_status, updated_at
@@ -14,9 +14,9 @@ Verified from live database. 41 tables, 37 views, 6 RPC functions, 7 utility fun
 - **tbl_scope_items**: scope_item_id PK, job_id FK, quote_line_id FK, modified_quote_line_id, item_name, category_id FK, description, event_zone, complexity_construction, finish_relative, status, is_general, completion_photo_path, photo_waiver, photo_waiver_reason, cancellation_reason, created_by, created_at, modified_at, photo_path, updated_at
 - **tbl_scope_item_categories**: category_id PK, category_name, description, active
 - **tbl_scope_options**: option_id PK, scope_item_id FK, option_label, description, pros, cons, est_labour_days, est_material_cost, est_total_cost, impact_on_quote, status, selected_by, selected_at, created_by, created_at
-- **tbl_work_orders**: work_order_id PK, job_id FK, scope_item_id FK, activity_verb, description, estimated_duration_hrs, reference_wo_id, complexity_construction, finish_relative, planned_lead_id FK, rate_override, status, on_hold_reason, void_reason, system_complete_timestamp, actual_complete_timestamp, completion_photo_path, wo_sequence, traveller_printed_at, traveller_printed_by, updated_at
+- **tbl_work_orders**: work_order_id PK, job_id FK, scope_item_id FK, activity_verb, description, estimated_duration_hrs, reference_wo_id, complexity_construction, finish_relative, planned_lead_id FK, rate_override, status, on_hold_reason, void_reason, system_complete_timestamp, actual_complete_timestamp, completion_photo_path, wo_sequence, traveller_printed_at, traveller_printed_by, paint_notes TEXT, updated_at
 - **tbl_wo_activities**: id PK, work_order_id FK, activity_id, sequence, notes
-- **tbl_wo_bom**: bom_id PK, work_order_id FK (nullable), scope_item_id FK (nullable), job_id FK, material_id FK, stock_item_id FK, material_category, item_description, stock_reference, quantity, unit, unit_cost, actual_unit_cost, supplier, needs_ordering, ordered_at, ordered_by, notes, expected_delivery, updated_at
+- **tbl_wo_bom**: bom_id PK, work_order_id FK (nullable), scope_item_id FK (nullable), job_id FK, material_id FK, stock_item_id FK, material_category, item_description, stock_reference, quantity, unit, unit_cost, actual_unit_cost, supplier, needs_ordering, ordered_at, ordered_by, notes, expected_delivery, from_stock BOOLEAN, updated_at
 - **tbl_wo_time_entries**: entry_id PK, work_order_id FK, freelancer_id FK, system_start_timestamp, actual_start_timestamp, system_end_timestamp, actual_end_timestamp, actual_hours, applied_hourly_rate, entry_cost, flag_note, timestamp_edited_flag, archived_at, archived_by, archive_reason
 - **tbl_wo_documents**: doc_id PK, work_order_id FK, scope_item_id FK, job_id FK, doc_type, file_name, onedrive_path, onedrive_item_id, file_size, mime_type, caption, sort_order, uploaded_by, uploaded_at, extraction_status, extracted_data JSONB
 
@@ -43,6 +43,7 @@ Verified from live database. 41 tables, 37 views, 6 RPC functions, 7 utility fun
 ### Financial
 - **tbl_invoices**: invoice_id PK, supplier, invoice_number, invoice_date, total_value, job_id FK, file_path, status, notes, uploaded_by, uploaded_at, processed_at, supplier_id FK, file_data, file_type
 - **tbl_invoice_lines**: line_id PK, invoice_id FK, line_number, raw_description, quantity, unit, unit_cost, line_total, material_id FK, match_confidence, match_status, work_order_id FK, alias_saved, notes, job_id FK
+- **tbl_invoice_allocations**: allocation_id PK, invoice_line_id FK (CASCADE), scope_item_id FK (CASCADE), percentage DECIMAL(5,2) CHECK >0 ≤100, allocated_amount DECIMAL(12,2), notes, created_at, updated_at. UNIQUE(invoice_line_id, scope_item_id)
 
 ### System
 - **tbl_notifications**: notification_id PK, type, title, detail, severity, source_freelancer_id, source_job_id, source_schedule_id, source_wo_id, read_at, dismissed_at, action_url, created_at
@@ -60,8 +61,8 @@ Verified from live database. 41 tables, 37 views, 6 RPC functions, 7 utility fun
 - **tbl_maintenance_flags**: flag_id PK, asset_id FK, log_id FK, severity, description, raised_by, raised_at, acknowledged_by, acknowledged_at, resolved_by, resolved_at, resolution_note, status
 - **tbl_maintenance_asset_photos**: photo_id PK, asset_id FK, onedrive_path, caption, uploaded_by, uploaded_at
 
-## Views (37)
-qry_cost_waterfall, qry_dash_quote_stats, qry_dash_upcoming_jobs, qry_dash_wo_stats, qry_estimate_vs_actual, qry_freelancer_hours_summary, qry_job_accepted_quote, qry_job_cost_summary, qry_job_estimated_cost, qry_job_execution_list, qry_job_quote_margin, qry_jobitems_withcoverage, qry_manpower_demand, qry_material_reconciliation, qry_material_summary_by_job, qry_materials_list, qry_procurement_needed, qry_quote_lines_with_contractors, qry_quote_scopes, qry_quoteline_margin, qry_recent_orders, qry_review_inbox, qry_scope_breakdown, qry_scope_context, qry_scope_estimated_cost, qry_scope_wo_stats, qry_scopeitem_cost_summary, qry_stale_travellers, qry_supplier_summary, qry_wo_cost_labour, qry_wo_cost_material, qry_wo_cost_summary, qry_wo_estimated_cost, qry_wo_phase_ordered, qry_wo_with_activities, qry_maintenance_task_status, qry_maintenance_asset_summary
+## Views (38)
+qry_cost_waterfall, qry_dash_quote_stats, qry_dash_upcoming_jobs, qry_dash_wo_stats, qry_estimate_vs_actual, qry_freelancer_hours_summary, qry_job_accepted_quote, qry_job_cost_summary, qry_job_estimated_cost, qry_job_execution_list, qry_job_quote_margin, qry_jobitems_withcoverage, qry_manpower_demand, qry_material_reconciliation, qry_material_summary_by_job, qry_materials_list, qry_procurement_needed, qry_quote_lines_with_contractors, qry_quote_scopes, qry_quoteline_margin, qry_recent_orders, qry_review_inbox, qry_scope_breakdown, qry_scope_context, qry_scope_estimated_cost, qry_scope_wo_stats, qry_scopeitem_cost_summary, qry_stale_travellers, qry_supplier_summary, qry_wo_cost_labour, qry_wo_cost_material, qry_wo_cost_summary, qry_wo_estimated_cost, qry_wo_phase_ordered, qry_wo_with_activities, qry_maintenance_task_status, qry_maintenance_asset_summary, qry_invoice_scope_costs
 
 ### Key View Notes
 - **qry_quoteline_margin**: per quote line actual costs. MUST filter `archived_at IS NULL` on time entries. Includes 'Stock Pick' category. `security_invoker = true`
