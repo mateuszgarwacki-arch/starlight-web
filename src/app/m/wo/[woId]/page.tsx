@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client";
-import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush } from "lucide-react";
+import { uploadToOneDrive, jobFolder, woPhotoName, getOneDriveUrl } from "@/lib/onedrive-client";
+import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush, ImageIcon } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ interface WODetail {
   complexity_construction: string | null;
   finish_relative: string | null;
   paint_notes: string | null;
+  completion_photo_path: string | null;
 }
 
 interface TimeEntryInfo {
@@ -57,6 +58,7 @@ export default function MobileWODetail() {
   const [showComplete, setShowComplete] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [completionPhotoUrl, setCompletionPhotoUrl] = useState<string | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
   const loadWO = useCallback(async () => {
@@ -70,7 +72,7 @@ export default function MobileWODetail() {
     // Load WO
     const { data: woData } = await supabase
       .from("tbl_work_orders")
-      .select("work_order_id, description, estimated_duration_hrs, status, activity_verb, scope_item_id, job_id, complexity_construction, finish_relative, paint_notes")
+      .select("work_order_id, description, estimated_duration_hrs, status, activity_verb, scope_item_id, job_id, complexity_construction, finish_relative, paint_notes, completion_photo_path")
       .eq("work_order_id", woId)
       .single();
 
@@ -121,6 +123,7 @@ export default function MobileWODetail() {
       complexity_construction: woData.complexity_construction,
       finish_relative: woData.finish_relative,
       paint_notes: woData.paint_notes || null,
+      completion_photo_path: woData.completion_photo_path || null,
     });
 
     setEntries((timeRes.data || []).map((t: any) => ({
@@ -132,6 +135,13 @@ export default function MobileWODetail() {
   }, [woId]);
 
   useEffect(() => { loadWO(); }, [loadWO]);
+
+  // Load completion photo URL
+  useEffect(() => {
+    if (wo?.completion_photo_path) {
+      getOneDriveUrl(wo.completion_photo_path).then(setCompletionPhotoUrl).catch(() => {});
+    }
+  }, [wo?.completion_photo_path]);
 
   // Derived state
   const myOpenEntry = entries.find(e => e.freelancer_id === myId && !e.system_end_timestamp);
@@ -367,6 +377,17 @@ export default function MobileWODetail() {
               <span className="text-[10px] font-semibold text-starlight-amber uppercase tracking-wider">Painting</span>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{wo.paint_notes}</p>
+          </div>
+        )}
+
+        {/* Completion photo */}
+        {completionPhotoUrl && (
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <ImageIcon className="h-3.5 w-3.5 text-starlight-green" />
+              <span className="text-[10px] font-semibold text-starlight-green uppercase tracking-wider">Completion Photo</span>
+            </div>
+            <img src={completionPhotoUrl} alt="Completion" className="w-full rounded-lg border border-gray-200 object-contain max-h-64" />
           </div>
         )}
 

@@ -1,5 +1,6 @@
-fix: Done filter loads Complete WOs from all active jobs
+feat: show completion photo on mobile WO detail
 
-Previously only loaded Complete WOs from jobs with Ready/In-Progress WOs.
-Now queries tbl_production_plan for all non-Closed jobs, so Chelsea In Bloom
-and similar fully-complete-but-still-open jobs show their done WOs.
+- Completion photo displayed on mobile WO detail page when available
+- Photo loaded from OneDrive via getOneDriveUrl
+- Green "Completion Photo" label with image icon
+- Painter can see what was built before painting it
