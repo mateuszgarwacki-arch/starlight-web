@@ -29,7 +29,7 @@ export default function MobileTaskList() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"mine" | "all" | "painting">("all");
+  const [filter, setFilter] = useState<"mine" | "all" | "painting" | "done">("all");
   const [myId, setMyId] = useState<number>(0);
   const [myName, setMyName] = useState("");
 
@@ -43,17 +43,23 @@ export default function MobileTaskList() {
     setMyId(fId);
     setMyName(fName);
 
-    // Load Ready + In-Progress WOs, plus Complete WOs with paint notes
+    // Load Ready + In-Progress WOs
     const { data: activeWos } = await supabase
       .from("tbl_work_orders")
       .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
       .in("status", ["Ready", "In-Progress"]);
-    const { data: paintCompleteWos } = await supabase
-      .from("tbl_work_orders")
-      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
-      .eq("status", "Complete")
-      .not("paint_notes", "is", null);
-    const wos = [...(activeWos || []), ...(paintCompleteWos || [])];
+    // Load Complete WOs from active jobs (for Done filter + painting)
+    const activeJobIds = [...new Set((activeWos || []).map(w => w.job_id).filter(Boolean))];
+    let completeWos: any[] = [];
+    if (activeJobIds.length > 0) {
+      const { data } = await supabase
+        .from("tbl_work_orders")
+        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+        .eq("status", "Complete")
+        .in("job_id", activeJobIds);
+      completeWos = data || [];
+    }
+    const wos = [...(activeWos || []), ...completeWos];
 
     if (!wos || wos.length === 0) { setTasks([]); setLoading(false); return; }
 
@@ -158,11 +164,16 @@ export default function MobileTaskList() {
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
   const activeTasks = tasks.filter(t => t.status !== "Complete");
-  const paintingCount = tasks.filter(t => t.paint_notes).length;
+  const doneTasks = tasks.filter(t => t.status === "Complete");
+  const paintingCount = tasks.filter(t => t.paint_notes && t.status !== "Complete").length
+    + tasks.filter(t => t.paint_notes && t.status === "Complete").length;
+  const paintingTasks = tasks.filter(t => t.paint_notes);
   const filtered = filter === "mine"
     ? activeTasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
     : filter === "painting"
-    ? tasks.filter(t => t.paint_notes)
+    ? paintingTasks
+    : filter === "done"
+    ? doneTasks
     : activeTasks;
 
   const phaseColors: Record<number, string> = {
@@ -191,6 +202,14 @@ export default function MobileTaskList() {
           >
             My Tasks
           </button>
+          {doneTasks.length > 0 && (
+            <button
+              onClick={() => setFilter(filter === "done" ? "all" : "done")}
+              className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "done" ? "bg-starlight-green text-white" : "text-starlight-green")}
+            >
+              Done ({doneTasks.length})
+            </button>
+          )}
           {paintingCount > 0 && (
             <button
               onClick={() => setFilter(filter === "painting" ? "all" : "painting")}
