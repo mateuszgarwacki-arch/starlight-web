@@ -1,6 +1,8 @@
-feat: show completion photo on mobile WO detail
+feat: completion photo on desktop WO detail + Completed tab on review page
 
-- Completion photo displayed on mobile WO detail page when available
-- Photo loaded from OneDrive via getOneDriveUrl
-- Green "Completion Photo" label with image icon
-- Painter can see what was built before painting it
+- WO detail: completion photo loads from OneDrive when expanding Complete WOs
+- WO detail: green "Completion Photo" section with image display
+- Review page: new "Completed" tab showing photo grid of finished work
+- Completed tab: grouped by job, 4-column grid, activity + scope + date
+- Photos load progressively in background from OneDrive
+- Each card links back to the WO page for context

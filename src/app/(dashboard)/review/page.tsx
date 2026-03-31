@@ -10,6 +10,7 @@ import {
   Flag, RefreshCw, Package, Inbox,
 } from "lucide-react";
 import Link from "next/link";
+import { CompletedWorkTab } from "@/components/completed-work-tab";
 
 interface JobCost {
   job_id: number;
@@ -83,7 +84,7 @@ interface MatDetail {
   match_status: string;
 }
 
-type TabKey = "costs" | "time" | "flags" | "accuracy" | "materials";
+type TabKey = "costs" | "time" | "flags" | "accuracy" | "materials" | "completed";
 
 export default function ReviewPage() {
   const supabase = createClient();
@@ -92,7 +93,7 @@ export default function ReviewPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get("tab") as TabKey;
-    if (urlTab && ["costs", "time", "flags", "accuracy", "materials"].includes(urlTab)) setTab(urlTab);
+    if (urlTab && ["costs", "time", "flags", "accuracy", "materials", "completed"].includes(urlTab)) setTab(urlTab);
   }, []);
 
   const [jobCosts, setJobCosts] = useState<JobCost[]>([]);
@@ -401,6 +402,7 @@ export default function ReviewPage() {
           { key: "time" as TabKey, label: "Time Entries", count: timeEntries.length },
           { key: "flags" as TabKey, label: "Flags", count: flags.length },
           { key: "accuracy" as TabKey, label: "Estimate Accuracy", count: accuracy.length },
+          { key: "completed" as TabKey, label: "Completed", count: -1 },
         ]).map(t => (
           <button
             key={t.key}
@@ -409,7 +411,7 @@ export default function ReviewPage() {
               tab === t.key ? "border-starlight-red text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
             )}
           >
-            {t.label} ({t.count})
+            {t.label}{t.count >= 0 ? ` (${t.count})` : ""}
           </button>
         ))}
       </div>
@@ -771,6 +773,9 @@ export default function ReviewPage() {
           )}
         </div>
       )}
+
+      {/* TAB: Completed Work */}
+      {tab === "completed" && <CompletedWorkTab />}
     </div>
   );
 }

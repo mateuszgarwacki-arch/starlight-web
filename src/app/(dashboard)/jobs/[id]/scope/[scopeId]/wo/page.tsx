@@ -26,10 +26,12 @@ import {
   ArrowDown,
   Warehouse,
   Paintbrush,
+  CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { PresenceAvatars } from "@/components/presence-avatars";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
@@ -55,6 +57,7 @@ interface WORow {
   wo_sequence: number | null;
   traveller_printed_at?: string | null;
   paint_notes: string | null;
+  completion_photo_path: string | null;
   sort_phase: number;
   // Enriched client-side
   activity_label?: string;
@@ -101,6 +104,7 @@ export default function ScopeWorkOrdersPage() {
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
   const [voidDialog, setVoidDialog] = useState<{ woId: number; status: string } | null>(null);
   const [voidReason, setVoidReason] = useState("");
+  const [completionPhotoUrls, setCompletionPhotoUrls] = useState<Record<number, string>>({});
 
   // Presence — show who else is viewing this scope's work orders
   const { others: presenceOthers, setEditing: presenceSetEditing } = usePresence("scope", scopeId, "Work Orders");
@@ -294,6 +298,13 @@ export default function ScopeWorkOrdersPage() {
       setExpandedWO(woId);
       loadBOM(woId);
       loadLinkedItems(woId);
+      // Load completion photo if available
+      const wo = workOrders.find(w => w.work_order_id === woId);
+      if (wo?.completion_photo_path && !completionPhotoUrls[woId]) {
+        getOneDriveUrl(wo.completion_photo_path).then(url => {
+          setCompletionPhotoUrls(prev => ({ ...prev, [woId]: url }));
+        }).catch(() => {});
+      }
     }
   };
 
@@ -926,6 +937,16 @@ export default function ScopeWorkOrdersPage() {
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none placeholder:text-gray-300"
                       />
                     </div>
+                    {/* Completion photo */}
+                    {completionPhotoUrls[wo.work_order_id] && (
+                      <div className="px-5 py-3 border-b border-gray-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-starlight-green" />
+                          <span className="text-[10px] font-semibold text-starlight-green uppercase tracking-wider">Completion Photo</span>
+                        </div>
+                        <img src={completionPhotoUrls[wo.work_order_id]} alt="Completion" className="rounded-lg border border-gray-200 max-h-64 object-contain" />
+                      </div>
+                    )}
                     {/* Linked Job Items */}
                     {linkedItems.length > 0 && (
                       <div className="px-5 py-3 border-b border-gray-100">
