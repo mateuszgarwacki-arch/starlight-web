@@ -48,8 +48,12 @@ export default function MobileTaskList() {
       .from("tbl_work_orders")
       .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
       .in("status", ["Ready", "In-Progress"]);
-    // Load Complete WOs from active jobs (for Done filter + painting)
-    const activeJobIds = [...new Set((activeWos || []).map(w => w.job_id).filter(Boolean))];
+    // Load Complete WOs from all active jobs (for Done filter + painting)
+    const { data: activeJobs } = await supabase
+      .from("tbl_production_plan")
+      .select("job_id")
+      .not("job_status", "eq", "Closed");
+    const activeJobIds = (activeJobs || []).map((j: any) => j.job_id);
     let completeWos: any[] = [];
     if (activeJobIds.length > 0) {
       const { data } = await supabase

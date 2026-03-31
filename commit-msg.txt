@@ -1,6 +1,5 @@
-feat: Done filter on mobile task list
+fix: Done filter loads Complete WOs from all active jobs
 
-- New green "Done (N)" filter button shows completed WOs from active jobs
-- Complete WOs loaded alongside active ones (same jobs only, not entire history)
-- Four filters: All | My Tasks | Done | Painting
-- Done view shows green "Built" badges on completed cards
+Previously only loaded Complete WOs from jobs with Ready/In-Progress WOs.
+Now queries tbl_production_plan for all non-Closed jobs, so Chelsea In Bloom
+and similar fully-complete-but-still-open jobs show their done WOs.
