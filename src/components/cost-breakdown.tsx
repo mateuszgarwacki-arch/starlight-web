@@ -240,7 +240,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
           )}
           {d.pmEstTotal > 0 && <span className="text-gray-500">PM Est. <span className="font-semibold text-orange-700">{fmt(d.pmEstTotal)}</span></span>}
           {estTotal > 0 && <span className="text-gray-500">Est. <span className="font-semibold text-gray-800">{fmt(estTotal)}</span></span>}
-          {committedTotal > 0 && <span className="text-gray-500">Actual <span className="font-semibold text-gray-800">{fmt(committedTotal)}</span></span>}
+          {committedTotal > 0 && <span className="text-gray-500">Spent <span className="font-semibold text-gray-800">{fmt(committedTotal)}</span></span>}
           {q > 0 && (estTotal > 0 || committedTotal > 0) && (
             <span className={`font-semibold ${mc(bestMarginPct)}`}>{bestMarginPct.toFixed(1)}% margin</span>
           )}
@@ -296,7 +296,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
             {/* Committed */}
             {committedTotal > 0 && (<>
               <div className="py-2 border-t border-gray-100 font-medium text-teal-700 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-teal-400"></span>Committed
+                <span className="w-2 h-2 rounded-full bg-teal-400"></span>Spent
               </div>
               <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actLabour)}</div>
               <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actMatsPlanned)}</div>
@@ -353,23 +353,20 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                       <th className="px-3 py-2 font-medium">Line</th>
                       <th className="px-3 py-2 font-medium text-center w-14">Scopes</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Quoted</th>
-                      <th className="px-3 py-2 font-medium text-right w-20">PM Est</th>
-                      <th className="px-3 py-2 font-medium text-right w-20">Labour</th>
-                      <th className="px-3 py-2 font-medium text-right w-20">Material</th>
-                      <th className="px-3 py-2 font-medium text-right w-20">Total</th>
+                      <th className="px-3 py-2 font-medium text-right w-24">Spent</th>
+                      <th className="px-3 py-2 font-medium text-right w-24">Committed</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Margin</th>
                       <th className="px-3 py-2 font-medium text-right w-14">%</th>
                     </tr>
                   </thead>
                   <tbody>
                     {workshopLines.map(l => {
-                      const cost = l.actTotal > 0 ? l.actTotal : l.estTotal;
-                      const labour = l.actLabour > 0 ? l.actLabour : l.estLabour;
-                      const material = l.actMaterial > 0 ? l.actMaterial : l.estMaterial;
-                      const isEst = l.actTotal === 0 && l.estTotal > 0;
-                      const margin = (l.line_value || 0) - cost;
+                      const spent = l.actTotal;
+                      const committed = Math.max(l.estTotal, l.actTotal);
+                      const hasRemaining = committed > spent;
+                      const isOverrun = l.actTotal > l.estTotal && l.estTotal > 0;
+                      const margin = (l.line_value || 0) - committed;
                       const marginPct = (l.line_value || 0) > 0 ? (margin / (l.line_value || 1)) * 100 : 0;
-                      const clr = isEst ? "text-blue-500" : "text-gray-800";
                       const hasScopes = l.scopeCount > 0;
                       const isLineExpanded = expandedLineId === l.quote_line_id;
                       const wfRows = waterfallCache[l.quote_line_id] || [];
@@ -393,28 +390,35 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                               : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-gray-600">{l.line_value ? fmt(l.line_value) : "—"}</td>
-                          <td className="px-3 py-2 text-right font-mono text-orange-600">{l.pmEstCost > 0 ? fmt(l.pmEstCost) : "—"}</td>
-                          <td className={`px-3 py-2 text-right font-mono ${clr}`}>
-                            {labour > 0 ? fmt(labour) : "—"}{isEst && labour > 0 && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                          <td className="px-3 py-2 text-right font-mono">
+                            {spent > 0 ? (
+                              <span className={isOverrun ? "text-starlight-red font-semibold" : "text-navy"}>
+                                {fmt(spent)}
+                              </span>
+                            ) : <span className="text-gray-300">—</span>}
                           </td>
-                          <td className={`px-3 py-2 text-right font-mono ${clr}`}>
-                            {material > 0 ? fmt(material) : "—"}{isEst && material > 0 && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
-                          </td>
-                          <td className={`px-3 py-2 text-right font-mono font-medium ${clr}`}>
-                            {cost > 0 ? fmt(cost) : "—"}{isEst && cost > 0 && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                          <td className="px-3 py-2 text-right font-mono">
+                            {committed > 0 ? (
+                              <span className={committed === spent ? "text-navy font-medium" : "text-blue-500"}>
+                                {fmt(committed)}
+                                {hasRemaining && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                              </span>
+                            ) : <span className="text-gray-300">—</span>}
                           </td>
                           <td className={`px-3 py-2 text-right font-mono font-semibold ${margin >= 0 ? "text-starlight-green" : "text-starlight-red"}`}>
-                            {cost > 0 && l.line_value ? (<>{margin > 0 && <TrendingUp className="h-3 w-3 inline mr-0.5" />}{margin < 0 && <TrendingDown className="h-3 w-3 inline mr-0.5" />}{fmt(margin)}</>) : "—"}
+                            {committed > 0 && l.line_value ? (<>{margin > 0 && <TrendingUp className="h-3 w-3 inline mr-0.5" />}{margin < 0 && <TrendingDown className="h-3 w-3 inline mr-0.5" />}{fmt(margin)}</>) : "—"}
                           </td>
                           <td className={`px-3 py-2 text-right font-mono ${marginPct >= d.targetMarginPct ? "text-starlight-green" : marginPct > 0 ? "text-amber-500" : "text-starlight-red"}`}>
-                            {cost > 0 && l.line_value ? `${marginPct.toFixed(0)}%` : "—"}
+                            {committed > 0 && l.line_value ? `${marginPct.toFixed(0)}%` : "—"}
                           </td>
                         </tr>
                         {/* Waterfall sub-rows for scope items */}
                         {isLineExpanded && wfRows.length > 0 && wfRows.map(w => {
-                          const wBest = w.actual_total || w.ws_est_total || w.pm_est_cost || 0;
+                          const wSpent = w.actual_total || 0;
+                          const wEst = w.ws_est_total || w.pm_est_cost || 0;
+                          const wCommitted = Math.max(wSpent, wEst);
                           const wQuoted = w.quoted_value || 0;
-                          const wMarginPct = wQuoted > 0 ? ((wQuoted - wBest) / wQuoted) * 100 : null;
+                          const wMarginPct = wQuoted > 0 && wCommitted > 0 ? ((wQuoted - wCommitted) / wQuoted) * 100 : null;
                           return (
                             <tr key={w.scope_item_id} className="bg-gray-50/70 border-t border-gray-100/50">
                               <td className="px-3 py-1.5"></td>
@@ -429,17 +433,15 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                               <td className="px-3 py-1.5 text-right font-mono text-[11px] text-gray-500">
                                 {wQuoted > 0 ? fmt(wQuoted) : "—"}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-orange-500">
-                                {w.pm_est_cost ? fmt(w.pm_est_cost) : "—"}
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-navy">
+                                {wSpent > 0 ? fmt(wSpent) : "—"}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-blue-500">
-                                {w.ws_est_labour_cost ? fmt(w.ws_est_labour_cost) : "—"}
-                              </td>
-                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-blue-500">
-                                {w.ws_est_material_cost ? fmt(w.ws_est_material_cost) : "—"}
-                              </td>
-                              <td className="px-3 py-1.5 text-right font-mono text-[11px] font-medium text-gray-600">
-                                {wBest > 0 ? fmt(wBest) : "—"}
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px]">
+                                {wCommitted > 0 ? (
+                                  <span className={wCommitted > wSpent ? "text-blue-500" : "text-navy"}>
+                                    {fmt(wCommitted)}{wCommitted > wSpent && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                                  </span>
+                                ) : "—"}
                               </td>
                               <td className="px-3 py-1.5"></td>
                               <td className={`px-3 py-1.5 text-right font-mono text-[11px] ${
@@ -454,7 +456,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
                         })}
                         {isLineExpanded && wfRows.length === 0 && (
                           <tr className="bg-gray-50/70">
-                            <td colSpan={10} className="px-3 py-2 text-[11px] text-gray-400 pl-6">
+                            <td colSpan={8} className="px-3 py-2 text-[11px] text-gray-400 pl-6">
                               No scope item cost data for this line
                             </td>
                           </tr>
