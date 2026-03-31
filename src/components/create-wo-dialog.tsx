@@ -291,9 +291,9 @@ export function CreateWODialog({
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               >
                 <option value="">Select...</option>
-                <option value="Harder-than-construction-warrants">Harder than warrants</option>
-                <option value="Neutral">Neutral</option>
-                <option value="Suits-the-form">Suits the form</option>
+                <option value="Raw">Raw</option>
+                <option value="Good">Good</option>
+                <option value="Spotlight">Spotlight</option>
               </select>
             </div>
           </div>

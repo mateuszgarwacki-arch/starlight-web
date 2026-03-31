@@ -1,5 +1,1 @@
-feat: editable complexity/finish on scope, renamed finish categories
-
-- Scope page: complexity and finish now editable dropdowns (were read-only)
-- Finish categories renamed: Raw / Good / Spotlight (was Suits-the-form / Neutral / Harder-than-construction-warrants)
-- WO page finish dropdown updated to match
+fix: update finish options in create-wo-dialog (Raw/Good/Spotlight)
