@@ -1,9 +1,7 @@
-feat: paint notes on WOs, painter filter on workshop, painting on traveller
+feat: paint notes on mobile — task list filter + WO detail display
 
-- New paint_notes text field on tbl_work_orders
-- WO detail: collapsible Painting section with free-text notes
-- WO row: amber paintbrush icon when paint notes exist
-- Workshop: "Painting" filter button (amber) shows all WOs with paint notes
-- Workshop: paint notes shown inline on WO cards when Painting filter active
-- Workshop: search includes paint notes text
-- Traveller: amber "Painting" section printed between description and BOM
+- Mobile task list: Painting filter button (amber paintbrush icon + count)
+- Mobile task list: paint icon on cards with painting notes
+- Mobile task list: paint notes expanded inline in painting filter mode
+- Mobile WO detail: amber Painting section with notes shown prominently
+- Painter opens phone, taps Painting filter, sees all their work across jobs

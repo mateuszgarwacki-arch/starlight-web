@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, jobFolder, woPhotoName } from "@/lib/onedrive-client";
-import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users } from "lucide-react";
+import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ interface WODetail {
   job_number: string;
   complexity_construction: string | null;
   finish_relative: string | null;
+  paint_notes: string | null;
 }
 
 interface TimeEntryInfo {
@@ -69,7 +70,7 @@ export default function MobileWODetail() {
     // Load WO
     const { data: woData } = await supabase
       .from("tbl_work_orders")
-      .select("work_order_id, description, estimated_duration_hrs, status, activity_verb, scope_item_id, job_id, complexity_construction, finish_relative")
+      .select("work_order_id, description, estimated_duration_hrs, status, activity_verb, scope_item_id, job_id, complexity_construction, finish_relative, paint_notes")
       .eq("work_order_id", woId)
       .single();
 
@@ -119,6 +120,7 @@ export default function MobileWODetail() {
       job_number: jobRes.data?.job_number || "—",
       complexity_construction: woData.complexity_construction,
       finish_relative: woData.finish_relative,
+      paint_notes: woData.paint_notes || null,
     });
 
     setEntries((timeRes.data || []).map((t: any) => ({
@@ -357,6 +359,16 @@ export default function MobileWODetail() {
         </div>
 
         {wo.description && <p className="text-sm text-gray-600 mt-3 leading-relaxed">{wo.description}</p>}
+
+        {wo.paint_notes && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Paintbrush className="h-3.5 w-3.5 text-starlight-amber" />
+              <span className="text-[10px] font-semibold text-starlight-amber uppercase tracking-wider">Painting</span>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{wo.paint_notes}</p>
+          </div>
+        )}
 
         <div className="flex gap-4 mt-3 text-xs text-gray-400">
           <span className="font-mono">{wo.job_number}</span>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
-import { Clock, Users, Play, UserPlus, CheckCircle2 } from "lucide-react";
+import { Clock, Users, Play, UserPlus, CheckCircle2, Paintbrush } from "lucide-react";
 
 interface TaskCard {
   work_order_id: number;
@@ -21,6 +21,7 @@ interface TaskCard {
   workers: { freelancer_id: number; name: string; open: boolean }[];
   // My state
   myOpenEntry: number | null; // entry_id if I have an open session
+  paint_notes: string | null;
 }
 
 export default function MobileTaskList() {
@@ -28,7 +29,7 @@ export default function MobileTaskList() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"mine" | "all">("all");
+  const [filter, setFilter] = useState<"mine" | "all" | "painting">("all");
   const [myId, setMyId] = useState<number>(0);
   const [myName, setMyName] = useState("");
 
@@ -45,7 +46,7 @@ export default function MobileTaskList() {
     // Load Ready + In-Progress WOs
     const { data: wos } = await supabase
       .from("tbl_work_orders")
-      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
       .in("status", ["Ready", "In-Progress"]);
 
     if (!wos || wos.length === 0) { setTasks([]); setLoading(false); return; }
@@ -138,6 +139,7 @@ export default function MobileTaskList() {
         phase_number: phase,
         workers,
         myOpenEntry: myOpen ? myOpen.entry_id : null,
+        paint_notes: wo.paint_notes || null,
       };
     });
 
@@ -149,8 +151,11 @@ export default function MobileTaskList() {
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
+  const paintingCount = tasks.filter(t => t.paint_notes).length;
   const filtered = filter === "mine"
     ? tasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
+    : filter === "painting"
+    ? tasks.filter(t => t.paint_notes)
     : tasks;
 
   const phaseColors: Record<number, string> = {
@@ -179,6 +184,14 @@ export default function MobileTaskList() {
           >
             My Tasks
           </button>
+          {paintingCount > 0 && (
+            <button
+              onClick={() => setFilter(filter === "painting" ? "all" : "painting")}
+              className={"px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 " + (filter === "painting" ? "bg-starlight-amber text-white" : "text-starlight-amber")}
+            >
+              <Paintbrush className="h-3 w-3" /> {paintingCount}
+            </button>
+          )}
         </div>
       </div>
 
@@ -202,6 +215,7 @@ export default function MobileTaskList() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-navy truncate">{task.activity_label}</p>
+                    {task.paint_notes && <span title="Painting"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
                     {task.status === "In-Progress" && (
                       <span className="text-[10px] bg-starlight-blue/10 text-starlight-blue px-1.5 py-0.5 rounded-full font-medium shrink-0">Live</span>
                     )}
@@ -209,6 +223,9 @@ export default function MobileTaskList() {
                   <p className="text-xs text-gray-500 truncate mt-0.5">{task.scope_name}</p>
                   {task.description && (
                     <p className="text-xs text-gray-400 truncate mt-0.5">{task.description}</p>
+                  )}
+                  {task.paint_notes && filter === "painting" && (
+                    <p className="text-xs text-starlight-amber bg-amber-50 rounded px-2 py-1 mt-1">{task.paint_notes}</p>
                   )}
                   <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
                     <span className="font-mono">{task.job_number}</span>
