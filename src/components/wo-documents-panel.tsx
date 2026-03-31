@@ -61,6 +61,8 @@ export function WODocumentsPanel({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
   const [showModelViewer, setShowModelViewer] = useState<string | null>(null);
+  const [dragDocId, setDragDocId] = useState<number | null>(null);
+  const [dragOverDocId, setDragOverDocId] = useState<number | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadDocs = useCallback(async () => {
@@ -138,6 +140,35 @@ export function WODocumentsPanel({
     try { const url = await getOneDriveUrl(doc.onedrive_path); window.open(url, "_blank"); } catch { alert("Failed to get download link"); }
   };
 
+  const handleDragStart = (docId: number) => { setDragDocId(docId); };
+  const handleDragOver = (e: React.DragEvent, docId: number) => { e.preventDefault(); setDragOverDocId(docId); };
+  const handleDragEnd = () => { setDragDocId(null); setDragOverDocId(null); };
+  const handleDrop = async (e: React.DragEvent, targetDocId: number, docType: string) => {
+    e.preventDefault();
+    if (dragDocId === null || dragDocId === targetDocId) { handleDragEnd(); return; }
+    const typeDocs = docs.filter(d => d.doc_type === docType).sort((a, b) => a.sort_order - b.sort_order);
+    const fromIdx = typeDocs.findIndex(d => d.doc_id === dragDocId);
+    const toIdx = typeDocs.findIndex(d => d.doc_id === targetDocId);
+    if (fromIdx < 0 || toIdx < 0) { handleDragEnd(); return; }
+    const reordered = [...typeDocs];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    // Optimistic update
+    const newDocs = docs.map(d => {
+      if (d.doc_type !== docType) return d;
+      const idx = reordered.findIndex(r => r.doc_id === d.doc_id);
+      return idx >= 0 ? { ...d, sort_order: idx } : d;
+    });
+    setDocs(newDocs);
+    handleDragEnd();
+    // Persist
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].sort_order !== i) {
+        await supabase.from("tbl_wo_documents").update({ sort_order: i }).eq("doc_id", reordered[i].doc_id);
+      }
+    }
+  };
+
   const grouped = {
     drawing: docs.filter(d => d.doc_type === "drawing"),
     reference: docs.filter(d => d.doc_type === "reference"),
@@ -186,16 +217,23 @@ export function WODocumentsPanel({
                         <p className="text-[10px] text-gray-300 pl-5">No {config.label.toLowerCase()} added</p>
                       ) : (
                         <div className={type === "drawing" || type === "reference" ? "flex flex-wrap gap-2" : "space-y-1"}>
-                          {typeDocs.map(doc => (
+                          {typeDocs.sort((a, b) => a.sort_order - b.sort_order).map((doc, idx) => (
                             type === "drawing" || type === "reference" ? (
-                              <div key={doc.doc_id} className="relative group">
-                                <button onClick={() => openPreview(doc)} className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 hover:border-starlight-blue transition-colors" title={doc.caption || doc.file_name}>
+                              <div key={doc.doc_id} className={"relative group transition-all " + (dragDocId === doc.doc_id ? "opacity-40 scale-95" : "") + (dragOverDocId === doc.doc_id && dragDocId !== doc.doc_id ? " ring-2 ring-starlight-blue ring-offset-1 rounded-lg" : "")}
+                                draggable={!readOnly}
+                                onDragStart={() => handleDragStart(doc.doc_id)}
+                                onDragOver={(e) => handleDragOver(e, doc.doc_id)}
+                                onDragEnd={handleDragEnd}
+                                onDrop={(e) => handleDrop(e, doc.doc_id, type)}
+                              >
+                                <button onClick={() => openPreview(doc)} className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
                                   {doc.mime_type?.startsWith("image/") ? (
                                     <OneDriveThumb path={doc.onedrive_path} />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center"><FileText className="h-6 w-6 text-gray-300" /></div>
                                   )}
                                 </button>
+                                <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-navy text-white text-[9px] font-bold flex items-center justify-center shadow-sm pointer-events-none">{idx + 1}</span>
                                 {!readOnly && (
                                   <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-starlight-red">
                                     <Trash2 className="h-2.5 w-2.5" />
