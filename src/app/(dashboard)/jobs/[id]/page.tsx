@@ -13,6 +13,7 @@ import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, F
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
+import { recordJobVisit } from "@/lib/job-history";
 import { usePresence } from "@/lib/use-presence";
 import { PresenceAvatars } from "@/components/presence-avatars";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
@@ -229,6 +230,11 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Record visit for recent jobs strip
+  useEffect(() => {
+    if (job) recordJobVisit({ jobId: job.job_id, jobNumber: job.job_number || "", jobName: job.job_name || "", path: `/jobs/${job.job_id}` });
+  }, [job?.job_id]);
 
   // ================================================================
   // AUTO-TICK LOGIC — check if a line should be auto-completed

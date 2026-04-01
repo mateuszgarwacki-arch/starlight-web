@@ -17,6 +17,7 @@ import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-r
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { recordJobVisit } from "@/lib/job-history";
 import { usePresence } from "@/lib/use-presence";
 import { PresenceAvatars } from "@/components/presence-avatars";
 
@@ -84,6 +85,15 @@ export default function ScopeDetailPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Record visit for recent jobs strip
+  useEffect(() => {
+    if (scope) recordJobVisit({
+      jobId, jobNumber: scope.job_number || "", jobName: scope.job_name || "",
+      scopeId, scopeName: scope.item_name || "",
+      path: `/jobs/${jobId}/scope/${scopeId}`,
+    });
+  }, [scope?.scope_item_id]);
 
   // Refresh coverage when returning from WO page
   useEffect(() => {

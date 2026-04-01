@@ -1,1 +1,6 @@
-fix: guarantee entry_id for WO timer stop via direct open-entries query  
+feat: recent jobs strip for quick navigation back to jobs  
+  
+- useJobHistory hook with sessionStorage tracking  
+- RecentJobsStrip shows last 5 visited jobs on non-job pages  
+- Chips show job number, name, and last scope visited  
+- recordJobVisit wired into job detail, scope, and WO pages  

@@ -31,6 +31,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { recordJobVisit } from "@/lib/job-history";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { PresenceAvatars } from "@/components/presence-avatars";
@@ -244,6 +245,15 @@ export default function ScopeWorkOrdersPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Record visit for recent jobs strip
+  useEffect(() => {
+    if (scope) recordJobVisit({
+      jobId, jobNumber: scope.job_number || "", jobName: scope.job_name || "",
+      scopeId, scopeName: scope.item_name || "",
+      path: `/jobs/${jobId}/scope/${scopeId}/wo`,
+    });
+  }, [scope?.scope_item_id]);
 
   // Refresh data when user returns from traveller tab
   useEffect(() => {
