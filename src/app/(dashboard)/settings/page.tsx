@@ -4,14 +4,15 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { toast } from "sonner";
-import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown } from "lucide-react";
+import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown, Lightbulb } from "lucide-react";
+import { TypicalComponentsEditor } from "@/components/typical-components-editor";
 
 interface RateCard { id: number; complexity: number; label: string; rate_per_hour: number; description: string | null; }
 interface BusinessSetting { id: number; setting_key: string; setting_value: string; description: string | null; }
 interface StaffUser { auth_id: string; email: string; name: string; role: string; freelancer_id: number | null; created_at: string; last_sign_in: string | null; }
 interface AuditEntry { audit_id: number; user_name: string; user_role: string; table_name: string; record_id: number; field_name: string; old_value: string | null; new_value: string | null; changed_at: string; job_id: number | null; action_type: string; reverted_at: string | null; reverted_by: string | null; }
 
-type TabKey = "rates" | "defaults" | "users" | "audit";
+type TabKey = "rates" | "defaults" | "users" | "audit" | "prompts";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -165,6 +166,7 @@ export default function SettingsPage() {
     { key: "defaults", label: "Defaults", icon: Settings, show: true },
     { key: "users", label: "Users", icon: Users, show: canManageUsers },
     { key: "audit", label: "Audit Log", icon: History, show: canManageUsers },
+    { key: "prompts", label: "Typical Components", icon: Lightbulb, show: true },
   ];
 
   return (
@@ -446,6 +448,16 @@ export default function SettingsPage() {
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {/* Typical Components */}
+      {activeTab === "prompts" && (
+        <section className="space-y-4">
+          <p className="text-sm text-gray-400">
+            Manage suggested items shown on scope breakdown pages. Add stock items or bespoke descriptions per category.
+          </p>
+          <TypicalComponentsEditor />
         </section>
       )}
     </div>

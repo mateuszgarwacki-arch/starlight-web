@@ -24,6 +24,7 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
   const [loading, setLoading] = useState(false);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [isOpen, setIsOpen] = useState(true);
+  const [guidanceNote, setGuidanceNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!categoryId) {
@@ -32,6 +33,12 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
     }
     setLoading(true);
     setDismissed(new Set());
+    // Load guidance note
+    supabase.from("tbl_scope_item_categories")
+      .select("guidance_note")
+      .eq("category_id", categoryId)
+      .single()
+      .then(({ data }) => { setGuidanceNote(data?.guidance_note || null); });
     supabase
       .from("tbl_category_prompts")
       .select("*")
@@ -93,6 +100,9 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
             Suggested items for this category. Click + to add, × to dismiss.
             Nothing is auto-created.
           </p>
+          {guidanceNote && (
+            <p className="text-xs text-amber-700 bg-amber-50/70 rounded-md px-2.5 py-1.5 mb-2 leading-relaxed">{guidanceNote}</p>
+          )}
           {loading ? (
             <p className="text-xs text-gray-400 animate-pulse">Loading...</p>
           ) : (
