@@ -1,6 +1,5 @@
-feat: recent jobs strip for quick navigation back to jobs  
+feat: auto-refresh cost analysis after BOM and hours changes  
   
-- useJobHistory hook with sessionStorage tracking  
-- RecentJobsStrip shows last 5 visited jobs on non-job pages  
-- Chips show job number, name, and last scope visited  
-- recordJobVisit wired into job detail, scope, and WO pages  
+- refreshKey prop on CostBreakdown component  
+- bumpCost triggers on: est hours, BOM add/edit/delete  
+- No polling, no performance hit, just re-query on change  

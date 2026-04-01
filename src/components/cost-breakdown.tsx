@@ -42,13 +42,14 @@ interface Props {
   scopeItemId?: number;
   jobId?: number;
   quotedValue?: number;
+  refreshKey?: number;
 }
 
 function fmt(n: number) {
   return n.toLocaleString("en-GB", { style: "currency", currency: "GBP" });
 }
 
-export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
+export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: Props) {
   const supabase = createClient();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue }: Props) {
     targetMarginPct: 40, woCount: 0, completedWOs: 0,
   });
 
-  useEffect(() => { load(); }, [scopeItemId, jobId]);
+  useEffect(() => { load(); }, [scopeItemId, jobId, refreshKey]);
 
   const load = async () => {
     setLoading(true);

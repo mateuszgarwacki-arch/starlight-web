@@ -107,6 +107,10 @@ export default function ScopeWorkOrdersPage() {
   const [voidReason, setVoidReason] = useState("");
   const [completionPhotoUrls, setCompletionPhotoUrls] = useState<Record<number, string>>({});
 
+  // Cost analysis refresh key — increment after any cost-affecting change
+  const [costKey, setCostKey] = useState(0);
+  const bumpCost = () => setCostKey(k => k + 1);
+
   // Presence — show who else is viewing this scope's work orders
   const { others: presenceOthers, setEditing: presenceSetEditing } = usePresence("scope", scopeId, "Work Orders");
 
@@ -444,6 +448,7 @@ export default function ScopeWorkOrdersPage() {
           w.work_order_id === woId ? { ...w, estimated_duration_hrs: val, updated_at: result.data?.updated_at } : w
         )
       );
+      bumpCost();
     }
   };
 
@@ -498,6 +503,7 @@ export default function ScopeWorkOrdersPage() {
     setShowMatSearch(false);
     setAddingBomTo(null);
     setMatSearch("");
+    bumpCost();
   };
 
   const addCustomBomRow = async () => {
@@ -518,6 +524,7 @@ export default function ScopeWorkOrdersPage() {
     setShowMatSearch(false);
     setAddingBomTo(null);
     setMatSearch("");
+    bumpCost();
   };
 
   const updateBomField = async (bomId: number, field: string, value: string | number | null) => {
@@ -533,6 +540,7 @@ export default function ScopeWorkOrdersPage() {
         prev.map((r) => (r.bom_id === bomId ? { ...r, [field]: value, updated_at: result.data?.updated_at } : r))
       );
     }
+    bumpCost();
   };
 
   const deleteBomRow = async (bomId: number) => {
@@ -546,6 +554,7 @@ export default function ScopeWorkOrdersPage() {
     });
     await supabase.from("tbl_wo_bom").delete().eq("bom_id", bomId);
     setBomRows((prev) => prev.filter((r) => r.bom_id !== bomId));
+    bumpCost();
   };
 
   // Material search filtering
@@ -635,7 +644,7 @@ export default function ScopeWorkOrdersPage() {
       </div>
 
       {/* Cost analysis */}
-      <CostBreakdown scopeItemId={scopeId} />
+      <CostBreakdown scopeItemId={scopeId} refreshKey={costKey} />
 
       {/* Work Orders header */}
       <div className="flex items-center justify-between">
