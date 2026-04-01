@@ -1,5 +1,7 @@
-fix: prompt engine stock items now create proper stock-linked job items  
+feat: prompt engine grouping - collapsible groups in Settings and scope pages  
   
-- Fetches product_code from stock catalogue for stock_reference  
-- Sets item_type=Stock and item_source=stock correctly  
-- Uses stock description from catalogue (not prompt text)  
+- prompt_group TEXT column on tbl_category_prompts  
+- Settings: group picker when adding stock or bespoke items  
+- Settings: items rendered in group sections, hover to change group  
+- Scope pages: groups as collapsible sections with click to expand  
+- Ungrouped items show at top level  

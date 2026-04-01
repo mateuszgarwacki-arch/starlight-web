@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Package, Pencil, GripVertical, ArrowUp, ArrowDown, Lightbulb } from "lucide-react";
+import { Plus, Trash2, Search, Package, Pencil, GripVertical, ArrowUp, ArrowDown, Lightbulb, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Category {
   category_id: number;
@@ -19,6 +19,7 @@ interface PromptRow {
   stock_item_id: number | null;
   quantity_default: number | null;
   display_order: number | null;
+  prompt_group: string | null;
   // Resolved
   stock_description?: string;
 }
@@ -50,6 +51,11 @@ export function TypicalComponentsEditor() {
   const [stockQuery, setStockQuery] = useState("");
   const [stockResults, setStockResults] = useState<StockResult[]>([]);
   const [stockSearching, setStockSearching] = useState(false);
+
+  // Group management
+  const [addGroup, setAddGroup] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [stockAddGroup, setStockAddGroup] = useState("");
 
 
   // Load categories
@@ -111,17 +117,21 @@ export function TypicalComponentsEditor() {
   const addBespoke = async () => {
     if (!selectedCatId || !bespokeDesc.trim()) return;
     const maxOrder = prompts.reduce((m, p) => Math.max(m, p.display_order || 0), 0);
+    const group = addGroup === "__new__" ? newGroupName.trim() || null : addGroup || null;
     const { data } = await supabase.from("tbl_category_prompts").insert({
       category_id: selectedCatId,
       description: bespokeDesc.trim(),
       typical_item_type: bespokeType,
       quantity_default: parseInt(bespokeQty) || 1,
       display_order: maxOrder + 1,
+      prompt_group: group,
     }).select().single();
     if (data) setPrompts(prev => [...prev, data]);
     setBespokeDesc("");
     setBespokeQty("1");
     setShowAddBespoke(false);
+    setAddGroup("");
+    setNewGroupName("");
     toast.success("Added");
   };
 
@@ -148,6 +158,7 @@ export function TypicalComponentsEditor() {
       return;
     }
     const maxOrder = prompts.reduce((m, p) => Math.max(m, p.display_order || 0), 0);
+    const group = stockAddGroup === "__new__" ? newGroupName.trim() || null : stockAddGroup || null;
     const { data } = await supabase.from("tbl_category_prompts").insert({
       category_id: selectedCatId,
       description: item.description,
@@ -155,6 +166,7 @@ export function TypicalComponentsEditor() {
       stock_item_id: item.stock_id,
       quantity_default: 1,
       display_order: maxOrder + 1,
+      prompt_group: group,
     }).select().single();
     if (data) setPrompts(prev => [...prev, { ...data, stock_description: item.description }]);
     toast.success(`Added: ${item.description.substring(0, 40)}`);
@@ -188,6 +200,35 @@ export function TypicalComponentsEditor() {
   };
 
   const selectedCat = categories.find(c => c.category_id === selectedCatId);
+  const existingGroups = [...new Set(prompts.map(p => p.prompt_group).filter(Boolean))] as string[];
+
+  // Group picker component
+  const GroupPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <div className="flex gap-1.5 items-end">
+      <div className="w-36">
+        <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
+        <select value={value} onChange={e => { onChange(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
+          className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+          <option value="">No group</option>
+          {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
+          <option value="__new__">+ New group...</option>
+        </select>
+      </div>
+      {value === "__new__" && (
+        <div className="w-32">
+          <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+            placeholder="Group name"
+            className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+        </div>
+      )}
+    </div>
+  );
+
+  // Change group on existing item
+  const changeGroup = async (promptId: number, group: string | null) => {
+    await supabase.from("tbl_category_prompts").update({ prompt_group: group }).eq("prompt_id", promptId);
+    setPrompts(prev => prev.map(p => p.prompt_id === promptId ? { ...p, prompt_group: group } : p));
+  };
 
   if (loading) return <div className="text-sm text-gray-400 animate-pulse">Loading categories...</div>;
 
@@ -276,6 +317,9 @@ export function TypicalComponentsEditor() {
                     Cancel
                   </button>
                 </div>
+                <div className="mb-3">
+                  <GroupPicker value={stockAddGroup} onChange={setStockAddGroup} />
+                </div>
                 {stockSearching && <p className="text-xs text-gray-400 animate-pulse">Searching...</p>}
                 {stockResults.length > 0 && (
                   <div className="space-y-1 max-h-60 overflow-y-auto">
@@ -332,53 +376,80 @@ export function TypicalComponentsEditor() {
                     Cancel
                   </button>
                 </div>
+                <div className="mt-2">
+                  <GroupPicker value={addGroup} onChange={setAddGroup} />
+                </div>
               </div>
             )}
 
 
-            {/* Prompt items */}
+            {/* Prompt items — grouped */}
             {prompts.length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-sm">
                 No typical components defined for {selectedCat?.category_name}. Add some above.
               </div>
-            ) : (
-              <div className="space-y-1">
-                {prompts.map((p, idx) => (
-                  <div key={p.prompt_id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-gray-200 bg-white group">
-                    {/* Reorder */}
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                      <button onClick={() => movePrompt(p.prompt_id, "up")} disabled={idx === 0}
-                        className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
-                        <ArrowUp className="h-3 w-3" />
-                      </button>
-                      <button onClick={() => movePrompt(p.prompt_id, "down")} disabled={idx === prompts.length - 1}
-                        className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
-                        <ArrowDown className="h-3 w-3" />
-                      </button>
-                    </div>
-                    {/* Type badge */}
-                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                      p.stock_item_id ? "bg-starlight-blue/10 text-starlight-blue" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      {p.stock_item_id ? "Stock" : (p.typical_item_type || "Bespoke")}
-                    </span>
-                    {/* Description */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-navy truncate">{p.stock_description || p.description}</p>
-                    </div>
-                    {/* Quantity */}
-                    {p.quantity_default && p.quantity_default > 1 && (
-                      <span className="text-xs text-gray-400 shrink-0">×{p.quantity_default}</span>
-                    )}
-                    {/* Delete */}
-                    <button onClick={() => deletePrompt(p.prompt_id)}
-                      className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-                      <Trash2 className="h-3.5 w-3.5" />
+            ) : (() => {
+              const ungrouped = prompts.filter(p => !p.prompt_group);
+              const groups = existingGroups;
+              const renderItem = (p: PromptRow, idx: number, list: PromptRow[]) => (
+                <div key={p.prompt_id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-gray-200 bg-white group">
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button onClick={() => movePrompt(p.prompt_id, "up")} disabled={idx === 0}
+                      className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button onClick={() => movePrompt(p.prompt_id, "down")} disabled={idx === list.length - 1}
+                      className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
+                      <ArrowDown className="h-3 w-3" />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
+                    p.stock_item_id ? "bg-starlight-blue/10 text-starlight-blue" : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {p.stock_item_id ? "Stock" : (p.typical_item_type || "Bespoke")}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-navy truncate">{p.stock_description || p.description}</p>
+                  </div>
+                  {p.quantity_default && p.quantity_default > 1 && (
+                    <span className="text-xs text-gray-400 shrink-0">×{p.quantity_default}</span>
+                  )}
+                  <select value={p.prompt_group || ""} onChange={e => changeGroup(p.prompt_id, e.target.value || null)}
+                    className="text-[10px] text-gray-400 border-0 bg-transparent focus:outline-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity w-20 shrink-0"
+                    title="Change group">
+                    <option value="">No group</option>
+                    {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <button onClick={() => deletePrompt(p.prompt_id)}
+                    className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+              return (
+                <div className="space-y-3">
+                  {ungrouped.length > 0 && (
+                    <div className="space-y-1">
+                      {ungrouped.map((p, idx) => renderItem(p, idx, ungrouped))}
+                    </div>
+                  )}
+                  {groups.map(groupName => {
+                    const groupItems = prompts.filter(p => p.prompt_group === groupName);
+                    return (
+                      <div key={groupName} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-navy uppercase tracking-wider">{groupName}</span>
+                          <span className="text-[10px] text-gray-400">{groupItems.length}</span>
+                        </div>
+                        <div className="p-1 space-y-1">
+                          {groupItems.map((p, idx) => renderItem(p, idx, groupItems))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </>
       )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { Plus, Lightbulb, X } from "lucide-react";
+import { Plus, Lightbulb, X, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Prompt {
   prompt_id: number;
@@ -11,6 +11,7 @@ interface Prompt {
   stock_item_id: number | null;
   stock_description: string | null;
   quantity_default: number | null;
+  prompt_group: string | null;
 }
 
 interface PromptPanelProps {
@@ -25,6 +26,7 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [isOpen, setIsOpen] = useState(true);
   const [guidanceNote, setGuidanceNote] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!categoryId) {
@@ -105,46 +107,56 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
           )}
           {loading ? (
             <p className="text-xs text-gray-400 animate-pulse">Loading...</p>
-          ) : (
-            visiblePrompts.map((prompt) => (
-              <div
-                key={prompt.prompt_id}
-                className="flex items-center justify-between bg-amber-50/50 rounded-lg px-3 py-2"
-              >
+          ) : (() => {
+            const renderItem = (prompt: Prompt) => (
+              <div key={prompt.prompt_id} className="flex items-center justify-between bg-amber-50/50 rounded-lg px-3 py-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700">{prompt.description}</p>
+                  <p className="text-sm text-gray-700">{prompt.stock_description || prompt.description}</p>
                   <p className="text-xs text-gray-400">
                     {prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke")}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 ml-3 shrink-0">
-                  <button
-                    onClick={() =>
-                      onAddItem(
-                        prompt.stock_description || prompt.description || "",
-                        prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke"),
-                        prompt.stock_item_id || undefined,
-                        prompt.quantity_default || undefined
-                      )
-                    }
-                    className="p-1.5 text-starlight-green hover:bg-green-50 rounded-md transition-colors"
-                    title="Add as job item"
-                  >
+                  <button onClick={() => onAddItem(
+                    prompt.stock_description || prompt.description || "",
+                    prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke"),
+                    prompt.stock_item_id || undefined,
+                    prompt.quantity_default || undefined
+                  )} className="p-1.5 text-starlight-green hover:bg-green-50 rounded-md transition-colors" title="Add as job item">
                     <Plus className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() =>
-                      setDismissed((prev) => new Set(prev).add(prompt.prompt_id))
-                    }
-                    className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition-colors"
-                    title="Dismiss"
-                  >
+                  <button onClick={() => setDismissed((prev) => new Set(prev).add(prompt.prompt_id))}
+                    className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition-colors" title="Dismiss">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-            ))
-          )}
+            );
+            const ungrouped = visiblePrompts.filter(p => !p.prompt_group);
+            const groups = [...new Set(visiblePrompts.map(p => p.prompt_group).filter(Boolean))] as string[];
+            return (
+              <div className="space-y-2">
+                {ungrouped.map(renderItem)}
+                {groups.map(groupName => {
+                  const items = visiblePrompts.filter(p => p.prompt_group === groupName);
+                  const isCollapsed = collapsedGroups.has(groupName);
+                  return (
+                    <div key={groupName}>
+                      <button onClick={() => setCollapsedGroups(prev => {
+                        const next = new Set(prev);
+                        isCollapsed ? next.delete(groupName) : next.add(groupName);
+                        return next;
+                      })} className="flex items-center gap-1.5 w-full text-left py-1 text-xs font-semibold text-gray-500 hover:text-navy transition-colors">
+                        {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        {groupName} ({items.length})
+                      </button>
+                      {!isCollapsed && <div className="space-y-1 ml-1">{items.map(renderItem)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
