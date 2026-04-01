@@ -1,5 +1,6 @@
-docs: update TRACKER.md and database schema for Session 16
-
-- TRACKER: Session 16 block with all features, files, SQL, conventions
-- Schema: session16 version with paint_notes, from_stock, tbl_invoice_allocations, qry_invoice_scope_costs
-- Table count: 42 (was 41), View count: 38 (was 37)
+feat: PM stop WO timers from Workshop page  
+  
+- Stop button on each active WO worker in the banner  
+- Inline hours + reason form (same pattern as task stop)  
+- auditedUpdate with PM override flag note  
+- Freelancer rate queried on demand for cost calculation  

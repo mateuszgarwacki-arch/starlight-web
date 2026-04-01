@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 
 interface WorkshopWO {
   work_order_id: number;
@@ -34,7 +35,7 @@ interface WorkshopWO {
   event_date: string | null;
   lead_name: string | null;
   total_logged_hrs: number;
-  active_workers: { name: string; since: string }[];
+  active_workers: { name: string; since: string; entry_id: number; freelancer_id: number }[];
   entry_count: number;
   paint_notes: string | null;
 }
@@ -66,6 +67,11 @@ export default function WorkshopPage() {
   const [stoppingTask, setStoppingTask] = useState<number | null>(null);
   const [stopHours, setStopHours] = useState("");
   const [stopReason, setStopReason] = useState("");
+
+  // PM stop WO timer controls
+  const [stoppingWOEntry, setStoppingWOEntry] = useState<number | null>(null);
+  const [stopWOHours, setStopWOHours] = useState("");
+  const [stopWOReason, setStopWOReason] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -146,6 +152,8 @@ export default function WorkshopPage() {
         .map((e: any) => ({
           name: fMap[e.freelancer_id] || "Unknown",
           since: new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          entry_id: e.entry_id,
+          freelancer_id: e.freelancer_id,
         }));
 
       return {
@@ -210,6 +218,38 @@ export default function WorkshopPage() {
     setStoppingTask(null);
     setStopHours("");
     setStopReason("");
+    loadAll();
+  };
+
+  // PM: stop an open WO timer with reason and hours override
+  const handleStopWOEntry = async (entryId: number, freelancerId: number) => {
+    const hours = parseFloat(stopWOHours);
+    if (isNaN(hours) || hours <= 0) { toast.error("Enter valid hours"); return; }
+    if (!stopWOReason.trim()) { toast.error("Reason required"); return; }
+
+    // Get freelancer rate
+    const { data: fr } = await supabase.from("tbl_freelancers")
+      .select("day_rate, standard_day_hours")
+      .eq("freelancer_id", freelancerId)
+      .single();
+    const rate = fr?.day_rate && fr?.standard_day_hours ? fr.day_rate / fr.standard_day_hours : 0;
+    const cost = Math.round(hours * rate * 100) / 100;
+    const now = new Date().toISOString();
+
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, {
+      system_end_timestamp: now,
+      actual_end_timestamp: now,
+      actual_hours: hours,
+      applied_hourly_rate: rate,
+      entry_cost: cost,
+      flag_note: `PM override: ${stopWOReason.trim()}`,
+    });
+
+    setStoppingWOEntry(null);
+    setStopWOHours("");
+    setStopWOReason("");
+    toast.success(`Timer stopped — ${hours}h logged`);
     loadAll();
   };
 
@@ -321,15 +361,59 @@ export default function WorkshopPage() {
           </div>
           <div className="space-y-1">
             {/* WO workers */}
-            {wos.flatMap(w => w.active_workers.map(aw => (
-              <div key={`${w.work_order_id}-${aw.name}`} className="flex items-center gap-2 text-xs">
-                <span className="font-medium text-navy w-28 truncate">{aw.name}</span>
-                <span className="text-starlight-blue">→</span>
-                <span className="text-gray-600 truncate flex-1">{w.activity_label} — {w.scope_name}</span>
-                <span className="text-[10px] font-mono text-gray-400 shrink-0">{w.job_number}</span>
-                <span className="text-[10px] text-gray-400 shrink-0">since {aw.since}</span>
+            {wos.flatMap(w => w.active_workers.map(aw => {
+              return (
+              <div key={`${w.work_order_id}-${aw.entry_id}`}>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-medium text-navy w-28 truncate">{aw.name}</span>
+                  <span className="text-starlight-blue">→</span>
+                  <span className="text-gray-600 truncate flex-1">{w.activity_label} — {w.scope_name}</span>
+                  <span className="text-[10px] font-mono text-gray-400 shrink-0">{w.job_number}</span>
+                  <span className="text-[10px] text-gray-400 shrink-0">since {aw.since}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (stoppingWOEntry === aw.entry_id) { setStoppingWOEntry(null); return; }
+                      setStoppingWOEntry(aw.entry_id);
+                      setStopWOHours("");
+                      setStopWOReason("");
+                    }}
+                    className={`p-1 rounded transition-colors shrink-0 ${stoppingWOEntry === aw.entry_id ? "bg-red-50 text-red-500" : "text-gray-300 hover:text-red-500 hover:bg-red-50"}`}
+                    title="Stop this timer">
+                    <Square className="h-3 w-3" />
+                  </button>
+                </div>
+                {stoppingWOEntry === aw.entry_id && (
+                  <div className="mt-1.5 ml-[7.5rem] flex items-end gap-2">
+                    <div className="w-20">
+                      <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                      <input type="number" step="0.5" min="0.5" value={stopWOHours}
+                        onChange={e => setStopWOHours(e.target.value)}
+                        className="w-full px-2 py-1 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                      <input type="text" value={stopWOReason}
+                        onChange={e => setStopWOReason(e.target.value)}
+                        placeholder="e.g. Forgot to stop, end of day"
+                        className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400"
+                        autoFocus />
+                    </div>
+                    <button onClick={() => handleStopWOEntry(aw.entry_id, aw.freelancer_id)}
+                      disabled={!stopWOReason.trim() || !stopWOHours}
+                      className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 disabled:opacity-50 shrink-0">
+                      Stop
+                    </button>
+                    <button onClick={() => setStoppingWOEntry(null)}
+                      className="px-2 py-1 text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
-            )))}
+              );
+            }))}
+
             {/* Ad-hoc task workers */}
             {activeTasks.map(t => (
               <div key={t.task_id} className="flex items-center gap-2 text-xs">
