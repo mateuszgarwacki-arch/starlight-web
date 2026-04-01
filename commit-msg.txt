@@ -1,8 +1,1 @@
-feat: Typical Components admin UI in Settings  
-  
-- New Typical Components tab on Settings page  
-- Category selector with guidance note editor  
-- Add from Stock: search and one-click add  
-- Add Bespoke: description, default qty, type  
-- Reorder with up/down arrows, delete  
-- Prompt panel shows guidance note on scope pages  
+docs: Session 17 tracker update  

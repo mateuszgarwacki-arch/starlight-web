@@ -1362,3 +1362,74 @@ Previous (37) + Added: qry_invoice_scope_costs
 - **Time logging on Complete WOs**: JOIN/LOG TIME allowed. Status stays Complete. Enables post-build painting/packing/touch-ups
 - **PM timer stop**: from crew/freelancer detail page. Requires reason. Flag note prefixed "PM override:"
 - **ON CONFLICT requires unique constraint**: always verify unique constraints exist before using ON CONFLICT in SQL. `tbl_stock_items.product_code` has NO unique constraint — use plain INSERT
+
+### Session 17: UX Polish & Prompt Engine (1 Apr 2026)
+
+#### PM Timer Stop from Workshop Page ✔
+- [x] Stop button (□) on each active WO worker in the blue "currently working" banner
+- [x] Inline form: hours input + mandatory reason, same pattern as crew/[id] and task stop
+- [x] `auditedUpdate` with "PM override:" flag prefix for audit trail
+- [x] Freelancer rate queried on demand (not cached) for accurate cost calculation
+- [x] Direct `tbl_wo_time_entries` query guarantees `entry_id` availability (RPC may not return it)
+
+#### Recent Jobs Navigation Strip ✔
+- [x] `useJobHistory` hook + `sessionStorage` tracking (up to 5 jobs, session-scoped)
+- [x] `<RecentJobsStrip>` component in dashboard layout — shows on all non-job pages
+- [x] Chips: job number + name + last scope visited, deeplinks to last page
+- [x] `recordJobVisit()` called from job detail, scope breakdown, and WO pages
+- [x] Scope-level recording: chip points to scope/WO page, not just job
+- [x] Hidden when already on a job page (no point showing it there)
+- [x] Custom event dispatch (`jobhistory`) for cross-component reactivity
+
+#### Cost Analysis Auto-Refresh ✔
+- [x] `refreshKey` prop on `<CostBreakdown>` component
+- [x] WO page: `bumpCost()` triggers refresh after: estimated hours change, BOM add/edit/delete
+- [x] No polling, no performance hit — single re-query only when data changes
+
+#### Finish Categories Fix ✔
+- [x] Create Scope dialog: replaced LookupCombo (category `FINISH_RELATIVE`) with hardcoded Raw/Good/Spotlight
+- [x] `tbl_master_lookups` FINISH_RELATIVE values updated via SQL (old → new)
+
+#### Typical Components Admin UI ✔
+- [x] New "Typical Components" tab in Settings page
+- [x] Category selector dropdown
+- [x] Guidance note: free-text per category, saves on blur, shown on scope pages
+- [x] Add from Stock: search stock catalogue, one-click add as stock-linked prompt
+- [x] Add Bespoke: description + default quantity + type (Bespoke/Stock-Needs-Work)
+- [x] Reorder with up/down arrows, delete with hover trash
+- [x] `stock_item_id` + `quantity_default` on `tbl_category_prompts`
+- [x] `guidance_note` on `tbl_scope_item_categories`
+- [x] Prompt panel: shows guidance note, stock items create stock-linked job items on click
+
+### New/Modified Files (Session 17)
+| File | Purpose |
+|------|--------|
+| `src/lib/job-history.ts` | NEW: sessionStorage job visit tracking hook |
+| `src/components/recent-jobs-strip.tsx` | NEW: Recent jobs chip strip for quick nav |
+| `src/components/typical-components-editor.tsx` | NEW: Full CRUD for category prompts in Settings |
+| `src/components/prompt-panel.tsx` | Stock-linked prompts, guidance note display |
+| `src/components/cost-breakdown.tsx` | refreshKey prop for on-demand refresh |
+| `src/components/create-scope-dialog.tsx` | Hardcoded Raw/Good/Spotlight finish dropdown |
+| `src/app/(dashboard)/layout.tsx` | RecentJobsStrip added |
+| `src/app/(dashboard)/settings/page.tsx` | Typical Components tab |
+| `src/app/(dashboard)/workshop/page.tsx` | PM stop on WO timers, entry_id guarantee |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | recordJobVisit, import job-history |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | recordJobVisit, stock-linked prompt handler |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | recordJobVisit, bumpCost on all handlers |
+
+### SQL to Run (Session 17)
+```sql
+ALTER TABLE tbl_scope_item_categories ADD COLUMN IF NOT EXISTS guidance_note TEXT;
+ALTER TABLE tbl_category_prompts ADD COLUMN IF NOT EXISTS stock_item_id INTEGER REFERENCES tbl_stock_items(stock_id);
+ALTER TABLE tbl_category_prompts ADD COLUMN IF NOT EXISTS quantity_default INTEGER;
+UPDATE tbl_master_lookups SET lookup_value = 'Raw' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Suits-the-form';
+UPDATE tbl_master_lookups SET lookup_value = 'Good' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Neutral';
+UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Harder-than-warrants';
+```
+
+### Conventions Added (Session 17)
+- **Recent jobs strip**: `sessionStorage`-based, session-scoped. `recordJobVisit()` from job/scope/WO pages. Strip hidden on job pages
+- **Cost analysis refresh**: use `refreshKey` prop on `<CostBreakdown>`. Increment after any cost-affecting change (hours, BOM). No polling
+- **Finish dropdown**: hardcoded Raw/Good/Spotlight in create-scope-dialog and create-wo-dialog. LookupCombo category is `FINISH_RELATIVE` (not `FINISH`)
+- **Prompt engine stock linking**: `stock_item_id` on `tbl_category_prompts`. When set, clicking + creates stock-linked job item with `item_source='stock'`
+- **PM timer stop locations**: crew/[id] page, Workshop active workers banner, ad-hoc tasks panel. All use same pattern: hours + reason + "PM override:" flag
