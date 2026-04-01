@@ -1,10 +1,1 @@
-feat: unified Job Items and Materials list with auto-BOM for stock items  
-  
-- Stock items auto-create paired BOM row with hire cost  
-- Cost column shows hire cost on stock items, via WO on bespoke  
-- Add Material button with inline catalogue search  
-- Material-only BOM rows shown below items  
-- Quantity sync: changing stock item qty updates BOM row  
-- Delete stock item also deletes paired BOM row  
-- ScopeBom section removed from scope page  
-- Prompt engine stock items also create paired BOM rows  
+docs: Session 17 final tracker update with unified items and grouping  

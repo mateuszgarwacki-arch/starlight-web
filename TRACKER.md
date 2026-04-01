@@ -1433,3 +1433,36 @@ UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINIS
 - **Finish dropdown**: hardcoded Raw/Good/Spotlight in create-scope-dialog and create-wo-dialog. LookupCombo category is `FINISH_RELATIVE` (not `FINISH`)
 - **Prompt engine stock linking**: `stock_item_id` on `tbl_category_prompts`. When set, clicking + creates stock-linked job item with `item_source='stock'`
 - **PM timer stop locations**: crew/[id] page, Workshop active workers banner, ad-hoc tasks panel. All use same pattern: hours + reason + "PM override:" flag
+
+#### Prompt Engine Grouping ✔
+- [x] `prompt_group` TEXT on `tbl_category_prompts`
+- [x] Settings editor: group picker on add forms (existing groups dropdown + "New group")
+- [x] Settings editor: items rendered in group sections with hover-to-change-group
+- [x] Scope pages: groups as collapsible sections with item counts
+- [x] Ungrouped items shown at top level
+
+#### Unified Job Items & Materials ✔
+- [x] `job_item_id` FK on `tbl_wo_bom` — pairs BOM rows with stock job items
+- [x] Stock items auto-create paired BOM row with hire_cost_day as unit_cost
+- [x] Cost column on stock items shows qty × hire cost (flows through BOM to all cost views)
+- [x] Quantity sync: changing stock item qty updates paired BOM row
+- [x] Deleting stock item also deletes paired BOM row
+- [x] "+ Add Material" button with inline catalogue search
+- [x] Material-only BOM rows rendered below items with grey Material badge
+- [x] Bespoke items show "via WO" in cost column
+- [x] ScopeBom section removed from scope page (absorbed into unified list)
+- [x] Prompt engine stock items also create paired BOM rows
+- [x] **Zero cost queries changed** — all costs still flow through tbl_wo_bom
+
+### SQL Run (Session 17)
+```sql
+ALTER TABLE tbl_scope_item_categories ADD COLUMN IF NOT EXISTS guidance_note TEXT;
+ALTER TABLE tbl_category_prompts ADD COLUMN IF NOT EXISTS stock_item_id INTEGER REFERENCES tbl_stock_items(stock_id);
+ALTER TABLE tbl_category_prompts ADD COLUMN IF NOT EXISTS quantity_default INTEGER;
+ALTER TABLE tbl_category_prompts ADD COLUMN IF NOT EXISTS prompt_group TEXT;
+ALTER TABLE tbl_wo_bom ADD COLUMN IF NOT EXISTS job_item_id INTEGER REFERENCES tbl_job_items(item_id);
+CREATE INDEX IF NOT EXISTS idx_wo_bom_job_item ON tbl_wo_bom(job_item_id) WHERE job_item_id IS NOT NULL;
+UPDATE tbl_master_lookups SET lookup_value = 'Raw' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Suits-the-form';
+UPDATE tbl_master_lookups SET lookup_value = 'Good' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Neutral';
+UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Harder-than-warrants';
+```
