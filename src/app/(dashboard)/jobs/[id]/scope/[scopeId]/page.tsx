@@ -108,17 +108,21 @@ export default function ScopeDetailPage() {
     setScope((prev) => (prev ? { ...prev, [field]: value } : null));
   };
 
-  const handleAddFromPrompt = async (description: string, itemType: string) => {
+  const handleAddFromPrompt = async (description: string, itemType: string, stockItemId?: number, quantity?: number) => {
     await supabase.from("tbl_job_items").insert({
       job_id: jobId,
       scope_item_id: scopeId,
       description,
       item_type: itemType,
+      stock_item_id: stockItemId || null,
+      item_source: stockItemId ? "stock" : "bespoke",
+      quantity: quantity || 1,
       kit_list_exported: "false",
       temp_selected: "false",
       created_at: new Date().toISOString(),
     });
     setRefreshKey((k) => k + 1);
+    toast.success(`Added: ${description.substring(0, 50)}`);
   };
 
   const handleWOCreated = () => {

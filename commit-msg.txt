@@ -1,1 +1,5 @@
-fix: finish dropdown on create scope uses Raw/Good/Spotlight  
+feat: prompt engine supports stock-linked items with one-click add  
+  
+- stock_item_id on tbl_category_prompts links prompts to stock  
+- Clicking + on stock prompt creates stock-linked job item  
+- quantity_default for suggested quantities  

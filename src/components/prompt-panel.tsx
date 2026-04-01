@@ -8,11 +8,14 @@ interface Prompt {
   prompt_id: number;
   description: string | null;
   typical_item_type: string | null;
+  stock_item_id: number | null;
+  stock_description: string | null;
+  quantity_default: number | null;
 }
 
 interface PromptPanelProps {
   categoryId: number | null;
-  onAddItem: (description: string, itemType: string) => void;
+  onAddItem: (description: string, itemType: string, stockItemId?: number, quantity?: number) => void;
 }
 
 export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
@@ -34,8 +37,18 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
       .select("*")
       .eq("category_id", categoryId)
       .order("display_order")
-      .then(({ data }) => {
-        if (data) setPrompts(data);
+      .then(async ({ data }) => {
+        if (data && data.length > 0) {
+          const stockIds = data.filter((p: any) => p.stock_item_id).map((p: any) => p.stock_item_id);
+          let stockMap: Record<number, string> = {};
+          if (stockIds.length > 0) {
+            const { data: items } = await supabase.from("tbl_stock_items").select("stock_id, description").in("stock_id", stockIds);
+            (items || []).forEach((s: any) => { stockMap[s.stock_id] = s.description; });
+          }
+          setPrompts(data.map((p: any) => ({ ...p, stock_description: stockMap[p.stock_item_id] || null })));
+        } else {
+          setPrompts([]);
+        }
         setLoading(false);
       });
   }, [categoryId]);
@@ -90,18 +103,18 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-700">{prompt.description}</p>
-                  {prompt.typical_item_type && (
-                    <p className="text-xs text-gray-400">
-                      Type: {prompt.typical_item_type}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-400">
+                    {prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke")}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 ml-3 shrink-0">
                   <button
                     onClick={() =>
                       onAddItem(
-                        prompt.description || "",
-                        prompt.typical_item_type || "Bespoke"
+                        prompt.stock_description || prompt.description || "",
+                        prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke"),
+                        prompt.stock_item_id || undefined,
+                        prompt.quantity_default || undefined
                       )
                     }
                     className="p-1.5 text-starlight-green hover:bg-green-50 rounded-md transition-colors"
