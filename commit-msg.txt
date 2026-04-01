@@ -1,5 +1,1 @@
-feat: auto-refresh cost analysis after BOM and hours changes  
-  
-- refreshKey prop on CostBreakdown component  
-- bumpCost triggers on: est hours, BOM add/edit/delete  
-- No polling, no performance hit, just re-query on change  
+fix: finish dropdown on create scope uses Raw/Good/Spotlight  
