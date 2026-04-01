@@ -109,12 +109,19 @@ export default function ScopeDetailPage() {
   };
 
   const handleAddFromPrompt = async (description: string, itemType: string, stockItemId?: number, quantity?: number) => {
+    let stockRef: string | null = null;
+    let stockDesc = description;
+    if (stockItemId) {
+      const { data: si } = await supabase.from("tbl_stock_items").select("product_code, description").eq("stock_id", stockItemId).single();
+      if (si) { stockRef = si.product_code; stockDesc = si.description || description; }
+    }
     await supabase.from("tbl_job_items").insert({
       job_id: jobId,
       scope_item_id: scopeId,
-      description,
-      item_type: itemType,
+      description: stockDesc,
+      item_type: stockItemId ? "Stock" : itemType,
       stock_item_id: stockItemId || null,
+      stock_reference: stockRef,
       item_source: stockItemId ? "stock" : "bespoke",
       quantity: quantity || 1,
       kit_list_exported: "false",
@@ -122,7 +129,7 @@ export default function ScopeDetailPage() {
       created_at: new Date().toISOString(),
     });
     setRefreshKey((k) => k + 1);
-    toast.success(`Added: ${description.substring(0, 50)}`);
+    toast.success(`Added: ${stockDesc.substring(0, 50)}`);
   };
 
   const handleWOCreated = () => {

@@ -1,1 +1,5 @@
-docs: Session 17 tracker update  
+fix: prompt engine stock items now create proper stock-linked job items  
+  
+- Fetches product_code from stock catalogue for stock_reference  
+- Sets item_type=Stock and item_source=stock correctly  
+- Uses stock description from catalogue (not prompt text)  
