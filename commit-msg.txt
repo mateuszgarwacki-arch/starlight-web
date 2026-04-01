@@ -1,7 +1,1 @@
-feat: prompt engine grouping - collapsible groups in Settings and scope pages  
-  
-- prompt_group TEXT column on tbl_category_prompts  
-- Settings: group picker when adding stock or bespoke items  
-- Settings: items rendered in group sections, hover to change group  
-- Scope pages: groups as collapsible sections with click to expand  
-- Ungrouped items show at top level  
+fix: group name input losing focus on keystroke  

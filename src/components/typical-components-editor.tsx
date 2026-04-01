@@ -202,28 +202,6 @@ export function TypicalComponentsEditor() {
   const selectedCat = categories.find(c => c.category_id === selectedCatId);
   const existingGroups = [...new Set(prompts.map(p => p.prompt_group).filter(Boolean))] as string[];
 
-  // Group picker component
-  const GroupPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <div className="flex gap-1.5 items-end">
-      <div className="w-36">
-        <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
-        <select value={value} onChange={e => { onChange(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
-          className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
-          <option value="">No group</option>
-          {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
-          <option value="__new__">+ New group...</option>
-        </select>
-      </div>
-      {value === "__new__" && (
-        <div className="w-32">
-          <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
-            placeholder="Group name"
-            className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
-        </div>
-      )}
-    </div>
-  );
-
   // Change group on existing item
   const changeGroup = async (promptId: number, group: string | null) => {
     await supabase.from("tbl_category_prompts").update({ prompt_group: group }).eq("prompt_id", promptId);
@@ -317,8 +295,23 @@ export function TypicalComponentsEditor() {
                     Cancel
                   </button>
                 </div>
-                <div className="mb-3">
-                  <GroupPicker value={stockAddGroup} onChange={setStockAddGroup} />
+                <div className="mb-3 flex gap-1.5 items-end">
+                  <div className="w-36">
+                    <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
+                    <select value={stockAddGroup} onChange={e => { setStockAddGroup(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
+                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                      <option value="">No group</option>
+                      {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                      <option value="__new__">+ New group...</option>
+                    </select>
+                  </div>
+                  {stockAddGroup === "__new__" && (
+                    <div className="w-32">
+                      <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                        placeholder="Group name"
+                        className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    </div>
+                  )}
                 </div>
                 {stockSearching && <p className="text-xs text-gray-400 animate-pulse">Searching...</p>}
                 {stockResults.length > 0 && (
@@ -376,8 +369,23 @@ export function TypicalComponentsEditor() {
                     Cancel
                   </button>
                 </div>
-                <div className="mt-2">
-                  <GroupPicker value={addGroup} onChange={setAddGroup} />
+                <div className="mt-2 flex gap-1.5 items-end">
+                  <div className="w-36">
+                    <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
+                    <select value={addGroup} onChange={e => { setAddGroup(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
+                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                      <option value="">No group</option>
+                      {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                      <option value="__new__">+ New group...</option>
+                    </select>
+                  </div>
+                  {addGroup === "__new__" && (
+                    <div className="w-32">
+                      <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                        placeholder="Group name"
+                        className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
