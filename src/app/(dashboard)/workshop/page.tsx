@@ -134,6 +134,17 @@ export default function WorkshopPage() {
       timeByWO[t.work_order_id].push(t);
     });
 
+    // Direct query for open entries to guarantee entry_id (RPC may not include it)
+    const { data: openEntries } = await supabase
+      .from("tbl_wo_time_entries")
+      .select("entry_id, work_order_id, freelancer_id, system_start_timestamp")
+      .is("system_end_timestamp", null)
+      .is("archived_at", null);
+    const openEntryMap: Record<string, number> = {};
+    (openEntries || []).forEach((oe: any) => {
+      openEntryMap[`${oe.work_order_id}-${oe.freelancer_id}`] = oe.entry_id;
+    });
+
     const enriched: WorkshopWO[] = woData.map((wo: any) => {
       const acts = actByWO[wo.work_order_id];
       let label = "No Activity"; let phase: number | null = null;
@@ -152,7 +163,7 @@ export default function WorkshopPage() {
         .map((e: any) => ({
           name: fMap[e.freelancer_id] || "Unknown",
           since: new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-          entry_id: e.entry_id,
+          entry_id: e.entry_id || openEntryMap[`${wo.work_order_id}-${e.freelancer_id}`] || 0,
           freelancer_id: e.freelancer_id,
         }));
 

@@ -1,6 +1,1 @@
-feat: PM stop WO timers from Workshop page  
-  
-- Stop button on each active WO worker in the banner  
-- Inline hours + reason form (same pattern as task stop)  
-- auditedUpdate with PM override flag note  
-- Freelancer rate queried on demand for cost calculation  
+fix: guarantee entry_id for WO timer stop via direct open-entries query  
