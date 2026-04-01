@@ -12,7 +12,6 @@ import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
-import { ScopeBom } from "@/components/scope-bom";
 import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -111,11 +110,12 @@ export default function ScopeDetailPage() {
   const handleAddFromPrompt = async (description: string, itemType: string, stockItemId?: number, quantity?: number) => {
     let stockRef: string | null = null;
     let stockDesc = description;
+    let hireCost = 0;
     if (stockItemId) {
-      const { data: si } = await supabase.from("tbl_stock_items").select("product_code, description").eq("stock_id", stockItemId).single();
-      if (si) { stockRef = si.product_code; stockDesc = si.description || description; }
+      const { data: si } = await supabase.from("tbl_stock_items").select("product_code, description, hire_cost_day").eq("stock_id", stockItemId).single();
+      if (si) { stockRef = si.product_code; stockDesc = si.description || description; hireCost = si.hire_cost_day || 0; }
     }
-    await supabase.from("tbl_job_items").insert({
+    const { data: inserted } = await supabase.from("tbl_job_items").insert({
       job_id: jobId,
       scope_item_id: scopeId,
       description: stockDesc,
@@ -127,7 +127,21 @@ export default function ScopeDetailPage() {
       kit_list_exported: "false",
       temp_selected: "false",
       created_at: new Date().toISOString(),
-    });
+    }).select("item_id").single();
+    // Auto-create paired BOM row for stock items
+    if (inserted && stockItemId) {
+      await supabase.from("tbl_wo_bom").insert({
+        scope_item_id: scopeId,
+        job_id: jobId,
+        job_item_id: inserted.item_id,
+        stock_item_id: stockItemId,
+        item_description: stockDesc,
+        quantity: quantity || 1,
+        unit: "Day",
+        unit_cost: hireCost,
+        needs_ordering: "false",
+      });
+    }
     setRefreshKey((k) => k + 1);
     toast.success(`Added: ${stockDesc.substring(0, 50)}`);
   };
@@ -343,9 +357,6 @@ export default function ScopeDetailPage() {
 
       {/* Build options */}
       <ScopeOptions scopeItemId={scope.scope_item_id} jobId={jobId} quotedValue={scope.line_value || undefined} />
-
-      {/* Scope-level materials (no WO needed) */}
-      <ScopeBom scopeItemId={scope.scope_item_id} jobId={jobId} />
 
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} />

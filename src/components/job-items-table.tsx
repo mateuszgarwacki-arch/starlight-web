@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
 import {
   Plus, Trash2, CheckCircle2, Circle, Search, X,
-  Warehouse, Paintbrush, ArrowUpCircle, MapPin, Link2,
+  Warehouse, Paintbrush, ArrowUpCircle, MapPin, Link2, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,13 +64,35 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   // Source item scope name resolution
   const [sourceScopes, setSourceScopes] = useState<Record<number, string>>({});
 
+  // BOM costs for stock items + scope-level material rows
+  const [bomByItem, setBomByItem] = useState<Record<number, { bom_id: number; quantity: number; unit_cost: number; unit: string }>>({});
+  const [materialRows, setMaterialRows] = useState<{ bom_id: number; item_description: string; quantity: number; unit: string; unit_cost: number; material_id: number | null }[]>([]);
+
+  // Material search
+  const [showMaterialSearch, setShowMaterialSearch] = useState(false);
+  const [matQuery, setMatQuery] = useState("");
+  const [matResults, setMatResults] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null }[]>([]);
+
   const loadItems = useCallback(async () => {
-    const { data } = await supabase
-      .from("qry_jobitems_withcoverage")
-      .select("*")
-      .eq("scope_item_id", scopeItemId)
-      .order("item_id");
-    if (data) setItems(data as JobItemRow[]);
+    const [itemsRes, bomRes] = await Promise.all([
+      supabase.from("qry_jobitems_withcoverage").select("*").eq("scope_item_id", scopeItemId).order("item_id"),
+      supabase.from("tbl_wo_bom").select("bom_id, job_item_id, item_description, quantity, unit, unit_cost, material_id, stock_item_id, scope_item_id, work_order_id")
+        .eq("scope_item_id", scopeItemId).is("work_order_id", null),
+    ]);
+    if (itemsRes.data) setItems(itemsRes.data as JobItemRow[]);
+
+    // Split BOM: item-linked (stock costs) vs standalone (materials)
+    const byItem: Record<number, { bom_id: number; quantity: number; unit_cost: number; unit: string }> = {};
+    const mats: typeof materialRows = [];
+    for (const b of (bomRes.data || [])) {
+      if (b.job_item_id) {
+        byItem[b.job_item_id] = { bom_id: b.bom_id, quantity: b.quantity || 0, unit_cost: b.unit_cost || 0, unit: b.unit || "Each" };
+      } else {
+        mats.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id });
+      }
+    }
+    setBomByItem(byItem);
+    setMaterialRows(mats);
     setLoading(false);
   }, [scopeItemId]);
 
@@ -165,7 +187,22 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       kit_list_exported: "false", temp_selected: "false",
       created_at: new Date().toISOString(),
     }).select("item_id").single();
-    if (data) { toast.success(`Added: ${stock.description}`); loadItems(); }
+    if (data) {
+      // Auto-create paired BOM row with hire cost
+      await supabase.from("tbl_wo_bom").insert({
+        scope_item_id: scopeItemId,
+        job_id: jobId,
+        job_item_id: data.item_id,
+        stock_item_id: stock.stock_id,
+        item_description: stock.description,
+        quantity: 1,
+        unit: "Day",
+        unit_cost: stock.hire_cost_day || 0,
+        needs_ordering: "false",
+      });
+      toast.success(`Added: ${stock.description}`);
+      loadItems();
+    }
   };
 
   const addBespokeItem = async () => {
@@ -189,6 +226,8 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   };
 
   const deleteItem = async (itemId: number) => {
+    // Delete paired BOM row first (FK constraint)
+    await supabase.from("tbl_wo_bom").delete().eq("job_item_id", itemId);
     await supabase.from("tbl_job_items").delete().eq("item_id", itemId);
     setSelected((prev) => { const n = new Set(prev); n.delete(itemId); return n; });
     loadItems();
@@ -197,6 +236,11 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   const updateItem = async (itemId: number, field: string, value: any) => {
     await supabase.from("tbl_job_items").update({ [field]: value }).eq("item_id", itemId);
     setItems((prev) => prev.map((i) => (i.item_id === itemId ? { ...i, [field]: value } : i)));
+    // Sync quantity to paired BOM row
+    if (field === "quantity" && bomByItem[itemId]) {
+      await supabase.from("tbl_wo_bom").update({ quantity: value }).eq("bom_id", bomByItem[itemId].bom_id);
+      setBomByItem(prev => ({ ...prev, [itemId]: { ...prev[itemId], quantity: value } }));
+    }
   };
 
   const promoteToStock = async (item: JobItemRow) => {
@@ -216,6 +260,56 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       toast.success("Promoted to stock catalogue");
       loadItems();
     }
+  };
+
+  // Material search
+  const searchMaterials = async (q: string) => {
+    if (q.length < 2) { setMatResults([]); return; }
+    const { data } = await supabase.from("tbl_materials")
+      .select("material_id, material_name, unit, current_unit_cost")
+      .eq("active", true)
+      .ilike("material_name", `%${q}%`)
+      .limit(8);
+    setMatResults(data || []);
+  };
+
+  const addMaterial = async (mat: { material_id: number; material_name: string; unit: string; current_unit_cost: number | null }) => {
+    await supabase.from("tbl_wo_bom").insert({
+      scope_item_id: scopeItemId,
+      job_id: jobId,
+      material_id: mat.material_id,
+      item_description: mat.material_name,
+      quantity: 1,
+      unit: mat.unit,
+      unit_cost: mat.current_unit_cost || 0,
+      needs_ordering: "true",
+    });
+    toast.success(`Added: ${mat.material_name}`);
+    setShowMaterialSearch(false);
+    setMatQuery("");
+    setMatResults([]);
+    loadItems();
+  };
+
+  const addCustomMaterial = async () => {
+    if (!matQuery.trim()) return;
+    await supabase.from("tbl_wo_bom").insert({
+      scope_item_id: scopeItemId,
+      job_id: jobId,
+      item_description: matQuery.trim(),
+      quantity: 1,
+      needs_ordering: "true",
+    });
+    toast.success(`Added: ${matQuery.trim()}`);
+    setShowMaterialSearch(false);
+    setMatQuery("");
+    setMatResults([]);
+    loadItems();
+  };
+
+  const deleteMaterialRow = async (bomId: number) => {
+    await supabase.from("tbl_wo_bom").delete().eq("bom_id", bomId);
+    loadItems();
   };
 
   const toggleSelect = (id: number) => {
@@ -243,7 +337,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
     <div className="space-y-3">
       {/* Header with two action buttons */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-navy">Job Items ({items.length})</h3>
+        <h3 className="text-sm font-semibold text-navy">Job Items & Materials ({items.length + materialRows.length})</h3>
         <div className="flex items-center gap-2">
           <button onClick={() => { setShowStockPicker(true); setStockSearch(""); setStockResults([]); }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-starlight-amber bg-starlight-amber/10 hover:bg-starlight-amber/20 rounded-lg transition-colors">
@@ -253,8 +347,45 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-starlight-blue bg-starlight-blue/10 hover:bg-starlight-blue/20 rounded-lg transition-colors">
             <Paintbrush className="h-3.5 w-3.5" /> Add Bespoke Item
           </button>
+          <button onClick={() => { setShowMaterialSearch(true); setMatQuery(""); setMatResults([]); }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+            <Wrench className="h-3.5 w-3.5" /> Add Material
+          </button>
         </div>
       </div>
+
+      {/* Material search inline */}
+      {showMaterialSearch && (
+        <div className="card p-3 border-gray-300">
+          <div className="flex gap-2 mb-2">
+            <input type="text" value={matQuery} onChange={e => { setMatQuery(e.target.value); searchMaterials(e.target.value); }}
+              placeholder="Search materials catalogue..."
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
+            <button onClick={() => setShowMaterialSearch(false)} className="px-3 py-2 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+          </div>
+          {matResults.length > 0 && (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {matResults.map(m => (
+                <div key={m.material_id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-navy">{m.material_name}</p>
+                    <p className="text-[10px] text-gray-400">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "No price"}</p>
+                  </div>
+                  <button onClick={() => addMaterial(m)} className="ml-2 p-1.5 text-starlight-green hover:bg-green-50 rounded-md shrink-0">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {matQuery.length >= 2 && matResults.length === 0 && (
+            <div className="flex items-center justify-between px-3 py-2">
+              <p className="text-xs text-gray-400">No materials found</p>
+              <button onClick={addCustomMaterial} className="text-xs text-starlight-blue hover:underline">Add "{matQuery}" as custom</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Items list */}
       {items.length === 0 ? (
@@ -326,11 +457,13 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                   <p className="text-[9px] text-gray-300 mt-0.5">qty</p>
                 </div>
 
-                {/* WO indicator */}
-                <div className="shrink-0 w-10 text-center pt-1">
-                  {hasWo ? (
-                    <span className="text-starlight-green text-xs font-medium" title="Work Order linked">WO</span>
-                  ) : <span className="text-gray-200 text-xs">—</span>}
+                {/* Cost (stock items from BOM) */}
+                <div className="shrink-0 w-20 text-right pt-1">
+                  {bomByItem[item.item_id] ? (
+                    <p className="text-sm font-mono text-navy">{formatCurrency((item.quantity || 1) * bomByItem[item.item_id].unit_cost)}</p>
+                  ) : hasWo ? (
+                    <span className="text-[10px] text-gray-400">via WO</span>
+                  ) : null}
                 </div>
 
                 {/* Actions */}
@@ -351,6 +484,33 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Material-only BOM rows */}
+      {materialRows.length > 0 && (
+        <div className="card overflow-hidden divide-y divide-gray-100">
+          {materialRows.map(m => (
+            <div key={m.bom_id} className="flex items-center gap-3 px-4 py-2.5">
+              <div className="pt-0.5 shrink-0 w-6" />
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[9px] font-semibold rounded shrink-0">
+                <Wrench className="h-2.5 w-2.5" />Material
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-navy">{m.item_description}</p>
+              </div>
+              <div className="shrink-0 w-16 text-center">
+                <p className="text-sm font-mono text-gray-600">{m.quantity} {m.unit}</p>
+              </div>
+              <div className="shrink-0 w-20 text-right">
+                <p className="text-sm font-mono text-navy">{formatCurrency(m.quantity * m.unit_cost)}</p>
+              </div>
+              <button onClick={() => deleteMaterialRow(m.bom_id)} title="Delete"
+                className="p-1 text-gray-300 hover:text-starlight-red transition-colors shrink-0">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
