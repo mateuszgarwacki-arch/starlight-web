@@ -498,7 +498,9 @@ Phase 7 complete. Invoice AI extraction. Suppliers system. Dashboard polish. Dep
 - **Two-layer extraction view**: "Materials to Order" (BOM) + "Individual Parts" (reference)
 
 ### BOM & Costing
-- **BOM stores whole standard lengths in Metres** — e.g. 1 length of 4800mm = qty 4.8, unit Metre, at £0.79/m = £3.79
+- **unit_cost is ALWAYS per-unit** — if unit=Metre, cost is per metre. If unit=Length, cost is per length. If unit=Sheet, cost is per sheet. Total = qty × unit_cost (always). No special stdLen multiplication
+- **Cut list extraction converts to per-length**: when inserting timber BOM, unit_cost = price_per_metre × standard_length_in_metres. qty = number of lengths. unit = "Length"
+- **Toggle converts both qty AND unit_cost**: Metre→Length: qty = ceil(qty/stdLen), cost = cost×stdLen. Length→Metre: qty = qty×stdLen, cost = cost/stdLen. Total stays the same
 - **Traveller converts to workshop units**: qty = number of lengths, unit = "Length", stock pull = "4800mm each"
 - **Overestimate principle**: cost whole lengths (what you buy), not actual used mm
 - **Bin-packing (FFD algorithm)**: sort pieces descending, fit into standard lengths. 4× 3000mm in 4800mm stock = 4 lengths not 3
@@ -1426,6 +1428,48 @@ UPDATE tbl_master_lookups SET lookup_value = 'Raw' WHERE category = 'FINISH_RELA
 UPDATE tbl_master_lookups SET lookup_value = 'Good' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Neutral';
 UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Harder-than-warrants';
 ```
+
+### Session 18: Dark Theme + BOM Cost Fix (2 Apr 2026)
+
+#### Dark Theme Migration (Option B — Full Token System) ✔
+- [x] New palette: base #0c0d14, surface tiers (#111219/#171820/#1d1e27/#23242e/#2a2c34)
+- [x] Brand colours from logo: steel blue #7BA4D4 (primary), dusty rose #D47BA0 (accent)
+- [x] Status colours for dark bg: red #ff716c, green #4ade80, amber #fbbf24
+- [x] Semantic tokens in tailwind.config.ts: base, surface/dim/mid/hi/top/bright, foreground, muted, faint, subtle, starlight.pink
+- [x] Batch-replaced 2875 color refs across 64 files (bg-white→bg-surface, text-gray→text-muted, etc.)
+- [x] Sidebar: bg-base, brand-blue active highlights, pink notification badge
+- [x] Login pages: bg-base (were bg-navy)
+- [x] Global dark input styling (bg-surface-mid, text-foreground, inverted number spinners)
+- [x] Traveller print CSS hardened: forces dark-on-white for all .traveller-page content
+- [x] Phase pills and print styles preserved
+
+#### BOM Cost Double-Counting Fix ✔
+- [x] **Root cause**: bomRowTotal in wo/page.tsx and scope-bom.tsx multiplied by stdLen when unit_cost was already per-length (from cut list extraction). Result: 39 × 4.8 × £8.40 = £1,572.48 instead of 39 × £8.40 = £327.60
+- [x] **Fix**: total = qty × unit_cost (always). No special Length-mode multiplication. Matches SQL views
+- [x] **Toggle converts both values**: Metre→Length converts qty and cost. Length→Metre reverses. Total stays constant
+- [x] **Subtitle enhanced**: Length mode shows per-metre reference (e.g. "£1.75/m")
+- [x] Fixed in both wo/page.tsx and scope-bom.tsx
+
+### New/Modified Files (Session 18)
+| File | Purpose |
+|------|--------|
+| `tailwind.config.ts` | Dark theme token system (base, surface tiers, foreground, muted, faint, subtle, starlight.pink) |
+| `src/app/globals.css` | Dark body, dark badge/card/input variants, print CSS hardening, number spinner fix |
+| `src/components/sidebar.tsx` | Full rewrite for dark theme (bg-base, navy active, pink accents) |
+| `src/components/floating-action-button.tsx` | text-base on amber button for contrast |
+| `src/app/login/page.tsx` | bg-base |
+| `src/app/m/login/page.tsx` | bg-base |
+| `src/app/traveller/page.tsx` | Toolbar bg-base, print button contrast |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | BOM cost fix: simplified bomRowTotal, smart toggle |
+| `src/components/scope-bom.tsx` | BOM cost fix: simplified rowTotal, smart toggle |
+| 64 .tsx files | Batch color token migration |
+
+### Conventions Added (Session 18)
+- **unit_cost is ALWAYS per-unit**: total = qty × unit_cost regardless of unit field. No stdLen multiplication in JS
+- **Toggle converts both qty AND unit_cost**: total stays constant across modes
+- **Dark theme tokens**: bg-surface (cards), bg-base (page), text-foreground (primary), text-muted (secondary), text-faint (tertiary), border-subtle
+- **Print pages stay light**: .traveller-page * gets forced dark-on-white via @media print
+- **Number input spinners**: `filter: invert(0.7)` on ::-webkit-inner/outer-spin-button for dark mode
 
 ### Conventions Added (Session 17)
 - **Recent jobs strip**: `sessionStorage`-based, session-scoped. `recordJobVisit()` from job/scope/WO pages. Strip hidden on job pages
