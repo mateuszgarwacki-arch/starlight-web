@@ -1,1 +1,1 @@
-Add Install (Materials) category, plain Install no longer needs scope  
+Crew: timestamps on time entries. Mobile: auto-stop open WO entries on START/JOIN  

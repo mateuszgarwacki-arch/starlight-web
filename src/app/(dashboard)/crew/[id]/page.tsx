@@ -486,6 +486,10 @@ export default function FreelancerDetailPage() {
                   <p className="text-xs text-muted">
                     {e.system_start_timestamp ? new Date(e.system_start_timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
                   </p>
+                  <p className="text-[9px] text-faint">
+                    {e.system_start_timestamp ? new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    {e.system_end_timestamp ? " → " + new Date(e.system_end_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
+                  </p>
                   {editingEntry === e.entry_id ? (
                     <div className="flex items-center gap-1">
                       <input type="number" step="0.5" value={editHoursValue}

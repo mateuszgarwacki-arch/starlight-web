@@ -172,12 +172,44 @@ export default function MobileWODetail() {
     }
   };
 
+  // Auto-stop any open WO time entries for this freelancer (on OTHER work orders)
+  const autoStopOpenEntries = async () => {
+    if (!myId) return;
+    const { data: openEntries } = await supabase
+      .from("tbl_wo_time_entries")
+      .select("entry_id, system_start_timestamp, work_order_id")
+      .eq("freelancer_id", myId)
+      .is("system_end_timestamp", null)
+      .is("archived_at", null);
+    if (!openEntries || openEntries.length === 0) return;
+
+    const { data: fr } = await supabase.from("tbl_freelancers")
+      .select("day_rate, standard_day_hours").eq("freelancer_id", myId).single();
+    const hourlyRate = fr ? (fr.day_rate || 0) / (fr.standard_day_hours || 8) : 0;
+    const now = new Date().toISOString();
+
+    for (const oe of openEntries) {
+      // Skip if it's on the current WO (we're about to log those manually)
+      if (oe.work_order_id === woId) continue;
+      const startMs = oe.system_start_timestamp ? new Date(oe.system_start_timestamp).getTime() : Date.now();
+      const hrs = Math.max(0.5, Math.round(((Date.now() - startMs) / 3600000) * 2) / 2);
+      const cost = hrs * hourlyRate;
+      await supabase.from("tbl_wo_time_entries").update({
+        system_end_timestamp: now, actual_end_timestamp: now,
+        actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: cost,
+        flag_note: "Auto-stopped: started another WO",
+      }).eq("entry_id", oe.entry_id);
+      toast.success(`Auto-logged ${hrs}h on previous task`);
+    }
+  };
+
   const handleStart = async () => {
     setActing(true);
     const now = new Date().toISOString();
 
-    // Auto-close any open ad-hoc tasks
+    // Auto-close any open ad-hoc tasks + open WO entries on other WOs
     await closeOpenTasks();
+    await autoStopOpenEntries();
 
     // Create time entry
     const ctx = await getAuditContext(supabase);
@@ -210,8 +242,9 @@ export default function MobileWODetail() {
     setActing(true);
     const now = new Date().toISOString();
 
-    // Auto-close any open ad-hoc tasks
+    // Auto-close any open ad-hoc tasks + open WO entries on other WOs
     await closeOpenTasks();
+    await autoStopOpenEntries();
 
     const ctx = await getAuditContext(supabase);
     await auditedInsert(ctx, "tbl_wo_time_entries", {
