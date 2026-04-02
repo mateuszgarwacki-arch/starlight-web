@@ -174,6 +174,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                 <th className="text-right py-1.5 px-2 font-medium w-24">Unit £</th>
                 <th className="text-right py-1.5 px-2 font-medium w-24">Total</th>
                 <th className="text-center py-1.5 px-2 font-medium w-14">Stock</th>
+                <th className="text-center py-1.5 px-2 font-medium w-16">Order</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -256,6 +257,16 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                         }}
                         className="h-3.5 w-3.5 rounded border-subtle text-starlight-amber focus:ring-starlight-amber"
                         title="From workshop stock (internal cost)"
+                      />
+                    </td>
+                    <td className="py-1.5 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isTruthy(row.needs_ordering)}
+                        disabled={isTruthy(row.from_stock)}
+                        onChange={(e) => updateField(row.bom_id, "needs_ordering", e.target.checked ? "true" : "false")}
+                        className="h-3.5 w-3.5 rounded border-subtle text-starlight-blue focus:ring-starlight-blue disabled:opacity-30"
+                        title="Needs ordering"
                       />
                     </td>
                     <td className="py-1.5 px-1">
