@@ -257,53 +257,53 @@ export default function InvoicesPage() {
   const vatDetected = invoiceTotal > 0 && !totalMatch && Math.abs(lineSum * 1.2 - invoiceTotal) < 1.0;
   const netFromGross = vatDetected ? Math.round(invoiceTotal / 1.2 * 100) / 100 : null;
 
-  if (loading) { return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading invoices...</div>; }
+  if (loading) { return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading invoices...</div>; }
 
   if (mode === "list") { return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-xl font-bold text-navy">Invoices</h1><p className="text-sm text-gray-400 mt-0.5">Upload supplier invoices · auto-match materials · update prices</p></div>
+        <div><h1 className="text-xl font-bold text-navy">Invoices</h1><p className="text-sm text-muted mt-0.5">Upload supplier invoices · auto-match materials · update prices</p></div>
         <div className="flex items-center gap-2">
-          <button onClick={startManualEntry} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors"><Plus className="h-4 w-4" /> Manual Entry</button>
-          <label className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors cursor-pointer"><Upload className="h-4 w-4" /> Upload Invoice<input type="file" accept=".pdf,image/*" onChange={handleFileUpload} className="hidden" /></label>
+          <button onClick={startManualEntry} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors"><Plus className="h-4 w-4" /> Manual Entry</button>
+          <label className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors cursor-pointer"><Upload className="h-4 w-4" /> Upload Invoice<input type="file" accept=".pdf,image/*" onChange={handleFileUpload} className="hidden" /></label>
         </div>
       </div>
-      {extracting && (<div className="card px-5 py-4 border-l-4 border-l-starlight-blue"><div className="flex items-center gap-3"><Zap className="h-5 w-5 text-starlight-blue animate-pulse" /><div><p className="text-sm font-medium text-navy">Extracting invoice data...</p><p className="text-xs text-gray-400 mt-0.5">Claude is reading the invoice and extracting line items</p></div></div></div>)}
-      {extractError && (<div className="card px-5 py-4 border-l-4 border-l-starlight-red"><div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-starlight-red" /><p className="text-sm text-starlight-red">{extractError}</p></div><p className="text-xs text-gray-400 mt-1">Make sure ANTHROPIC_API_KEY is set in Vercel environment variables, or use Manual Entry.</p></div>)}
+      {extracting && (<div className="card px-5 py-4 border-l-4 border-l-starlight-blue"><div className="flex items-center gap-3"><Zap className="h-5 w-5 text-starlight-blue animate-pulse" /><div><p className="text-sm font-medium text-navy">Extracting invoice data...</p><p className="text-xs text-muted mt-0.5">Claude is reading the invoice and extracting line items</p></div></div></div>)}
+      {extractError && (<div className="card px-5 py-4 border-l-4 border-l-starlight-red"><div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-starlight-red" /><p className="text-sm text-starlight-red">{extractError}</p></div><p className="text-xs text-muted mt-1">Make sure ANTHROPIC_API_KEY is set in Vercel environment variables, or use Manual Entry.</p></div>)}
       <div className="grid grid-cols-3 gap-3">
-        <div className="card px-4 py-3"><p className="text-[10px] text-gray-400 uppercase tracking-wider">Invoices Processed</p><p className="text-lg font-semibold text-navy font-mono">{invoices.filter((i) => i.status === "Processed").length}</p></div>
-        <div className="card px-4 py-3"><p className="text-[10px] text-gray-400 uppercase tracking-wider">Material Aliases</p><p className="text-lg font-semibold text-starlight-blue font-mono">{aliases.length}</p></div>
-        <div className="card px-4 py-3"><p className="text-[10px] text-gray-400 uppercase tracking-wider">Materials in Catalogue</p><p className="text-lg font-semibold text-starlight-green font-mono">{materials.length}</p></div>
+        <div className="card px-4 py-3"><p className="text-[10px] text-muted uppercase tracking-wider">Invoices Processed</p><p className="text-lg font-semibold text-navy font-mono">{invoices.filter((i) => i.status === "Processed").length}</p></div>
+        <div className="card px-4 py-3"><p className="text-[10px] text-muted uppercase tracking-wider">Material Aliases</p><p className="text-lg font-semibold text-starlight-blue font-mono">{aliases.length}</p></div>
+        <div className="card px-4 py-3"><p className="text-[10px] text-muted uppercase tracking-wider">Materials in Catalogue</p><p className="text-lg font-semibold text-starlight-green font-mono">{materials.length}</p></div>
       </div>
       <div className="card overflow-hidden">
-        {invoices.length === 0 ? (<div className="px-6 py-12 text-center"><FileText className="h-10 w-10 text-gray-300 mx-auto" /><p className="text-sm text-gray-400 mt-3">No invoices processed yet</p></div>) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider"><th className="px-4 py-2 font-medium">Supplier</th><th className="px-4 py-2 font-medium">Invoice #</th><th className="px-4 py-2 font-medium">Date</th><th className="px-4 py-2 font-medium text-right">Total</th><th className="px-4 py-2 font-medium">Job</th><th className="px-4 py-2 font-medium">Status</th><th className="px-4 py-2 font-medium w-16"></th></tr></thead>
+        {invoices.length === 0 ? (<div className="px-6 py-12 text-center"><FileText className="h-10 w-10 text-faint mx-auto" /><p className="text-sm text-muted mt-3">No invoices processed yet</p></div>) : (
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-base text-left text-[10px] text-muted uppercase tracking-wider"><th className="px-4 py-2 font-medium">Supplier</th><th className="px-4 py-2 font-medium">Invoice #</th><th className="px-4 py-2 font-medium">Date</th><th className="px-4 py-2 font-medium text-right">Total</th><th className="px-4 py-2 font-medium">Job</th><th className="px-4 py-2 font-medium">Status</th><th className="px-4 py-2 font-medium w-16"></th></tr></thead>
           <tbody>{invoices.map((inv) => { const job = jobs.find((j: any) => j.job_id === inv.job_id); const isExp = expandedInvId === inv.invoice_id; return (<>
-            <tr key={inv.invoice_id} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpandInvoice(inv.invoice_id)}>
+            <tr key={inv.invoice_id} className="border-t border-subtle hover:bg-surface-dim cursor-pointer" onClick={() => toggleExpandInvoice(inv.invoice_id)}>
               <td className="px-4 py-2.5 font-medium text-navy">
                 <div className="flex items-center gap-2">
-                  {isExp ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                  {isExp ? <ChevronDown className="h-3.5 w-3.5 text-muted shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted shrink-0" />}
                   {inv.supplier}
                 </div>
               </td>
-              <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">{inv.invoice_number || "—"}</td>
-              <td className="px-4 py-2.5 text-gray-500 text-xs">{inv.invoice_date ? formatDate(inv.invoice_date) : "—"}</td>
+              <td className="px-4 py-2.5 text-muted font-mono text-xs">{inv.invoice_number || "—"}</td>
+              <td className="px-4 py-2.5 text-muted text-xs">{inv.invoice_date ? formatDate(inv.invoice_date) : "—"}</td>
               <td className="px-4 py-2.5 text-right font-mono text-navy">{inv.total_value ? formatCurrency(inv.total_value) : "—"}</td>
-              <td className="px-4 py-2.5 text-xs text-gray-500">{job ? (job.job_number || job.job_name) : "—"}</td>
-              <td className="px-4 py-2.5"><span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-gray-100 text-gray-500")}>{inv.status}</span></td>
+              <td className="px-4 py-2.5 text-xs text-muted">{job ? (job.job_number || job.job_name) : "—"}</td>
+              <td className="px-4 py-2.5"><span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-surface-mid text-muted")}>{inv.status}</span></td>
               <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => openEditInvoice(inv)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={async () => { if (window.confirm(`Delete invoice ${inv.invoice_number || inv.supplier}?`)) { await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id); await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id); loadData(); } }} className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEditInvoice(inv)} className="p-1.5 text-muted hover:text-navy hover:bg-surface-mid rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={async () => { if (window.confirm(`Delete invoice ${inv.invoice_number || inv.supplier}?`)) { await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id); await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id); loadData(); } }} className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>
                 </div>
               </td>
             </tr>
             {isExp && (
-              <tr key={`${inv.invoice_id}-detail`}><td colSpan={7} className="px-0 py-0 bg-gray-50/50">
+              <tr key={`${inv.invoice_id}-detail`}><td colSpan={7} className="px-0 py-0 bg-surface-dim/50">
                 <div className="px-8 py-3">
-                  {previewLines.length === 0 ? <p className="text-xs text-gray-400 py-2">No line items</p> : (
+                  {previewLines.length === 0 ? <p className="text-xs text-muted py-2">No line items</p> : (
                     <table className="w-full text-xs">
-                      <thead><tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                      <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider">
                         <th className="py-1 font-medium w-8">#</th>
                         <th className="py-1 font-medium">Description</th>
                         <th className="py-1 font-medium">Material</th>
@@ -318,13 +318,13 @@ export default function InvoicesPage() {
                         const totalPct = lineAllocs.reduce((s: number, a: Allocation) => s + a.percentage, 0);
                         const isAllocating = allocatingLineId === l.line_id;
                         return (<>
-                          <tr key={l.line_id || l.line_number} className="border-t border-gray-100">
-                            <td className="py-1.5 text-gray-400 font-mono">{l.line_number}</td>
-                            <td className="py-1.5 text-gray-600 max-w-[300px]">{l.raw_description}</td>
-                            <td className="py-1.5">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-gray-300">—</span>}</td>
-                            <td className="py-1.5 text-right font-mono text-gray-600">{l.quantity || "—"}</td>
-                            <td className="py-1.5 text-gray-500">{l.unit || "—"}</td>
-                            <td className="py-1.5 text-right font-mono text-gray-600">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
+                          <tr key={l.line_id || l.line_number} className="border-t border-subtle">
+                            <td className="py-1.5 text-muted font-mono">{l.line_number}</td>
+                            <td className="py-1.5 text-muted max-w-[300px]">{l.raw_description}</td>
+                            <td className="py-1.5">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-faint">—</span>}</td>
+                            <td className="py-1.5 text-right font-mono text-muted">{l.quantity || "—"}</td>
+                            <td className="py-1.5 text-muted">{l.unit || "—"}</td>
+                            <td className="py-1.5 text-right font-mono text-muted">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
                             <td className="py-1.5 text-right font-mono text-navy font-medium">{l.line_total ? formatCurrency(l.line_total) : "—"}</td>
                             <td className="py-1.5">
                               {l.line_id && scopeItems.length > 0 ? (
@@ -335,13 +335,13 @@ export default function InvoicesPage() {
                                     </span>
                                   )}
                                   <button onClick={() => setAllocatingLineId(isAllocating ? null : l.line_id)}
-                                    className={"p-1 rounded transition-colors " + (isAllocating ? "text-starlight-blue bg-blue-50" : "text-gray-400 hover:text-starlight-blue hover:bg-gray-100")}
+                                    className={"p-1 rounded transition-colors " + (isAllocating ? "text-starlight-blue bg-navy/10" : "text-muted hover:text-starlight-blue hover:bg-surface-mid")}
                                     title="Allocate to scope items">
                                     <Split className="h-3 w-3" />
                                   </button>
                                 </div>
                               ) : (
-                                <span className="text-gray-300 text-[9px]">{!l.line_id ? "" : "No job"}</span>
+                                <span className="text-faint text-[9px]">{!l.line_id ? "" : "No job"}</span>
                               )}
                             </td>
                           </tr>
@@ -360,43 +360,43 @@ export default function InvoicesPage() {
                           {/* Inline allocation panel */}
                           {isAllocating && (
                             <tr key={`${l.line_id}-alloc-panel`}><td colSpan={8} className="py-0">
-                              <div className="bg-blue-50/50 border-y border-starlight-blue/20 px-4 py-2.5">
+                              <div className="bg-navy/10/50 border-y border-starlight-blue/20 px-4 py-2.5">
                                 <div className="flex items-center justify-between mb-2">
                                   <p className="text-[10px] font-semibold text-navy">Allocate {formatCurrency(l.line_total || 0)} to scope items</p>
                                   <div className="flex items-center gap-2">
-                                    {totalPct > 0 && <span className="text-[9px] font-mono text-gray-500">{totalPct}% allocated · {formatCurrency((l.line_total || 0) * (100 - totalPct) / 100)} remaining</span>}
-                                    <button onClick={() => setAllocatingLineId(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
+                                    {totalPct > 0 && <span className="text-[9px] font-mono text-muted">{totalPct}% allocated · {formatCurrency((l.line_total || 0) * (100 - totalPct) / 100)} remaining</span>}
+                                    <button onClick={() => setAllocatingLineId(null)} className="text-muted hover:text-muted"><X className="h-3.5 w-3.5" /></button>
                                   </div>
                                 </div>
                                 {/* Existing allocations */}
                                 {lineAllocs.map((a: Allocation) => (
-                                  <div key={a.allocation_id} className="flex items-center gap-2 mb-1.5 bg-white rounded-lg px-3 py-1.5 border border-gray-100">
+                                  <div key={a.allocation_id} className="flex items-center gap-2 mb-1.5 bg-surface rounded-lg px-3 py-1.5 border border-subtle">
                                     <span className="text-xs text-navy font-medium flex-1">{a.scope_name}</span>
-                                    <span className="text-xs font-mono text-gray-600">{a.percentage}%</span>
+                                    <span className="text-xs font-mono text-muted">{a.percentage}%</span>
                                     <span className="text-xs font-mono text-navy">{formatCurrency(a.allocated_amount)}</span>
-                                    <button onClick={() => a.allocation_id && deleteAllocation(a.allocation_id, l.line_id)} className="p-0.5 text-gray-300 hover:text-starlight-red"><Trash2 className="h-3 w-3" /></button>
+                                    <button onClick={() => a.allocation_id && deleteAllocation(a.allocation_id, l.line_id)} className="p-0.5 text-faint hover:text-starlight-red"><Trash2 className="h-3 w-3" /></button>
                                   </div>
                                 ))}
                                 {/* Add new allocation row */}
                                 {totalPct < 100 && (
                                   <div className="flex items-center gap-2 mt-1.5">
-                                    <select id={`alloc-scope-${l.line_id}`} className="flex-1 px-2 py-1.5 border border-gray-200 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue">
+                                    <select id={`alloc-scope-${l.line_id}`} className="flex-1 px-2 py-1.5 border border-subtle rounded text-xs bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue">
                                       <option value="">Select scope item...</option>
                                       {scopeItems.filter(s => !lineAllocs.some(a => a.scope_item_id === s.scope_item_id)).map(s => (
                                         <option key={s.scope_item_id} value={s.scope_item_id}>{s.item_name || `Scope #${s.scope_item_id}`}</option>
                                       ))}
                                     </select>
                                     <input id={`alloc-pct-${l.line_id}`} type="number" min="1" max={100 - totalPct} defaultValue={100 - totalPct}
-                                      className="w-16 px-2 py-1.5 border border-gray-200 rounded text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-                                    <span className="text-[9px] text-gray-400">%</span>
+                                      className="w-16 px-2 py-1.5 border border-subtle rounded text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                                    <span className="text-[9px] text-muted">%</span>
                                     <button onClick={() => {
                                       const scopeEl = document.getElementById(`alloc-scope-${l.line_id}`) as HTMLSelectElement;
                                       const pctEl = document.getElementById(`alloc-pct-${l.line_id}`) as HTMLInputElement;
                                       if (scopeEl?.value && pctEl?.value) saveAllocation(l.line_id, Number(scopeEl.value), Number(pctEl.value));
-                                    }} className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors">Add</button>
+                                    }} className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-navy transition-colors">Add</button>
                                     {lineAllocs.length === 0 && scopeItems.length === 1 && (
                                       <button onClick={() => allocate100(l.line_id, scopeItems[0].scope_item_id)}
-                                        className="px-2 py-1.5 text-[10px] text-starlight-blue hover:bg-blue-50 rounded transition-colors" title="Allocate 100% to the only scope item">
+                                        className="px-2 py-1.5 text-[10px] text-starlight-blue hover:bg-navy/10 rounded transition-colors" title="Allocate 100% to the only scope item">
                                         100% → {(scopeItems[0].item_name || "").substring(0, 20)}
                                       </button>
                                     )}
@@ -420,11 +420,11 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-xl font-bold text-navy">{editingInvoiceId ? "Edit Invoice" : "Process Invoice"}</h1><p className="text-sm text-gray-400 mt-0.5">{confirmedCount} confirmed · {unmatchedCount} need matching · {lines.length} total lines</p></div>
+        <div><h1 className="text-xl font-bold text-navy">{editingInvoiceId ? "Edit Invoice" : "Process Invoice"}</h1><p className="text-sm text-muted mt-0.5">{confirmedCount} confirmed · {unmatchedCount} need matching · {lines.length} total lines</p></div>
         <div className="flex items-center gap-2">
-          {fileData && (<button onClick={() => setShowPreview(!showPreview)} className={"px-3 py-2 text-sm rounded-lg transition-colors " + (showPreview ? "text-starlight-blue bg-blue-50" : "text-gray-500 hover:bg-gray-100")}><Eye className="h-4 w-4" /></button>)}
-          <button onClick={() => { setMode("list"); setEditingInvoiceId(null); }} className="px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-          <button onClick={processInvoice} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"><Check className="h-4 w-4" /> {saving ? "Saving..." : editingInvoiceId ? "Update Invoice" : "Process Invoice"}</button>
+          {fileData && (<button onClick={() => setShowPreview(!showPreview)} className={"px-3 py-2 text-sm rounded-lg transition-colors " + (showPreview ? "text-starlight-blue bg-navy/10" : "text-muted hover:bg-surface-mid")}><Eye className="h-4 w-4" /></button>)}
+          <button onClick={() => { setMode("list"); setEditingInvoiceId(null); }} className="px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
+          <button onClick={processInvoice} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors"><Check className="h-4 w-4" /> {saving ? "Saving..." : editingInvoiceId ? "Update Invoice" : "Process Invoice"}</button>
         </div>
       </div>
 
@@ -435,26 +435,26 @@ export default function InvoicesPage() {
             <h3 className="text-xs font-semibold text-navy mb-3">Invoice Details</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-medium text-gray-500 mb-1">Supplier *</label>
+                <label className="block text-[10px] font-medium text-muted mb-1">Supplier *</label>
                 <div className="flex gap-2">
                 <select value={invoiceForm.supplier_id} onChange={(e) => { const sup = suppliers.find((s) => s.supplier_id === Number(e.target.value)); setInvoiceForm({ ...invoiceForm, supplier_id: e.target.value, supplier: sup?.supplier_name || invoiceForm.supplier }); }}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                  className="flex-1 px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                   <option value="">Select supplier...</option>
                   {suppliers.map((s) => (<option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>))}
                 </select>
-                <button onClick={() => { setNewSupplierName(invoiceForm.supplier || ""); setShowNewSupplier(true); }} className="px-2.5 py-2 border border-gray-200 rounded-lg text-gray-400 hover:text-starlight-blue hover:border-starlight-blue transition-colors" title="Add new supplier"><Plus className="h-4 w-4" /></button>
+                <button onClick={() => { setNewSupplierName(invoiceForm.supplier || ""); setShowNewSupplier(true); }} className="px-2.5 py-2 border border-subtle rounded-lg text-muted hover:text-starlight-blue hover:border-starlight-blue transition-colors" title="Add new supplier"><Plus className="h-4 w-4" /></button>
                 </div>
                 {!invoiceForm.supplier_id && invoiceForm.supplier && (<p className="text-[10px] text-starlight-amber mt-1">Extracted: &quot;{invoiceForm.supplier}&quot; — select or add new</p>)}
               </div>
-              <div><label className="block text-[10px] font-medium text-gray-500 mb-1">Invoice #</label><input type="text" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="INV-001" /></div>
+              <div><label className="block text-[10px] font-medium text-muted mb-1">Invoice #</label><input type="text" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="INV-001" /></div>
             </div>
             <div className="grid grid-cols-3 gap-3 mt-3">
-              <div><label className="block text-[10px] font-medium text-gray-500 mb-1">Date</label><input type="date" value={invoiceForm.invoice_date} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
-              <div><label className="block text-[10px] font-medium text-gray-500 mb-1">Total (£ net)</label><input type="number" step="0.01" value={invoiceForm.total_value} onChange={(e) => setInvoiceForm({ ...invoiceForm, total_value: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="0.00" /></div>
-              <div><label className="block text-[10px] font-medium text-gray-500 mb-1">Job</label><select value={invoiceForm.job_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, job_id: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"><option value="">No job</option>{jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number} — {j.job_name}</option>))}</select></div>
+              <div><label className="block text-[10px] font-medium text-muted mb-1">Date</label><input type="date" value={invoiceForm.invoice_date} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_date: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+              <div><label className="block text-[10px] font-medium text-muted mb-1">Total (£ net)</label><input type="number" step="0.01" value={invoiceForm.total_value} onChange={(e) => setInvoiceForm({ ...invoiceForm, total_value: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="0.00" /></div>
+              <div><label className="block text-[10px] font-medium text-muted mb-1">Job</label><select value={invoiceForm.job_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, job_id: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"><option value="">No job</option>{jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number} — {j.job_name}</option>))}</select></div>
             </div>
             <div className="flex items-center gap-4 mt-3">
-              <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none"><input type="checkbox" checked={invoiceForm.includes_vat} onChange={(e) => applyVatToggle(e.target.checked)} className="rounded border-gray-300" /> Prices include VAT (strip 20%)</label>
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none"><input type="checkbox" checked={invoiceForm.includes_vat} onChange={(e) => applyVatToggle(e.target.checked)} className="rounded border-subtle" /> Prices include VAT (strip 20%)</label>
               <div className="flex-1" />
               {invoiceTotal > 0 && (
                 <div className="flex items-center gap-2">
@@ -474,15 +474,15 @@ export default function InvoicesPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-navy flex items-center gap-2"><Package className="h-4 w-4" /> Line Items ({lines.length})</h3>
-              <button onClick={addLine} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors"><Plus className="h-3.5 w-3.5" /> Add Line</button>
+              <button onClick={addLine} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors"><Plus className="h-3.5 w-3.5" /> Add Line</button>
             </div>
             <div className="space-y-2">
               {lines.map((line, idx) => (
                 <div key={idx} className={"card px-4 py-3 border-l-4 " + (line.match_status === "confirmed" ? "border-l-starlight-green" : line.match_status === "skipped" ? "border-l-gray-300" : line.match_status === "matched" ? "border-l-starlight-blue" : "border-l-starlight-amber")}>
                   <div className="flex items-start gap-3">
-                    <span className="text-[10px] text-gray-400 font-mono mt-2 shrink-0 w-6">{line.line_number}</span>
+                    <span className="text-[10px] text-muted font-mono mt-2 shrink-0 w-6">{line.line_number}</span>
                     <div className="flex-1 min-w-0 space-y-2">
-                      <input type="text" value={line.raw_description} onChange={(e) => updateLine(idx, "raw_description", e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Product description from invoice" />
+                      <input type="text" value={line.raw_description} onChange={(e) => updateLine(idx, "raw_description", e.target.value)} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Product description from invoice" />
                       <div className="flex items-center gap-2 flex-wrap">
                         {line.material_id ? (
                           <button onClick={() => { setSearchingLine(idx); setMaterialSearch(""); }} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-starlight-green/10 text-starlight-green hover:bg-starlight-green/20 transition-colors">
@@ -493,44 +493,44 @@ export default function InvoicesPage() {
                         ) : (
                           <button onClick={() => { setSearchingLine(idx); setMaterialSearch(""); }} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-starlight-amber/10 text-starlight-amber hover:bg-starlight-amber/20 transition-colors"><Search className="h-3 w-3" /> Match Material</button>
                         )}
-                        <input type="number" step="0.01" value={line.quantity ?? ""} onChange={(e) => updateLine(idx, "quantity", e.target.value ? Number(e.target.value) : null)} className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Qty" />
-                        <select value={line.unit ?? ""} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="w-20 px-1 py-1 border border-gray-200 rounded-lg text-xs text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue">
+                        <input type="number" step="0.01" value={line.quantity ?? ""} onChange={(e) => updateLine(idx, "quantity", e.target.value ? Number(e.target.value) : null)} className="w-20 px-2 py-1 border border-subtle rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Qty" />
+                        <select value={line.unit ?? ""} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="w-20 px-1 py-1 border border-subtle rounded-lg text-xs text-center bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue">
                           <option value="">Unit</option>
                           {unitOptions.map((u) => (<option key={u} value={u}>{u}</option>))}
                         </select>
-                        <input type="number" step="0.01" value={line.unit_cost ?? ""} onChange={(e) => updateLine(idx, "unit_cost", e.target.value ? Number(e.target.value) : null)} className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="£ cost" />
+                        <input type="number" step="0.01" value={line.unit_cost ?? ""} onChange={(e) => updateLine(idx, "unit_cost", e.target.value ? Number(e.target.value) : null)} className="w-24 px-2 py-1 border border-subtle rounded-lg text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="£ cost" />
                         {line.line_total != null && <span className="text-xs font-mono text-navy font-medium">{formatCurrency(line.line_total)}</span>}
-                        <select value={line.job_id ?? ""} onChange={(e) => updateLine(idx, "job_id", e.target.value ? Number(e.target.value) : null)} className="px-2 py-1 border border-gray-200 rounded-lg text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue max-w-[140px]"><option value="">Invoice job</option>{jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number}</option>))}</select>
+                        <select value={line.job_id ?? ""} onChange={(e) => updateLine(idx, "job_id", e.target.value ? Number(e.target.value) : null)} className="px-2 py-1 border border-subtle rounded-lg text-[10px] bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue max-w-[140px]"><option value="">Invoice job</option>{jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number}</option>))}</select>
                       </div>
                       {searchingLine === idx && (
-                        <div className="border border-gray-200 rounded-lg bg-white shadow-lg p-2 max-h-56 overflow-y-auto z-10 relative">
-                          <div className="mb-1 pb-1 border-b border-gray-100"><button onClick={() => openNewMaterial(idx)} className="w-full text-left px-3 py-1.5 rounded-md text-xs text-starlight-blue hover:bg-blue-50 transition-colors font-medium"><Plus className="h-3 w-3 inline mr-1.5" /> Create New Material</button></div>
-                          <div className="relative mb-2"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" /><input type="text" value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Search materials..." autoFocus /></div>
-                          {filteredMaterials.map((m) => (<button key={m.material_id} onClick={() => assignMaterial(idx, m)} className="w-full text-left px-3 py-1.5 rounded-md text-xs hover:bg-gray-50 transition-colors"><span className="font-medium text-navy">{m.material_name}</span>{m.current_unit_cost != null && <span className="ml-2 text-gray-400 font-mono">{formatCurrency(m.current_unit_cost)}</span>}</button>))}
+                        <div className="border border-subtle rounded-lg bg-surface shadow-lg p-2 max-h-56 overflow-y-auto z-10 relative">
+                          <div className="mb-1 pb-1 border-b border-subtle"><button onClick={() => openNewMaterial(idx)} className="w-full text-left px-3 py-1.5 rounded-md text-xs text-starlight-blue hover:bg-navy/10 transition-colors font-medium"><Plus className="h-3 w-3 inline mr-1.5" /> Create New Material</button></div>
+                          <div className="relative mb-2"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted" /><input type="text" value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 border border-subtle rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="Search materials..." autoFocus /></div>
+                          {filteredMaterials.map((m) => (<button key={m.material_id} onClick={() => assignMaterial(idx, m)} className="w-full text-left px-3 py-1.5 rounded-md text-xs hover:bg-surface-dim transition-colors"><span className="font-medium text-navy">{m.material_name}</span>{m.current_unit_cost != null && <span className="ml-2 text-muted font-mono">{formatCurrency(m.current_unit_cost)}</span>}</button>))}
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0 mt-1">
-                      {line.match_status !== "confirmed" && line.material_id && (<button onClick={() => confirmMatch(idx)} title="Confirm" className="p-1.5 text-starlight-green hover:bg-green-50 rounded-md transition-colors"><Check className="h-3.5 w-3.5" /></button>)}
-                      {line.match_status !== "skipped" && line.match_status !== "confirmed" && (<button onClick={() => skipLine(idx)} title="Skip" className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>)}
-                      <button onClick={() => removeLine(idx)} title="Remove" className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-md transition-colors"><X className="h-3 w-3" /></button>
+                      {line.match_status !== "confirmed" && line.material_id && (<button onClick={() => confirmMatch(idx)} title="Confirm" className="p-1.5 text-starlight-green hover:bg-starlight-green/10 rounded-md transition-colors"><Check className="h-3.5 w-3.5" /></button>)}
+                      {line.match_status !== "skipped" && line.match_status !== "confirmed" && (<button onClick={() => skipLine(idx)} title="Skip" className="p-1.5 text-muted hover:text-muted hover:bg-surface-mid rounded-md transition-colors"><X className="h-3.5 w-3.5" /></button>)}
+                      <button onClick={() => removeLine(idx)} title="Remove" className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"><X className="h-3 w-3" /></button>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            {lines.length === 0 && (<div className="card px-6 py-8 text-center text-gray-400 text-sm">No line items. Upload an invoice or add lines manually.</div>)}
+            {lines.length === 0 && (<div className="card px-6 py-8 text-center text-muted text-sm">No line items. Upload an invoice or add lines manually.</div>)}
           </div>
         </div>
 
         {/* RIGHT: Invoice preview */}
         {fileData && showPreview && (
           <div className="card overflow-hidden sticky top-4 flex flex-col" style={{ maxHeight: "90vh" }}>
-            <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between shrink-0"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button></div>
+            <div className="px-4 py-2 border-b border-subtle flex items-center justify-between shrink-0"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-muted hover:text-muted"><X className="h-4 w-4" /></button></div>
             <div className="flex-1 min-h-0">
               {fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full h-full object-contain" />) :
                fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}#navpanes=0&view=FitH`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
-               (<p className="p-4 text-sm text-gray-400">Preview not available</p>)}
+               (<p className="p-4 text-sm text-muted">Preview not available</p>)}
             </div>
           </div>
         )}
@@ -539,22 +539,22 @@ export default function InvoicesPage() {
       {/* New Supplier Dialog */}
       {showNewSupplier && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-subtle flex items-center justify-between">
               <h3 className="text-sm font-semibold text-navy">Add Supplier</h3>
-              <button onClick={() => setShowNewSupplier(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowNewSupplier(false)} className="text-muted hover:text-muted"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-5 py-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Company Name *</label>
+              <label className="block text-xs font-medium text-muted mb-1">Company Name *</label>
               <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 placeholder="e.g. Volund Timber Ltd" autoFocus />
-              <p className="text-[10px] text-gray-400 mt-2">You can add contact details later in the Suppliers page.</p>
+              <p className="text-[10px] text-muted mt-2">You can add contact details later in the Suppliers page.</p>
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setShowNewSupplier(false)} className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-2">
+              <button onClick={() => setShowNewSupplier(false)} className="px-3 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
               <button onClick={createSupplierInline} disabled={saving || !newSupplierName.trim()}
-                className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors">
                 {saving ? "Adding..." : "Add & Select"}
               </button>
             </div>
@@ -565,37 +565,37 @@ export default function InvoicesPage() {
       {/* New Material Dialog */}
       {showNewMaterial && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-subtle flex items-center justify-between">
               <h3 className="text-sm font-semibold text-navy">Create New Material</h3>
-              <button onClick={() => setShowNewMaterial(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowNewMaterial(false)} className="text-muted hover:text-muted"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-5 py-4 space-y-3">
               {newMatLine !== null && lines[newMatLine] && (
-                <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                  Invoice: <span className="text-gray-600">{lines[newMatLine]?.raw_description}</span>
+                <div className="text-xs text-muted bg-surface-dim rounded-lg px-3 py-2">
+                  Invoice: <span className="text-muted">{lines[newMatLine]?.raw_description}</span>
                   <p className="text-[10px] mt-1">This description will be saved as an alias</p>
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Your Internal Name *</label>
+                <label className="block text-xs font-medium text-muted mb-1">Your Internal Name *</label>
                 <input type="text" value={newMatForm.name} onChange={(e) => setNewMatForm({ ...newMatForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                   placeholder="e.g. 3x2 CLS Timber" autoFocus />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
+                <label className="block text-xs font-medium text-muted mb-1">Unit</label>
                 <select value={newMatForm.unit} onChange={(e) => setNewMatForm({ ...newMatForm, unit: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                   <option value="">Select unit...</option>
                   {unitOptions.map((u) => (<option key={u} value={u}>{u}</option>))}
                 </select>
               </div>
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setShowNewMaterial(false)} className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-2">
+              <button onClick={() => setShowNewMaterial(false)} className="px-3 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
               <button onClick={saveNewMaterial} disabled={saving || !newMatForm.name.trim()}
-                className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors">
                 {saving ? "Creating..." : "Create & Match"}
               </button>
             </div>

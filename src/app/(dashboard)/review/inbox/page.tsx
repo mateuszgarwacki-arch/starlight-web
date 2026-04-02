@@ -95,19 +95,19 @@ export default function ReviewInboxPage() {
   const pendingTasks = items.filter((i) => i.item_type === "task");
   const openRequests = items.filter((i) => i.item_type === "request");
 
-  if (loading) { return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading inbox...</div>; }
+  if (loading) { return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading inbox...</div>; }
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/review" className="text-gray-400 hover:text-navy"><ArrowLeft className="h-5 w-5" /></Link>
-          <div><h1 className="text-xl font-bold text-navy">Workshop Inbox</h1><p className="text-sm text-gray-400 mt-0.5">{pendingTasks.length} pending task{pendingTasks.length !== 1 ? "s" : ""}, {openRequests.length} open request{openRequests.length !== 1 ? "s" : ""}</p></div>
+          <Link href="/review" className="text-muted hover:text-navy"><ArrowLeft className="h-5 w-5" /></Link>
+          <div><h1 className="text-xl font-bold text-navy">Workshop Inbox</h1><p className="text-sm text-muted mt-0.5">{pendingTasks.length} pending task{pendingTasks.length !== 1 ? "s" : ""}, {openRequests.length} open request{openRequests.length !== 1 ? "s" : ""}</p></div>
         </div>
-        <button onClick={loadInbox} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors"><RefreshCw className="h-4 w-4" /> Refresh</button>
+        <button onClick={loadInbox} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors"><RefreshCw className="h-4 w-4" /> Refresh</button>
       </div>
 
-      {items.length === 0 && (<div className="card px-8 py-12 text-center"><Check className="h-10 w-10 text-starlight-green mx-auto mb-3" /><p className="text-lg font-semibold text-navy">All clear</p><p className="text-sm text-gray-400 mt-1">No pending tasks or open requests</p></div>)}
+      {items.length === 0 && (<div className="card px-8 py-12 text-center"><Check className="h-10 w-10 text-starlight-green mx-auto mb-3" /><p className="text-lg font-semibold text-navy">All clear</p><p className="text-sm text-muted mt-1">No pending tasks or open requests</p></div>)}
 
       <div className="space-y-3">
         {items.map((item) => {
@@ -121,29 +121,29 @@ export default function ReviewInboxPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={"text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider " + (isTask ? "bg-navy/10 text-navy" : "bg-starlight-amber/10 text-starlight-amber")}>{isTask ? "Task" : "Request"}</span>
-                      <span className="text-[10px] text-gray-400">{catInfo.label}</span>
+                      <span className="text-[10px] text-muted">{catInfo.label}</span>
                       {isUrgent && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-red/10 text-starlight-red">URGENT</span>}
                     </div>
                     <p className="text-sm font-semibold text-navy mt-1">{item.title}</p>
-                    {item.description && <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>}
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
+                    {item.description && <p className="text-xs text-muted mt-0.5">{item.description}</p>}
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
                       <span>{item.freelancer_name}</span>{item.job_number && <span className="font-mono">{item.job_number} — {item.job_name}</span>}
                       {item.claimed_hours != null && <span className="font-semibold text-navy">{item.claimed_hours}h</span>}{item.worked_date && <span>{formatDate(item.worked_date)}</span>}
                       <span>{new Date(item.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   </div>
                 </div>
-                {item.photo_url && (<a href={item.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0"><div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200 overflow-hidden"><Image className="h-5 w-5 text-gray-400" /></div></a>)}
+                {item.photo_url && (<a href={item.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0"><div className="w-16 h-16 rounded-lg bg-surface-mid flex items-center justify-center border border-subtle overflow-hidden"><Image className="h-5 w-5 text-muted" /></div></a>)}
               </div>
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-subtle">
                 {isTask ? (<>
                   <button onClick={() => openRouteModal(item)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 transition-colors"><CornerDownRight className="h-3 w-3" /> Route to WO</button>
                   <button onClick={() => handleApproveOverhead(item, "")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors"><Check className="h-3 w-3" /> Approve Overhead</button>
-                  <button onClick={() => { setActionItem(item); setActionType("reject"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"><X className="h-3 w-3" /> Reject</button>
+                  <button onClick={() => { setActionItem(item); setActionType("reject"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors"><X className="h-3 w-3" /> Reject</button>
                 </>) : (<>
                   {item.status === "open" && (<button onClick={() => handleRequestAction(item, "acknowledged", "")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue/10 text-starlight-blue rounded-lg hover:bg-starlight-blue/20 transition-colors"><Check className="h-3 w-3" /> Acknowledge</button>)}
                   <button onClick={() => { setActionItem(item); setActionType("resolved"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors"><Check className="h-3 w-3" /> Resolve</button>
-                  <button onClick={() => { setActionItem(item); setActionType("dismissed"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"><X className="h-3 w-3" /> Dismiss</button>
+                  <button onClick={() => { setActionItem(item); setActionType("dismissed"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors"><X className="h-3 w-3" /> Dismiss</button>
                 </>)}
               </div>
             </div>
@@ -154,24 +154,24 @@ export default function ReviewInboxPage() {
       {routingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setRoutingTask(null)} />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-navy">Route Task to Work Order</h3>
-            <p className="text-sm text-gray-500">{routingTask.title} — {routingTask.freelancer_name}</p>
-            <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" /><input type="text" value={woSearch} onChange={(e) => setWoSearch(e.target.value)} placeholder="Search work orders..." className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
-            <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-gray-100">
-              {filteredWos.length === 0 ? (<p className="text-sm text-gray-400 p-4 text-center">No matching work orders</p>) : (
+            <p className="text-sm text-muted">{routingTask.title} — {routingTask.freelancer_name}</p>
+            <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted" /><input type="text" value={woSearch} onChange={(e) => setWoSearch(e.target.value)} placeholder="Search work orders..." className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
+            <div className="border border-subtle rounded-lg max-h-48 overflow-y-auto divide-y divide-subtle">
+              {filteredWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
                 filteredWos.slice(0, 20).map((wo) => (
-                  <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)} className={"w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
+                  <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)} className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
                     <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400"><span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span><span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-gray-100 text-gray-500")}>{wo.status}</span></div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted"><span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span><span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span></div>
                   </button>)))}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-gray-500 mb-1 block">Hours</label><input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5" className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />{routingTask.claimed_hours && routeHours && parseFloat(routeHours) !== routingTask.claimed_hours && (<p className="text-[10px] text-starlight-amber mt-1">Claimed: {routingTask.claimed_hours}h</p>)}</div>
-              <div><label className="text-xs font-medium text-gray-500 mb-1 block">Note (optional)</label><input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..." className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
+              <div><label className="text-xs font-medium text-muted mb-1 block">Hours</label><input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5" className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />{routingTask.claimed_hours && routeHours && parseFloat(routeHours) !== routingTask.claimed_hours && (<p className="text-[10px] text-starlight-amber mt-1">Claimed: {routingTask.claimed_hours}h</p>)}</div>
+              <div><label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label><input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
               <button onClick={handleRouteToWO} disabled={!selectedWo || routeSubmitting} className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">{routeSubmitting ? "Routing..." : "Route & Create Entry"}</button>
             </div>
           </div>
@@ -181,13 +181,13 @@ export default function ReviewInboxPage() {
       {actionItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setActionItem(null)} />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+          <div className="relative bg-surface rounded-xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
             <h3 className="text-lg font-semibold text-navy">{actionType === "reject" ? "Reject Task" : actionType === "resolved" ? "Resolve Request" : "Dismiss Request"}</h3>
-            <p className="text-sm text-gray-500">{actionItem.title}</p>
-            <div><label className="text-xs font-medium text-gray-500 mb-1 block">{actionType === "resolved" ? "Resolution note (required)" : "Reason (required)"}</label><textarea value={actionNote} onChange={(e) => setActionNote(e.target.value)} placeholder={actionType === "resolved" ? "e.g. Ordered, arriving Thursday" : "Reason..."} rows={3} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" autoFocus /></div>
+            <p className="text-sm text-muted">{actionItem.title}</p>
+            <div><label className="text-xs font-medium text-muted mb-1 block">{actionType === "resolved" ? "Resolution note (required)" : "Reason (required)"}</label><textarea value={actionNote} onChange={(e) => setActionNote(e.target.value)} placeholder={actionType === "resolved" ? "e.g. Ordered, arriving Thursday" : "Reason..."} rows={3} className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" autoFocus /></div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setActionItem(null)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
-              <button onClick={async () => { setActionSubmitting(true); if (actionItem.item_type === "task") { await handleRejectTask(actionItem, actionNote); } else { await handleRequestAction(actionItem, actionType, actionNote); } setActionItem(null); setActionSubmitting(false); }} disabled={actionSubmitting} className={"px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-40 " + (actionType === "reject" || actionType === "dismissed" ? "bg-gray-600 text-white hover:bg-gray-700" : "bg-starlight-green text-white hover:bg-starlight-green/90")}>{actionSubmitting ? "..." : actionType === "reject" ? "Reject" : actionType === "resolved" ? "Resolve" : "Dismiss"}</button>
+              <button onClick={() => setActionItem(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
+              <button onClick={async () => { setActionSubmitting(true); if (actionItem.item_type === "task") { await handleRejectTask(actionItem, actionNote); } else { await handleRequestAction(actionItem, actionType, actionNote); } setActionItem(null); setActionSubmitting(false); }} disabled={actionSubmitting} className={"px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-40 " + (actionType === "reject" || actionType === "dismissed" ? "bg-surface-bright text-white hover:bg-surface-bright" : "bg-starlight-green text-white hover:bg-starlight-green/90")}>{actionSubmitting ? "..." : actionType === "reject" ? "Reject" : actionType === "resolved" ? "Resolve" : "Dismiss"}</button>
             </div>
           </div>
         </div>

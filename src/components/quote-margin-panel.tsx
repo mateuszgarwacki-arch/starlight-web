@@ -84,7 +84,7 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
     <div className="card overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors text-left"
+        className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-surface-dim/50 transition-colors text-left"
       >
         <BarChart3 className="h-4 w-4 text-starlight-red" />
         <span className="text-sm font-semibold text-navy flex-1">Quote Line Margin Analysis</span>
@@ -95,37 +95,37 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
             {formatCurrency(summary.total_margin)} ({summary.margin_pct ?? 0}%)
           </span>
         )}
-        {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+        {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-subtle">
           {loading ? (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm animate-pulse">Loading margin data...</div>
+            <div className="px-5 py-8 text-center text-muted text-sm animate-pulse">Loading margin data...</div>
           ) : lines.length === 0 ? (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm">
+            <div className="px-5 py-8 text-center text-muted text-sm">
               No workshop lines with cost data. Create scope items and complete work orders to see margins.
             </div>
           ) : (
             <>
               {summary && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-5 py-3 bg-gray-50/50">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-5 py-3 bg-surface-dim/50">
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Quoted (Workshop)</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Quoted (Workshop)</p>
                     <p className="text-sm font-mono font-semibold text-navy">{formatCurrency(summary.total_quoted)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Actual Cost</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Actual Cost</p>
                     <p className="text-sm font-mono font-semibold text-navy">{formatCurrency(summary.total_actual)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimated Cost</p>
-                    <p className="text-sm font-mono font-semibold text-blue-600">
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Estimated Cost</p>
+                    <p className="text-sm font-mono font-semibold text-navy">
                       {formatCurrency(lines.reduce((s, l) => s + (l.estimated_total || 0), 0))}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Margin</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Margin</p>
                     <p className={"text-sm font-mono font-semibold " + (
                       summary.total_margin >= 0 ? "text-starlight-green" : "text-starlight-red"
                     )}>
@@ -133,7 +133,7 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Margin %</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Margin %</p>
                     <p className={"text-sm font-mono font-semibold " + (
                       (summary.margin_pct ?? 0) >= 0 ? "text-starlight-green" : "text-starlight-red"
                     )}>
@@ -141,9 +141,9 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Tracked / Untracked</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Tracked / Untracked</p>
                     <p className="text-sm font-mono text-navy">
-                      {summary.tracked_lines} / <span className="text-gray-400">{summary.untracked_lines}</span>
+                      {summary.tracked_lines} / <span className="text-muted">{summary.untracked_lines}</span>
                     </p>
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                    <tr className="bg-base text-left text-[10px] text-muted uppercase tracking-wider">
                       <th className="px-4 py-2 font-medium w-8">#</th>
                       <th className="px-4 py-2 font-medium">Line</th>
                       <th className="px-4 py-2 font-medium">Zone</th>
@@ -167,42 +167,42 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                   </thead>
                   <tbody>
                     {lines.map(l => (
-                      <tr key={l.quote_line_id} className={"border-t border-gray-100 " + (
-                        l.tracking_status === "No Scope" ? "bg-gray-50/50 text-gray-400" : ""
+                      <tr key={l.quote_line_id} className={"border-t border-subtle " + (
+                        l.tracking_status === "No Scope" ? "bg-surface-dim/50 text-muted" : ""
                       )}>
-                        <td className="px-4 py-2 text-xs font-mono text-gray-400">{l.line_number}</td>
+                        <td className="px-4 py-2 text-xs font-mono text-muted">{l.line_number}</td>
                         <td className="px-4 py-2 text-xs text-navy max-w-[250px] truncate" title={l.line_text || ""}>
                           {l.line_text || "—"}
                         </td>
-                        <td className="px-4 py-2 text-xs text-gray-500">{l.event_zone || "—"}</td>
+                        <td className="px-4 py-2 text-xs text-muted">{l.event_zone || "—"}</td>
                         <td className="px-4 py-2 text-center">
                           {l.scope_count > 0 ? (
                             <span className="text-[10px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium">{l.scope_count}</span>
                           ) : (
-                            <span className="text-[10px] text-gray-300">—</span>
+                            <span className="text-[10px] text-faint">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-right font-mono text-gray-600">{l.quoted_value ? formatCurrency(l.quoted_value) : "—"}</td>
+                        <td className="px-4 py-2 text-right font-mono text-muted">{l.quoted_value ? formatCurrency(l.quoted_value) : "—"}</td>
                         <td className="px-4 py-2 text-right font-mono">
                           {l.actual_labour > 0
                             ? <span className="text-navy">{formatCurrency(l.actual_labour)}</span>
-                            : l.estimated_labour ? <span className="text-blue-500">{formatCurrency(l.estimated_labour)} <span className="text-[9px] text-gray-400">est</span></span>
-                            : <span className="text-gray-300">—</span>}
+                            : l.estimated_labour ? <span className="text-navy">{formatCurrency(l.estimated_labour)} <span className="text-[9px] text-muted">est</span></span>
+                            : <span className="text-faint">—</span>}
                         </td>
                         <td className="px-4 py-2 text-right font-mono">
                           {l.actual_material > 0
                             ? <span className="text-navy">{formatCurrency(l.actual_material)}</span>
-                            : l.estimated_material ? <span className="text-blue-500">{formatCurrency(l.estimated_material)} <span className="text-[9px] text-gray-400">est</span></span>
-                            : <span className="text-gray-300">—</span>}
+                            : l.estimated_material ? <span className="text-navy">{formatCurrency(l.estimated_material)} <span className="text-[9px] text-muted">est</span></span>
+                            : <span className="text-faint">—</span>}
                         </td>
                         <td className="px-4 py-2 text-right font-mono font-medium">
                           {l.actual_total > 0
                             ? <span className="text-navy">{formatCurrency(l.actual_total)}</span>
-                            : (l.estimated_total || 0) > 0 ? <span className="text-blue-500">{formatCurrency(l.estimated_total || 0)} <span className="text-[9px] text-gray-400">est</span></span>
-                            : <span className="text-gray-300">—</span>}
+                            : (l.estimated_total || 0) > 0 ? <span className="text-navy">{formatCurrency(l.estimated_total || 0)} <span className="text-[9px] text-muted">est</span></span>
+                            : <span className="text-faint">—</span>}
                         </td>
                         <td className={"px-4 py-2 text-right font-mono font-semibold " + (
-                          l.tracking_status === "No Scope" ? "text-gray-300" :
+                          l.tracking_status === "No Scope" ? "text-faint" :
                           l.line_margin >= 0 ? "text-starlight-green" : "text-starlight-red"
                         )}>
                           {l.tracking_status === "No Scope" ? "—" : (
@@ -214,7 +214,7 @@ export function QuoteMarginPanel({ jobId }: { jobId: number }) {
                           )}
                         </td>
                         <td className={"px-4 py-2 text-right font-mono text-xs " + (
-                          l.tracking_status === "No Scope" ? "text-gray-300" :
+                          l.tracking_status === "No Scope" ? "text-faint" :
                           (l.margin_pct ?? 0) >= 0 ? "text-starlight-green" : "text-starlight-red"
                         )}>
                           {l.tracking_status === "No Scope" ? "—" : `${l.margin_pct ?? 0}%`}

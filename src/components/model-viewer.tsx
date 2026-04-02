@@ -224,51 +224,51 @@ export function ModelViewer({ url, fileName, onClose }: ModelViewerProps) {
   return (
     <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
       <div
-        className={`bg-white rounded-xl overflow-hidden flex flex-col transition-all duration-200 ${
+        className={`bg-surface rounded-xl overflow-hidden flex flex-col transition-all duration-200 ${
           isFullscreen ? "w-full h-full rounded-none" : "w-full max-w-4xl h-[85vh] max-h-[700px]"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header toolbar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-white shrink-0">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle bg-surface shrink-0">
           <div className="flex items-center gap-2">
             <Box className="h-4 w-4 text-starlight-red" />
             <span className="text-sm font-semibold text-navy truncate max-w-[200px] sm:max-w-none">{fileName}</span>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={handleResetView} className="p-1.5 text-gray-400 hover:text-navy rounded-lg hover:bg-gray-50 transition-colors" title="Reset view">
+            <button onClick={handleResetView} className="p-1.5 text-muted hover:text-navy rounded-lg hover:bg-surface-dim transition-colors" title="Reset view">
               <RotateCcw className="h-4 w-4" />
             </button>
-            <button onClick={handleDownload} className="p-1.5 text-gray-400 hover:text-navy rounded-lg hover:bg-gray-50 transition-colors" title="Download model">
+            <button onClick={handleDownload} className="p-1.5 text-muted hover:text-navy rounded-lg hover:bg-surface-dim transition-colors" title="Download model">
               <Download className="h-4 w-4" />
             </button>
-            <button onClick={toggleFullscreen} className="p-1.5 text-gray-400 hover:text-navy rounded-lg hover:bg-gray-50 transition-colors" title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+            <button onClick={toggleFullscreen} className="p-1.5 text-muted hover:text-navy rounded-lg hover:bg-surface-dim transition-colors" title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-starlight-red rounded-lg hover:bg-gray-50 transition-colors ml-1" title="Close">
+            <button onClick={onClose} className="p-1.5 text-muted hover:text-starlight-red rounded-lg hover:bg-surface-dim transition-colors ml-1" title="Close">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         {/* 3D Viewport */}
-        <div className="flex-1 relative bg-starlight-bg">
+        <div className="flex-1 relative bg-base">
           <div ref={containerRef} className="absolute inset-0" />
 
           {/* Loading overlay */}
           {loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-starlight-bg/90">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-base/90">
               <Loader2 className="h-8 w-8 text-starlight-blue animate-spin" />
-              <p className="text-sm text-gray-500 mt-3">Loading 3D model...</p>
+              <p className="text-sm text-muted mt-3">Loading 3D model...</p>
             </div>
           )}
 
           {/* Error state */}
           {error && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-starlight-bg p-8">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-base p-8">
               <Box className="h-10 w-10 text-starlight-red mb-3" />
-              <p className="text-sm text-gray-600 text-center max-w-sm">{error}</p>
-              <button onClick={handleDownload} className="mt-4 px-4 py-2 bg-starlight-blue text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">
+              <p className="text-sm text-muted text-center max-w-sm">{error}</p>
+              <button onClick={handleDownload} className="mt-4 px-4 py-2 bg-starlight-blue text-white text-sm rounded-lg hover:bg-navy transition-colors">
                 Download Instead
               </button>
             </div>

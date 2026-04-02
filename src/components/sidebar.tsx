@@ -76,13 +76,13 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed top-0 left-0 h-screen bg-navy text-white flex flex-col transition-all duration-200 z-50",
+        "fixed top-0 left-0 h-screen bg-base text-white flex flex-col transition-all duration-200 z-50 border-r border-subtle",
         collapsed ? "w-16" : "w-56"
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
-        <Star className="h-6 w-6 text-starlight-amber shrink-0" />
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-subtle">
+        <Star className="h-6 w-6 text-starlight-pink shrink-0" />
         {!collapsed && (
           <span className="font-semibold text-sm tracking-wide">
             STARLIGHT
@@ -106,14 +106,14 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors relative",
                 isActive
-                  ? "bg-white/15 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-navy/15 text-navy"
+                  : "text-muted hover:text-white hover:bg-surface-mid"
               )}
             >
               <div className="relative shrink-0">
                 <item.icon className="h-4.5 w-4.5" />
                 {showBadge && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-starlight-red text-white text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-starlight-pink text-white text-[10px] font-bold flex items-center justify-center">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
@@ -125,10 +125,10 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-white/10 p-2 space-y-1">
+      <div className="border-t border-subtle p-2 space-y-1">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white/40 hover:text-white/70 w-full"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-faint hover:text-muted w-full"
         >
           <ChevronLeft
             className={cn(
@@ -140,7 +140,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white/40 hover:text-starlight-red w-full"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-faint hover:text-starlight-red w-full"
         >
           <LogOut className="h-4 w-4" />
           {!collapsed && <span>Sign out</span>}

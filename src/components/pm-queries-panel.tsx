@@ -116,7 +116,7 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
     <div className="mt-3">
       <input type="file" ref={fileRef} accept="image/*" className="hidden" onChange={handleFileChange} />
       <button onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-navy transition-colors">
+        className="flex items-center gap-1.5 text-xs text-muted hover:text-navy transition-colors">
         {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         <MessageCircleQuestion className="h-3.5 w-3.5" />
         <span className="font-medium">PM Queries</span>
@@ -133,7 +133,7 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
             <div key={q.query_id} className={`px-3 py-2 rounded-lg text-xs ${
               q.status === "Open" ? "bg-starlight-amber/5 border border-starlight-amber/20" :
               q.status === "Answered" ? "bg-starlight-green/5 border border-starlight-green/20" :
-              "bg-gray-50 border border-gray-100 opacity-50"
+              "bg-surface-dim border border-subtle opacity-50"
             }`}>
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
@@ -145,10 +145,10 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
                         className="flex-1 px-2 py-0.5 border border-starlight-amber/30 rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-amber"
                         autoFocus />
                       <button onClick={() => updateQuestion(q.query_id)} className="p-0.5 text-starlight-green"><Check className="h-3 w-3" /></button>
-                      <button onClick={() => setEditingId(null)} className="p-0.5 text-gray-400"><X className="h-3 w-3" /></button>
+                      <button onClick={() => setEditingId(null)} className="p-0.5 text-muted"><X className="h-3 w-3" /></button>
                     </div>
                   ) : (
-                    <p className={`text-navy cursor-pointer hover:text-starlight-blue ${q.status === "Dismissed" ? "line-through text-gray-400" : ""}`}
+                    <p className={`text-navy cursor-pointer hover:text-starlight-blue ${q.status === "Dismissed" ? "line-through text-muted" : ""}`}
                       onClick={() => { setEditingId(q.query_id); setEditText(q.question); }}>
                       {q.question}
                     </p>
@@ -159,13 +159,13 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
                   {q.status === "Open" && (
                     <>
                       <button onClick={() => { setEditingId(q.query_id); setEditText(q.question); }}
-                        className="p-0.5 text-gray-300 hover:text-starlight-blue" title="Edit"><Pencil className="h-2.5 w-2.5" /></button>
+                        className="p-0.5 text-faint hover:text-starlight-blue" title="Edit"><Pencil className="h-2.5 w-2.5" /></button>
                       <button onClick={() => { setPhotoTarget(q.query_id); fileRef.current?.click(); }}
-                        className="p-0.5 text-gray-300 hover:text-starlight-blue" title="Add photo"><Camera className="h-2.5 w-2.5" /></button>
+                        className="p-0.5 text-faint hover:text-starlight-blue" title="Add photo"><Camera className="h-2.5 w-2.5" /></button>
                       <button onClick={() => dismiss(q.query_id)}
-                        className="p-0.5 text-gray-300 hover:text-gray-500" title="Dismiss"><X className="h-2.5 w-2.5" /></button>
+                        className="p-0.5 text-faint hover:text-muted" title="Dismiss"><X className="h-2.5 w-2.5" /></button>
                       <button onClick={() => deleteQuery(q.query_id)}
-                        className="p-0.5 text-gray-300 hover:text-starlight-red" title="Delete"><Trash2 className="h-2.5 w-2.5" /></button>
+                        className="p-0.5 text-faint hover:text-starlight-red" title="Delete"><Trash2 className="h-2.5 w-2.5" /></button>
                     </>
                   )}
                   {q.status === "Answered" && <Check className="h-3 w-3 text-starlight-green" />}
@@ -173,10 +173,10 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
               </div>
               {q.photo_url && (
                 <div className="mt-1.5 relative group">
-                  <img src={q.photo_url} alt="" className="max-h-32 rounded border border-gray-200" />
+                  <img src={q.photo_url} alt="" className="max-h-32 rounded border border-subtle" />
                   {q.status === "Open" && (
                     <button onClick={() => removePhoto(q.query_id)}
-                      className="absolute top-1 right-1 p-0.5 bg-white/80 rounded text-gray-400 hover:text-starlight-red opacity-0 group-hover:opacity-100 transition-opacity">
+                      className="absolute top-1 right-1 p-0.5 bg-surface/80 rounded text-muted hover:text-starlight-red opacity-0 group-hover:opacity-100 transition-opacity">
                       <X className="h-3 w-3" />
                     </button>
                   )}
@@ -190,7 +190,7 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
             <div className="relative inline-block">
               <img src={pendingPhoto} alt="" className="max-h-20 rounded border border-starlight-amber/30" />
               <button onClick={() => setPendingPhoto(null)}
-                className="absolute -top-1 -right-1 p-0.5 bg-white rounded-full shadow text-gray-400 hover:text-starlight-red">
+                className="absolute -top-1 -right-1 p-0.5 bg-surface rounded-full shadow text-muted hover:text-starlight-red">
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -200,9 +200,9 @@ export function PmQueriesPanel({ scopeItemId, jobId }: PmQueriesPanelProps) {
               onChange={(e) => setNewQuestion(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addQuery(); } }}
               placeholder="Ask PM a question about this scope item..."
-              className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-amber placeholder:text-gray-300" />
+              className="flex-1 px-3 py-1.5 border border-subtle rounded-lg text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-amber placeholder:text-faint" />
             <button onClick={() => { setPhotoTarget(null); fileRef.current?.click(); }}
-              className="p-1.5 text-gray-300 hover:text-starlight-amber hover:bg-starlight-amber/10 rounded-lg transition-colors" title="Attach photo">
+              className="p-1.5 text-faint hover:text-starlight-amber hover:bg-starlight-amber/10 rounded-lg transition-colors" title="Attach photo">
               <Camera className="h-3.5 w-3.5" />
             </button>
             <button onClick={addQuery} disabled={!newQuestion.trim() || saving}

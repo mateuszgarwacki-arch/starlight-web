@@ -331,7 +331,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   };
   (JobItemsTable as any)._addFromPrompt = addFromPrompt;
 
-  if (loading) return <div className="text-sm text-gray-400 animate-pulse py-4">Loading job items...</div>;
+  if (loading) return <div className="text-sm text-muted animate-pulse py-4">Loading job items...</div>;
 
   return (
     <div className="space-y-3">
@@ -348,7 +348,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
             <Paintbrush className="h-3.5 w-3.5" /> Add Bespoke Item
           </button>
           <button onClick={() => { setShowMaterialSearch(true); setMatQuery(""); setMatResults([]); }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted bg-surface-mid hover:bg-surface-hi rounded-lg transition-colors">
             <Wrench className="h-3.5 w-3.5" /> Add Material
           </button>
         </div>
@@ -356,22 +356,22 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
 
       {/* Material search inline */}
       {showMaterialSearch && (
-        <div className="card p-3 border-gray-300">
+        <div className="card p-3 border-subtle">
           <div className="flex gap-2 mb-2">
             <input type="text" value={matQuery} onChange={e => { setMatQuery(e.target.value); searchMaterials(e.target.value); }}
               placeholder="Search materials catalogue..."
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
-            <button onClick={() => setShowMaterialSearch(false)} className="px-3 py-2 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+              className="flex-1 px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
+            <button onClick={() => setShowMaterialSearch(false)} className="px-3 py-2 text-xs text-muted hover:text-muted">Cancel</button>
           </div>
           {matResults.length > 0 && (
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {matResults.map(m => (
-                <div key={m.material_id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                <div key={m.material_id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-surface-dim">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-navy">{m.material_name}</p>
-                    <p className="text-[10px] text-gray-400">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "No price"}</p>
+                    <p className="text-[10px] text-muted">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "No price"}</p>
                   </div>
-                  <button onClick={() => addMaterial(m)} className="ml-2 p-1.5 text-starlight-green hover:bg-green-50 rounded-md shrink-0">
+                  <button onClick={() => addMaterial(m)} className="ml-2 p-1.5 text-starlight-green hover:bg-starlight-green/10 rounded-md shrink-0">
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
@@ -380,7 +380,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
           )}
           {matQuery.length >= 2 && matResults.length === 0 && (
             <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-xs text-gray-400">No materials found</p>
+              <p className="text-xs text-muted">No materials found</p>
               <button onClick={addCustomMaterial} className="text-xs text-starlight-blue hover:underline">Add "{matQuery}" as custom</button>
             </div>
           )}
@@ -389,23 +389,23 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
 
       {/* Items list */}
       {items.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg px-4 py-8 text-center">
-          <p className="text-gray-400 text-sm">No job items yet</p>
-          <p className="text-gray-300 text-xs mt-1">Add stock items from the catalogue or create bespoke items</p>
+        <div className="bg-surface-dim rounded-lg px-4 py-8 text-center">
+          <p className="text-muted text-sm">No job items yet</p>
+          <p className="text-faint text-xs mt-1">Add stock items from the catalogue or create bespoke items</p>
         </div>
       ) : (
-        <div className="card overflow-hidden divide-y divide-gray-100">
+        <div className="card overflow-hidden divide-y divide-subtle">
           {items.map((item) => {
             const hasWo = item.has_wo === "true";
             const isStock = item.item_source === "stock" || item.item_source === "promoted" || (item.stock_reference && item.item_source !== "bespoke");
             const isSelected = selected.has(item.item_id);
 
             return (
-              <div key={item.item_id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}>
+              <div key={item.item_id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${isSelected ? "bg-navy/10/50" : ""}`}>
                 {/* Select */}
                 <div className="pt-1 shrink-0">
                   <button onClick={() => toggleSelect(item.item_id)}
-                    className={`transition-colors ${isSelected ? "text-starlight-blue" : "text-gray-300 hover:text-gray-400"}`}>
+                    className={`transition-colors ${isSelected ? "text-starlight-blue" : "text-faint hover:text-muted"}`}>
                     {isSelected ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
                   </button>
                 </div>
@@ -423,7 +423,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                       </span>
                     )}
                     {item.stock_reference && (
-                      <span className="text-[10px] font-mono text-gray-400">{item.stock_reference}</span>
+                      <span className="text-[10px] font-mono text-muted">{item.stock_reference}</span>
                     )}
                     {item.item_source === "promoted" && (
                       <span className="text-[9px] text-starlight-green font-medium">Promoted</span>
@@ -440,12 +440,12 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                   </div>
                   <p className="text-sm text-navy font-medium">{item.description || "Untitled item"}</p>
                   {item.finish_required && (
-                    <p className="text-xs text-gray-400 mt-0.5">Finish: {item.finish_required}</p>
+                    <p className="text-xs text-muted mt-0.5">Finish: {item.finish_required}</p>
                   )}
                   <input type="text" defaultValue={item.notes || ""}
                     onBlur={(e) => { const val = e.target.value.trim() || null; if (val !== (item.notes || null)) updateItem(item.item_id, "notes", val); }}
                     placeholder="Add a note..."
-                    className="mt-1 w-full text-xs text-gray-400 bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none px-0 py-0.5 placeholder:text-gray-300" />
+                    className="mt-1 w-full text-xs text-muted bg-transparent border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none px-0 py-0.5 placeholder:text-faint" />
                 </div>
 
                 {/* Qty */}
@@ -453,8 +453,8 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                   <input type="number" value={item.quantity ?? ""} min={1}
                     onChange={(e) => setItems((prev) => prev.map((i) => i.item_id === item.item_id ? { ...i, quantity: parseFloat(e.target.value) || null } : i))}
                     onBlur={(e) => updateItem(item.item_id, "quantity", parseFloat(e.target.value) || null)}
-                    className="w-14 px-2 py-1 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-                  <p className="text-[9px] text-gray-300 mt-0.5">qty</p>
+                    className="w-14 px-2 py-1 text-sm text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                  <p className="text-[9px] text-faint mt-0.5">qty</p>
                 </div>
 
                 {/* Cost (stock items from BOM) */}
@@ -462,7 +462,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                   {bomByItem[item.item_id] ? (
                     <p className="text-sm font-mono text-navy">{formatCurrency((item.quantity || 1) * bomByItem[item.item_id].unit_cost)}</p>
                   ) : hasWo ? (
-                    <span className="text-[10px] text-gray-400">via WO</span>
+                    <span className="text-[10px] text-muted">via WO</span>
                   ) : null}
                 </div>
 
@@ -470,13 +470,13 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                 <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5">
                   {!hasWo && item.item_source === "bespoke" && item.description && (
                     <button onClick={() => promoteToStock(item)} title="Promote to stock catalogue"
-                      className="p-1 text-gray-300 hover:text-starlight-green transition-colors">
+                      className="p-1 text-faint hover:text-starlight-green transition-colors">
                       <ArrowUpCircle className="h-3.5 w-3.5" />
                     </button>
                   )}
                   {!hasWo && (
                     <button onClick={() => deleteItem(item.item_id)} title="Delete"
-                      className="p-1 text-gray-300 hover:text-starlight-red transition-colors">
+                      className="p-1 text-faint hover:text-starlight-red transition-colors">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
@@ -489,24 +489,24 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
 
       {/* Material-only BOM rows */}
       {materialRows.length > 0 && (
-        <div className="card overflow-hidden divide-y divide-gray-100">
+        <div className="card overflow-hidden divide-y divide-subtle">
           {materialRows.map(m => (
             <div key={m.bom_id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="pt-0.5 shrink-0 w-6" />
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[9px] font-semibold rounded shrink-0">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-surface-mid text-muted text-[9px] font-semibold rounded shrink-0">
                 <Wrench className="h-2.5 w-2.5" />Material
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-navy">{m.item_description}</p>
               </div>
               <div className="shrink-0 w-16 text-center">
-                <p className="text-sm font-mono text-gray-600">{m.quantity} {m.unit}</p>
+                <p className="text-sm font-mono text-muted">{m.quantity} {m.unit}</p>
               </div>
               <div className="shrink-0 w-20 text-right">
                 <p className="text-sm font-mono text-navy">{formatCurrency(m.quantity * m.unit_cost)}</p>
               </div>
               <button onClick={() => deleteMaterialRow(m.bom_id)} title="Delete"
-                className="p-1 text-gray-300 hover:text-starlight-red transition-colors shrink-0">
+                className="p-1 text-faint hover:text-starlight-red transition-colors shrink-0">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -525,64 +525,64 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       {/* ============================================================ */}
       {showStockPicker && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowStockPicker(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+            <div className="px-5 py-4 border-b border-subtle flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm font-semibold text-navy flex items-center gap-2">
                   <Warehouse className="h-4 w-4 text-starlight-amber" /> Add Stock Items
                 </h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">Search and add items from the stock catalogue</p>
+                <p className="text-[10px] text-muted mt-0.5">Search and add items from the stock catalogue</p>
               </div>
-              <button onClick={() => setShowStockPicker(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <button onClick={() => setShowStockPicker(false)} className="p-1.5 text-muted hover:text-muted rounded-lg hover:bg-surface-mid">
                 <X className="h-4 w-4" />
               </button>
             </div>
             {/* Search */}
-            <div className="px-5 py-3 border-b border-gray-100 shrink-0">
+            <div className="px-5 py-3 border-b border-subtle shrink-0">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
                 <input type="text" value={stockSearch} onChange={(e) => handleStockSearch(e.target.value)}
                   placeholder="Search by name or product code..."
-                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-amber"
+                  className="w-full pl-9 pr-3 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-amber"
                   autoFocus />
               </div>
             </div>
             {/* Results */}
             <div className="flex-1 overflow-y-auto">
               {stockSearch.length < 2 ? (
-                <div className="px-5 py-12 text-center text-gray-300 text-sm">Type to search the stock catalogue...</div>
+                <div className="px-5 py-12 text-center text-faint text-sm">Type to search the stock catalogue...</div>
               ) : stockLoading ? (
-                <div className="px-5 py-12 text-center text-gray-400 text-sm animate-pulse">Searching...</div>
+                <div className="px-5 py-12 text-center text-muted text-sm animate-pulse">Searching...</div>
               ) : stockResults.length === 0 ? (
-                <div className="px-5 py-12 text-center text-gray-400 text-sm">No items matching &quot;{stockSearch}&quot;</div>
+                <div className="px-5 py-12 text-center text-muted text-sm">No items matching &quot;{stockSearch}&quot;</div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-subtle">
                   {stockResults.map((stock) => (
                     <button key={stock.stock_id} onClick={() => addStockItem(stock)}
                       className="w-full flex items-center gap-4 px-5 py-3 hover:bg-starlight-amber/5 transition-colors text-left">
-                      <div className="w-14 h-14 shrink-0 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden">
+                      <div className="w-14 h-14 shrink-0 bg-surface-dim rounded-lg flex items-center justify-center overflow-hidden">
                         {stock.thumbnail_url ? (
                           <img src={stock.thumbnail_url} alt="" className="w-full h-full object-contain p-1" />
                         ) : (
-                          <Warehouse className="h-5 w-5 text-gray-200" />
+                          <Warehouse className="h-5 w-5 text-faint" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-navy">{stock.description}</p>
-                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-gray-400">
+                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted">
                           <span className="font-mono">{stock.product_code}</span>
                           {stock.location && <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{stock.location}</span>}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-semibold text-navy">{stock.stock_quantity}</p>
-                        <p className="text-[10px] text-gray-400">available</p>
+                        <p className="text-[10px] text-muted">available</p>
                       </div>
                       {stock.hire_cost_day && (
                         <div className="text-right shrink-0 w-20">
-                          <p className="text-xs font-mono text-gray-600">{formatCurrency(stock.hire_cost_day)}</p>
-                          <p className="text-[10px] text-gray-400">/day</p>
+                          <p className="text-xs font-mono text-muted">{formatCurrency(stock.hire_cost_day)}</p>
+                          <p className="text-[10px] text-muted">/day</p>
                         </div>
                       )}
                       <Plus className="h-5 w-5 text-starlight-amber shrink-0" />
@@ -600,12 +600,12 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       {/* ============================================================ */}
       {showBespokeDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowBespokeDialog(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-subtle flex items-center justify-between">
               <h3 className="text-sm font-semibold text-navy flex items-center gap-2">
                 <Paintbrush className="h-4 w-4 text-starlight-blue" /> Add Bespoke Item
               </h3>
-              <button onClick={() => setShowBespokeDialog(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <button onClick={() => setShowBespokeDialog(false)} className="p-1.5 text-muted hover:text-muted rounded-lg hover:bg-surface-mid">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -614,12 +614,12 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
               {jobBespokeItems.length > 0 && (
                 <div>
                   <button type="button" onClick={() => setBespokeForm(f => ({ ...f, _showCopy: !(f as any)._showCopy } as any))}
-                    className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-starlight-blue transition-colors">
+                    className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-starlight-blue transition-colors">
                     <Link2 className="h-3 w-3" />
                     Copy from another scope ({jobBespokeItems.length})
                     <span className="text-[9px]">{(bespokeForm as any)._showCopy ? '▾' : '▸'}</span>
                   </button>
-                  {(bespokeForm as any)._showCopy && <div className="mt-1.5 max-h-36 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {(bespokeForm as any)._showCopy && <div className="mt-1.5 max-h-36 overflow-y-auto border border-subtle rounded-lg divide-y divide-subtle">
                     {jobBespokeItems.map((jbi) => (
                       <button key={jbi.item_id} type="button"
                         onClick={() => setBespokeForm({
@@ -632,9 +632,9 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                         className={"w-full text-left px-3 py-2 hover:bg-starlight-blue/5 transition-colors " + (bespokeForm.source_item_id === jbi.item_id ? "bg-starlight-blue/10" : "")}>
                         <p className="text-xs text-navy font-medium">{jbi.description}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-gray-400">{jbi.scope_name}</span>
-                          {jbi.finish_required && <span className="text-[10px] text-gray-400">· {jbi.finish_required}</span>}
-                          <span className="text-[10px] text-gray-400">· qty {jbi.quantity || 1}</span>
+                          <span className="text-[10px] text-muted">{jbi.scope_name}</span>
+                          {jbi.finish_required && <span className="text-[10px] text-muted">· {jbi.finish_required}</span>}
+                          <span className="text-[10px] text-muted">· qty {jbi.quantity || 1}</span>
                         </div>
                       </button>
                     ))}
@@ -647,37 +647,37 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Description *</label>
+                <label className="block text-xs font-medium text-muted mb-1">Description *</label>
                 <textarea value={bespokeForm.description} onChange={(e) => setBespokeForm({ ...bespokeForm, description: e.target.value })}
                   rows={3} placeholder="Describe what needs to be built..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none" autoFocus />
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none" autoFocus />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Quantity</label>
                   <input type="number" value={bespokeForm.quantity} min={1}
                     onChange={(e) => setBespokeForm({ ...bespokeForm, quantity: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Finish Required</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Finish Required</label>
                   <input type="text" value={bespokeForm.finish_required}
                     onChange={(e) => setBespokeForm({ ...bespokeForm, finish_required: e.target.value })}
                     placeholder="Paint colour, etc."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer pt-1">
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1">
                 <input type="checkbox" checked={bespokeForm.promote_to_stock}
                   onChange={(e) => setBespokeForm({ ...bespokeForm, promote_to_stock: e.target.checked })}
-                  className="rounded border-gray-300 text-starlight-green focus:ring-starlight-green" />
+                  className="rounded border-subtle text-starlight-green focus:ring-starlight-green" />
                 Add to stock catalogue when complete
               </label>
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={() => setShowBespokeDialog(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3">
+              <button onClick={() => setShowBespokeDialog(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
               <button onClick={addBespokeItem} disabled={!bespokeForm.description.trim()}
-                className="px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+                className="px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-navy transition-colors disabled:opacity-50">
                 Add Item
               </button>
             </div>

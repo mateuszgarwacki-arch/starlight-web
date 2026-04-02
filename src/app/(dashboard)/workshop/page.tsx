@@ -321,7 +321,7 @@ export default function WorkshopPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading workshop...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading workshop...</div>;
   }
 
   return (
@@ -330,9 +330,9 @@ export default function WorkshopPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Workshop</h1>
-          <p className="text-sm text-gray-400 mt-0.5">All work orders across all active jobs</p>
+          <p className="text-sm text-muted mt-0.5">All work orders across all active jobs</p>
         </div>
-        <button onClick={loadAll} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+        <button onClick={loadAll} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
@@ -340,23 +340,23 @@ export default function WorkshopPage() {
       {/* Stats strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Total WOs</p>
+          <p className="text-xs text-muted">Total WOs</p>
           <p className="text-lg font-semibold text-navy">{stats.total}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">In Progress</p>
+          <p className="text-xs text-muted">In Progress</p>
           <p className="text-lg font-semibold text-starlight-blue">{stats.inProgress}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Ready</p>
+          <p className="text-xs text-muted">Ready</p>
           <p className="text-lg font-semibold text-navy">{stats.ready}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Est. Hours</p>
+          <p className="text-xs text-muted">Est. Hours</p>
           <p className="text-lg font-semibold text-navy">{stats.totalEstHrs}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Logged Hours</p>
+          <p className="text-xs text-muted">Logged Hours</p>
           <p className="text-lg font-semibold text-starlight-green">{Math.round(stats.totalLoggedHrs * 10) / 10}h</p>
         </div>
       </div>
@@ -378,9 +378,9 @@ export default function WorkshopPage() {
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-medium text-navy w-28 truncate">{aw.name}</span>
                   <span className="text-starlight-blue">→</span>
-                  <span className="text-gray-600 truncate flex-1">{w.activity_label} — {w.scope_name}</span>
-                  <span className="text-[10px] font-mono text-gray-400 shrink-0">{w.job_number}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0">since {aw.since}</span>
+                  <span className="text-muted truncate flex-1">{w.activity_label} — {w.scope_name}</span>
+                  <span className="text-[10px] font-mono text-muted shrink-0">{w.job_number}</span>
+                  <span className="text-[10px] text-muted shrink-0">since {aw.since}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -389,7 +389,7 @@ export default function WorkshopPage() {
                       setStopWOHours("");
                       setStopWOReason("");
                     }}
-                    className={`p-1 rounded transition-colors shrink-0 ${stoppingWOEntry === aw.entry_id ? "bg-red-50 text-red-500" : "text-gray-300 hover:text-red-500 hover:bg-red-50"}`}
+                    className={`p-1 rounded transition-colors shrink-0 ${stoppingWOEntry === aw.entry_id ? "bg-starlight-red/10 text-starlight-red" : "text-faint hover:text-starlight-red hover:bg-starlight-red/10"}`}
                     title="Stop this timer">
                     <Square className="h-3 w-3" />
                   </button>
@@ -397,26 +397,26 @@ export default function WorkshopPage() {
                 {stoppingWOEntry === aw.entry_id && (
                   <div className="mt-1.5 ml-[7.5rem] flex items-end gap-2">
                     <div className="w-20">
-                      <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                      <label className="text-[9px] text-muted block mb-0.5">Hours</label>
                       <input type="number" step="0.5" min="0.5" value={stopWOHours}
                         onChange={e => setStopWOHours(e.target.value)}
-                        className="w-full px-2 py-1 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
+                        className="w-full px-2 py-1 text-sm text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
                     </div>
                     <div className="flex-1">
-                      <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                      <label className="text-[9px] text-muted block mb-0.5">Reason *</label>
                       <input type="text" value={stopWOReason}
                         onChange={e => setStopWOReason(e.target.value)}
                         placeholder="e.g. Forgot to stop, end of day"
-                        className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400"
+                        className="w-full px-2 py-1 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-red-400"
                         autoFocus />
                     </div>
                     <button onClick={() => handleStopWOEntry(aw.entry_id, aw.freelancer_id)}
                       disabled={!stopWOReason.trim() || !stopWOHours}
-                      className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 disabled:opacity-50 shrink-0">
+                      className="px-3 py-1 bg-starlight-red text-white text-xs font-medium rounded hover:bg-starlight-red disabled:opacity-50 shrink-0">
                       Stop
                     </button>
                     <button onClick={() => setStoppingWOEntry(null)}
-                      className="px-2 py-1 text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                      className="px-2 py-1 text-xs text-muted hover:text-muted shrink-0">
                       Cancel
                     </button>
                   </div>
@@ -430,11 +430,11 @@ export default function WorkshopPage() {
               <div key={t.task_id} className="flex items-center gap-2 text-xs">
                 <span className="font-medium text-navy w-28 truncate">{t.freelancer_name}</span>
                 <span className="text-starlight-amber">→</span>
-                <span className="text-gray-600 truncate flex-1">{t.title}</span>
+                <span className="text-muted truncate flex-1">{t.title}</span>
                 <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${t.category === "maintenance" ? "bg-starlight-amber/10 text-starlight-amber" : "bg-navy/10 text-navy"}`}>
                   {t.category === "maintenance" ? "Maint." : "General"}
                 </span>
-                <span className="text-[10px] text-gray-400 shrink-0">since {new Date(t.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="text-[10px] text-muted shrink-0">since {new Date(t.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
               </div>
             ))}
           </div>
@@ -444,12 +444,12 @@ export default function WorkshopPage() {
       {/* Active ad-hoc tasks */}
       {activeTasks.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+          <div className="px-4 py-2.5 border-b border-subtle flex items-center gap-2">
             <Timer className="h-4 w-4 text-starlight-amber" />
             <h3 className="text-xs font-semibold text-navy">Active Tasks ({activeTasks.length})</h3>
-            <span className="text-[10px] text-gray-400">Ad-hoc work in progress — not linked to work orders</span>
+            <span className="text-[10px] text-muted">Ad-hoc work in progress — not linked to work orders</span>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-subtle">
             {activeTasks.map(task => {
               const elapsed = Math.round((Date.now() - new Date(task.started_at).getTime()) / 60000);
               const elapsedStr = elapsed < 60 ? `${elapsed}m` : `${Math.floor(elapsed / 60)}h ${elapsed % 60}m`;
@@ -464,14 +464,14 @@ export default function WorkshopPage() {
                     }`}>{catLabel}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-navy font-medium truncate">{task.title}</p>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                      <div className="flex items-center gap-2 text-[10px] text-muted">
                         <span>{task.freelancer_name}</span>
                         {task.job_number && <span className="font-mono">{task.job_number}</span>}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-mono text-starlight-amber font-semibold">{elapsedStr}</p>
-                      <p className="text-[9px] text-gray-400">since {new Date(task.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
+                      <p className="text-[9px] text-muted">since {new Date(task.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
                     </div>
                     <button
                       onClick={() => {
@@ -481,7 +481,7 @@ export default function WorkshopPage() {
                         setStopHours(String(defHrs));
                         setStopReason("");
                       }}
-                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${stoppingTask === task.task_id ? "bg-red-50 text-red-500" : "text-gray-400 hover:text-red-500 hover:bg-red-50"}`}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${stoppingTask === task.task_id ? "bg-starlight-red/10 text-starlight-red" : "text-muted hover:text-starlight-red hover:bg-starlight-red/10"}`}
                       title="Stop this task">
                       <Square className="h-3.5 w-3.5" />
                     </button>
@@ -489,26 +489,26 @@ export default function WorkshopPage() {
                   {stoppingTask === task.task_id && (
                     <div className="mt-2 ml-16 flex items-end gap-2">
                       <div className="w-20">
-                        <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                        <label className="text-[9px] text-muted block mb-0.5">Hours</label>
                         <input type="number" step="0.5" min="0.5" value={stopHours}
                           onChange={e => setStopHours(e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
+                          className="w-full px-2 py-1.5 text-sm text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-red-400" />
                       </div>
                       <div className="flex-1">
-                        <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                        <label className="text-[9px] text-muted block mb-0.5">Reason *</label>
                         <input type="text" value={stopReason}
                           onChange={e => setStopReason(e.target.value)}
                           placeholder="e.g. Forgot to stop, moved to WO, end of day"
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-400"
+                          className="w-full px-2 py-1.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-red-400"
                           autoFocus />
                       </div>
                       <button onClick={() => handleStopTask(task.task_id)}
                         disabled={!stopReason.trim() || !stopHours}
-                        className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 disabled:opacity-50 shrink-0">
+                        className="px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded hover:bg-starlight-red disabled:opacity-50 shrink-0">
                         Stop
                       </button>
                       <button onClick={() => setStoppingTask(null)}
-                        className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                        className="px-2 py-1.5 text-xs text-muted hover:text-muted shrink-0">
                         Cancel
                       </button>
                     </div>
@@ -523,13 +523,13 @@ export default function WorkshopPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-400" />
+          <Filter className="h-4 w-4 text-muted" />
           {(["all", "Not-Started", "Ready", "In-Progress", "Complete", "On-Hold"] as FilterStatus[]).map(s => (
             <button
               key={s}
               onClick={() => setFilterStatus(s)}
               className={"px-3 py-1 rounded-full text-xs font-medium border transition-colors " + (
-                filterStatus === s ? "bg-navy text-white border-navy" : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                filterStatus === s ? "bg-navy text-white border-navy" : "bg-surface text-muted border-subtle hover:border-subtle"
               )}
             >
               {s === "all" ? `All (${stats.total})` : `${s} (${wos.filter(w => w.status === s).length})`}
@@ -539,7 +539,7 @@ export default function WorkshopPage() {
             <button
               onClick={() => setFilterStatus(filterStatus === "painting" ? "all" : "painting")}
               className={"px-3 py-1 rounded-full text-xs font-medium border transition-colors inline-flex items-center gap-1 " + (
-                filterStatus === "painting" ? "bg-starlight-amber text-white border-starlight-amber" : "bg-white text-starlight-amber border-starlight-amber/30 hover:border-starlight-amber"
+                filterStatus === "painting" ? "bg-starlight-amber text-white border-starlight-amber" : "bg-surface text-starlight-amber border-starlight-amber/30 hover:border-starlight-amber"
               )}
             >
               <Paintbrush className="h-3 w-3" /> Painting ({stats.painting})
@@ -549,19 +549,19 @@ export default function WorkshopPage() {
         <select
           value={filterJob}
           onChange={(e) => setFilterJob(e.target.value)}
-          className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+          className="px-3 py-1.5 border border-subtle rounded-lg text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
         >
           <option value="all">All Jobs</option>
           {jobs.map(j => <option key={j} value={j}>{j}</option>)}
         </select>
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-faint" />
           <input
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Search activities, scope items..."
-            className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+            className="w-full pl-9 pr-3 py-1.5 border border-subtle rounded-lg text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
           />
         </div>
       </div>
@@ -569,7 +569,7 @@ export default function WorkshopPage() {
       {/* WO List — grouped by job, then by scope item */}
       <div className="space-y-6">
         {filtered.length === 0 ? (
-          <div className="card px-6 py-12 text-center text-gray-400 text-sm">No work orders match your filters</div>
+          <div className="card px-6 py-12 text-center text-muted text-sm">No work orders match your filters</div>
         ) : (
           Object.entries(
             filtered.reduce((groups: Record<string, typeof filtered>, wo) => {
@@ -601,10 +601,10 @@ export default function WorkshopPage() {
             return (
               <div key={jobKey}>
                 {/* Job header */}
-                <div className="flex items-center gap-3 mb-2 px-1 border-b border-gray-200 pb-2">
+                <div className="flex items-center gap-3 mb-2 px-1 border-b border-subtle pb-2">
                   <span className="text-sm font-bold font-mono text-navy">{firstJob.job_number}</span>
                   <p className="text-sm font-semibold text-navy truncate flex-1">{firstJob.job_name}</p>
-                  <span className="text-[10px] text-gray-400">{jobDoneCount}/{jobWOs.length} WOs done</span>
+                  <span className="text-[10px] text-muted">{jobDoneCount}/{jobWOs.length} WOs done</span>
                   {jobActiveCount > 0 && <span className="text-[10px] text-starlight-blue font-medium">{jobActiveCount} active</span>}
                   {firstJob.event_date && <DaysRemainingBadge eventDate={firstJob.event_date} />}
                 </div>
@@ -617,34 +617,34 @@ export default function WorkshopPage() {
                     return (
                       <div key={scopeKey}>
                         <div className="flex items-center gap-3 mb-1.5 px-1">
-                          <p className="text-xs font-semibold text-gray-500 truncate">{first.scope_name}</p>
-                          <span className="text-[10px] text-gray-400">{doneCount}/{scopeWOs.length} steps done</span>
+                          <p className="text-xs font-semibold text-muted truncate">{first.scope_name}</p>
+                          <span className="text-[10px] text-muted">{doneCount}/{scopeWOs.length} steps done</span>
                         </div>
-                        <div className="card overflow-hidden divide-y divide-gray-100">
+                        <div className="card overflow-hidden divide-y divide-subtle">
                           {scopeWOs.map((wo, woIdx) => {
             const isExpanded = expandedWO === wo.work_order_id;
             return (
               <div key={wo.work_order_id} className="card overflow-hidden">
                 {/* Row */}
                 <div
-                  className="px-5 py-3.5 flex items-center gap-3 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  className="px-5 py-3.5 flex items-center gap-3 cursor-pointer hover:bg-surface-dim/50 transition-colors"
                   onClick={() => toggleExpand(wo.work_order_id)}
                 >
-                  <div className="text-gray-300">
+                  <div className="text-faint">
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </div>
                   <div className="flex items-center gap-1.5 w-16 shrink-0">
                     <div className={"w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 " + (
                       wo.status === "Complete" ? "bg-starlight-green" :
                       wo.status === "In-Progress" ? "bg-starlight-blue" :
-                      wo.status === "Voided" ? "bg-gray-300" :
+                      wo.status === "Voided" ? "bg-surface-top" :
                       woIdx === 0 || (woIdx > 0 && scopeWOs[woIdx - 1].status === "Complete") ? "bg-starlight-amber" :
-                      "bg-gray-300"
+                      "bg-surface-top"
                     )}>
                       {woIdx + 1}
                     </div>
                     {woIdx < scopeWOs.length - 1 && (
-                      <div className={"w-3 h-0.5 " + (wo.status === "Complete" ? "bg-starlight-green" : "bg-gray-200")} />
+                      <div className={"w-3 h-0.5 " + (wo.status === "Complete" ? "bg-starlight-green" : "bg-surface-hi")} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -652,11 +652,11 @@ export default function WorkshopPage() {
                       <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
                       {wo.paint_notes && <span title="Has painting notes"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
                     </div>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">
+                    <p className="text-xs text-muted truncate mt-0.5">
                       {wo.scope_name}{wo.description ? ` — ${wo.description}` : ""}
                     </p>
                     {wo.paint_notes && filterStatus === "painting" && (
-                      <p className="text-xs text-starlight-amber bg-amber-50 rounded px-2 py-1 mt-1 whitespace-pre-wrap">{wo.paint_notes}</p>
+                      <p className="text-xs text-starlight-amber bg-starlight-amber/10 rounded px-2 py-1 mt-1 whitespace-pre-wrap">{wo.paint_notes}</p>
                     )}
                   </div>
 
@@ -665,7 +665,7 @@ export default function WorkshopPage() {
                     <p className="text-sm font-mono text-navy">
                       {wo.total_logged_hrs > 0 ? `${Math.round(wo.total_logged_hrs * 10) / 10}h` : "—"}
                     </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-muted">
                       {wo.estimated_duration_hrs ? `of ${wo.estimated_duration_hrs}h est.` : "no est."}
                     </p>
                   </div>
@@ -677,9 +677,9 @@ export default function WorkshopPage() {
                         {wo.active_workers.map(w => w.name.split(" ")[0]).join(", ")}
                       </span>
                     ) : wo.lead_name ? (
-                      <p className="text-xs text-gray-400 truncate">{wo.lead_name}</p>
+                      <p className="text-xs text-muted truncate">{wo.lead_name}</p>
                     ) : (
-                      <p className="text-xs text-gray-300 italic">Unassigned</p>
+                      <p className="text-xs text-faint italic">Unassigned</p>
                     )}
                   </div>
                   <div className="w-24 shrink-0 text-right">
@@ -690,23 +690,23 @@ export default function WorkshopPage() {
 
                 {/* Expanded: Time entries */}
                 {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50/30 px-5 py-3">
+                  <div className="border-t border-subtle bg-surface-dim/30 px-5 py-3">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Time Entries</h3>
+                      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Time Entries</h3>
                       <Link
                         href={`/jobs/${wo.job_id}/scope/${wo.scope_item_id}/wo`}
-                        className="text-xs text-starlight-blue hover:text-blue-700 font-medium"
+                        className="text-xs text-starlight-blue hover:text-navy font-medium"
                       >
                         Open in Work Orders →
                       </Link>
                     </div>
                     {expandedEntries.length === 0 ? (
-                      <p className="text-xs text-gray-300 py-2">No time entries yet</p>
+                      <p className="text-xs text-faint py-2">No time entries yet</p>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                            <tr className="text-[10px] text-muted uppercase tracking-wider border-b border-subtle">
                               <th className="text-left py-1.5 pr-3 font-medium">Person</th>
                               <th className="text-left py-1.5 px-2 font-medium">Started</th>
                               <th className="text-left py-1.5 px-2 font-medium">Ended</th>
@@ -718,21 +718,21 @@ export default function WorkshopPage() {
                           </thead>
                           <tbody>
                             {expandedEntries.map((e: any) => (
-                              <tr key={e.entry_id} className={"border-b border-gray-100 last:border-0 " + (!e.system_end_timestamp ? "bg-starlight-blue/5" : "")}>
+                              <tr key={e.entry_id} className={"border-b border-subtle last:border-0 " + (!e.system_end_timestamp ? "bg-starlight-blue/5" : "")}>
                                 <td className="py-1.5 pr-3 text-sm text-navy font-medium">
                                   {e.name}
                                   {!e.system_end_timestamp && <span className="ml-1.5 text-[10px] text-starlight-blue font-normal">(active)</span>}
                                 </td>
-                                <td className="py-1.5 px-2 text-xs text-gray-500 font-mono">
+                                <td className="py-1.5 px-2 text-xs text-muted font-mono">
                                   {new Date(e.system_start_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                                 </td>
-                                <td className="py-1.5 px-2 text-xs text-gray-500 font-mono">
+                                <td className="py-1.5 px-2 text-xs text-muted font-mono">
                                   {e.system_end_timestamp
                                     ? new Date(e.system_end_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
                                     : "—"}
                                 </td>
                                 <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.actual_hours ? `${e.actual_hours}h` : "—"}</td>
-                                <td className="py-1.5 px-2 text-right text-xs font-mono text-gray-500">{e.applied_hourly_rate ? formatCurrency(e.applied_hourly_rate) : "—"}</td>
+                                <td className="py-1.5 px-2 text-right text-xs font-mono text-muted">{e.applied_hourly_rate ? formatCurrency(e.applied_hourly_rate) : "—"}</td>
                                 <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.entry_cost ? formatCurrency(e.entry_cost) : "—"}</td>
                                 <td className="py-1.5 px-2 text-xs text-starlight-amber max-w-[200px] truncate">{e.flag_note || ""}</td>
                               </tr>
@@ -740,8 +740,8 @@ export default function WorkshopPage() {
                           </tbody>
                           {expandedEntries.some((e: any) => e.system_end_timestamp) && (
                             <tfoot>
-                              <tr className="border-t border-gray-200">
-                                <td colSpan={3} className="py-2 text-right text-xs font-medium text-gray-500">Total</td>
+                              <tr className="border-t border-subtle">
+                                <td colSpan={3} className="py-2 text-right text-xs font-medium text-muted">Total</td>
                                 <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">
                                   {Math.round(expandedEntries.reduce((s: number, e: any) => s + (e.actual_hours || 0), 0) * 10) / 10}h
                                 </td>

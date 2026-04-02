@@ -487,10 +487,10 @@ export function CutListExtractor({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-starlight-amber" />
-            <span className="text-xs text-gray-600">{fileName}</span>
+            <span className="text-xs text-muted">{fileName}</span>
           </div>
           <button onClick={handleExtract} disabled={extracting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-amber text-white text-xs font-medium rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-amber text-white text-xs font-medium rounded-lg hover:bg-starlight-amber transition-colors disabled:opacity-50">
             {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
             {extracting ? "Extracting..." : "Extract BOM"}
           </button>
@@ -519,7 +519,7 @@ export function CutListExtractor({
               setStatus("extracted");
               if (onUpdate) onUpdate();
             }}
-            className="text-[10px] text-gray-400 hover:text-starlight-blue px-2 py-0.5 rounded hover:bg-starlight-blue/10 transition-colors"
+            className="text-[10px] text-muted hover:text-starlight-blue px-2 py-0.5 rounded hover:bg-starlight-blue/10 transition-colors"
           >
             Re-add to BOM
           </button>
@@ -531,24 +531,24 @@ export function CutListExtractor({
   // EXTRACTED — show material summary (what to order) + expandable parts list
   if (matSummary.length > 0) {
     return (
-      <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+      <div className="mt-2 border border-subtle rounded-lg overflow-hidden">
         {summary && (
-          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">{summary.total_parts} parts → {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} to order</span>
+          <div className="px-3 py-2 bg-surface-dim border-b border-subtle flex items-center justify-between">
+            <span className="text-[10px] text-muted">{summary.total_parts} parts → {matSummary.length} material{matSummary.length !== 1 ? "s" : ""} to order</span>
           </div>
         )}
 
         {/* Material summary — what to add to BOM */}
         <div className="px-3 py-2">
-          <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Materials to Order</p>
+          <p className="text-[9px] text-muted uppercase tracking-wider font-semibold mb-1.5">Materials to Order</p>
           <div className="space-y-1.5">
             {matSummary.map((mat, idx) => (
               <div key={idx}>
-                <div className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-gray-50 opacity-50")}>
-                  <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-gray-300" />
+                <div className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-surface-dim opacity-50")}>
+                  <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-subtle" />
                   <span className="text-xs text-navy font-medium flex-1">{mat.material}</span>
                   {mat.total_linear_mm != null && mat.total_linear_mm > 0 && (
-                    <span className="text-[10px] font-mono text-gray-500">{mat.total_linear_mm}mm total</span>
+                    <span className="text-[10px] font-mono text-muted">{mat.total_linear_mm}mm total</span>
                   )}
                   {mat.lengths_needed != null && mat.lengths_needed > 0 && (
                     <span className="text-xs font-mono text-starlight-blue font-medium">{mat.lengths_needed}× {mat.standard_length_mm || 4800}mm</span>
@@ -556,9 +556,9 @@ export function CutListExtractor({
                   {mat.sheets_needed != null && mat.sheets_needed > 0 && (
                     <span className="text-xs font-mono text-starlight-blue font-medium">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
                   )}
-                  <span className="text-[10px] text-gray-400">{mat.total_parts} parts</span>
+                  <span className="text-[10px] text-muted">{mat.total_parts} parts</span>
                   {mat.waste_pct != null && (
-                    <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-gray-400")}>{mat.waste_pct}% waste</span>
+                    <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-muted")}>{mat.waste_pct}% waste</span>
                   )}
                 </div>
                 {mat.anomalies && mat.anomalies.length > 0 && (
@@ -576,15 +576,15 @@ export function CutListExtractor({
         </div>
 
         {/* Expandable parts list — reference */}
-        <div className="border-t border-gray-100">
-          <button onClick={() => setShowParts(!showParts)} className="w-full px-3 py-1.5 text-left text-[10px] text-gray-400 hover:text-gray-600">
+        <div className="border-t border-subtle">
+          <button onClick={() => setShowParts(!showParts)} className="w-full px-3 py-1.5 text-left text-[10px] text-muted hover:text-muted">
             {showParts ? "▾" : "▸"} {parts.length} individual parts (reference)
           </button>
           {showParts && (
-            <div className="overflow-x-auto max-h-48 overflow-y-auto border-t border-gray-50">
+            <div className="overflow-x-auto max-h-48 overflow-y-auto border-t border-subtle">
               <table className="w-full text-[10px]">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="text-[9px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                <thead className="sticky top-0 bg-surface">
+                  <tr className="text-[9px] text-muted uppercase tracking-wider border-b border-subtle">
                     <th className="px-2 py-1 text-left">Part</th>
                     <th className="px-2 py-1 text-left">Material</th>
                     <th className="px-2 py-1 text-right">L</th>
@@ -595,12 +595,12 @@ export function CutListExtractor({
                 </thead>
                 <tbody>
                   {parts.map((p, idx) => (
-                    <tr key={idx} className="border-b border-gray-50">
+                    <tr key={idx} className="border-b border-subtle">
                       <td className="px-2 py-0.5 text-navy">{p.description}</td>
-                      <td className="px-2 py-0.5 text-gray-500">{p.material}</td>
-                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.length_mm || "—"}</td>
-                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.width_mm || "—"}</td>
-                      <td className="px-2 py-0.5 text-right font-mono text-gray-500">{p.thickness_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-muted">{p.material}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-muted">{p.length_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-muted">{p.width_mm || "—"}</td>
+                      <td className="px-2 py-0.5 text-right font-mono text-muted">{p.thickness_mm || "—"}</td>
                       <td className="px-2 py-0.5 text-right font-mono text-navy">{p.quantity}</td>
                     </tr>
                   ))}
@@ -611,10 +611,10 @@ export function CutListExtractor({
         </div>
 
         {/* Add to BOM button */}
-        <div className="px-3 py-2 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <span className="text-[10px] text-gray-400">{selectedCount} material{selectedCount !== 1 ? "s" : ""} selected</span>
+        <div className="px-3 py-2 border-t border-subtle bg-surface-dim flex items-center justify-between">
+          <span className="text-[10px] text-muted">{selectedCount} material{selectedCount !== 1 ? "s" : ""} selected</span>
           <button onClick={addToBom} disabled={selectedCount === 0 || adding}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-green text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-green text-white text-xs font-medium rounded-lg hover:bg-starlight-green transition-colors disabled:opacity-50">
             {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             {adding ? "Adding..." : `Add ${selectedCount} to BOM`}
           </button>

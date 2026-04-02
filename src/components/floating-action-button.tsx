@@ -36,7 +36,7 @@ export function FloatingActionButton() {
           </button>
           <button
             onClick={() => { setOpen(false); router.push("/m/request"); }}
-            className="flex items-center gap-2 bg-starlight-amber text-navy pl-4 pr-5 py-3 rounded-full shadow-lg active:bg-starlight-amber/90 transition-all animate-in fade-in slide-in-from-bottom-2 duration-150"
+            className="flex items-center gap-2 bg-starlight-amber text-base pl-4 pr-5 py-3 rounded-full shadow-lg active:bg-starlight-amber/90 transition-all animate-in fade-in slide-in-from-bottom-2 duration-150"
           >
             <ClipboardList className="h-4 w-4" />
             <span className="text-sm font-medium">Raise Request</span>
@@ -50,7 +50,7 @@ export function FloatingActionButton() {
         className={
           "fixed bottom-[5.5rem] right-4 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 " +
           (open
-            ? "bg-gray-600 rotate-0"
+            ? "bg-surface-bright rotate-0"
             : "bg-starlight-red")
         }
       >

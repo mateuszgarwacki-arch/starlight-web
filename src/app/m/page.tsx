@@ -185,7 +185,7 @@ export default function MobileTaskList() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading tasks...</div>;
+    return <div className="flex items-center justify-center h-40 text-muted text-sm animate-pulse">Loading tasks...</div>;
   }
 
   return (
@@ -193,16 +193,16 @@ export default function MobileTaskList() {
       {/* Header with toggle */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-navy">Tasks</h1>
-        <div className="flex bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="flex bg-surface rounded-lg border border-subtle overflow-hidden">
           <button
             onClick={() => setFilter("all")}
-            className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "all" ? "bg-navy text-white" : "text-gray-500")}
+            className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "all" ? "bg-navy text-white" : "text-muted")}
           >
             All ({activeTasks.length})
           </button>
           <button
             onClick={() => setFilter("mine")}
-            className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "mine" ? "bg-navy text-white" : "text-gray-500")}
+            className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "mine" ? "bg-navy text-white" : "text-muted")}
           >
             My Tasks
           </button>
@@ -226,22 +226,22 @@ export default function MobileTaskList() {
       </div>
 
       {/* Welcome */}
-      <p className="text-sm text-gray-400">Hey {myName}. {filtered.length} task{filtered.length !== 1 ? "s" : ""} available.</p>
+      <p className="text-sm text-muted">Hey {myName}. {filtered.length} task{filtered.length !== 1 ? "s" : ""} available.</p>
 
       {/* Task cards */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-300 text-sm">No tasks right now</div>
+        <div className="text-center py-12 text-faint text-sm">No tasks right now</div>
       ) : (
         <div className="space-y-3">
           {filtered.map((task) => (
             <button
               key={task.work_order_id}
               onClick={() => router.push("/m/wo/" + task.work_order_id)}
-              className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 active:bg-gray-50 transition-colors shadow-sm"
+              className="w-full text-left bg-surface rounded-xl border border-subtle p-4 active:bg-surface-dim transition-colors shadow-sm"
             >
               <div className="flex items-start gap-3">
                 {/* Phase dot */}
-                <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (phaseColors[task.phase_number || 0] || "bg-gray-300")} />
+                <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (phaseColors[task.phase_number || 0] || "bg-surface-top")} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-navy truncate">{task.activity_label}</p>
@@ -253,14 +253,14 @@ export default function MobileTaskList() {
                       <span className="text-[10px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium shrink-0">Built</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{task.scope_name}</p>
+                  <p className="text-xs text-muted truncate mt-0.5">{task.scope_name}</p>
                   {task.description && (
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{task.description}</p>
+                    <p className="text-xs text-muted truncate mt-0.5">{task.description}</p>
                   )}
                   {task.paint_notes && filter === "painting" && (
-                    <p className="text-xs text-starlight-amber bg-amber-50 rounded px-2 py-1 mt-1">{task.paint_notes}</p>
+                    <p className="text-xs text-starlight-amber bg-starlight-amber/10 rounded px-2 py-1 mt-1">{task.paint_notes}</p>
                   )}
-                  <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
+                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
                     <span className="font-mono">{task.job_number}</span>
                     {task.estimated_duration_hrs && (
                       <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" />{task.estimated_duration_hrs}h est.</span>

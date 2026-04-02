@@ -68,7 +68,7 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
   if (visiblePrompts.length === 0 && dismissed.size > 0) {
     return (
       <div className="card px-4 py-3 border-l-4 border-l-starlight-amber/30">
-        <p className="text-xs text-gray-400">All suggestions dismissed</p>
+        <p className="text-xs text-muted">All suggestions dismissed</p>
         <button
           onClick={() => setDismissed(new Set())}
           className="text-xs text-starlight-blue hover:underline mt-1"
@@ -83,7 +83,7 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
     <div className="card border-l-4 border-l-starlight-amber overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-surface-dim transition-colors"
       >
         <div className="flex items-center gap-2">
           <Lightbulb className="h-4 w-4 text-starlight-amber" />
@@ -91,28 +91,28 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
             Typical Components ({visiblePrompts.length})
           </span>
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-muted">
           {isOpen ? "Hide" : "Show"}
         </span>
       </button>
 
       {isOpen && (
         <div className="px-4 pb-3 space-y-2">
-          <p className="text-xs text-gray-400 mb-2">
+          <p className="text-xs text-muted mb-2">
             Suggested items for this category. Click + to add, × to dismiss.
             Nothing is auto-created.
           </p>
           {guidanceNote && (
-            <p className="text-xs text-amber-700 bg-amber-50/70 rounded-md px-2.5 py-1.5 mb-2 leading-relaxed">{guidanceNote}</p>
+            <p className="text-xs text-starlight-amber bg-starlight-amber/10/70 rounded-md px-2.5 py-1.5 mb-2 leading-relaxed">{guidanceNote}</p>
           )}
           {loading ? (
-            <p className="text-xs text-gray-400 animate-pulse">Loading...</p>
+            <p className="text-xs text-muted animate-pulse">Loading...</p>
           ) : (() => {
             const renderItem = (prompt: Prompt) => (
-              <div key={prompt.prompt_id} className="flex items-center justify-between bg-amber-50/50 rounded-lg px-3 py-2">
+              <div key={prompt.prompt_id} className="flex items-center justify-between bg-starlight-amber/10/50 rounded-lg px-3 py-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700">{prompt.stock_description || prompt.description}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm text-foreground">{prompt.stock_description || prompt.description}</p>
+                  <p className="text-xs text-muted">
                     {prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke")}
                   </p>
                 </div>
@@ -122,11 +122,11 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
                     prompt.stock_item_id ? "Stock" : (prompt.typical_item_type || "Bespoke"),
                     prompt.stock_item_id || undefined,
                     prompt.quantity_default || undefined
-                  )} className="p-1.5 text-starlight-green hover:bg-green-50 rounded-md transition-colors" title="Add as job item">
+                  )} className="p-1.5 text-starlight-green hover:bg-starlight-green/10 rounded-md transition-colors" title="Add as job item">
                     <Plus className="h-4 w-4" />
                   </button>
                   <button onClick={() => setDismissed((prev) => new Set(prev).add(prompt.prompt_id))}
-                    className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition-colors" title="Dismiss">
+                    className="p-1.5 text-muted hover:bg-surface-mid rounded-md transition-colors" title="Dismiss">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -146,7 +146,7 @@ export function PromptPanel({ categoryId, onAddItem }: PromptPanelProps) {
                         const next = new Set(prev);
                         isCollapsed ? next.delete(groupName) : next.add(groupName);
                         return next;
-                      })} className="flex items-center gap-1.5 w-full text-left py-1 text-xs font-semibold text-gray-500 hover:text-navy transition-colors">
+                      })} className="flex items-center gap-1.5 w-full text-left py-1 text-xs font-semibold text-muted hover:text-navy transition-colors">
                         {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                         {groupName} ({items.length})
                       </button>

@@ -596,14 +596,14 @@ export default function ScopeWorkOrdersPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">
+      <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">
         Loading work orders...
       </div>
     );
   }
 
   if (!scope) {
-    return <div className="text-center py-12 text-gray-400">Scope item not found</div>;
+    return <div className="text-center py-12 text-muted">Scope item not found</div>;
   }
 
   return (
@@ -612,7 +612,7 @@ export default function ScopeWorkOrdersPage() {
       <div className="flex items-center justify-between">
         <Link
           href={`/jobs/${jobId}/scope/${scopeId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Scope Item
@@ -624,17 +624,17 @@ export default function ScopeWorkOrdersPage() {
       <div className="card px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-400 font-mono">
+            <p className="text-xs text-muted font-mono">
               {scope.job_number} &gt; Scope #{scope.scope_item_id}
             </p>
             <h1 className="text-xl font-bold text-navy mt-0.5">
               {scope.item_name || `Scope Item #${scope.scope_item_id}`}
             </h1>
-            <p className="text-sm text-gray-400">{scope.job_name}</p>
+            <p className="text-sm text-muted">{scope.job_name}</p>
           </div>
           <div className="flex items-center gap-3 text-right">
             <div>
-              <p className="text-xs text-gray-400">Event</p>
+              <p className="text-xs text-muted">Event</p>
               <p className="text-sm font-medium text-navy">{formatDate(scope.event_date)}</p>
             </div>
             <DaysRemainingBadge eventDate={scope.event_date} />
@@ -651,15 +651,15 @@ export default function ScopeWorkOrdersPage() {
         <div className="flex items-center gap-2">
           <Hammer className="h-5 w-5 text-navy" />
           <h2 className="text-lg font-semibold text-navy">Work Orders</h2>
-          <span className="text-sm text-gray-400">({workOrders.length})</span>
+          <span className="text-sm text-muted">({workOrders.length})</span>
         </div>
       </div>
 
       {/* Work Orders list */}
       {workOrders.length === 0 ? (
         <div className="card px-6 py-12 text-center">
-          <p className="text-gray-400 text-sm">No work orders yet</p>
-          <p className="text-gray-300 text-xs mt-1">
+          <p className="text-muted text-sm">No work orders yet</p>
+          <p className="text-faint text-xs mt-1">
             Go back to the Scope Item and create WOs from selected Job Items
           </p>
         </div>
@@ -672,11 +672,11 @@ export default function ScopeWorkOrdersPage() {
               <div key={wo.work_order_id} className="card overflow-hidden">
                 {/* WO Row */}
                 <div
-                  className="px-5 py-3.5 flex items-center gap-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  className="px-5 py-3.5 flex items-center gap-4 cursor-pointer hover:bg-surface-dim/50 transition-colors"
                   onClick={() => toggleExpand(wo.work_order_id)}
                 >
                   {/* Expand chevron */}
-                  <div className="text-gray-300">
+                  <div className="text-faint">
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4" />
                     ) : (
@@ -691,14 +691,14 @@ export default function ScopeWorkOrdersPage() {
                       <span className={"text-[9px] " + (
                         sortedArr[woIdx - 1].status === "Complete" ? "text-starlight-green" :
                         sortedArr[woIdx - 1].status === "In-Progress" ? "text-starlight-blue" :
-                        "text-gray-400"
+                        "text-muted"
                       )}>
                         prev: {sortedArr[woIdx - 1].status === "Complete" ? "done" :
                                sortedArr[woIdx - 1].status === "In-Progress" ? "active" :
                                "waiting"}
                       </span>
                     )}
-                    {woIdx === 0 && <span className="text-[9px] text-gray-300">first</span>}
+                    {woIdx === 0 && <span className="text-[9px] text-faint">first</span>}
                   </div>
 
                   {/* Activity label + description */}
@@ -710,7 +710,7 @@ export default function ScopeWorkOrdersPage() {
                       {wo.paint_notes && <span title="Has painting notes"><Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" /></span>}
                     </div>
                     {wo.description && (
-                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                      <p className="text-xs text-muted truncate mt-0.5">
                         {wo.description}
                       </p>
                     )}
@@ -723,15 +723,15 @@ export default function ScopeWorkOrdersPage() {
                         ? `${wo.estimated_duration_hrs}h`
                         : "—"}
                     </p>
-                    <p className="text-[10px] text-gray-400">est.</p>
+                    <p className="text-[10px] text-muted">est.</p>
                   </div>
 
                   {/* Planned lead */}
                   <div className="w-28 shrink-0 text-right">
                     {wo.lead_name ? (
-                      <p className="text-xs text-gray-600 truncate">{wo.lead_name}</p>
+                      <p className="text-xs text-muted truncate">{wo.lead_name}</p>
                     ) : (
-                      <p className="text-xs text-gray-300 italic">Unassigned</p>
+                      <p className="text-xs text-faint italic">Unassigned</p>
                     )}
                   </div>
 
@@ -773,7 +773,7 @@ export default function ScopeWorkOrdersPage() {
                             deleteWO(wo.work_order_id);
                           }
                         }}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-starlight-red hover:bg-red-50 transition-colors"
+                        className="p-1.5 rounded-lg text-faint hover:text-starlight-red hover:bg-starlight-red/10 transition-colors"
                         title="Delete work order"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -782,7 +782,7 @@ export default function ScopeWorkOrdersPage() {
                     {wo.status !== "Voided" && wo.status !== "Complete" && wo.status !== "Not-Started" && (
                       <button
                         onClick={() => setVoidDialog({ woId: wo.work_order_id, status: wo.status || "" })}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-starlight-amber hover:bg-amber-50 transition-colors"
+                        className="p-1.5 rounded-lg text-faint hover:text-starlight-amber hover:bg-starlight-amber/10 transition-colors"
                         title="Void work order"
                       >
                         <AlertTriangle className="h-4 w-4" />
@@ -793,15 +793,15 @@ export default function ScopeWorkOrdersPage() {
 
                 {/* Expanded detail panel */}
                 {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50/30">
+                  <div className="border-t border-subtle bg-surface-dim/30">
                     {/* Editable WO fields */}
-                    <div className="px-5 py-3 border-b border-gray-100">
+                    <div className="px-5 py-3 border-b border-subtle">
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-medium text-gray-500">Step {woIdx + 1} of {sortedArr.length}</span>
+                        <span className="text-xs font-medium text-muted">Step {woIdx + 1} of {sortedArr.length}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); reorderWO(wo.work_order_id, -1); }}
                           disabled={woIdx === 0}
-                          className="p-1 rounded text-gray-400 hover:text-navy hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          className="p-1 rounded text-muted hover:text-navy hover:bg-surface-mid disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                           title="Move up"
                         >
                           <ArrowUp className="h-3.5 w-3.5" />
@@ -809,7 +809,7 @@ export default function ScopeWorkOrdersPage() {
                         <button
                           onClick={(e) => { e.stopPropagation(); reorderWO(wo.work_order_id, 1); }}
                           disabled={woIdx === sortedArr.length - 1}
-                          className="p-1 rounded text-gray-400 hover:text-navy hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          className="p-1 rounded text-muted hover:text-navy hover:bg-surface-mid disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                           title="Move down"
                         >
                           <ArrowDown className="h-3.5 w-3.5" />
@@ -817,7 +817,7 @@ export default function ScopeWorkOrdersPage() {
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Description
                         </label>
                         <input
@@ -828,12 +828,12 @@ export default function ScopeWorkOrdersPage() {
                             presenceSetEditing(null);
                             updateWODescription(wo.work_order_id, e.target.value);
                           }}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                           placeholder="What needs doing..."
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Est. Hours
                         </label>
                         <input
@@ -845,11 +845,11 @@ export default function ScopeWorkOrdersPage() {
                             presenceSetEditing(null);
                             updateEstimatedHrs(wo.work_order_id, e.target.value);
                           }}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Planned Lead
                         </label>
                         <select
@@ -860,7 +860,7 @@ export default function ScopeWorkOrdersPage() {
                               e.target.value ? Number(e.target.value) : null
                             )
                           }
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         >
                           <option value="">Unassigned</option>
                           {freelancers.map((f) => (
@@ -871,7 +871,7 @@ export default function ScopeWorkOrdersPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Complexity
                         </label>
                         <select
@@ -882,7 +882,7 @@ export default function ScopeWorkOrdersPage() {
                             await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, { complexity_construction: val }, jobId);
                             setWorkOrders((prev) => prev.map((w) => w.work_order_id === wo.work_order_id ? { ...w, complexity_construction: val } : w));
                           }}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         >
                           <option value="">Select...</option>
                           <option value="1 - Straightforward">1 - Straightforward</option>
@@ -891,7 +891,7 @@ export default function ScopeWorkOrdersPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Finish
                         </label>
                         <select
@@ -902,7 +902,7 @@ export default function ScopeWorkOrdersPage() {
                             await auditedUpdate(ctx, "tbl_work_orders", wo.work_order_id, { finish_relative: val }, jobId);
                             setWorkOrders((prev) => prev.map((w) => w.work_order_id === wo.work_order_id ? { ...w, finish_relative: val } : w));
                           }}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         >
                           <option value="">Select...</option>
                           <option value="Raw">Raw</option>
@@ -911,7 +911,7 @@ export default function ScopeWorkOrdersPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">
                           Status
                         </label>
                         <select
@@ -919,7 +919,7 @@ export default function ScopeWorkOrdersPage() {
                           onChange={(e) =>
                             updateWOStatus(wo.work_order_id, e.target.value)
                           }
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         >
                           <option value="Not-Started">Not-Started</option>
                           <option value="Ready">Ready</option>
@@ -933,11 +933,11 @@ export default function ScopeWorkOrdersPage() {
 
                     </div>
                     {/* Paint notes */}
-                    <div className="px-5 py-3 border-b border-gray-100">
+                    <div className="px-5 py-3 border-b border-subtle">
                       <div className="flex items-center gap-2 mb-1.5">
                         <Paintbrush className="h-3.5 w-3.5 text-starlight-amber" />
-                        <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Painting</label>
-                        {!wo.paint_notes && <span className="text-[9px] text-gray-300 italic">None — add notes if this WO needs painting</span>}
+                        <label className="text-[10px] font-medium text-muted uppercase tracking-wider">Painting</label>
+                        {!wo.paint_notes && <span className="text-[9px] text-faint italic">None — add notes if this WO needs painting</span>}
                       </div>
                       <textarea
                         defaultValue={wo.paint_notes || ""}
@@ -953,32 +953,32 @@ export default function ScopeWorkOrdersPage() {
                         }}
                         rows={2}
                         placeholder="e.g. Paint back panel RAL 9005, 2 coats primer + 1 topcoat on raw MDF edges"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none placeholder:text-gray-300"
+                        className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none placeholder:text-faint"
                       />
                     </div>
                     {/* Completion photo */}
                     {completionPhotoUrls[wo.work_order_id] && (
-                      <div className="px-5 py-3 border-b border-gray-100">
+                      <div className="px-5 py-3 border-b border-subtle">
                         <div className="flex items-center gap-2 mb-2">
                           <CheckCircle2 className="h-3.5 w-3.5 text-starlight-green" />
                           <span className="text-[10px] font-semibold text-starlight-green uppercase tracking-wider">Completion Photo</span>
                         </div>
-                        <img src={completionPhotoUrls[wo.work_order_id]} alt="Completion" className="rounded-lg border border-gray-200 max-h-64 object-contain" />
+                        <img src={completionPhotoUrls[wo.work_order_id]} alt="Completion" className="rounded-lg border border-subtle max-h-64 object-contain" />
                       </div>
                     )}
                     {/* Linked Job Items */}
                     {linkedItems.length > 0 && (
-                      <div className="px-5 py-3 border-b border-gray-100">
-                        <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                      <div className="px-5 py-3 border-b border-subtle">
+                        <h3 className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2">
                           Linked Job Items
                         </h3>
                         <div className="flex flex-wrap gap-2">
                           {linkedItems.map((item: any) => (
                             <div
                               key={item.item_id}
-                              className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5"
+                              className="inline-flex items-center gap-2 bg-surface border border-subtle rounded-lg px-3 py-1.5"
                             >
-                              <Link2 className="h-3 w-3 text-gray-400 shrink-0" />
+                              <Link2 className="h-3 w-3 text-muted shrink-0" />
                               <div>
                                 <p className="text-xs font-medium text-navy">
                                   {item.quantity ? item.quantity + "x " : ""}{item.description}
@@ -987,7 +987,7 @@ export default function ScopeWorkOrdersPage() {
                                   <p className="text-[10px] text-starlight-amber">{item.finish_required}</p>
                                 )}
                               </div>
-                              <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                              <span className="text-[10px] text-muted bg-surface-dim px-1.5 py-0.5 rounded">
                                 {item.item_type}
                               </span>
                             </div>
@@ -999,12 +999,12 @@ export default function ScopeWorkOrdersPage() {
                     {/* BOM Section */}
                     <div className="px-5 py-3">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">
                           Bill of Materials
                         </h3>
                         <button
                           onClick={() => addBomRow(wo.work_order_id)}
-                          className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-blue-700 font-medium transition-colors"
+                          className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium transition-colors"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Material
@@ -1012,18 +1012,18 @@ export default function ScopeWorkOrdersPage() {
                       </div>
 
                       {bomLoading ? (
-                        <p className="text-xs text-gray-400 animate-pulse py-2">
+                        <p className="text-xs text-muted animate-pulse py-2">
                           Loading materials...
                         </p>
                       ) : bomRows.length === 0 ? (
-                        <p className="text-xs text-gray-300 py-2">
+                        <p className="text-xs text-faint py-2">
                           No materials added yet
                         </p>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                              <tr className="text-[10px] text-muted uppercase tracking-wider border-b border-subtle">
                                 <th className="text-left py-1.5 pr-3 font-medium">Material</th>
                                 <th className="text-right py-1.5 px-2 font-medium w-20">Qty</th>
                                 <th className="text-left py-1.5 px-2 font-medium w-20">Unit</th>
@@ -1045,7 +1045,7 @@ export default function ScopeWorkOrdersPage() {
                                 return (
                                   <tr
                                     key={row.bom_id}
-                                    className="border-b border-gray-100 last:border-0"
+                                    className="border-b border-subtle last:border-0"
                                   >
                                     <td className="py-1.5 pr-3">
                                       <div className="flex items-center gap-1.5">
@@ -1062,7 +1062,7 @@ export default function ScopeWorkOrdersPage() {
                                             presenceSetEditing(null);
                                             updateBomField(row.bom_id, "item_description", e.target.value || null);
                                           }}
-                                          className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm bg-transparent focus:bg-white focus:outline-none"
+                                          className="w-full px-1.5 py-1 border border-transparent hover:border-subtle focus:border-starlight-blue rounded text-sm bg-transparent focus:bg-surface focus:outline-none"
                                         />
                                       </div>
                                     </td>
@@ -1080,7 +1080,7 @@ export default function ScopeWorkOrdersPage() {
                                             e.target.value ? parseFloat(e.target.value) : null
                                           );
                                         }}
-                                        className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-white focus:outline-none font-mono"
+                                        className="w-full px-1.5 py-1 border border-transparent hover:border-subtle focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-surface focus:outline-none font-mono"
                                       />
                                     </td>
                                     <td className="py-1.5 px-2">
@@ -1088,18 +1088,18 @@ export default function ScopeWorkOrdersPage() {
                                         <div>
                                           <button
                                             onClick={() => updateBomField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
-                                            className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200")}
+                                            className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-surface-mid text-muted border-subtle hover:bg-surface-hi")}
                                             title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
                                           >
                                             {isLengthMode ? "Length" : "Metre"}
-                                            <span className="text-[9px] text-gray-400">⇄</span>
+                                            <span className="text-[9px] text-muted">⇄</span>
                                           </button>
                                           {isLengthMode && (
-                                            <p className="text-[9px] text-gray-400 mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                                            <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
                                           )}
                                         </div>
                                       ) : (
-                                        <span className="text-xs text-gray-400">{row.unit || "—"}</span>
+                                        <span className="text-xs text-muted">{row.unit || "—"}</span>
                                       )}
                                     </td>
                                     <td className="py-1.5 px-2">
@@ -1116,7 +1116,7 @@ export default function ScopeWorkOrdersPage() {
                                             e.target.value ? parseFloat(e.target.value) : null
                                           );
                                         }}
-                                        className="w-full px-1.5 py-1 border border-transparent hover:border-gray-200 focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-white focus:outline-none font-mono"
+                                        className="w-full px-1.5 py-1 border border-transparent hover:border-subtle focus:border-starlight-blue rounded text-sm text-right bg-transparent focus:bg-surface focus:outline-none font-mono"
                                       />
                                     </td>
                                     <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">
@@ -1140,7 +1140,7 @@ export default function ScopeWorkOrdersPage() {
                                             }
                                           }
                                         }}
-                                        className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber"
+                                        className="h-3.5 w-3.5 rounded border-subtle text-starlight-amber focus:ring-starlight-amber"
                                         title="From workshop stock (internal cost)"
                                       />
                                     </td>
@@ -1156,13 +1156,13 @@ export default function ScopeWorkOrdersPage() {
                                             e.target.checked ? "true" : "false"
                                           )
                                         }
-                                        className={"h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber" + (isFromStock ? " opacity-30" : "")}
+                                        className={"h-3.5 w-3.5 rounded border-subtle text-starlight-amber focus:ring-starlight-amber" + (isFromStock ? " opacity-30" : "")}
                                       />
                                     </td>
                                     <td className="py-1.5">
                                       <button
                                         onClick={() => deleteBomRow(row.bom_id)}
-                                        className="p-1 text-gray-300 hover:text-starlight-red transition-colors"
+                                        className="p-1 text-faint hover:text-starlight-red transition-colors"
                                         title="Remove"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
@@ -1173,10 +1173,10 @@ export default function ScopeWorkOrdersPage() {
                               })}
                             </tbody>
                             <tfoot>
-                              <tr className="border-t border-gray-200">
+                              <tr className="border-t border-subtle">
                                 <td
                                   colSpan={5}
-                                  className="py-2 text-right text-xs font-medium text-gray-500"
+                                  className="py-2 text-right text-xs font-medium text-muted"
                                 >
                                   Material Total
                                 </td>
@@ -1214,35 +1214,35 @@ export default function ScopeWorkOrdersPage() {
       {/* Void dialog */}
       {voidDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
-            <div className="px-5 py-4 border-b border-gray-100">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-subtle">
               <h3 className="text-sm font-semibold text-navy">Void Work Order</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Voided WOs retain all time entry costs. This cannot be undone.
               </p>
             </div>
             <div className="px-5 py-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason *</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Reason *</label>
               <textarea
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value)}
                 placeholder="Why is this being voided..."
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none"
+                className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none"
                 autoFocus
               />
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3">
               <button
                 onClick={() => { setVoidDialog(null); setVoidReason(""); }}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => voidReason.trim() && voidWO(voidDialog.woId, voidReason.trim())}
                 disabled={!voidReason.trim()}
-                className="px-4 py-2 bg-starlight-amber text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-starlight-amber text-white text-sm font-medium rounded-lg hover:bg-starlight-amber transition-colors disabled:opacity-50"
               >
                 Void Work Order
               </button>
@@ -1254,10 +1254,10 @@ export default function ScopeWorkOrdersPage() {
       {/* Material search modal */}
       {showMatSearch && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="px-5 py-4 border-b border-gray-100">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md">
+            <div className="px-5 py-4 border-b border-subtle">
               <h3 className="text-sm font-semibold text-navy">Add Material to BOM</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Search the catalogue or type a custom item
               </p>
             </div>
@@ -1267,21 +1267,21 @@ export default function ScopeWorkOrdersPage() {
                 value={matSearch}
                 onChange={(e) => setMatSearch(e.target.value)}
                 placeholder="Search materials..."
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 autoFocus
               />
 
               {/* Results */}
               {matResults.length > 0 && (
-                <div className="mt-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
+                <div className="mt-2 max-h-48 overflow-y-auto border border-subtle rounded-lg divide-y divide-subtle">
                   {matResults.map((m) => (
                     <button
                       key={m.material_id}
                       onClick={() => selectMaterial(m)}
-                      className="w-full text-left px-3 py-2 hover:bg-starlight-bg transition-colors"
+                      className="w-full text-left px-3 py-2 hover:bg-base transition-colors"
                     >
                       <p className="text-sm text-navy font-medium">{m.material_name}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted">
                         {m.unit}
                         {m.current_unit_cost != null && ` · ${formatCurrency(m.current_unit_cost)}`}
                       </p>
@@ -1291,19 +1291,19 @@ export default function ScopeWorkOrdersPage() {
               )}
 
               {matSearch.length >= 2 && matResults.length === 0 && (
-                <p className="text-xs text-gray-400 mt-2 py-1">
+                <p className="text-xs text-muted mt-2 py-1">
                   No catalogue matches
                 </p>
               )}
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-between">
+            <div className="px-5 py-3 border-t border-subtle flex justify-between">
               <button
                 onClick={() => {
                   setShowMatSearch(false);
                   setAddingBomTo(null);
                   setMatSearch("");
                 }}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
               >
                 Cancel
               </button>

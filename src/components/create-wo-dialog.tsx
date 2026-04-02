@@ -158,18 +158,18 @@ export function CreateWODialog({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+      <div className="bg-surface rounded-xl shadow-2xl w-full max-w-lg">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
           <h2 className="text-lg font-semibold text-navy">Create Work Order</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="h-5 w-5 text-gray-400" />
+          <button onClick={onClose} className="p-1 hover:bg-surface-mid rounded-lg transition-colors">
+            <X className="h-5 w-5 text-muted" />
           </button>
         </div>
 
         {/* Context */}
-        <div className="px-6 py-3 bg-starlight-bg border-b border-gray-100">
-          <p className="text-xs text-gray-500">
+        <div className="px-6 py-3 bg-base border-b border-subtle">
+          <p className="text-xs text-muted">
             {selectedItemIds.length} job item{selectedItemIds.length !== 1 ? "s" : ""} will be linked
           </p>
         </div>
@@ -178,7 +178,7 @@ export function CreateWODialog({
         <div className="px-6 py-4 space-y-4">
           {/* Activity picker */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Activities *
             </label>
 
@@ -187,7 +187,7 @@ export function CreateWODialog({
               onChange={(e) => {
                 if (e.target.value) addActivity(Number(e.target.value));
               }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue mb-2"
+              className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue mb-2"
             >
               <option value="">+ Add activity...</option>
               {available.map((act) => (
@@ -202,9 +202,9 @@ export function CreateWODialog({
                 {chosenActivities.map((act, idx) => (
                   <div
                     key={act.lookup_id}
-                    className="flex items-center gap-2 bg-starlight-bg rounded-lg px-3 py-2"
+                    className="flex items-center gap-2 bg-base rounded-lg px-3 py-2"
                   >
-                    <span className="text-xs text-gray-400 w-4">{idx + 1}.</span>
+                    <span className="text-xs text-muted w-4">{idx + 1}.</span>
                     <span className="flex-1 text-sm text-navy font-medium">
                       {act.lookup_value}
                     </span>
@@ -212,7 +212,7 @@ export function CreateWODialog({
                       {idx > 0 && (
                         <button
                           onClick={() => moveActivity(idx, -1)}
-                          className="p-0.5 text-gray-400 hover:text-navy text-xs"
+                          className="p-0.5 text-muted hover:text-navy text-xs"
                           title="Move up"
                         >
                           ↑
@@ -221,7 +221,7 @@ export function CreateWODialog({
                       {idx < chosenActivities.length - 1 && (
                         <button
                           onClick={() => moveActivity(idx, 1)}
-                          className="p-0.5 text-gray-400 hover:text-navy text-xs"
+                          className="p-0.5 text-muted hover:text-navy text-xs"
                           title="Move down"
                         >
                           ↓
@@ -230,7 +230,7 @@ export function CreateWODialog({
                     </div>
                     <button
                       onClick={() => removeActivity(act.lookup_id)}
-                      className="p-0.5 text-gray-400 hover:text-starlight-red"
+                      className="p-0.5 text-muted hover:text-starlight-red"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -240,42 +240,42 @@ export function CreateWODialog({
             )}
 
             {chosenActivities.length > 0 && (
-              <p className="mt-2 text-xs text-gray-400">
+              <p className="mt-2 text-xs text-muted">
                 Displays as: <span className="font-medium text-navy">{previewLabel}</span>
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Description</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">Description</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What specifically needs doing..."
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Estimated Hours</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">Estimated Hours</label>
             <input
               type="number"
               step="0.5"
               value={estimatedHrs}
               onChange={(e) => setEstimatedHrs(e.target.value)}
               placeholder="e.g. 4"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Complexity</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Complexity</label>
               <select
                 value={complexity}
                 onChange={(e) => setComplexity(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               >
                 <option value="">Select...</option>
                 <option value="1 - Straightforward">1 - Straightforward</option>
@@ -284,11 +284,11 @@ export function CreateWODialog({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Finish</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Finish</label>
               <select
                 value={finish}
                 onChange={(e) => setFinish(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               >
                 <option value="">Select...</option>
                 <option value="Raw">Raw</option>
@@ -299,24 +299,24 @@ export function CreateWODialog({
           </div>
 
           {error && (
-            <div className="text-sm text-starlight-red bg-red-50 rounded-lg px-3 py-2">
+            <div className="text-sm text-starlight-red bg-starlight-red/10 rounded-lg px-3 py-2">
               {error}
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={saving}
-            className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors disabled:opacity-50"
           >
             {saving ? "Creating..." : "Create Work Order"}
           </button>

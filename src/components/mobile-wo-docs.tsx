@@ -84,15 +84,15 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-surface rounded-xl border border-subtle overflow-hidden">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full px-4 py-3 flex items-center justify-between active:bg-gray-50"
+          className="w-full px-4 py-3 flex items-center justify-between active:bg-surface-dim"
         >
           <div className="flex items-center gap-2">
-            {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+            {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
             <span className="text-sm font-semibold text-navy">Documents</span>
-            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{docs.length}</span>
+            <span className="text-[10px] bg-surface-mid text-muted px-1.5 py-0.5 rounded-full">{docs.length}</span>
           </div>
         </button>
 
@@ -105,8 +105,8 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                 <div key={type}>
                   <div className="flex items-center gap-1.5 mb-2">
                     <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{config.label}</span>
-                    <span className="text-[10px] text-gray-400">({typeDocs.length})</span>
+                    <span className="text-xs font-semibold text-muted uppercase tracking-wider">{config.label}</span>
+                    <span className="text-[10px] text-muted">({typeDocs.length})</span>
                   </div>
 
                   {/* Drawings and references: thumbnail grid */}
@@ -116,14 +116,14 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                         <button
                           key={doc.doc_id}
                           onClick={() => openImage(doc)}
-                          className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 active:border-starlight-blue transition-colors"
+                          className="w-20 h-20 rounded-lg border border-subtle overflow-hidden bg-surface-dim active:border-starlight-blue transition-colors"
                           title={doc.caption || doc.file_name}
                         >
                           {doc.mime_type?.startsWith("image/") ? (
                             <MobileThumb path={doc.onedrive_path} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <FileText className="h-6 w-6 text-gray-300" />
+                              <FileText className="h-6 w-6 text-faint" />
                             </div>
                           )}
                         </button>
@@ -135,13 +135,13 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                   {type === "model" && (
                     <div className="space-y-1.5">
                       {typeDocs.map(doc => (
-                        <div key={doc.doc_id} className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg">
+                        <div key={doc.doc_id} className="flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg">
                           <Box className="h-4 w-4 text-starlight-red shrink-0" />
                           <span className="text-sm text-navy flex-1 truncate">{doc.caption || doc.file_name}</span>
-                          <button onClick={() => openModel(doc)} className="px-2.5 py-1 bg-starlight-blue text-white text-[11px] font-medium rounded-md active:bg-blue-700">
+                          <button onClick={() => openModel(doc)} className="px-2.5 py-1 bg-starlight-blue text-white text-[11px] font-medium rounded-md active:bg-navy">
                             <Eye className="h-3 w-3 inline mr-1" />3D
                           </button>
-                          <button onClick={() => downloadFile(doc)} className="p-1.5 text-gray-400 active:text-navy">
+                          <button onClick={() => downloadFile(doc)} className="p-1.5 text-muted active:text-navy">
                             <Download className="h-4 w-4" />
                           </button>
                         </div>
@@ -156,11 +156,11 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                         <button
                           key={doc.doc_id}
                           onClick={() => downloadFile(doc)}
-                          className="w-full flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg active:bg-gray-100"
+                          className="w-full flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg active:bg-surface-mid"
                         >
                           <FileText className="h-4 w-4 text-starlight-green shrink-0" />
                           <span className="text-sm text-navy flex-1 truncate text-left">{doc.caption || doc.file_name}</span>
-                          <Download className="h-4 w-4 text-gray-400" />
+                          <Download className="h-4 w-4 text-muted" />
                         </button>
                       ))}
                     </div>
@@ -176,12 +176,12 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       {previewUrl && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-3" onClick={() => setPreviewUrl(null)}>
           <div className="max-w-full max-h-full relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPreviewUrl(null)} className="absolute -top-2 -right-2 bg-white rounded-full p-1.5 shadow-lg text-gray-600 active:text-navy z-10">
+            <button onClick={() => setPreviewUrl(null)} className="absolute -top-2 -right-2 bg-surface rounded-full p-1.5 shadow-lg text-muted active:text-navy z-10">
               <X className="h-4 w-4" />
             </button>
             <p className="text-white text-xs text-center mb-2 truncate max-w-[250px] mx-auto">{previewName}</p>
             {previewName.endsWith(".pdf") ? (
-              <iframe src={previewUrl} className="w-[90vw] h-[75vh] rounded-lg bg-white" />
+              <iframe src={previewUrl} className="w-[90vw] h-[75vh] rounded-lg bg-surface" />
             ) : (
               <img src={previewUrl} alt={previewName} className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg" />
             )}
@@ -203,7 +203,7 @@ function MobileThumb({ path }: { path: string | null }) {
   useEffect(() => {
     if (path) getOneDriveUrl(path).then(setUrl).catch(() => {});
   }, [path]);
-  if (!url) return <div className="w-full h-full bg-gray-100 animate-pulse" />;
+  if (!url) return <div className="w-full h-full bg-surface-mid animate-pulse" />;
   return <img src={url} alt="" className="w-full h-full object-cover" />;
 }
 

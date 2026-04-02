@@ -246,7 +246,7 @@ export default function MobileSchedule() {
   };
 
   const pendingCount = groups.filter((g) => g.status === "pending").length;
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading schedule...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading schedule...</div>;
 
   return (
     <div className="space-y-4">
@@ -254,7 +254,7 @@ export default function MobileSchedule() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-navy">My schedule</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Tap any day to see options</p>
+          <p className="text-xs text-muted mt-0.5">Tap any day to see options</p>
         </div>
         {myId && (
           <button onClick={async () => {
@@ -272,21 +272,21 @@ export default function MobileSchedule() {
       </div>
 
       {/* Monthly Calendar */}
-      <div className="bg-white rounded-xl border border-gray-100 px-3 py-3">
+      <div className="bg-surface rounded-xl border border-subtle px-3 py-3">
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-gray-400"><ChevronLeft className="h-4 w-4" /></button>
+          <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-muted"><ChevronLeft className="h-4 w-4" /></button>
           <span className="text-sm font-semibold text-navy">{calLabel}</span>
-          <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-gray-400"><ChevronRight className="h-4 w-4" /></button>
+          <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-muted"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2 justify-center">
-          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-green-400" /> Confirmed</span>
-          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-amber-300" /> Pending</span>
-          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-red-300" /> Declined</span>
-          <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-gray-300" /> Off</span>
+          <span className="flex items-center gap-1 text-[9px] text-muted"><span className="w-2 h-2 rounded-sm bg-starlight-green" /> Confirmed</span>
+          <span className="flex items-center gap-1 text-[9px] text-muted"><span className="w-2 h-2 rounded-sm bg-starlight-amber/30" /> Pending</span>
+          <span className="flex items-center gap-1 text-[9px] text-muted"><span className="w-2 h-2 rounded-sm bg-starlight-red/30" /> Declined</span>
+          <span className="flex items-center gap-1 text-[9px] text-muted"><span className="w-2 h-2 rounded-sm bg-surface-top" /> Off</span>
         </div>
         <div className="grid grid-cols-7 gap-0.5 mb-1">
           {["M","T","W","T","F","S","S"].map((d, i) => (
-            <div key={i} className="text-center text-[10px] font-medium text-gray-400">{d}</div>
+            <div key={i} className="text-center text-[10px] font-medium text-muted">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-0.5">
@@ -295,13 +295,13 @@ export default function MobileSchedule() {
             const info = getCalDayInfo(d.date);
             const isToday = d.date === todayStr;
             const isPast = d.date < todayStr;
-            let bg = ""; let tc = d.isWeekend ? "text-gray-300" : "text-gray-500";
+            let bg = ""; let tc = d.isWeekend ? "text-faint" : "text-muted";
             if (info) {
               switch (info.status) {
-                case "Confirmed": bg = "bg-green-100"; tc = "text-green-800 font-semibold"; break;
-                case "Booked": case "Notified": bg = "bg-amber-50"; tc = "text-amber-700 font-semibold"; break;
-                case "Declined": bg = "bg-red-50"; tc = "text-red-400 line-through"; break;
-                case "Unavailable": bg = "bg-gray-100"; tc = "text-gray-400"; break;
+                case "Confirmed": bg = "bg-starlight-green/15"; tc = "text-starlight-green font-semibold"; break;
+                case "Booked": case "Notified": bg = "bg-starlight-amber/10"; tc = "text-starlight-amber font-semibold"; break;
+                case "Declined": bg = "bg-starlight-red/10"; tc = "text-starlight-red line-through"; break;
+                case "Unavailable": bg = "bg-surface-mid"; tc = "text-muted"; break;
               }
             }
             return (
@@ -326,38 +326,38 @@ export default function MobileSchedule() {
             const cc = isExp ? Object.values(dayToggles).filter(Boolean).length : 0;
             const dc = isExp ? Object.values(dayToggles).filter((v) => !v).length : 0;
             return (
-              <div key={g.key} className="bg-white rounded-xl border-2 border-amber-300 overflow-hidden mb-3">
+              <div key={g.key} className="bg-surface rounded-xl border-2 border-starlight-amber/30 overflow-hidden mb-3">
                 <div className="px-4 pt-4 pb-3">
                   <div className="flex justify-between items-start">
-                    <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-gray-400 mt-1">{g.dateRange} · {g.dayCount} day{g.dayCount > 1 ? "s" : ""}</p></div>
-                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">Pending</span>
+                    <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-muted mt-1">{g.dateRange} · {g.dayCount} day{g.dayCount > 1 ? "s" : ""}</p></div>
+                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-starlight-amber/15 text-starlight-amber">Pending</span>
                   </div>
-                  {g.notes && <div className="mt-2 px-3 py-2 bg-gray-50 rounded-lg text-xs text-gray-500">{g.notes}</div>}
+                  {g.notes && <div className="mt-2 px-3 py-2 bg-surface-dim rounded-lg text-xs text-muted">{g.notes}</div>}
                 </div>
                 {!isExp && (
                   <div className="px-4 pb-4 space-y-2">
-                    <button onClick={() => confirmAll(g)} disabled={acting} className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                    <button onClick={() => confirmAll(g)} disabled={acting} className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
                       <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" />Confirm all {g.dayCount} day{g.dayCount > 1 ? "s" : ""}
                     </button>
-                    <button onClick={() => toggleExpand(g.key, g)} className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg">Confirm with exceptions</button>
+                    <button onClick={() => toggleExpand(g.key, g)} className="w-full py-2.5 text-muted text-sm border border-subtle rounded-lg">Confirm with exceptions</button>
                   </div>
                 )}
                 {isExp && (
                   <div className="px-4 pb-4">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">Toggle days you can't do:</p>
+                    <p className="text-[11px] font-medium text-muted uppercase tracking-wider mb-2">Toggle days you can't do:</p>
                     <div className="space-y-1 max-h-[240px] overflow-y-auto mb-3">
                       {g.rows.map((r) => { const on = dayToggles[r.schedule_id] !== false; return (
-                        <button key={r.schedule_id} onClick={() => setDayToggles((p) => ({ ...p, [r.schedule_id]: !on }))} className={"w-full flex justify-between items-center px-3 py-2.5 rounded-lg " + (on ? "bg-green-50" : "bg-red-50")}>
-                          <span className={"text-[13px] font-medium " + (on ? "text-green-700" : "text-red-600")}>{fmtDate(r.scheduled_date)}</span>
-                          <div className={"w-9 h-5 rounded-full relative " + (on ? "bg-green-500" : "bg-gray-300")}><div className={"w-4 h-4 bg-white rounded-full absolute top-0.5 " + (on ? "right-0.5" : "left-0.5")} /></div>
+                        <button key={r.schedule_id} onClick={() => setDayToggles((p) => ({ ...p, [r.schedule_id]: !on }))} className={"w-full flex justify-between items-center px-3 py-2.5 rounded-lg " + (on ? "bg-starlight-green/10" : "bg-starlight-red/10")}>
+                          <span className={"text-[13px] font-medium " + (on ? "text-starlight-green" : "text-starlight-red")}>{fmtDate(r.scheduled_date)}</span>
+                          <div className={"w-9 h-5 rounded-full relative " + (on ? "bg-starlight-green" : "bg-surface-top")}><div className={"w-4 h-4 bg-surface rounded-full absolute top-0.5 " + (on ? "right-0.5" : "left-0.5")} /></div>
                         </button>
                       ); })}
                     </div>
-                    <div className="flex justify-between px-3 py-2.5 bg-gray-50 rounded-lg mb-3"><span className="text-xs text-gray-500">Confirming</span><span className="text-sm font-semibold text-navy">{cc} of {g.dayCount}</span></div>
-                    <button onClick={() => confirmWithExceptions(g)} disabled={acting || cc === 0} className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50 mb-2">
+                    <div className="flex justify-between px-3 py-2.5 bg-surface-dim rounded-lg mb-3"><span className="text-xs text-muted">Confirming</span><span className="text-sm font-semibold text-navy">{cc} of {g.dayCount}</span></div>
+                    <button onClick={() => confirmWithExceptions(g)} disabled={acting || cc === 0} className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50 mb-2">
                       {dc > 0 ? `Confirm ${cc}, decline ${dc}` : `Confirm all ${cc} days`}
                     </button>
-                    <button onClick={() => { setExpandedGroup(null); setDayToggles({}); }} className="w-full py-2.5 text-gray-500 text-sm border border-gray-200 rounded-lg">Back</button>
+                    <button onClick={() => { setExpandedGroup(null); setDayToggles({}); }} className="w-full py-2.5 text-muted text-sm border border-subtle rounded-lg">Back</button>
                   </div>
                 )}
               </div>
@@ -372,14 +372,14 @@ export default function MobileSchedule() {
           <h2 className="text-sm font-semibold text-navy mb-2">Upcoming</h2>
           {groups.filter((g) => g.status !== "pending").map((g) => {
             const sl = g.status === "confirmed" ? "Confirmed" : g.status === "declined" ? "Declined" : "Partial";
-            const sc = g.status === "confirmed" ? "bg-green-100 text-green-700" : g.status === "declined" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700";
+            const sc = g.status === "confirmed" ? "bg-starlight-green/15 text-starlight-green" : g.status === "declined" ? "bg-starlight-red/15 text-starlight-red" : "bg-navy/15 text-navy";
             const cd = g.rows.filter((r) => r.status === "Confirmed").length;
             const dd = g.rows.filter((r) => r.status === "Declined").length;
             return (
-              <div key={g.key} className="bg-white rounded-xl border border-gray-100 px-4 py-3 mb-2">
+              <div key={g.key} className="bg-surface rounded-xl border border-subtle px-4 py-3 mb-2">
                 <div className="flex justify-between items-start">
-                  <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-gray-400 mt-1">{g.dateRange}</p>
-                    {g.status === "partial" && <p className="text-xs text-gray-500 mt-0.5">{cd} confirmed, {dd} declined</p>}
+                  <div><p className="text-[15px] font-semibold text-navy">{g.job?.job_name || "Workshop"}</p><p className="text-xs text-muted mt-1">{g.dateRange}</p>
+                    {g.status === "partial" && <p className="text-xs text-muted mt-0.5">{cd} confirmed, {dd} declined</p>}
                   </div>
                   <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full " + sc}>{sl}</span>
                 </div>
@@ -408,21 +408,21 @@ export default function MobileSchedule() {
       {/* ============================================================ */}
       {selectedDay && (
         <div className="fixed inset-0 bg-black/40 flex items-end z-50" onClick={(e) => { if (e.target === e.currentTarget) setSelectedDay(null); }}>
-          <div className="bg-white w-full rounded-t-2xl max-h-[60vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+          <div className="bg-surface w-full rounded-t-2xl max-h-[60vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-subtle flex justify-between items-center">
               <div>
                 <h3 className="text-[15px] font-semibold text-navy">{fmtDate(selectedDay.date)}</h3>
                 {selectedDay.info ? (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     {selectedDay.info.status === "Unavailable" 
                       ? `Unavailable${selectedDay.info.row.unavailable_reason ? " — " + selectedDay.info.row.unavailable_reason : ""}`
                       : `${selectedDay.info.status} — ${selectedDay.info.job?.job_name || "Workshop"}`}
                   </p>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-0.5">No bookings</p>
+                  <p className="text-xs text-muted mt-0.5">No bookings</p>
                 )}
               </div>
-              <button onClick={() => setSelectedDay(null)} className="p-1 text-gray-400"><X className="h-5 w-5" /></button>
+              <button onClick={() => setSelectedDay(null)} className="p-1 text-muted"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-5 py-4 space-y-2">
 
@@ -430,13 +430,13 @@ export default function MobileSchedule() {
               {!selectedDay.info && (
                 <>
                   <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason (optional)</label>
+                    <label className="block text-xs font-medium text-muted mb-1.5">Reason (optional)</label>
                     <input type="text" value={unavailReason} onChange={(e) => setUnavailReason(e.target.value)}
                       placeholder="Holiday, other job, appointment..."
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                      className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                   <button onClick={() => markDayUnavailable(selectedDay.date, unavailReason)} disabled={acting}
-                    className="w-full py-3 bg-gray-100 text-gray-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                    className="w-full py-3 bg-surface-mid text-foreground font-medium text-sm rounded-lg disabled:opacity-50">
                     Mark as unavailable
                   </button>
                 </>
@@ -446,11 +446,11 @@ export default function MobileSchedule() {
               {selectedDay.info && ["Booked", "Notified"].includes(selectedDay.info.status) && (
                 <>
                   <button onClick={() => confirmDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                    className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
                     <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Confirm this day
                   </button>
                   <button onClick={() => declineDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-red-50 text-red-600 font-medium text-sm rounded-lg disabled:opacity-50">
+                    className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
                     <X className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Decline this day
                   </button>
                 </>
@@ -459,14 +459,14 @@ export default function MobileSchedule() {
               {/* Confirmed — option to withdraw */}
               {selectedDay.info?.status === "Confirmed" && (
                 <>
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-1">
+                  <div className="bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5 mb-1">
                     <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                      <p className="text-xs text-amber-700">Withdrawing will notify the workshop manager so they can find a replacement.</p>
+                      <AlertTriangle className="h-4 w-4 text-starlight-amber mt-0.5 shrink-0" />
+                      <p className="text-xs text-starlight-amber">Withdrawing will notify the workshop manager so they can find a replacement.</p>
                     </div>
                   </div>
                   <button onClick={() => withdrawDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-red-50 text-red-600 font-medium text-sm rounded-lg disabled:opacity-50">
+                    className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
                     I can't make this day anymore
                   </button>
                 </>
@@ -474,20 +474,20 @@ export default function MobileSchedule() {
 
               {/* Declined — info only */}
               {selectedDay.info?.status === "Declined" && (
-                <p className="text-sm text-gray-400 text-center py-2">You declined this day. Contact the workshop manager if you've changed your mind.</p>
+                <p className="text-sm text-muted text-center py-2">You declined this day. Contact the workshop manager if you've changed your mind.</p>
               )}
 
               {/* Unavailable — remove it */}
               {selectedDay.info?.status === "Unavailable" && (
                 <button onClick={() => removeDayUnavailable(selectedDay.info!.row)} disabled={acting}
-                  className="w-full py-3 bg-green-50 text-green-700 font-medium text-sm rounded-lg disabled:opacity-50">
+                  className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
                   Remove unavailability — I'm free this day
                 </button>
               )}
 
               {/* Cancel */}
               <button onClick={() => { setSelectedDay(null); setUnavailReason(""); }}
-                className="w-full py-2.5 text-gray-400 text-sm mt-1">
+                className="w-full py-2.5 text-muted text-sm mt-1">
                 Cancel
               </button>
             </div>

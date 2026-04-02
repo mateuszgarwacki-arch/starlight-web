@@ -215,7 +215,7 @@ export default function AddBookingPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading...</div>;
   }
 
   const todayStr = todayLocal();
@@ -224,12 +224,12 @@ export default function AddBookingPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/capacity" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-          <ArrowLeft className="h-5 w-5 text-gray-400" />
+        <Link href="/capacity" className="p-2 hover:bg-surface-mid rounded-lg transition-colors">
+          <ArrowLeft className="h-5 w-5 text-muted" />
         </Link>
         <div>
           <h1 className="text-xl font-bold text-navy">Add booking</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Select a person, a job, and the days you need them</p>
+          <p className="text-sm text-muted mt-0.5">Select a person, a job, and the days you need them</p>
         </div>
       </div>
 
@@ -238,14 +238,14 @@ export default function AddBookingPage() {
         <div className="space-y-4">
           {/* Freelancer picker */}
           <div>
-            <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Freelancer</label>
+            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5">Freelancer</label>
             <select
               value={selectedFreelancer?.freelancer_id || ""}
               onChange={(e) => {
                 const f = freelancers.find((x) => x.freelancer_id === Number(e.target.value));
                 if (f) selectFreelancer(f);
               }}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             >
               <option value="">Select a freelancer...</option>
               {freelancers.map((f) => (
@@ -258,7 +258,7 @@ export default function AddBookingPage() {
 
           {/* Job picker */}
           <div>
-            <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Job</label>
+            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5">Job</label>
             <select
               value={selectedJob?.job_id || ""}
               onChange={(e) => {
@@ -266,7 +266,7 @@ export default function AddBookingPage() {
                 if (val === "0") setSelectedJob({ job_id: 0, job_name: "General workshop", job_number: "", event_date: null } as any);
                 else { const j = jobs.find((x) => x.job_id === Number(val)); setSelectedJob(j || null); }
               }}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             >
               <option value="">Select a job...</option>
               <option value="0">General workshop</option>
@@ -280,22 +280,22 @@ export default function AddBookingPage() {
 
           {/* Note */}
           <div>
-            <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Note (optional)</label>
+            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5">Note (optional)</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Mainly cutting + framework assembly..."
               rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+              className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             />
           </div>
 
           {/* Summary */}
           {selectedFreelancer && dayCount > 0 && (
             <div className="card px-4 py-3">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Summary</p>
+              <p className="text-[10px] text-muted uppercase tracking-wider">Summary</p>
               <p className="text-xl font-semibold text-navy mt-1">{dayCount} day{dayCount > 1 ? "s" : ""} selected</p>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-sm text-muted mt-0.5">
                 {totalHours} hours · {formatCurrency(totalCost)} estimated
               </p>
             </div>
@@ -303,10 +303,10 @@ export default function AddBookingPage() {
 
           {/* Conflict warnings — soft signal, not a block */}
           {conflictWarnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-              <p className="text-[11px] font-medium text-amber-700 mb-1">Heads up — {conflictWarnings.length} day{conflictWarnings.length > 1 ? "s" : ""} with existing commitments:</p>
+            <div className="bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5">
+              <p className="text-[11px] font-medium text-starlight-amber mb-1">Heads up — {conflictWarnings.length} day{conflictWarnings.length > 1 ? "s" : ""} with existing commitments:</p>
               {conflictWarnings.map((w, i) => (
-                <p key={i} className="text-[11px] text-amber-600">{w}</p>
+                <p key={i} className="text-[11px] text-starlight-amber">{w}</p>
               ))}
             </div>
           )}
@@ -324,7 +324,7 @@ export default function AddBookingPage() {
             <button
               onClick={() => saveBooking(false)}
               disabled={saving || !selectedFreelancer || !selectedJob || dayCount === 0}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-subtle text-muted text-sm rounded-lg hover:bg-surface-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4" />
               Book without notifying
@@ -335,31 +335,31 @@ export default function AddBookingPage() {
         {/* Right: Calendar */}
         <div className="card px-5 py-4">
           {!selectedFreelancer ? (
-            <div className="text-center py-16 text-gray-400 text-sm">Select a freelancer to see their calendar</div>
+            <div className="text-center py-16 text-muted text-sm">Select a freelancer to see their calendar</div>
           ) : (
             <>
               {/* Month nav */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <button onClick={() => shiftMonth(-1)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                    <ChevronLeft className="h-4 w-4 text-gray-400" />
+                  <button onClick={() => shiftMonth(-1)} className="p-1.5 hover:bg-surface-mid rounded-lg transition-colors">
+                    <ChevronLeft className="h-4 w-4 text-muted" />
                   </button>
                   <span className="text-sm font-semibold text-navy min-w-[160px] text-center">{calLabel}</span>
-                  <button onClick={() => shiftMonth(1)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                    <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <button onClick={() => shiftMonth(1)} className="p-1.5 hover:bg-surface-mid rounded-lg transition-colors">
+                    <ChevronRight className="h-4 w-4 text-muted" />
                   </button>
                 </div>
-                <div className="flex gap-3 text-[10px] text-gray-400">
+                <div className="flex gap-3 text-[10px] text-muted">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-starlight-blue/20" /> Selected</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-starlight-green/30" /> Already booked</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-200" style={{ background: "repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 2px, transparent 2px, transparent 5px)" }} /> Unavailable</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-surface-hi" style={{ background: "repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 2px, transparent 2px, transparent 5px)" }} /> Unavailable</span>
                 </div>
               </div>
 
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-                  <div key={d} className={"text-center text-[11px] font-medium py-1 " + (d === "Sat" || d === "Sun" ? "text-gray-400" : "text-gray-400")}>{d}</div>
+                  <div key={d} className={"text-center text-[11px] font-medium py-1 " + (d === "Sat" || d === "Sun" ? "text-muted" : "text-muted")}>{d}</div>
                 ))}
               </div>
 
@@ -387,10 +387,10 @@ export default function AddBookingPage() {
                          state === "selected-unavailable" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-2 ring-starlight-amber/50 cursor-pointer" :
                          state === "selected-booked" ? "bg-starlight-blue/15 text-starlight-blue font-semibold ring-2 ring-starlight-amber/50 cursor-pointer" :
                          state === "booked" ? "bg-starlight-green/15 text-starlight-green font-medium cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
-                         state === "unavailable" ? "text-gray-400 cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
-                         isPast ? "text-gray-200 cursor-not-allowed" :
-                         d.isWeekend ? "text-gray-400 hover:bg-gray-50 cursor-pointer" :
-                         "text-gray-700 hover:bg-gray-50 cursor-pointer")
+                         state === "unavailable" ? "text-muted cursor-pointer hover:ring-1 hover:ring-starlight-blue/30" :
+                         isPast ? "text-faint cursor-not-allowed" :
+                         d.isWeekend ? "text-muted hover:bg-surface-dim cursor-pointer" :
+                         "text-foreground hover:bg-surface-dim cursor-pointer")
                       }
                       style={state === "unavailable" ? {
                         background: "repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 3px, transparent 3px, transparent 7px)",
@@ -404,7 +404,7 @@ export default function AddBookingPage() {
 
               {/* Info bar at bottom */}
               {existingDays.length > 0 && (
-                <div className="mt-3 px-3 py-2.5 bg-gray-50 rounded-lg text-[11px] text-gray-400 space-y-1">
+                <div className="mt-3 px-3 py-2.5 bg-surface-dim rounded-lg text-[11px] text-muted space-y-1">
                   {existingDays.filter((e) => e.status === "Unavailable").slice(0, 3).map((e) => (
                     <div key={e.date}>
                       {new Date(e.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} — {selectedFreelancer?.freelancer_name?.split(" ")[0]} marked unavailable{e.unavailable_reason ? ` (${e.unavailable_reason})` : ""}

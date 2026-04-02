@@ -223,7 +223,7 @@ export default function OrdersPage() {
     : groups;
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-gray-400 text-sm">Loading procurement...</div></div>;
+    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-muted text-sm">Loading procurement...</div></div>;
   }
 
   return (
@@ -232,13 +232,13 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Orders</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Procurement management — what needs buying, what&apos;s been ordered</p>
+          <p className="text-sm text-muted mt-0.5">Procurement management — what needs buying, what&apos;s been ordered</p>
         </div>
         <div className="flex items-center gap-2">
           {selected.size > 0 && (
             <button
               onClick={openMarkDialog}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-green text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-green text-white text-sm font-medium rounded-lg hover:bg-starlight-green transition-colors"
             >
               <Check className="h-4 w-4" /> Mark {selected.size} Ordered
             </button>
@@ -250,33 +250,33 @@ export default function OrdersPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card px-4 py-3">
           <p className="text-2xl font-semibold text-navy">{outstanding.length}</p>
-          <p className="text-xs text-gray-500">Items to order</p>
+          <p className="text-xs text-muted">Items to order</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-2xl font-semibold text-navy">{groups.length}</p>
-          <p className="text-xs text-gray-500">Unique materials</p>
+          <p className="text-xs text-muted">Unique materials</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-2xl font-semibold text-navy">
             {formatCurrency(outstanding.reduce((s, i) => s + (i.quantity || 0) * (i.unit_cost || 0), 0))}
           </p>
-          <p className="text-xs text-gray-500">Est. total cost</p>
+          <p className="text-xs text-muted">Est. total cost</p>
         </div>
 
         <div className="card px-4 py-3">
           <p className="text-2xl font-semibold text-navy">
             {new Set(outstanding.map(i => i.job_number).filter(Boolean)).size}
           </p>
-          <p className="text-xs text-gray-500">Jobs affected</p>
+          <p className="text-xs text-muted">Jobs affected</p>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-subtle">
         <button
           onClick={() => setTab("outstanding")}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            tab === "outstanding" ? "border-starlight-red text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "outstanding" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-muted"
           }`}
         >
           <Package className="h-3.5 w-3.5 inline mr-1.5" />
@@ -285,7 +285,7 @@ export default function OrdersPage() {
         <button
           onClick={() => setTab("ordered")}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            tab === "ordered" ? "border-starlight-green text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+            tab === "ordered" ? "border-starlight-green text-navy" : "border-transparent text-muted hover:text-muted"
           }`}
         >
           <Truck className="h-3.5 w-3.5 inline mr-1.5" />
@@ -298,16 +298,16 @@ export default function OrdersPage() {
         <div className="space-y-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
             <input
               type="text"
               placeholder="Filter by material name..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+              className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
             />
             {filter && (
-              <button onClick={() => setFilter("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy">
+              <button onClick={() => setFilter("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-navy">
                 <X className="h-4 w-4" />
               </button>
             )}
@@ -315,8 +315,8 @@ export default function OrdersPage() {
 
           {filteredGroups.length === 0 ? (
             <div className="card px-5 py-10 text-center">
-              <Package className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">{filter ? "No materials match your filter" : "Nothing to order — all BOM items are covered"}</p>
+              <Package className="h-8 w-8 text-faint mx-auto mb-2" />
+              <p className="text-sm text-muted">{filter ? "No materials match your filter" : "Nothing to order — all BOM items are covered"}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -328,34 +328,34 @@ export default function OrdersPage() {
                 return (
                   <div key={group.key} className="card overflow-hidden">
                     {/* Group header */}
-                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-surface-dim/50 transition-colors">
                       <input
                         type="checkbox"
                         checked={allSelected}
                         ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
                         onChange={() => toggleSelectAll(group)}
-                        className="h-4 w-4 rounded border-gray-300 text-starlight-blue focus:ring-starlight-blue/50"
+                        className="h-4 w-4 rounded border-subtle text-starlight-blue focus:ring-starlight-blue/50"
                       />
                       <button onClick={() => toggleGroup(group.key)} className="flex items-center gap-2 flex-1 text-left">
-                        {group.expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+                        {group.expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />}
                         <span className="font-medium text-navy text-sm">{group.material_name}</span>
-                        {group.category_name && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{group.category_name}</span>}
+                        {group.category_name && <span className="text-[10px] bg-surface-mid text-muted px-1.5 py-0.5 rounded-full">{group.category_name}</span>}
                       </button>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
+                      <div className="flex items-center gap-4 text-xs text-muted shrink-0">
                         <span className="font-mono font-medium text-navy">{group.total_qty} {group.unit || ""}</span>
-                        {group.standard_sheet_size && <span className="text-gray-400">{group.standard_sheet_size}</span>}
-                        {group.standard_length && <span className="text-gray-400">{group.standard_length}m std</span>}
-                        {estCost > 0 && <span className="text-gray-400">{formatCurrency(estCost)}</span>}
-                        <span className="text-gray-400">{group.items.length} {group.items.length === 1 ? "WO" : "WOs"}</span>
+                        {group.standard_sheet_size && <span className="text-muted">{group.standard_sheet_size}</span>}
+                        {group.standard_length && <span className="text-muted">{group.standard_length}m std</span>}
+                        {estCost > 0 && <span className="text-muted">{formatCurrency(estCost)}</span>}
+                        <span className="text-muted">{group.items.length} {group.items.length === 1 ? "WO" : "WOs"}</span>
                       </div>
                     </div>
 
                     {/* Expanded detail rows */}
                     {group.expanded && (
-                      <div className="border-t border-gray-100 bg-gray-50/30">
+                      <div className="border-t border-subtle bg-surface-dim/30">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                            <tr className="text-left text-[10px] text-muted uppercase tracking-wider">
                               <th className="pl-11 pr-2 py-2 font-medium w-8"></th>
                               <th className="px-2 py-2 font-medium">Work Order</th>
                               <th className="px-2 py-2 font-medium">Scope Item</th>
@@ -368,23 +368,23 @@ export default function OrdersPage() {
                           </thead>
                           <tbody>
                             {group.items.map(item => (
-                              <tr key={item.bom_id} className="border-t border-gray-100/50 hover:bg-white/50">
+                              <tr key={item.bom_id} className="border-t border-subtle/50 hover:bg-surface/50">
                                 <td className="pl-11 pr-2 py-2">
                                   <input
                                     type="checkbox"
                                     checked={selected.has(item.bom_id)}
                                     onChange={() => toggleItem(item.bom_id)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-blue focus:ring-starlight-blue/50"
+                                    className="h-3.5 w-3.5 rounded border-subtle text-starlight-blue focus:ring-starlight-blue/50"
                                   />
                                 </td>
                                 <td className="px-2 py-2 text-navy">{item.wo_description || "—"}</td>
-                                <td className="px-2 py-2 text-gray-600">{item.scope_name || "—"}</td>
-                                <td className="px-2 py-2 text-gray-500 font-mono">{item.job_number || "—"}</td>
+                                <td className="px-2 py-2 text-muted">{item.scope_name || "—"}</td>
+                                <td className="px-2 py-2 text-muted font-mono">{item.job_number || "—"}</td>
                                 <td className="px-2 py-2 text-right font-mono text-navy">{item.quantity || "—"} {item.unit || ""}</td>
 
-                                <td className="px-2 py-2 text-right text-gray-500">{item.unit_cost ? formatCurrency(item.unit_cost) : "—"}</td>
-                                <td className="px-2 py-2 text-gray-500">{item.supplier || "—"}</td>
-                                <td className="px-2 py-2 text-gray-400 truncate max-w-[150px]">{item.notes || ""}</td>
+                                <td className="px-2 py-2 text-right text-muted">{item.unit_cost ? formatCurrency(item.unit_cost) : "—"}</td>
+                                <td className="px-2 py-2 text-muted">{item.supplier || "—"}</td>
+                                <td className="px-2 py-2 text-muted truncate max-w-[150px]">{item.notes || ""}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -404,14 +404,14 @@ export default function OrdersPage() {
         <div>
           {recentOrders.length === 0 ? (
             <div className="card px-5 py-10 text-center">
-              <Truck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">No recent orders recorded</p>
+              <Truck className="h-8 w-8 text-faint mx-auto mb-2" />
+              <p className="text-sm text-muted">No recent orders recorded</p>
             </div>
           ) : (
             <div className="card overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                  <tr className="bg-base text-left text-[10px] text-muted uppercase tracking-wider">
                     <th className="px-4 py-2 font-medium">Material</th>
                     <th className="px-4 py-2 font-medium text-right">Qty</th>
                     <th className="px-4 py-2 font-medium">Supplier</th>
@@ -423,19 +423,19 @@ export default function OrdersPage() {
                 </thead>
                 <tbody>
                   {recentOrders.map(o => (
-                    <tr key={o.bom_id} className="border-t border-gray-100 hover:bg-gray-50/50">
+                    <tr key={o.bom_id} className="border-t border-subtle hover:bg-surface-dim/50">
                       <td className="px-4 py-2.5 font-medium text-navy">{o.material_name}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-600">{o.quantity || "—"} {o.unit || ""}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{o.supplier || "—"}</td>
-                      <td className="px-4 py-2.5 text-gray-500 font-mono">{o.job_number || "—"}</td>
-                      <td className="px-4 py-2.5 text-gray-500 truncate max-w-[180px]">{o.wo_description || "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-muted">{o.quantity || "—"} {o.unit || ""}</td>
+                      <td className="px-4 py-2.5 text-muted">{o.supplier || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted font-mono">{o.job_number || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted truncate max-w-[180px]">{o.wo_description || "—"}</td>
 
-                      <td className="px-4 py-2.5 text-gray-500">{formatDate(o.ordered_at)}</td>
+                      <td className="px-4 py-2.5 text-muted">{formatDate(o.ordered_at)}</td>
                       <td className="px-4 py-2.5">
                         {o.expected_delivery ? (
-                          <span className="text-gray-600">{formatDate(o.expected_delivery)}</span>
+                          <span className="text-muted">{formatDate(o.expected_delivery)}</span>
                         ) : (
-                          <span className="text-gray-300">—</span>
+                          <span className="text-faint">—</span>
                         )}
                       </td>
                     </tr>
@@ -451,18 +451,18 @@ export default function OrdersPage() {
       {/* MARK ORDERED DIALOG */}
       {showMarkDialog && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-navy">Mark as Ordered</h2>
-            <p className="text-sm text-gray-500">{selected.size} item{selected.size !== 1 ? "s" : ""} selected</p>
+            <p className="text-sm text-muted">{selected.size} item{selected.size !== 1 ? "s" : ""} selected</p>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Supplier</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Supplier</label>
               {!showAddSupplier ? (
                 <div className="flex gap-2">
                   <select
                     value={markSupplier}
                     onChange={(e) => setMarkSupplier(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                    className="flex-1 px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
                   >
                     <option value="">— Select supplier —</option>
                     {lastSupplier && <option value={lastSupplier}>★ {lastSupplier} (last used)</option>}
@@ -478,7 +478,7 @@ export default function OrdersPage() {
                   </select>
                   <button
                     onClick={() => setShowAddSupplier(true)}
-                    className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-500 hover:text-navy hover:border-starlight-blue transition-colors shrink-0"
+                    className="px-3 py-2.5 border border-subtle rounded-lg text-sm text-muted hover:text-navy hover:border-starlight-blue transition-colors shrink-0"
                     title="Add new supplier"
                   >
                     <Plus className="h-4 w-4" />
@@ -491,48 +491,48 @@ export default function OrdersPage() {
                     value={newSupplierName}
                     onChange={(e) => setNewSupplierName(e.target.value)}
                     placeholder="New supplier name..."
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                    className="flex-1 px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
                     autoFocus
                     onKeyDown={(e) => { if (e.key === "Enter") handleAddSupplier(); if (e.key === "Escape") { setShowAddSupplier(false); setNewSupplierName(""); } }}
                   />
                   <button
                     onClick={handleAddSupplier}
                     disabled={!newSupplierName.trim() || addingSupplier}
-                    className="px-3 py-2.5 bg-starlight-blue text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 shrink-0"
+                    className="px-3 py-2.5 bg-starlight-blue text-white rounded-lg text-sm font-medium hover:bg-navy transition-colors disabled:opacity-50 shrink-0"
                   >
                     {addingSupplier ? "..." : "Add"}
                   </button>
                   <button
                     onClick={() => { setShowAddSupplier(false); setNewSupplierName(""); }}
-                    className="px-2.5 py-2.5 text-gray-400 hover:text-navy transition-colors shrink-0"
+                    className="px-2.5 py-2.5 text-muted hover:text-navy transition-colors shrink-0"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               )}
               {suppliers.length === 0 && !showAddSupplier && (
-                <p className="text-[10px] text-gray-400 mt-1">No suppliers yet — click + to add one</p>
+                <p className="text-[10px] text-muted mt-1">No suppliers yet — click + to add one</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Expected Delivery</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Expected Delivery</label>
               <input
                 type="date"
                 value={markDelivery}
                 onChange={(e) => setMarkDelivery(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Notes (optional)</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Notes (optional)</label>
               <input
                 type="text"
                 value={markNotes}
                 onChange={(e) => setMarkNotes(e.target.value)}
                 placeholder="e.g. Amazon order #12345, arriving Thursday"
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/50"
                 maxLength={200}
               />
             </div>
@@ -540,14 +540,14 @@ export default function OrdersPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setShowMarkDialog(false); setMarkSupplier(""); setMarkDelivery(""); setMarkNotes(""); setLastSupplier(null); setRecentSuppliers([]); }}
-                className="flex-1 px-4 py-2.5 text-gray-600 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                className="flex-1 px-4 py-2.5 text-muted bg-surface-mid rounded-lg text-sm font-medium hover:bg-surface-hi transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleMarkOrdered}
                 disabled={acting}
-                className="flex-1 px-4 py-2.5 bg-starlight-green text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-starlight-green text-white rounded-lg text-sm font-semibold hover:bg-starlight-green transition-colors disabled:opacity-50"
               >
                 {acting ? "Saving..." : "Confirm Ordered"}
               </button>

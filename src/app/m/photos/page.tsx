@@ -113,39 +113,39 @@ export default function MobilePhotosPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>;
+    return <div className="flex items-center justify-center h-40 text-muted text-sm animate-pulse">Loading...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-navy">Site Photos</h1>
-        <button onClick={loadItems} className="p-2 text-gray-400 active:text-navy">
+        <button onClick={loadItems} className="p-2 text-muted active:text-navy">
           <RefreshCw className="h-4 w-4" />
         </button>
       </div>
 
       {items.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+        <div className="bg-surface rounded-xl border border-subtle p-8 text-center">
           <Check className="h-10 w-10 text-starlight-green mx-auto" />
-          <p className="text-sm text-gray-500 mt-3 font-medium">All caught up</p>
-          <p className="text-xs text-gray-400 mt-1">No scope items awaiting site photos right now.</p>
+          <p className="text-sm text-muted mt-3 font-medium">All caught up</p>
+          <p className="text-xs text-muted mt-1">No scope items awaiting site photos right now.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted">
             {items.length} item{items.length !== 1 ? "s" : ""} awaiting completion photo
           </p>
           {items.map(item => (
-            <div key={item.scope_item_id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div key={item.scope_item_id} className="bg-surface rounded-xl border border-subtle p-4 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-navy">{item.item_name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{item.job_name}</p>
+                  <p className="text-xs text-muted mt-0.5">{item.job_name}</p>
                   <div className="flex gap-2 mt-1">
-                    <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.job_number}</span>
+                    <span className="text-[10px] font-mono text-muted bg-surface-mid px-1.5 py-0.5 rounded">{item.job_number}</span>
                     {item.event_zone && (
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.event_zone}</span>
+                      <span className="text-[10px] text-muted bg-surface-mid px-1.5 py-0.5 rounded">{item.event_zone}</span>
                     )}
                   </div>
                 </div>
@@ -175,7 +175,7 @@ export default function MobilePhotosPage() {
                 <button
                   onClick={() => cameraRefs.current[item.scope_item_id]?.click()}
                   disabled={uploading === item.scope_item_id}
-                  className="flex-1 py-3 bg-starlight-green text-white text-sm font-semibold rounded-xl active:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-starlight-green text-white text-sm font-semibold rounded-xl active:bg-starlight-green transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Camera className="h-4 w-4" />
                   Take Photo
@@ -183,7 +183,7 @@ export default function MobilePhotosPage() {
                 <button
                   onClick={() => setShowWaiver(item.scope_item_id)}
                   disabled={uploading === item.scope_item_id}
-                  className="py-3 px-4 bg-gray-100 text-gray-500 text-sm font-medium rounded-xl active:bg-gray-200 transition-colors disabled:opacity-50"
+                  className="py-3 px-4 bg-surface-mid text-muted text-sm font-medium rounded-xl active:bg-surface-hi transition-colors disabled:opacity-50"
                 >
                   Waiver
                 </button>
@@ -194,20 +194,20 @@ export default function MobilePhotosPage() {
                     <AlertTriangle className="h-4 w-4" />
                     Photo Waiver
                   </div>
-                  <p className="text-xs text-gray-500">Why can&apos;t a completion photo be taken?</p>
+                  <p className="text-xs text-muted">Why can&apos;t a completion photo be taken?</p>
                   <input
                     type="text"
                     value={waiverReason}
                     onChange={(e) => setWaiverReason(e.target.value)}
                     placeholder="e.g. Item consumed during event, client denied access..."
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber"
+                    className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber"
                     maxLength={200}
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setShowWaiver(null); setWaiverReason(""); }}
-                      className="flex-1 py-2 text-gray-600 bg-gray-100 rounded-lg text-sm font-medium"
+                      className="flex-1 py-2 text-muted bg-surface-mid rounded-lg text-sm font-medium"
                     >
                       Cancel
                     </button>

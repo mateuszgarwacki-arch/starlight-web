@@ -6,36 +6,64 @@
 
 @layer base {
   :root {
-    --navy: #1A1A2E;
-    --red: #C0392B;
-    --blue: #2980B9;
-    --green: #27AE60;
-    --amber: #F39C12;
-    --bg: #F4F5F7;
+    --base: #0c0d14;
+    --surface: #111219;
+    --brand-blue: #7BA4D4;
+    --brand-pink: #D47BA0;
+    --foreground: #f0f0f4;
+    --muted: #9a9aaa;
+    --faint: #6a6a78;
+    --subtle: #1e2030;
+    --red: #ff716c;
+    --green: #4ade80;
+    --amber: #fbbf24;
+    /* Legacy aliases — safe to remove once all hardcoded var() refs are gone */
+    --navy: #7BA4D4;
+    --blue: #7BA4D4;
+    --bg: #0c0d14;
   }
 
   body {
-    @apply bg-starlight-bg text-gray-900 antialiased;
+    @apply bg-base text-foreground antialiased;
   }
 }
 
 @layer components {
-  /* Status badge variants */
-  .badge-not-started { @apply bg-gray-100 text-gray-600; }
-  .badge-ready { @apply bg-white text-gray-800 border border-gray-300; }
+  /* Status badge variants — dark theme */
+  .badge-not-started { @apply bg-surface-mid text-muted; }
+  .badge-ready { @apply bg-surface text-foreground border border-subtle; }
   .badge-in-progress { @apply bg-starlight-blue/10 text-starlight-blue; }
   .badge-complete { @apply bg-starlight-green/10 text-starlight-green; }
   .badge-on-hold { @apply bg-starlight-amber/10 text-starlight-amber; }
-  .badge-voided { @apply bg-gray-100 text-gray-400 line-through; }
+  .badge-voided { @apply bg-surface-mid text-faint line-through; }
 
-  /* Card base */
+  /* Card base — dark theme */
   .card {
-    @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+    @apply bg-surface rounded-lg border border-subtle;
+  }
+
+  /* Form inputs — dark theme base styling */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  textarea,
+  select {
+    @apply bg-surface-mid text-foreground;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-faint;
   }
 
   /* Amber highlight for uninterpreted quote lines */
   .row-amber {
-    @apply bg-amber-50 border-l-4 border-l-starlight-amber;
+    @apply bg-starlight-amber/5 border-l-4 border-l-starlight-amber;
   }
 }
 
@@ -58,7 +86,7 @@
 
 
 /* ============================================================
-   Traveller Print Styles
+   Traveller Print Styles — stays light for print
    ============================================================ */
 @media print {
   nav, .sidebar, header,
@@ -68,6 +96,7 @@
 
   body {
     background: white !important;
+    color: black !important;
     margin: 0 !important;
     padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
@@ -88,6 +117,19 @@
     page-break-inside: avoid;
     border-width: 1.5pt !important;
     border-color: #1A1A2E !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Force ALL text inside traveller pages to print dark-on-white */
+  .traveller-page *,
+  .traveller-print-area * {
+    color: #1A1A2E !important;
+    border-color: #ccc !important;
+  }
+
+  .traveller-page table th {
+    color: #555 !important;
   }
 
   .traveller-page:last-child {

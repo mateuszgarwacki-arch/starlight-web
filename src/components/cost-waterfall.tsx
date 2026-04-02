@@ -41,9 +41,9 @@ interface Props {
 }
 
 function MarginBadge({ cost, quoted }: { cost: number | null; quoted: number | null }) {
-  if (!cost || !quoted || quoted === 0) return <span className="text-gray-300">—</span>;
+  if (!cost || !quoted || quoted === 0) return <span className="text-faint">—</span>;
   const m = pct(cost, quoted);
-  if (m === null) return <span className="text-gray-300">—</span>;
+  if (m === null) return <span className="text-faint">—</span>;
   return (
     <span className={`text-xs font-mono ${
       m >= 20 ? "text-starlight-green" : m >= 0 ? "text-starlight-amber" : "text-starlight-red"
@@ -54,7 +54,7 @@ function MarginBadge({ cost, quoted }: { cost: number | null; quoted: number | n
 }
 
 function TrendIcon({ actual, quoted }: { actual: number | null; quoted: number | null }) {
-  if (!actual || !quoted) return <Minus className="h-3.5 w-3.5 text-gray-300" />;
+  if (!actual || !quoted) return <Minus className="h-3.5 w-3.5 text-faint" />;
   if (actual <= quoted * 0.9) return <TrendingDown className="h-3.5 w-3.5 text-starlight-green" />;
   if (actual <= quoted * 1.1) return <Minus className="h-3.5 w-3.5 text-starlight-amber" />;
   return <TrendingUp className="h-3.5 w-3.5 text-starlight-red" />;
@@ -100,15 +100,15 @@ export function CostWaterfall({ jobId }: Props) {
         className="w-full flex items-center justify-between px-5 py-3.5 text-left"
       >
         <div className="flex items-center gap-2">
-          {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
           <BarChart3 className="h-4 w-4 text-navy" />
           <span className="text-sm font-semibold text-navy">Cost Waterfall</span>
-          <span className="text-xs text-gray-400">{rows.length} scope items</span>
+          <span className="text-xs text-muted">{rows.length} scope items</span>
         </div>
         <div className="flex items-center gap-4 text-xs">
-          <span className="text-gray-400">Quoted: <span className="font-mono text-navy">{fmt(totals.quoted)}</span></span>
+          <span className="text-muted">Quoted: <span className="font-mono text-navy">{fmt(totals.quoted)}</span></span>
           {hasActuals && (
-            <span className="text-gray-400">Actual: <span className={`font-mono ${
+            <span className="text-muted">Actual: <span className={`font-mono ${
               totals.actual <= totals.quoted ? "text-starlight-green" : "text-starlight-red"
             }`}>{fmt(totals.actual)}</span></span>
           )}
@@ -121,7 +121,7 @@ export function CostWaterfall({ jobId }: Props) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400">
+                <tr className="border-b border-subtle text-xs text-muted">
                   <th className="text-left py-2 pr-3 font-medium">Scope Item</th>
                   <th className="text-right py-2 px-2 font-medium w-24">Quoted</th>
                   {hasPmEst && <th className="text-right py-2 px-2 font-medium w-24">PM Est</th>}
@@ -138,14 +138,14 @@ export function CostWaterfall({ jobId }: Props) {
                   return (
                     <Fragment key={r.scope_item_id}>
                       <tr
-                        className="border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-colors"
+                        className="border-b border-subtle hover:bg-surface-dim/50 cursor-pointer transition-colors"
                         onClick={() => setExpandedRow(isRowExpanded ? null : r.scope_item_id)}
                       >
                         <td className="py-2.5 pr-3">
                           <div className="flex items-center gap-1.5">
                             {isRowExpanded
-                              ? <ChevronDown className="h-3 w-3 text-gray-400 shrink-0" />
-                              : <ChevronRight className="h-3 w-3 text-gray-400 shrink-0" />}
+                              ? <ChevronDown className="h-3 w-3 text-muted shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-muted shrink-0" />}
                             <Link
                               href={`/jobs/${jobId}/scope/${r.scope_item_id}`}
                               onClick={(e) => e.stopPropagation()}
@@ -154,7 +154,7 @@ export function CostWaterfall({ jobId }: Props) {
                               {r.scope_name || `Scope #${r.scope_item_id}`}
                             </Link>
                             {r.selected_option && (
-                              <span className="text-[10px] bg-green-50 text-starlight-green px-1.5 py-0.5 rounded shrink-0">
+                              <span className="text-[10px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded shrink-0">
                                 {r.selected_option}
                               </span>
                             )}
@@ -164,7 +164,7 @@ export function CostWaterfall({ jobId }: Props) {
                           {r.quoted_value ? fmt(r.quoted_value) : "—"}
                         </td>
                         {hasPmEst && (
-                          <td className="text-right py-2.5 px-2 font-mono text-orange-500">
+                          <td className="text-right py-2.5 px-2 font-mono text-starlight-amber">
                             {r.pm_est_cost ? fmt(r.pm_est_cost) : "—"}
                           </td>
                         )}
@@ -191,15 +191,15 @@ export function CostWaterfall({ jobId }: Props) {
                       {/* Expanded detail row */}
                       {isRowExpanded && (
                         <tr>
-                          <td colSpan={6 + (hasPmEst ? 1 : 0)} className="py-2 px-4 bg-gray-50/50">
-                            <div className="grid grid-cols-4 gap-4 text-xs text-gray-500">
+                          <td colSpan={6 + (hasPmEst ? 1 : 0)} className="py-2 px-4 bg-surface-dim/50">
+                            <div className="grid grid-cols-4 gap-4 text-xs text-muted">
                               <div>
-                                <p className="font-medium text-gray-400 mb-1">Quoted</p>
+                                <p className="font-medium text-muted mb-1">Quoted</p>
                                 <p className="font-mono">{r.quoted_value ? fmt(r.quoted_value) : "—"}</p>
                               </div>
                               {r.pm_est_cost != null && (
                                 <div>
-                                  <p className="font-medium text-orange-400 mb-1">PM Estimate</p>
+                                  <p className="font-medium text-starlight-amber mb-1">PM Estimate</p>
                                   <p className="font-mono">{fmt(r.pm_est_cost)}</p>
                                   <MarginBadge cost={r.pm_est_cost} quoted={r.quoted_value} />
                                 </div>
@@ -230,11 +230,11 @@ export function CostWaterfall({ jobId }: Props) {
                   );
                 })}
                 {/* Totals row */}
-                <tr className="border-t-2 border-gray-200 font-semibold">
+                <tr className="border-t-2 border-subtle font-semibold">
                   <td className="py-2.5 pr-3 text-navy">Total ({rows.length} items)</td>
                   <td className="text-right py-2.5 px-2 font-mono text-navy">{fmt(totals.quoted)}</td>
                   {hasPmEst && (
-                    <td className="text-right py-2.5 px-2 font-mono text-orange-500">{fmt(totals.pmEst)}</td>
+                    <td className="text-right py-2.5 px-2 font-mono text-starlight-amber">{fmt(totals.pmEst)}</td>
                   )}
                   {hasWorkshopEst && (
                     <td className="text-right py-2.5 px-2 font-mono text-starlight-blue">{fmt(totals.workshopEst)}</td>

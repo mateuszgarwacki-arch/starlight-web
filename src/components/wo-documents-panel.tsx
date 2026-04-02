@@ -179,16 +179,16 @@ export function WODocumentsPanel({
 
   return (
     <>
-      <div className="border-t border-gray-100">
-        <button onClick={() => setExpanded(!expanded)} className="w-full px-5 py-2.5 flex items-center gap-2 hover:bg-gray-50/50 transition-colors text-left">
-          {expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Documents & Files</span>
-          {totalCount > 0 && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{totalCount}</span>}
+      <div className="border-t border-subtle">
+        <button onClick={() => setExpanded(!expanded)} className="w-full px-5 py-2.5 flex items-center gap-2 hover:bg-surface-dim/50 transition-colors text-left">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted" /> : <ChevronRight className="h-3.5 w-3.5 text-muted" />}
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">Documents & Files</span>
+          {totalCount > 0 && <span className="text-[10px] bg-surface-mid text-muted px-1.5 py-0.5 rounded-full">{totalCount}</span>}
         </button>
         {expanded && (
           <div className="px-5 pb-4 space-y-4">
             {loading ? (
-              <p className="text-xs text-gray-400 animate-pulse py-2">Loading files...</p>
+              <p className="text-xs text-muted animate-pulse py-2">Loading files...</p>
             ) : (
               <>
                 {Object.entries(DOC_TYPE_CONFIG).map(([type, config]) => {
@@ -200,13 +200,13 @@ export function WODocumentsPanel({
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <Icon className={`h-3.5 w-3.5 ${config.color}`} />
-                          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{config.label}</span>
-                          {typeDocs.length > 0 && <span className="text-[10px] text-gray-400">({typeDocs.length})</span>}
+                          <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">{config.label}</span>
+                          {typeDocs.length > 0 && <span className="text-[10px] text-muted">({typeDocs.length})</span>}
                         </div>
                         {!readOnly && (
                           <>
                             <input ref={el => { fileRefs.current[type] = el; }} type="file" accept={config.accept} multiple onChange={(e) => handleUpload(type, e.target.files)} className="hidden" />
-                            <button onClick={() => fileRefs.current[type]?.click()} disabled={isUploading} className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-navy font-medium transition-colors disabled:opacity-50">
+                            <button onClick={() => fileRefs.current[type]?.click()} disabled={isUploading} className="inline-flex items-center gap-1 text-[10px] text-muted hover:text-navy font-medium transition-colors disabled:opacity-50">
                               {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add
                             </button>
                           </>
@@ -214,7 +214,7 @@ export function WODocumentsPanel({
                       </div>
 
                       {typeDocs.length === 0 ? (
-                        <p className="text-[10px] text-gray-300 pl-5">No {config.label.toLowerCase()} added</p>
+                        <p className="text-[10px] text-faint pl-5">No {config.label.toLowerCase()} added</p>
                       ) : (
                         <div className={type === "drawing" || type === "reference" ? "flex flex-wrap gap-2" : "space-y-1"}>
                           {typeDocs.sort((a, b) => a.sort_order - b.sort_order).map((doc, idx) => (
@@ -226,23 +226,23 @@ export function WODocumentsPanel({
                                 onDragEnd={handleDragEnd}
                                 onDrop={(e) => handleDrop(e, doc.doc_id, type)}
                               >
-                                <button onClick={() => openPreview(doc)} className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
+                                <button onClick={() => openPreview(doc)} className="w-16 h-16 rounded-lg border border-subtle overflow-hidden bg-surface-dim hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
                                   {doc.mime_type?.startsWith("image/") ? (
                                     <OneDriveThumb path={doc.onedrive_path} />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center"><FileText className="h-6 w-6 text-gray-300" /></div>
+                                    <div className="w-full h-full flex items-center justify-center"><FileText className="h-6 w-6 text-faint" /></div>
                                   )}
                                 </button>
                                 <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-navy text-white text-[9px] font-bold flex items-center justify-center shadow-sm pointer-events-none">{idx + 1}</span>
                                 {!readOnly && (
-                                  <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-starlight-red">
+                                  <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-surface border border-subtle rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-starlight-red">
                                     <Trash2 className="h-2.5 w-2.5" />
                                   </button>
                                 )}
                               </div>
                             ) : (
                               <div key={doc.doc_id}>
-                                <div className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-gray-50 group">
+                                <div className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-surface-dim group">
                                   <Icon className={`h-3.5 w-3.5 ${config.color} shrink-0`} />
                                   <span className="text-xs text-navy flex-1 truncate">{doc.caption || doc.file_name}</span>
                                   {doc.doc_type === "cut_list" && doc.extraction_status && (
@@ -250,13 +250,13 @@ export function WODocumentsPanel({
                                       doc.extraction_status === "confirmed" ? "bg-starlight-green/10 text-starlight-green" :
                                       doc.extraction_status === "extracted" ? "bg-starlight-blue/10 text-starlight-blue" :
                                       doc.extraction_status === "pending" ? "bg-starlight-amber/10 text-starlight-amber" :
-                                      "bg-red-50 text-starlight-red"
+                                      "bg-starlight-red/10 text-starlight-red"
                                     )}>{doc.extraction_status}</span>
                                   )}
                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {doc.doc_type === "model" && <button onClick={() => openPreview(doc)} className="p-1 text-gray-400 hover:text-navy" title="View 3D model"><Eye className="h-3.5 w-3.5" /></button>}
-                                    <button onClick={() => downloadDoc(doc)} className="p-1 text-gray-400 hover:text-navy" title="Download"><Download className="h-3.5 w-3.5" /></button>
-                                    {!readOnly && <button onClick={() => deleteDoc(doc.doc_id)} className="p-1 text-gray-400 hover:text-starlight-red" title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>}
+                                    {doc.doc_type === "model" && <button onClick={() => openPreview(doc)} className="p-1 text-muted hover:text-navy" title="View 3D model"><Eye className="h-3.5 w-3.5" /></button>}
+                                    <button onClick={() => downloadDoc(doc)} className="p-1 text-muted hover:text-navy" title="Download"><Download className="h-3.5 w-3.5" /></button>
+                                    {!readOnly && <button onClick={() => deleteDoc(doc.doc_id)} className="p-1 text-muted hover:text-starlight-red" title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>}
                                   </div>
                                 </div>
                                 {doc.doc_type === "cut_list" && workOrderId && (
@@ -290,7 +290,7 @@ export function WODocumentsPanel({
       {previewUrl && !showModelViewer && (
         <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
           <div className="max-w-4xl max-h-[90vh] relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPreviewUrl(null)} className="absolute -top-3 -right-3 bg-white rounded-full p-1.5 shadow-lg text-gray-600 hover:text-navy z-10">✕</button>
+            <button onClick={() => setPreviewUrl(null)} className="absolute -top-3 -right-3 bg-surface rounded-full p-1.5 shadow-lg text-muted hover:text-navy z-10">✕</button>
             <p className="text-white text-xs text-center mb-2">{previewName}</p>
             {previewName.endsWith(".pdf") ? (
               <iframe src={previewUrl} className="w-full h-[80vh] rounded-lg" />
@@ -312,6 +312,6 @@ export function WODocumentsPanel({
 function OneDriveThumb({ path }: { path: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => { if (path) getOneDriveUrl(path).then(setUrl).catch(() => {}); }, [path]);
-  if (!url) return <div className="w-full h-full bg-gray-100 animate-pulse" />;
+  if (!url) return <div className="w-full h-full bg-surface-mid animate-pulse" />;
   return <img src={url} alt="" className="w-full h-full object-cover" />;
 }

@@ -33,7 +33,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-navy flex items-center justify-center px-4">
+    <div className="min-h-screen bg-base flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-10">
@@ -49,38 +49,38 @@ export default function LoginPage() {
         {/* Login card */}
         <form
           onSubmit={handleLogin}
-          className="bg-white rounded-xl p-6 shadow-2xl space-y-4"
+          className="bg-surface rounded-xl p-6 shadow-2xl space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent"
               placeholder="mateusz@starlightdesign.co.uk"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Password
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent"
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent"
               placeholder="Enter password"
               required
             />
           </div>
 
           {error && (
-            <div className="text-sm text-starlight-red bg-red-50 rounded-lg px-3 py-2">
+            <div className="text-sm text-starlight-red bg-starlight-red/10 rounded-lg px-3 py-2">
               {error}
             </div>
           )}
@@ -88,7 +88,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

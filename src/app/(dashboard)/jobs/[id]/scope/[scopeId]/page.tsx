@@ -187,14 +187,14 @@ export default function ScopeDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">
+      <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">
         Loading scope item...
       </div>
     );
   }
 
   if (!scope) {
-    return <div className="text-center py-12 text-gray-400">Scope item not found</div>;
+    return <div className="text-center py-12 text-muted">Scope item not found</div>;
   }
 
   return (
@@ -203,7 +203,7 @@ export default function ScopeDetailPage() {
       <div className="flex items-center justify-between">
         <Link
           href={`/jobs/${jobId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Job
@@ -215,7 +215,7 @@ export default function ScopeDetailPage() {
       <div className="card px-6 py-5">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <p className="text-xs text-gray-400 font-mono">
+            <p className="text-xs text-muted font-mono">
               {scope.job_number} &gt; Scope #{scope.scope_item_id}
             </p>
             <textarea
@@ -238,10 +238,10 @@ export default function ScopeDetailPage() {
                 el.style.height = el.scrollHeight + "px";
               }}
               rows={1}
-              className="text-xl font-bold text-navy mt-1 w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none rounded px-1 -ml-1 resize-none overflow-hidden leading-tight"
+              className="text-xl font-bold text-navy mt-1 w-full bg-transparent border border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none rounded px-1 -ml-1 resize-none overflow-hidden leading-tight"
             />
             {scope.job_name && (
-              <p className="text-sm text-gray-400 mt-1">{scope.job_name}</p>
+              <p className="text-sm text-muted mt-1">{scope.job_name}</p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export default function ScopeDetailPage() {
               {scope.status === "Provisional" && woCount === 0 && (
                 <button
                   onClick={deleteScope}
-                  className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-lg transition-colors"
+                  className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-lg transition-colors"
                   title="Delete scope item"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -258,7 +258,7 @@ export default function ScopeDetailPage() {
               {scope.status !== "Completed" && scope.status !== "Cancelled-Cost-Retained" && (
                 <button
                   onClick={() => setShowCancelDialog(true)}
-                  className="p-1.5 text-gray-300 hover:text-starlight-amber hover:bg-amber-50 rounded-lg transition-colors"
+                  className="p-1.5 text-faint hover:text-starlight-amber hover:bg-starlight-amber/10 rounded-lg transition-colors"
                   title="Cancel (retain costs)"
                 >
                   <AlertTriangle className="h-4 w-4" />
@@ -270,7 +270,7 @@ export default function ScopeDetailPage() {
         {/* Editable fields */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Status</label>
+            <label className="block text-xs font-medium text-muted mb-1">Status</label>
             <LookupCombo
               category="SCOPE_STATUS"
               value={scope.status}
@@ -279,11 +279,11 @@ export default function ScopeDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>
+            <label className="block text-xs font-medium text-muted mb-1">Category</label>
             <select
               value={scope.category_id || ""}
               onChange={(e) => updateField("category_id", e.target.value ? Number(e.target.value) : null)}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue min-w-[120px]"
+              className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue min-w-[120px]"
             >
               <option value="">Select...</option>
               {categories.map((cat) => (
@@ -294,11 +294,11 @@ export default function ScopeDetailPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Complexity</label>
+            <label className="block text-xs font-medium text-muted mb-1">Complexity</label>
             <select
               value={scope.complexity_construction || ""}
               onChange={(e) => updateField("complexity_construction", e.target.value || null)}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             >
               <option value="">Select...</option>
               <option value="1 - Straightforward">1 - Straightforward</option>
@@ -307,11 +307,11 @@ export default function ScopeDetailPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Finish</label>
+            <label className="block text-xs font-medium text-muted mb-1">Finish</label>
             <select
               value={scope.finish_relative || ""}
               onChange={(e) => updateField("finish_relative", e.target.value || null)}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             >
               <option value="">Select...</option>
               <option value="Raw">Raw</option>
@@ -320,7 +320,7 @@ export default function ScopeDetailPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Event Zone</label>
+            <label className="block text-xs font-medium text-muted mb-1">Event Zone</label>
             <input
               type="text"
               value={scope.event_zone || ""}
@@ -329,14 +329,14 @@ export default function ScopeDetailPage() {
               }
               onFocus={() => presenceSetEditing("event_zone")}
               onBlur={(e) => { presenceSetEditing(null); updateField("event_zone", e.target.value || null); }}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
             />
           </div>
         </div>
 
         {/* Description */}
         <div className="mt-3">
-          <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
+          <label className="block text-xs font-medium text-muted mb-1">Description</label>
           <textarea
             value={scope.description || ""}
             onChange={(e) =>
@@ -345,7 +345,7 @@ export default function ScopeDetailPage() {
             onFocus={() => presenceSetEditing("description")}
             onBlur={(e) => { presenceSetEditing(null); updateField("description", e.target.value || null); }}
             rows={2}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+            className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             placeholder="Describe the scope item..."
           />
         </div>
@@ -379,10 +379,10 @@ export default function ScopeDetailPage() {
               <Hammer className="h-4 w-4 text-navy" />
               <div>
                 <p className="text-sm font-medium text-navy">Work Orders</p>
-                <p className="text-xs text-gray-400">{woCount} WOs</p>
+                <p className="text-xs text-muted">{woCount} WOs</p>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-300" />
+            <ChevronRight className="h-4 w-4 text-faint" />
           </Link>
         </div>
 
@@ -400,7 +400,7 @@ export default function ScopeDetailPage() {
             <div className="mt-3 flex justify-end">
               <button
                 onClick={() => setShowWODialog(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors"
               >
                 <Hammer className="h-4 w-4" />
                 Create Work Order from {selectedItemIds.length} Item{selectedItemIds.length > 1 ? "s" : ""}
@@ -413,35 +413,35 @@ export default function ScopeDetailPage() {
       {/* Cancel Dialog */}
       {showCancelDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
-            <div className="px-5 py-4 border-b border-gray-100">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-subtle">
               <h3 className="text-sm font-semibold text-navy">Cancel Scope Item</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Completed WO costs will be retained. This cannot be undone.
               </p>
             </div>
             <div className="px-5 py-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Reason *</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Reason *</label>
               <textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 placeholder="Why is this being cancelled..."
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none"
+                className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-amber resize-none"
                 autoFocus
               />
             </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3">
               <button
                 onClick={() => { setShowCancelDialog(false); setCancelReason(""); }}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => cancelReason.trim() && cancelScope(cancelReason.trim())}
                 disabled={!cancelReason.trim()}
-                className="px-4 py-2 bg-starlight-amber text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-starlight-amber text-white text-sm font-medium rounded-lg hover:bg-starlight-amber transition-colors disabled:opacity-50"
               >
                 Cancel Scope Item
               </button>

@@ -17,7 +17,7 @@ const CATEGORIES = [
   { value: "job_work", label: "Job Work", color: "bg-starlight-blue/10 text-starlight-blue border-starlight-blue/30" },
   { value: "maintenance", label: "Maintenance", color: "bg-starlight-amber/10 text-starlight-amber border-starlight-amber/30" },
   { value: "workshop_general", label: "Workshop General", color: "bg-navy/10 text-navy border-navy/30" },
-  { value: "other", label: "Other", color: "bg-gray-100 text-gray-600 border-gray-300" },
+  { value: "other", label: "Other", color: "bg-surface-mid text-muted border-subtle" },
 ];
 
 function localDateStr(): string {
@@ -87,61 +87,61 @@ export default function MobileTaskPage() {
   return (
     <div className="space-y-5 max-w-lg">
       <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-gray-400 active:text-navy"><ArrowLeft className="h-5 w-5" /></button>
+        <button onClick={() => router.back()} className="text-muted active:text-navy"><ArrowLeft className="h-5 w-5" /></button>
         <h1 className="text-lg font-bold text-navy">Log a Task</h1>
       </div>
       {activeWarning && (<div className="bg-starlight-amber/10 border border-starlight-amber/30 rounded-xl px-4 py-3 text-xs text-starlight-amber">{activeWarning}</div>)}
       <div>
-        <label className="text-xs font-medium text-gray-500 mb-1.5 block">What did you do?</label>
-        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Reorganised timber rack" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" autoFocus />
+        <label className="text-xs font-medium text-muted mb-1.5 block">What did you do?</label>
+        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Reorganised timber rack" className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" autoFocus />
       </div>
       <div>
-        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Category</label>
+        <label className="text-xs font-medium text-muted mb-1.5 block">Category</label>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((cat) => (<button key={cat.value} onClick={() => setCategory(cat.value)} className={"px-3.5 py-2 rounded-full text-xs font-medium border transition-all " + (category === cat.value ? cat.color + " ring-2 ring-offset-1 ring-current" : "bg-gray-50 text-gray-400 border-gray-200")}>{cat.label}</button>))}
+          {CATEGORIES.map((cat) => (<button key={cat.value} onClick={() => setCategory(cat.value)} className={"px-3.5 py-2 rounded-full text-xs font-medium border transition-all " + (category === cat.value ? cat.color + " ring-2 ring-offset-1 ring-current" : "bg-surface-dim text-muted border-subtle")}>{cat.label}</button>))}
         </div>
       </div>
       {category === "job_work" && (
         <div>
-          <label className="text-xs font-medium text-gray-500 mb-1.5 block">Job (optional)</label>
+          <label className="text-xs font-medium text-muted mb-1.5 block">Job (optional)</label>
           {selectedJob ? (
-            <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3">
-              <div><p className="text-sm font-medium text-navy">{selectedJob.job_name}</p><p className="text-[10px] text-gray-400 font-mono">{selectedJob.job_number}</p></div>
+            <div className="flex items-center justify-between bg-surface border border-subtle rounded-xl px-4 py-3">
+              <div><p className="text-sm font-medium text-navy">{selectedJob.job_name}</p><p className="text-[10px] text-muted font-mono">{selectedJob.job_number}</p></div>
               <button onClick={() => setJobId(null)} className="text-xs text-starlight-red">Clear</button>
             </div>
           ) : (
             <div>
-              <input type="text" value={jobSearch} onChange={(e) => { setJobSearch(e.target.value); setShowJobPicker(true); }} onFocus={() => setShowJobPicker(true)} placeholder="Search jobs..." className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+              <input type="text" value={jobSearch} onChange={(e) => { setJobSearch(e.target.value); setShowJobPicker(true); }} onFocus={() => setShowJobPicker(true)} placeholder="Search jobs..." className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
               {showJobPicker && filteredJobs.length > 0 && (
-                <div className="mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
-                  {filteredJobs.slice(0, 8).map((j) => (<button key={j.job_id} onClick={() => { setJobId(j.job_id); setJobSearch(""); setShowJobPicker(false); }} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 last:border-0"><p className="text-sm text-navy">{j.job_name}</p><p className="text-[10px] text-gray-400 font-mono">{j.job_number}</p></button>))}
+                <div className="mt-1 bg-surface border border-subtle rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                  {filteredJobs.slice(0, 8).map((j) => (<button key={j.job_id} onClick={() => { setJobId(j.job_id); setJobSearch(""); setShowJobPicker(false); }} className="w-full text-left px-4 py-2.5 hover:bg-surface-dim active:bg-surface-mid border-b border-subtle last:border-0"><p className="text-sm text-navy">{j.job_name}</p><p className="text-[10px] text-muted font-mono">{j.job_number}</p></button>))}
                 </div>
               )}
             </div>
           )}
         </div>
       )}
-      <button onClick={handleStartTimer} disabled={submitting || !title.trim() || hasActiveTask} className="w-full py-3.5 bg-white border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+      <button onClick={handleStartTimer} disabled={submitting || !title.trim() || hasActiveTask} className="w-full py-3.5 bg-surface border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
         <Timer className="h-4 w-4" />{hasActiveTask ? "Task timer already active" : "Start Timer"}
       </button>
-      <div className="flex items-center gap-3"><div className="flex-1 h-px bg-gray-200" /><span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">or log completed work</span><div className="flex-1 h-px bg-gray-200" /></div>
+      <div className="flex items-center gap-3"><div className="flex-1 h-px bg-surface-hi" /><span className="text-[10px] text-muted font-medium uppercase tracking-wider">or log completed work</span><div className="flex-1 h-px bg-surface-hi" /></div>
       <div className="flex gap-3">
         <div className="shrink-0" style={{width: "130px"}}>
-          <label className="text-xs font-medium text-gray-500 mb-1.5 block">Hours</label>
-          <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <button onClick={() => adjustHours(-0.5)} className="px-2 py-3 text-gray-400 active:bg-gray-50 border-r border-gray-200"><Minus className="h-3.5 w-3.5" /></button>
+          <label className="text-xs font-medium text-muted mb-1.5 block">Hours</label>
+          <div className="flex items-center bg-surface border border-subtle rounded-xl overflow-hidden">
+            <button onClick={() => adjustHours(-0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-r border-subtle"><Minus className="h-3.5 w-3.5" /></button>
             <input type="number" value={hours} onChange={(e) => setHours(Math.max(0, parseFloat(e.target.value) || 0))} step="0.5" className="w-12 text-center py-3 text-sm font-semibold text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-            <button onClick={() => adjustHours(0.5)} className="px-2 py-3 text-gray-400 active:bg-gray-50 border-l border-gray-200"><Plus className="h-3.5 w-3.5" /></button>
+            <button onClick={() => adjustHours(0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-l border-subtle"><Plus className="h-3.5 w-3.5" /></button>
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <label className="text-xs font-medium text-gray-500 mb-1.5 block">When</label>
-          <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-3 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+          <label className="text-xs font-medium text-muted mb-1.5 block">When</label>
+          <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
         </div>
       </div>
       <div>
-        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Notes (optional)</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any extra detail..." rows={2} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-navy placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" />
+        <label className="text-xs font-medium text-muted mb-1.5 block">Notes (optional)</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any extra detail..." rows={2} className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" />
       </div>
       <button onClick={handleQuickLog} disabled={submitting || !title.trim() || hours <= 0} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
         <Clock className="h-4 w-4" />{submitting ? "Logging..." : "Log Task"}

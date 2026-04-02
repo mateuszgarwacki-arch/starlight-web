@@ -46,7 +46,7 @@ export function PrintTravellerButton({
       {wo && (
         <button
           onClick={() => openTraveller("single")}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-navy hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-lg text-muted hover:text-navy hover:bg-surface-mid transition-colors"
           title="Print traveller"
         >
           <Printer className="h-4 w-4" />
@@ -55,7 +55,7 @@ export function PrintTravellerButton({
       {printableWOs.length > 1 && (
         <button
           onClick={() => openTraveller("pack")}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-navy hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-lg text-muted hover:text-navy hover:bg-surface-mid transition-colors"
           title="Print scope pack (all WOs)"
         >
           <Package className="h-4 w-4" />
@@ -63,7 +63,7 @@ export function PrintTravellerButton({
       )}
       {wo?.traveller_printed_at && (
         <span
-          className="text-[9px] text-gray-400 ml-0.5 cursor-default"
+          className="text-[9px] text-muted ml-0.5 cursor-default"
           title={`Last printed: ${new Date(wo.traveller_printed_at).toLocaleString("en-GB")}`}
         >
           <Printer className="h-3 w-3 inline text-starlight-green" />

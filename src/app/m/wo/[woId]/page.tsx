@@ -340,43 +340,43 @@ export default function MobileWODetail() {
     : 0;
 
   if (loading) {
-    return <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>;
+    return <div className="flex items-center justify-center h-40 text-muted text-sm animate-pulse">Loading...</div>;
   }
   if (!wo) {
-    return <div className="text-center py-12 text-gray-400">Work order not found</div>;
+    return <div className="text-center py-12 text-muted">Work order not found</div>;
   }
 
   return (
     <div className="space-y-4">
-      <Link href="/m" className="inline-flex items-center gap-1.5 text-sm text-gray-400">
+      <Link href="/m" className="inline-flex items-center gap-1.5 text-sm text-muted">
         <ArrowLeft className="h-4 w-4" /> Back to Tasks
       </Link>
 
       {/* WO Header card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div className="bg-surface rounded-xl border border-subtle p-4 shadow-sm">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-lg font-bold text-navy">{wo.activity_label}</p>
-            <p className="text-sm text-gray-500 mt-0.5">{wo.scope_name}</p>
+            <p className="text-sm text-muted mt-0.5">{wo.scope_name}</p>
           </div>
           <span className={"text-xs px-2 py-1 rounded-full font-medium " + (
-            wo.status === "Ready" ? "bg-gray-100 text-gray-600" :
+            wo.status === "Ready" ? "bg-surface-mid text-muted" :
             wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" :
-            wo.status === "Complete" ? "bg-starlight-green/10 text-starlight-green" : "bg-gray-100 text-gray-500"
+            wo.status === "Complete" ? "bg-starlight-green/10 text-starlight-green" : "bg-surface-mid text-muted"
           )}>
             {wo.status}
           </span>
         </div>
 
-        {wo.description && <p className="text-sm text-gray-600 mt-3 leading-relaxed">{wo.description}</p>}
+        {wo.description && <p className="text-sm text-muted mt-3 leading-relaxed">{wo.description}</p>}
 
         {wo.paint_notes && (
-          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+          <div className="mt-3 bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5">
             <div className="flex items-center gap-1.5 mb-1">
               <Paintbrush className="h-3.5 w-3.5 text-starlight-amber" />
               <span className="text-[10px] font-semibold text-starlight-amber uppercase tracking-wider">Painting</span>
             </div>
-            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{wo.paint_notes}</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{wo.paint_notes}</p>
           </div>
         )}
 
@@ -387,11 +387,11 @@ export default function MobileWODetail() {
               <ImageIcon className="h-3.5 w-3.5 text-starlight-green" />
               <span className="text-[10px] font-semibold text-starlight-green uppercase tracking-wider">Completion Photo</span>
             </div>
-            <img src={completionPhotoUrl} alt="Completion" className="w-full rounded-lg border border-gray-200 object-contain max-h-64" />
+            <img src={completionPhotoUrl} alt="Completion" className="w-full rounded-lg border border-subtle object-contain max-h-64" />
           </div>
         )}
 
-        <div className="flex gap-4 mt-3 text-xs text-gray-400">
+        <div className="flex gap-4 mt-3 text-xs text-muted">
           <span className="font-mono">{wo.job_number}</span>
           {wo.estimated_duration_hrs && <span>{wo.estimated_duration_hrs}h est.</span>}
           {wo.complexity_construction && <span>{wo.complexity_construction}</span>}
@@ -407,9 +407,9 @@ export default function MobileWODetail() {
           </div>
           <div className="mt-1.5 space-y-1">
             {openEntries.map(e => (
-              <p key={e.entry_id} className="text-sm text-gray-600">
+              <p key={e.entry_id} className="text-sm text-muted">
                 {e.freelancer_name}
-                <span className="text-xs text-gray-400 ml-2">
+                <span className="text-xs text-muted ml-2">
                   since {new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </p>
@@ -423,7 +423,7 @@ export default function MobileWODetail() {
         <div className="bg-starlight-green/5 rounded-xl border border-starlight-green/20 px-4 py-4 text-center">
           <Clock className="h-6 w-6 text-starlight-green mx-auto" />
           <p className="text-2xl font-bold text-navy mt-2 font-mono">{elapsedHours}h</p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-muted mt-1">
             Started {new Date(myOpenEntry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
@@ -436,7 +436,7 @@ export default function MobileWODetail() {
           <button
             onClick={handleStart}
             disabled={acting}
-            className="w-full py-4 bg-starlight-blue text-white text-lg font-semibold rounded-xl active:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
+            className="w-full py-4 bg-starlight-blue text-white text-lg font-semibold rounded-xl active:bg-navy transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
           >
             <Play className="h-6 w-6" /> START
           </button>
@@ -447,7 +447,7 @@ export default function MobileWODetail() {
           <button
             onClick={handleJoin}
             disabled={acting}
-            className="w-full py-4 bg-starlight-amber text-white text-lg font-semibold rounded-xl active:bg-amber-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
+            className="w-full py-4 bg-starlight-amber text-white text-lg font-semibold rounded-xl active:bg-starlight-amber transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
           >
             <UserPlus className="h-6 w-6" /> {wo.status === "Complete" ? "LOG TIME" : "JOIN"}
           </button>
@@ -468,7 +468,7 @@ export default function MobileWODetail() {
         {allEntriesClosed && wo.status === "In-Progress" && (
           <button
             onClick={() => setShowComplete(true)}
-            className="w-full py-4 bg-starlight-green text-white text-lg font-semibold rounded-xl active:bg-green-700 transition-colors flex items-center justify-center gap-3"
+            className="w-full py-4 bg-starlight-green text-white text-lg font-semibold rounded-xl active:bg-starlight-green transition-colors flex items-center justify-center gap-3"
           >
             <CheckCircle2 className="h-6 w-6" /> MARK COMPLETE
           </button>
@@ -477,11 +477,11 @@ export default function MobileWODetail() {
 
       {/* Completed entries log */}
       {entries.filter(e => e.system_end_timestamp).length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Time Log</h3>
+        <div className="bg-surface rounded-xl border border-subtle p-4">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Time Log</h3>
           {entries.filter(e => e.system_end_timestamp).map(e => (
-            <div key={e.entry_id} className="flex justify-between py-1.5 text-sm border-b border-gray-50 last:border-0">
-              <span className="text-gray-600">{e.freelancer_name}</span>
+            <div key={e.entry_id} className="flex justify-between py-1.5 text-sm border-b border-subtle last:border-0">
+              <span className="text-muted">{e.freelancer_name}</span>
               <span className="font-mono text-navy">{e.actual_hours || "—"}h</span>
             </div>
           ))}
@@ -494,35 +494,35 @@ export default function MobileWODetail() {
       {/* ============ LOG HOURS BOTTOM SHEET ============ */}
       {showLogSheet && (
         <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
-          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4 animate-slide-up">
+          <div className="bg-surface w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4 animate-slide-up">
             <h2 className="text-lg font-bold text-navy">Log My Hours</h2>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Actual Hours *</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Actual Hours *</label>
               <input
                 type="number"
                 step="0.5"
                 value={logHours}
                 onChange={(e) => setLogHours(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-4 py-3 border border-subtle rounded-xl text-xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 autoFocus
                 inputMode="decimal"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Flag Note (optional)</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Flag Note (optional)</label>
               <input
                 type="text"
                 value={flagNote}
                 onChange={(e) => setFlagNote(e.target.value)}
                 placeholder="Material arrived warped, needed extra time..."
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-4 py-3 border border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 maxLength={200}
               />
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setShowLogSheet(false); setLogHours(""); setFlagNote(""); }}
-                className="flex-1 py-3 text-gray-600 bg-gray-100 rounded-xl font-medium"
+                className="flex-1 py-3 text-muted bg-surface-mid rounded-xl font-medium"
               >
                 Cancel
               </button>
@@ -541,9 +541,9 @@ export default function MobileWODetail() {
       {/* ============ MARK COMPLETE SHEET ============ */}
       {showComplete && (
         <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
-          <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4">
+          <div className="bg-surface w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4">
             <h2 className="text-lg font-bold text-navy">Mark Complete</h2>
-            <p className="text-sm text-gray-500">Take a completion photo of the finished work.</p>
+            <p className="text-sm text-muted">Take a completion photo of the finished work.</p>
 
             <input
               ref={cameraRef}
@@ -567,7 +567,7 @@ export default function MobileWODetail() {
             ) : (
               <button
                 onClick={() => cameraRef.current?.click()}
-                className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center gap-2 text-gray-400 active:bg-gray-50"
+                className="w-full py-8 border-2 border-dashed border-subtle rounded-xl flex flex-col items-center gap-2 text-muted active:bg-surface-dim"
               >
                 <Camera className="h-8 w-8" />
                 <span className="text-sm">Tap to take photo</span>
@@ -577,7 +577,7 @@ export default function MobileWODetail() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setShowComplete(false); setPhotoFile(null); setPhotoPreview(null); }}
-                className="flex-1 py-3 text-gray-600 bg-gray-100 rounded-xl font-medium"
+                className="flex-1 py-3 text-muted bg-surface-mid rounded-xl font-medium"
               >
                 Cancel
               </button>

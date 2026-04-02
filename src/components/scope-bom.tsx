@@ -144,33 +144,33 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
+      <div className="px-5 py-3 flex items-center justify-between border-b border-subtle">
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-navy" />
           <h3 className="text-sm font-semibold text-navy">Materials</h3>
           {rows.length > 0 && (
-            <span className="text-[10px] text-gray-400 font-mono">
+            <span className="text-[10px] text-muted font-mono">
               {rows.length} item{rows.length !== 1 ? "s" : ""} · {formatCurrency(totalCost)}
             </span>
           )}
         </div>
         <button
           onClick={() => { setShowSearch(true); setSearch(""); setSearchResults([]); }}
-          className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-blue-700 font-medium transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium transition-colors"
         >
           <Plus className="h-3.5 w-3.5" /> Add Material
         </button>
       </div>
 
       {rows.length === 0 && !showSearch ? (
-        <div className="px-5 py-6 text-center text-xs text-gray-300">
+        <div className="px-5 py-6 text-center text-xs text-faint">
           No materials added — use + Add Material to specify what&apos;s needed for this scope item
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-200">
+              <tr className="text-[10px] text-muted uppercase tracking-wider border-b border-subtle">
                 <th className="text-left py-1.5 px-4 font-medium">Material</th>
                 <th className="text-right py-1.5 px-2 font-medium w-20">Qty</th>
                 <th className="text-left py-1.5 px-2 font-medium w-20">Unit</th>
@@ -188,43 +188,43 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                 const isLengthMode = row.unit === "Length" && stdLen;
                 const canToggle = !!stdLen;
                 return (
-                  <tr key={row.bom_id} className="border-b border-gray-100 last:border-0">
+                  <tr key={row.bom_id} className="border-b border-subtle last:border-0">
                     <td className="py-1.5 px-4">
                       <div className="flex items-center gap-1.5">
                         {(row.stock_item_id || isTruthy(row.from_stock)) && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-starlight-amber/10 text-starlight-amber text-[9px] font-medium rounded shrink-0"><Warehouse className="h-2.5 w-2.5" />Stock</span>}
                         <input type="text" defaultValue={row.item_description || ""}
                           onBlur={(e) => { if (e.target.value !== row.item_description) updateField(row.bom_id, "item_description", e.target.value); }}
-                          className="w-full text-sm text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 -ml-1" />
+                          className="w-full text-sm text-navy bg-transparent border-0 focus:outline-none focus:bg-surface-dim rounded px-1 -ml-1" />
                       </div>
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       <input type="number" defaultValue={row.quantity ?? ""}
                         onBlur={(e) => { const val = parseFloat(e.target.value) || 0; if (val !== row.quantity) updateField(row.bom_id, "quantity", val); }}
-                        className="w-16 text-right text-sm font-mono text-navy bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
+                        className="w-16 text-right text-sm font-mono text-navy bg-transparent border-0 focus:outline-none focus:bg-surface-dim rounded" />
                     </td>
                     <td className="py-1.5 px-2">
                       {canToggle ? (
                         <button
                           onClick={() => updateField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
-                          className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200")}
+                          className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-surface-mid text-muted border-subtle hover:bg-surface-hi")}
                           title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
                         >
                           {isLengthMode ? "Length" : "Metre"}
-                          <span className="text-[9px] text-gray-400">⇄</span>
+                          <span className="text-[9px] text-muted">⇄</span>
                         </button>
                       ) : (
                         <input type="text" defaultValue={row.unit || ""}
                           onBlur={(e) => { if (e.target.value !== row.unit) updateField(row.bom_id, "unit", e.target.value); }}
-                          className="w-16 text-sm text-gray-600 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
+                          className="w-16 text-sm text-muted bg-transparent border-0 focus:outline-none focus:bg-surface-dim rounded" />
                       )}
                       {isLengthMode && (
-                        <p className="text-[9px] text-gray-400 mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                        <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
                       )}
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       <input type="number" step="0.01" defaultValue={cost || ""}
                         onBlur={(e) => { const val = parseFloat(e.target.value) || 0; if (val !== cost) updateField(row.bom_id, "unit_cost", val); }}
-                        className="w-20 text-right text-sm font-mono text-gray-600 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded" />
+                        className="w-20 text-right text-sm font-mono text-muted bg-transparent border-0 focus:outline-none focus:bg-surface-dim rounded" />
                     </td>
                     <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{total > 0 ? formatCurrency(total) : "—"}</td>
                     <td className="py-1.5 px-2 text-center">
@@ -242,12 +242,12 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                             }
                           }
                         }}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-starlight-amber focus:ring-starlight-amber"
+                        className="h-3.5 w-3.5 rounded border-subtle text-starlight-amber focus:ring-starlight-amber"
                         title="From workshop stock (internal cost)"
                       />
                     </td>
                     <td className="py-1.5 px-1">
-                      <button onClick={() => deleteRow(row.bom_id)} className="p-1 text-gray-300 hover:text-starlight-red transition-colors">
+                      <button onClick={() => deleteRow(row.bom_id)} className="p-1 text-faint hover:text-starlight-red transition-colors">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </td>
@@ -260,14 +260,14 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
       )}
 
       {showSearch && (
-        <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
+        <div className="border-t border-subtle px-4 py-3 bg-surface-dim/50">
           <div className="flex items-center gap-2 mb-2">
-            <Search className="h-4 w-4 text-gray-400" />
+            <Search className="h-4 w-4 text-muted" />
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search materials or stock items..."
-              className="flex-1 text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="flex-1 text-sm border border-subtle rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               autoFocus />
-            <button onClick={() => { setShowSearch(false); setSearch(""); }} className="p-1 text-gray-400 hover:text-gray-600">
+            <button onClick={() => { setShowSearch(false); setSearch(""); }} className="p-1 text-muted hover:text-muted">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -275,7 +275,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
             {/* Stock items section */}
             {stockResults.length > 0 && (
               <div>
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1 px-1">Stock Items</p>
+                <p className="text-[9px] text-muted uppercase tracking-wider font-semibold mb-1 px-1">Stock Items</p>
                 <div className="space-y-0.5">
                   {stockResults.map((s) => (
                     <button key={s.stock_id} onClick={() => selectStockItem(s)}
@@ -283,13 +283,13 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                       {s.thumbnail_url ? (
                         <img src={s.thumbnail_url} alt="" className="w-8 h-8 object-contain rounded shrink-0" />
                       ) : (
-                        <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center shrink-0"><Package className="h-3 w-3 text-gray-300" /></div>
+                        <div className="w-8 h-8 bg-surface-mid rounded flex items-center justify-center shrink-0"><Package className="h-3 w-3 text-faint" /></div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-navy font-medium truncate">{s.description}</p>
-                        <p className="text-[10px] text-gray-400 font-mono">{s.product_code} · {s.stock_quantity} in stock</p>
+                        <p className="text-[10px] text-muted font-mono">{s.product_code} · {s.stock_quantity} in stock</p>
                       </div>
-                      {s.hire_cost_day && <span className="text-[10px] text-gray-400 shrink-0">{formatCurrency(s.hire_cost_day)}/day</span>}
+                      {s.hire_cost_day && <span className="text-[10px] text-muted shrink-0">{formatCurrency(s.hire_cost_day)}/day</span>}
                     </button>
                   ))}
                 </div>
@@ -298,13 +298,13 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
             {/* Materials section */}
             {searchResults.length > 0 && (
               <div>
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold mb-1 px-1">Materials</p>
+                <p className="text-[9px] text-muted uppercase tracking-wider font-semibold mb-1 px-1">Materials</p>
                 <div className="space-y-0.5">
                   {searchResults.map((m) => (
                     <button key={m.material_id} onClick={() => selectMaterial(m)}
                       className="w-full text-left px-3 py-2 rounded-lg hover:bg-starlight-blue/5 transition-colors flex items-center justify-between">
                       <span className="text-xs text-navy font-medium">{m.material_name}</span>
-                      <span className="text-[10px] text-gray-400">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "no price"}</span>
+                      <span className="text-[10px] text-muted">{m.unit} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "no price"}</span>
                     </button>
                   ))}
                 </div>
@@ -313,7 +313,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
           </div>
           {search.length >= 2 && (
             <button onClick={addCustomRow}
-              className="mt-2 w-full text-left px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-starlight-blue hover:bg-starlight-blue/5 transition-colors text-xs text-gray-500">
+              className="mt-2 w-full text-left px-3 py-2 rounded-lg border border-dashed border-subtle hover:border-starlight-blue hover:bg-starlight-blue/5 transition-colors text-xs text-muted">
               + Add &quot;<span className="font-medium text-navy">{search}</span>&quot; as custom item
             </button>
           )}

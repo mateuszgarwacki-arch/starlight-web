@@ -322,7 +322,7 @@ export default function MaterialsPage() {
   // ============================================================
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading materials catalogue...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading materials catalogue...</div>;
   }
 
   return (
@@ -331,17 +331,17 @@ export default function MaterialsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Materials Catalogue</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <p className="text-sm text-muted mt-0.5">
             {activeCount} active materials · {categories.length} categories
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
           <button
             onClick={openAddDialog}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors"
           >
             <Plus className="h-4 w-4" /> Add Material
           </button>
@@ -349,14 +349,14 @@ export default function MaterialsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-surface-mid rounded-lg p-1 w-fit">
         {(["catalogue", "prices"] as TabKey[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={
               "px-4 py-2 rounded-md text-sm font-medium transition-colors " +
-              (tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-navy")
+              (tab === t ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")
             }
           >
             {t === "catalogue" ? (
@@ -376,21 +376,21 @@ export default function MaterialsPage() {
           {/* Search + Filters */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search materials..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-sm text-muted cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={showInactive}
                 onChange={(e) => setShowInactive(e.target.checked)}
-                className="rounded border-gray-300"
+                className="rounded border-subtle"
               />
               Show inactive
             </label>
@@ -404,7 +404,7 @@ export default function MaterialsPage() {
                 "px-3 py-1.5 rounded-full text-xs font-medium transition-colors " +
                 (catFilter === "All"
                   ? "bg-navy text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+                  : "bg-surface-mid text-muted hover:bg-surface-hi")
               }
             >
               All ({materials.filter(m => showInactive || isTruthy(m.active)).length})
@@ -422,7 +422,7 @@ export default function MaterialsPage() {
                     "px-3 py-1.5 rounded-full text-xs font-medium transition-colors " +
                     (catFilter === cat
                       ? "bg-navy text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+                      : "bg-surface-mid text-muted hover:bg-surface-hi")
                   }
                 >
                   {cat} ({count})
@@ -434,14 +434,14 @@ export default function MaterialsPage() {
           {/* Table */}
           <div className="card overflow-hidden">
             {filtered.length === 0 ? (
-              <div className="px-6 py-10 text-center text-gray-400 text-sm">
+              <div className="px-6 py-10 text-center text-muted text-sm">
                 {search ? "No materials match your search" : "No materials in catalogue yet"}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                    <tr className="bg-base text-left text-[10px] text-muted uppercase tracking-wider">
                       <th className="px-4 py-2 font-medium">Material</th>
                       <th className="px-4 py-2 font-medium">Category</th>
                       <th className="px-4 py-2 font-medium">Unit</th>
@@ -456,27 +456,27 @@ export default function MaterialsPage() {
                       <tr
                         key={m.material_id}
                         className={
-                          "border-t border-gray-100 transition-colors hover:bg-gray-50 " +
+                          "border-t border-subtle transition-colors hover:bg-surface-dim " +
                           (!isTruthy(m.active) ? "opacity-50" : "")
                         }
                       >
                         <td className="px-4 py-2.5">
                           <p className="font-medium text-navy">{m.material_name || "—"}</p>
                           {m.notes && (
-                            <p className="text-[10px] text-gray-400 mt-0.5 max-w-[250px] truncate">{m.notes}</p>
+                            <p className="text-[10px] text-muted mt-0.5 max-w-[250px] truncate">{m.notes}</p>
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-mid text-muted">
                             {m.category_name}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-gray-600">{m.unit || "—"}</td>
+                        <td className="px-4 py-2.5 text-muted">{m.unit || "—"}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-navy">
                           {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "—"}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">{m.primary_supplier || "—"}</td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">
+                        <td className="px-4 py-2.5 text-muted text-xs">{m.primary_supplier || "—"}</td>
+                        <td className="px-4 py-2.5 text-muted text-xs">
                           {m.standard_length ? `${m.standard_length}mm` : ""}
                           {m.standard_sheet_size ? ` ${m.standard_sheet_size}` : ""}
                           {m.spec_val_1 && m.spec_val_2 ? ` (${m.spec_val_1}×${m.spec_val_2}mm)` : ""}
@@ -487,21 +487,21 @@ export default function MaterialsPage() {
                             <button
                               onClick={() => { setTab("prices"); loadPrices(m.material_id); }}
                               title="Price history"
-                              className="p-1.5 text-gray-400 hover:text-starlight-blue hover:bg-blue-50 rounded-md transition-colors"
+                              className="p-1.5 text-muted hover:text-starlight-blue hover:bg-navy/10 rounded-md transition-colors"
                             >
                               <History className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => openEditDialog(m)}
                               title="Edit"
-                              className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"
+                              className="p-1.5 text-muted hover:text-navy hover:bg-surface-mid rounded-md transition-colors"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => toggleActive(m)}
                               title={isTruthy(m.active) ? "Deactivate" : "Reactivate"}
-                              className="p-1.5 text-gray-400 hover:text-starlight-amber hover:bg-amber-50 rounded-md transition-colors"
+                              className="p-1.5 text-muted hover:text-starlight-amber hover:bg-starlight-amber/10 rounded-md transition-colors"
                             >
                               <Archive className="h-3.5 w-3.5" />
                             </button>
@@ -524,18 +524,18 @@ export default function MaterialsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Material selector */}
           <div className="card overflow-hidden lg:col-span-1">
-            <div className="px-4 py-3 border-b border-gray-100">
+            <div className="px-4 py-3 border-b border-subtle">
               <h3 className="text-sm font-semibold text-navy">Select Material</h3>
             </div>
             <div className="p-3">
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search..."
-                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                  className="w-full pl-9 pr-3 py-2 border border-subtle rounded-lg text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 />
               </div>
               <div className="max-h-[500px] overflow-y-auto space-y-0.5">
@@ -552,11 +552,11 @@ export default function MaterialsPage() {
                         "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors " +
                         (selectedMaterialId === m.material_id
                           ? "bg-starlight-blue/10 text-starlight-blue font-medium"
-                          : "text-gray-700 hover:bg-gray-50")
+                          : "text-foreground hover:bg-surface-dim")
                       }
                     >
                       <p className="truncate">{m.material_name}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
+                      <p className="text-[10px] text-muted mt-0.5">
                         {m.category_name} · {m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "no price"}
                       </p>
                     </button>
@@ -568,7 +568,7 @@ export default function MaterialsPage() {
           {/* Price history panel */}
           <div className="lg:col-span-2 space-y-4">
             {!selectedMaterialId ? (
-              <div className="card px-6 py-12 text-center text-gray-400 text-sm">
+              <div className="card px-6 py-12 text-center text-muted text-sm">
                 Select a material to view its price history
               </div>
             ) : (
@@ -578,7 +578,7 @@ export default function MaterialsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-semibold text-navy">{selectedMaterial?.material_name}</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-muted mt-0.5">
                         {selectedMaterial?.category_name} · {selectedMaterial?.unit || "—"} · Current: {selectedMaterial?.current_unit_cost ? formatCurrency(selectedMaterial.current_unit_cost) : "not set"}
                       </p>
                     </div>
@@ -593,7 +593,7 @@ export default function MaterialsPage() {
                           notes: "",
                         });
                       }}
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-starlight-red text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-starlight-red text-white text-xs font-medium rounded-lg hover:bg-starlight-red transition-colors"
                     >
                       <Plus className="h-3.5 w-3.5" /> Add Price
                     </button>
@@ -606,32 +606,32 @@ export default function MaterialsPage() {
                     <h4 className="text-xs font-semibold text-navy mb-3">New Price Entry</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 mb-1">Unit Cost (£) *</label>
+                        <label className="block text-[10px] font-medium text-muted mb-1">Unit Cost (£) *</label>
                         <input
                           type="number"
                           step="0.01"
                           value={priceForm.unit_cost}
                           onChange={(e) => setPriceForm({ ...priceForm, unit_cost: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                           placeholder="0.00"
                           autoFocus
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 mb-1">Effective Date</label>
+                        <label className="block text-[10px] font-medium text-muted mb-1">Effective Date</label>
                         <input
                           type="date"
                           value={priceForm.effective_date}
                           onChange={(e) => setPriceForm({ ...priceForm, effective_date: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 mb-1">Source</label>
+                        <label className="block text-[10px] font-medium text-muted mb-1">Source</label>
                         <select
                           value={priceForm.source}
                           onChange={(e) => setPriceForm({ ...priceForm, source: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         >
                           <option value="Quote">Quote</option>
                           <option value="Invoice">Invoice</option>
@@ -639,37 +639,37 @@ export default function MaterialsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 mb-1">Supplier</label>
+                        <label className="block text-[10px] font-medium text-muted mb-1">Supplier</label>
                         <input
                           type="text"
                           value={priceForm.supplier}
                           onChange={(e) => setPriceForm({ ...priceForm, supplier: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                          className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                           placeholder="Supplier name"
                         />
                       </div>
                     </div>
                     <div className="mt-3">
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Notes</label>
+                      <label className="block text-[10px] font-medium text-muted mb-1">Notes</label>
                       <input
                         type="text"
                         value={priceForm.notes}
                         onChange={(e) => setPriceForm({ ...priceForm, notes: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                        className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         placeholder="Bulk discount, minimum order, etc."
                       />
                     </div>
                     <div className="flex justify-end gap-2 mt-3">
                       <button
                         onClick={() => setShowPriceForm(false)}
-                        className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="px-3 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={savePrice}
                         disabled={saving || !priceForm.unit_cost}
-                        className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors"
                       >
                         {saving ? "Saving..." : "Save Price"}
                       </button>
@@ -680,16 +680,16 @@ export default function MaterialsPage() {
                 {/* Price history table */}
                 <div className="card overflow-hidden">
                   {pricesLoading ? (
-                    <div className="px-6 py-8 text-center text-gray-400 text-sm animate-pulse">Loading prices...</div>
+                    <div className="px-6 py-8 text-center text-muted text-sm animate-pulse">Loading prices...</div>
                   ) : prices.length === 0 ? (
-                    <div className="px-6 py-8 text-center text-gray-400 text-sm">
+                    <div className="px-6 py-8 text-center text-muted text-sm">
                       No price history recorded for this material
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-starlight-bg text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                          <tr className="bg-base text-left text-[10px] text-muted uppercase tracking-wider">
                             <th className="px-4 py-2 font-medium">Effective Date</th>
                             <th className="px-4 py-2 font-medium text-right">Unit Cost</th>
                             <th className="px-4 py-2 font-medium">Source</th>
@@ -703,7 +703,7 @@ export default function MaterialsPage() {
                             <tr
                               key={p.price_id}
                               className={
-                                "border-t border-gray-100 " +
+                                "border-t border-subtle " +
                                 (idx === 0 ? "bg-starlight-blue/5" : "")
                               }
                             >
@@ -721,14 +721,14 @@ export default function MaterialsPage() {
                                   "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " +
                                   (p.source === "Invoice" ? "bg-starlight-green/10 text-starlight-green" :
                                    p.source === "Quote" ? "bg-starlight-blue/10 text-starlight-blue" :
-                                   "bg-gray-100 text-gray-500")
+                                   "bg-surface-mid text-muted")
                                 }>
                                   {p.source || "—"}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-xs text-gray-500">{p.supplier || "—"}</td>
-                              <td className="px-4 py-2.5 text-xs text-gray-400 max-w-[200px] truncate">{p.notes || "—"}</td>
-                              <td className="px-4 py-2.5 text-xs text-gray-400 font-mono">
+                              <td className="px-4 py-2.5 text-xs text-muted">{p.supplier || "—"}</td>
+                              <td className="px-4 py-2.5 text-xs text-muted max-w-[200px] truncate">{p.notes || "—"}</td>
+                              <td className="px-4 py-2.5 text-xs text-muted font-mono">
                                 {p.recorded_at ? formatDate(p.recorded_at) : "—"}
                               </td>
                             </tr>
@@ -749,12 +749,12 @@ export default function MaterialsPage() {
       {/* ============================================================ */}
       {showDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-subtle flex items-center justify-between sticky top-0 bg-surface rounded-t-xl z-10">
               <h3 className="text-sm font-semibold text-navy">
                 {editingMaterial ? "Edit Material" : "Add Material"}
               </h3>
-              <button onClick={() => setShowDialog(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowDialog(false)} className="text-muted hover:text-muted">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -762,12 +762,12 @@ export default function MaterialsPage() {
             <div className="px-6 py-5 space-y-4">
               {/* Name */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Material Name *</label>
+                <label className="block text-xs font-medium text-muted mb-1">Material Name *</label>
                 <input
                   type="text"
                   value={form.material_name}
                   onChange={(e) => setForm({ ...form, material_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                   placeholder="e.g. 2×1 PAR Softwood"
                   autoFocus
                 />
@@ -776,11 +776,11 @@ export default function MaterialsPage() {
               {/* Category + Unit */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Category</label>
                   <select
                     value={form.material_category}
                     onChange={(e) => setForm({ ...form, material_category: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                   >
                     <option value="">Select category...</option>
                     {categories.map((c) => (
@@ -789,14 +789,14 @@ export default function MaterialsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Unit</label>
                   <select
                     value={units.some(u => u.lookup_value === form.unit) ? form.unit : (form.unit ? "__custom__" : "")}
                     onChange={(e) => {
                       if (e.target.value === "__custom__") setForm({ ...form, unit: "" });
                       else setForm({ ...form, unit: e.target.value });
                     }}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                   >
                     <option value="">Select unit...</option>
                     {units.map((u) => (
@@ -809,7 +809,7 @@ export default function MaterialsPage() {
                       type="text"
                       value={form.unit}
                       onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                      className="w-full mt-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                      className="w-full mt-1.5 px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                       placeholder="Enter custom unit..."
                       autoFocus
                     />
@@ -820,18 +820,18 @@ export default function MaterialsPage() {
               {/* Cost + Supplier */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Current Unit Cost (£)</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Current Unit Cost (£)</label>
                   <input
                     type="number"
                     step="0.01"
                     value={form.current_unit_cost}
                     onChange={(e) => setForm({ ...form, current_unit_cost: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                     placeholder="0.00"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Primary Supplier</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Primary Supplier</label>
                   <select
                     value={suppliers.some(s => s.supplier_name === form.primary_supplier) ? form.primary_supplier : (form.primary_supplier ? "__custom__" : "")}
                     onChange={(e) => {
@@ -839,7 +839,7 @@ export default function MaterialsPage() {
                       else if (e.target.value === "__custom__") { /* keep current */ }
                       else { setForm({ ...form, primary_supplier: e.target.value }); setShowNewSupplier(false); }
                     }}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                   >
                     <option value="">No supplier</option>
                     {suppliers.map((s) => (
@@ -856,7 +856,7 @@ export default function MaterialsPage() {
                         type="text"
                         value={newSupplierName}
                         onChange={(e) => setNewSupplierName(e.target.value)}
-                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                        className="flex-1 px-3 py-1.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                         placeholder="New supplier name..."
                         autoFocus
                         onKeyDown={(e) => {
@@ -880,7 +880,7 @@ export default function MaterialsPage() {
                           const { data } = await supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name");
                           if (data) setSuppliers(data);
                         }}
-                        className="px-3 py-1.5 bg-starlight-blue text-white text-xs rounded-lg hover:bg-blue-600"
+                        className="px-3 py-1.5 bg-starlight-blue text-white text-xs rounded-lg hover:bg-navy"
                       >Add</button>
                     </div>
                   )}
@@ -889,101 +889,101 @@ export default function MaterialsPage() {
 
               {/* Stock dimensions — category-specific */}
               {showSheetSize && (
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Standard Sheet Dimensions (mm)</p>
+                <div className="border-t border-subtle pt-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted font-medium mb-3">Standard Sheet Dimensions (mm)</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Length (mm)</label>
-                      <input type="number" value={form.sheet_length_mm} onChange={(e) => setForm({ ...form, sheet_length_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="2440" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Length (mm)</label>
+                      <input type="number" value={form.sheet_length_mm} onChange={(e) => setForm({ ...form, sheet_length_mm: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="2440" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Width (mm)</label>
-                      <input type="number" value={form.sheet_width_mm} onChange={(e) => setForm({ ...form, sheet_width_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="1220" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Width (mm)</label>
+                      <input type="number" value={form.sheet_width_mm} onChange={(e) => setForm({ ...form, sheet_width_mm: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="1220" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Thickness (mm)</label>
-                      <input type="number" value={form.sheet_thickness_mm} onChange={(e) => setForm({ ...form, sheet_thickness_mm: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="18" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Thickness (mm)</label>
+                      <input type="number" value={form.sheet_thickness_mm} onChange={(e) => setForm({ ...form, sheet_thickness_mm: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="18" />
                     </div>
                   </div>
                 </div>
               )}
               {showLength && (
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Standard Stock Dimensions (mm)</p>
+                <div className="border-t border-subtle pt-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted font-medium mb-3">Standard Stock Dimensions (mm)</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Stock Length (mm)</label>
-                      <input type="number" value={form.standard_length} onChange={(e) => setForm({ ...form, standard_length: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="4800" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Stock Length (mm)</label>
+                      <input type="number" value={form.standard_length} onChange={(e) => setForm({ ...form, standard_length: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="4800" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Width (mm)</label>
-                      <input type="number" value={form.spec_val_1} onChange={(e) => setForm({ ...form, spec_val_1: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="44" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Width (mm)</label>
+                      <input type="number" value={form.spec_val_1} onChange={(e) => setForm({ ...form, spec_val_1: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="44" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-medium text-gray-500 mb-1">Thickness (mm)</label>
-                      <input type="number" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="19" />
+                      <label className="block text-[10px] font-medium text-muted mb-1">Thickness (mm)</label>
+                      <input type="number" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="19" />
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Spec fields */}
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-3">Specification Fields</p>
+              <div className="border-t border-subtle pt-4">
+                <p className="text-[10px] uppercase tracking-wider text-muted font-medium mb-3">Specification Fields</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-1">Spec Value 1</label>
-                    <input type="number" step="any" value={form.spec_val_1} onChange={(e) => setForm({ ...form, spec_val_1: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    <label className="block text-[10px] font-medium text-muted mb-1">Spec Value 1</label>
+                    <input type="number" step="any" value={form.spec_val_1} onChange={(e) => setForm({ ...form, spec_val_1: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-1">Spec Value 2</label>
-                    <input type="number" step="any" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    <label className="block text-[10px] font-medium text-muted mb-1">Spec Value 2</label>
+                    <input type="number" step="any" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-1">Spec Value 3</label>
-                    <input type="number" step="any" value={form.spec_val_3} onChange={(e) => setForm({ ...form, spec_val_3: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    <label className="block text-[10px] font-medium text-muted mb-1">Spec Value 3</label>
+                    <input type="number" step="any" value={form.spec_val_3} onChange={(e) => setForm({ ...form, spec_val_3: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-3">
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-1">Spec Text 1</label>
-                    <input type="text" value={form.spec_text_1} onChange={(e) => setForm({ ...form, spec_text_1: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    <label className="block text-[10px] font-medium text-muted mb-1">Spec Text 1</label>
+                    <input type="text" value={form.spec_text_1} onChange={(e) => setForm({ ...form, spec_text_1: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-1">Spec Text 2</label>
-                    <input type="text" value={form.spec_text_2} onChange={(e) => setForm({ ...form, spec_text_2: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    <label className="block text-[10px] font-medium text-muted mb-1">Spec Text 2</label>
+                    <input type="text" value={form.spec_text_2} onChange={(e) => setForm({ ...form, spec_text_2: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                 </div>
                 <div className="mt-3">
-                  <label className="block text-[10px] font-medium text-gray-500 mb-1">Paint / Finish</label>
-                  <input type="text" value={form.paint_finish} onChange={(e) => setForm({ ...form, paint_finish: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="e.g. Matt, Satin, Gloss" />
+                  <label className="block text-[10px] font-medium text-muted mb-1">Paint / Finish</label>
+                  <input type="text" value={form.paint_finish} onChange={(e) => setForm({ ...form, paint_finish: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="e.g. Matt, Satin, Gloss" />
                 </div>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-muted mb-1">Notes</label>
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
                   placeholder="Handling, ordering, or specification notes..."
                 />
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white rounded-b-xl">
+            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-2 sticky bottom-0 bg-surface rounded-b-xl">
               <button
                 onClick={() => setShowDialog(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={saveMaterial}
                 disabled={saving || !form.material_name.trim()}
-                className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving..." : editingMaterial ? "Update" : "Add Material"}
               </button>

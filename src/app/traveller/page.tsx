@@ -334,11 +334,11 @@ export default function TravellerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Loading traveller...</p>
-          <p className="text-xs text-gray-400 mt-1">Fetching documents from OneDrive</p>
+          <Loader2 className="h-8 w-8 animate-spin text-muted mx-auto mb-3" />
+          <p className="text-sm text-muted">Loading traveller...</p>
+          <p className="text-xs text-muted mt-1">Fetching documents from OneDrive</p>
         </div>
       </div>
     );
@@ -346,8 +346,8 @@ export default function TravellerPage() {
 
   if (error || !scope) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <p className="text-red-500 text-sm">{error || "Failed to load"}</p>
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <p className="text-starlight-red text-sm">{error || "Failed to load"}</p>
       </div>
     );
   }
@@ -382,10 +382,10 @@ export default function TravellerPage() {
         <Page key={`div-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
           <div className="flex items-center justify-center" style={{ minHeight: "240mm" }}>
             <div className="text-center">
-              <p className="text-5xl font-bold text-gray-800 mb-3">Step {stepNum} of {totalWOCount}</p>
-              <p className="text-2xl font-semibold text-gray-600 mb-4">{wo.activity_label}</p>
-              {wo.description && <p className="text-base text-gray-500 max-w-lg mx-auto">{wo.description}</p>}
-              <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-400">
+              <p className="text-5xl font-bold text-foreground mb-3">Step {stepNum} of {totalWOCount}</p>
+              <p className="text-2xl font-semibold text-muted mb-4">{wo.activity_label}</p>
+              {wo.description && <p className="text-base text-muted max-w-lg mx-auto">{wo.description}</p>}
+              <div className="mt-6 flex items-center justify-center gap-4 text-sm text-muted">
                 {wo.estimated_duration_hrs != null && <span>Est. {wo.estimated_duration_hrs}h</span>}
                 {wo.lead_name && <span>Lead: {wo.lead_name}</span>}
               </div>
@@ -420,7 +420,7 @@ export default function TravellerPage() {
         pageNum++;
         pages.push(
           <Page key={`cl-${cl.doc_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-            <div className="text-center py-20 text-gray-400 text-sm">Cut list file not available for preview</div>
+            <div className="text-center py-20 text-muted text-sm">Cut list file not available for preview</div>
           </Page>
         );
       }
@@ -450,9 +450,9 @@ export default function TravellerPage() {
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen print:bg-white">
+    <div className="bg-surface-mid min-h-screen print:bg-surface">
       {/* Floating toolbar — hidden on print */}
-      <div className="print:hidden fixed top-0 left-0 right-0 z-50 bg-[#1A1A2E] text-white px-6 py-3 flex items-center justify-between shadow-lg">
+      <div className="print:hidden fixed top-0 left-0 right-0 z-50 bg-base text-white px-6 py-3 flex items-center justify-between shadow-lg">
         <div>
           <p className="text-sm font-medium">
             Traveller — {mode === "pack" ? "Scope Pack" : "Single WO"}
@@ -463,18 +463,18 @@ export default function TravellerPage() {
         </div>
         <div className="flex items-center gap-3">
           {wosToPrint.some((w) => w.status === "Not-Started") && !printed && (
-            <span className="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full">
+            <span className="text-xs bg-starlight-amber/20 text-starlight-amber px-3 py-1 rounded-full">
               Will set Not-Started → Ready
             </span>
           )}
           {printed && (
-            <span className="text-xs text-green-400 flex items-center gap-1">
+            <span className="text-xs text-starlight-green flex items-center gap-1">
               <Check className="h-3.5 w-3.5" /> Timestamps saved
             </span>
           )}
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-5 py-2 bg-white text-[#1A1A2E] font-medium text-sm rounded-lg hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 px-5 py-2 bg-foreground text-base font-medium text-sm rounded-lg hover:bg-foreground/90 transition-colors"
           >
             <Printer className="h-4 w-4" />
             Print{!printed ? " & Release" : ""}
@@ -500,29 +500,29 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
   children: React.ReactNode;
 }) {
   return (
-    <div className="traveller-page bg-white mx-auto my-4 print:my-0 relative" style={{ width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" }}>
-      <div className="absolute inset-[3px] border border-gray-400 pointer-events-none" style={{ zIndex: 0 }} />
+    <div className="traveller-page bg-surface mx-auto my-4 print:my-0 relative" style={{ width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" }}>
+      <div className="absolute inset-[3px] border border-subtle pointer-events-none" style={{ zIndex: 0 }} />
       <div className="relative" style={{ zIndex: 1, padding: "7mm 8mm" }}>
         {/* Header */}
-        <div className="text-[9px] pb-2 mb-3 border-b border-gray-300">
+        <div className="text-[9px] pb-2 mb-3 border-b border-subtle">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-gray-900">{scope.job_number}</span>
-              <span className="text-gray-300">|</span>
-              <span className="text-gray-600">{scope.job_name}</span>
+              <span className="font-bold text-foreground">{scope.job_number}</span>
+              <span className="text-faint">|</span>
+              <span className="text-muted">{scope.job_name}</span>
             </div>
-            <span className="font-semibold text-gray-700 shrink-0">Step {woIdx + 1} of {totalWOs} {wo.activity_label}</span>
+            <span className="font-semibold text-foreground shrink-0">Step {woIdx + 1} of {totalWOs} {wo.activity_label}</span>
           </div>
-          <p className="text-gray-500 mt-0.5 leading-tight">{scope.item_name}</p>
+          <p className="text-muted mt-0.5 leading-tight">{scope.item_name}</p>
         </div>
 
         {/* Content */}
         <div style={{ minHeight: "252mm" }}>{children}</div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-[9px] text-gray-400 pt-2 mt-3 border-t border-gray-300">
+        <div className="flex items-center justify-between text-[9px] text-muted pt-2 mt-3 border-t border-subtle">
           <span>Printed: {printDate}</span>
-          <span className="font-medium text-gray-500">Page {pageNum} of {totalPages}</span>
+          <span className="font-medium text-muted">Page {pageNum} of {totalPages}</span>
           <span>WO-{wo.work_order_id} · Starlight</span>
         </div>
       </div>
@@ -544,10 +544,10 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       {/* Header with QR */}
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-gray-900">{scope.job_number} — {scope.job_name}</h1>
-          <p className="text-sm font-medium text-gray-700 mt-1 break-words">{scope.item_name}</p>
-          <p className="text-xs text-gray-500 mt-1">
-            <span className="font-semibold text-gray-800">Step {woIdx + 1} of {totalWOs} — {wo.activity_label}</span>
+          <h1 className="text-lg font-bold text-foreground">{scope.job_number} — {scope.job_name}</h1>
+          <p className="text-sm font-medium text-foreground mt-1 break-words">{scope.item_name}</p>
+          <p className="text-xs text-muted mt-1">
+            <span className="font-semibold text-foreground">Step {woIdx + 1} of {totalWOs} — {wo.activity_label}</span>
             {" · "}Est. {wo.estimated_duration_hrs ?? "—"}h
             {" · "}Event: {formatDate(scope.event_date)}
           </p>
@@ -562,40 +562,40 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
         </div>
       </div>
 
-      <hr className="border-gray-300" />
+      <hr className="border-subtle" />
 
       {/* Full description */}
       <div>
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Task description</p>
-        <p className="text-[13px] text-gray-800 bg-gray-50 px-3 py-2 rounded leading-snug break-words whitespace-pre-wrap">{wo.description || "No description provided"}</p>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Task description</p>
+        <p className="text-[13px] text-foreground bg-surface-dim px-3 py-2 rounded leading-snug break-words whitespace-pre-wrap">{wo.description || "No description provided"}</p>
       </div>
 
-      <hr className="border-gray-300" />
+      <hr className="border-subtle" />
 
       {/* Paint notes */}
       {wo.paint_notes && (
         <>
           <div>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">🎨 Painting</p>
-            <p className="text-[13px] text-gray-800 bg-amber-50 px-3 py-2 rounded border border-amber-200 leading-snug break-words whitespace-pre-wrap">{wo.paint_notes}</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">🎨 Painting</p>
+            <p className="text-[13px] text-foreground bg-starlight-amber/10 px-3 py-2 rounded border border-starlight-amber/20 leading-snug break-words whitespace-pre-wrap">{wo.paint_notes}</p>
           </div>
-          <hr className="border-gray-300" />
+          <hr className="border-subtle" />
         </>
       )}
 
       {/* BOM */}
       <div>
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Bill of materials</p>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Bill of materials</p>
         {bom.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No materials assigned</p>
+          <p className="text-xs text-muted italic">No materials assigned</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-100 print:bg-gray-100">
-                <th className="text-left py-1 px-2 font-semibold text-gray-600">Material</th>
-                <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Qty</th>
-                <th className="text-right py-1 px-2 font-semibold text-gray-600 w-14">Unit</th>
-                <th className="text-left py-1 px-2 font-semibold text-gray-600 w-36">Stock pull</th>
+              <tr className="bg-surface-mid print:bg-surface-mid">
+                <th className="text-left py-1 px-2 font-semibold text-muted">Material</th>
+                <th className="text-right py-1 px-2 font-semibold text-muted w-14">Qty</th>
+                <th className="text-right py-1 px-2 font-semibold text-muted w-14">Unit</th>
+                <th className="text-left py-1 px-2 font-semibold text-muted w-36">Stock pull</th>
               </tr>
             </thead>
             <tbody>
@@ -631,11 +631,11 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
                   stockPull = `${r.quantity} sheet${r.quantity > 1 ? "s" : ""} (${r.mat_standard_sheet_size})`;
                 }
                 return (
-                  <tr key={r.bom_id} className="border-b border-gray-100">
-                    <td className="py-1 px-2 text-gray-800">{r.item_description || "—"}</td>
+                  <tr key={r.bom_id} className="border-b border-subtle">
+                    <td className="py-1 px-2 text-foreground">{r.item_description || "—"}</td>
                     <td className="py-1 px-2 text-right">{qtyDisplay}</td>
-                    <td className="py-1 px-2 text-right text-gray-600">{unitDisplay}</td>
-                    <td className="py-1 px-2 text-[10px] text-gray-500">{stockPull || "—"}</td>
+                    <td className="py-1 px-2 text-right text-muted">{unitDisplay}</td>
+                    <td className="py-1 px-2 text-[10px] text-muted">{stockPull || "—"}</td>
                   </tr>
                 );
               })}
@@ -644,16 +644,16 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
         )}
       </div>
 
-      <hr className="border-gray-300" />
+      <hr className="border-subtle" />
 
       {/* Linked items */}
       {linkedItems.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Linked job items</p>
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Linked job items</p>
           {linkedItems.map((it) => (
             <div key={it.item_id} className="flex items-start gap-2 mb-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-              <span className="text-xs text-gray-800">{it.quantity && it.quantity > 1 ? `${it.quantity}x ` : ""}{it.description}{it.item_type ? ` · ${it.item_type}` : ""}{it.finish_required ? ` · ${it.finish_required}` : ""}</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-navy mt-1.5 shrink-0" />
+              <span className="text-xs text-foreground">{it.quantity && it.quantity > 1 ? `${it.quantity}x ` : ""}{it.description}{it.item_type ? ` · ${it.item_type}` : ""}{it.finish_required ? ` · ${it.finish_required}` : ""}</span>
             </div>
           ))}
         </div>
@@ -662,10 +662,10 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       {/* Docs summary */}
       {(drawingCount > 0 || referenceCount > 0 || cutListCount > 0) && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Documents</p>
-          <p className="text-xs text-gray-600">
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-0.5">Documents</p>
+          <p className="text-xs text-muted">
             {[drawingCount > 0 && `${drawingCount} drawing${drawingCount > 1 ? "s" : ""}`, referenceCount > 0 && `${referenceCount} ref`, cutListCount > 0 && `${cutListCount} cut list`].filter(Boolean).join(" · ")}
-            <span className="text-gray-400"> — following pages</span>
+            <span className="text-muted"> — following pages</span>
           </p>
         </div>
       )}
@@ -673,18 +673,18 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       {/* Sibling WOs */}
       {siblingWOs.length > 0 && (
         <>
-          <hr className="border-gray-300" />
+          <hr className="border-subtle" />
           <div>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Other work orders on this scope item</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Other work orders on this scope item</p>
             {siblingWOs.sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999)).map((s) => {
               const all = [...siblingWOs, wo].sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
               const idx = all.findIndex((x) => x.work_order_id === s.work_order_id);
               return (
-                <p key={s.work_order_id} className="text-xs text-gray-600 mb-0.5">
-                  <span className="text-gray-400 inline-block w-10">{idx + 1} of {all.length}</span>
+                <p key={s.work_order_id} className="text-xs text-muted mb-0.5">
+                  <span className="text-muted inline-block w-10">{idx + 1} of {all.length}</span>
                   <span className="font-medium">{s.activity_label}</span>
-                  {s.description && <span className="text-gray-500"> · {s.description.length > 80 ? s.description.substring(0, 80) + "…" : s.description}</span>}
-                  {" · "}<span className={s.status === "Complete" ? "text-green-600" : s.status === "In-Progress" ? "text-blue-600" : "text-gray-400"}>{s.status}</span>
+                  {s.description && <span className="text-muted"> · {s.description.length > 80 ? s.description.substring(0, 80) + "…" : s.description}</span>}
+                  {" · "}<span className={s.status === "Complete" ? "text-starlight-green" : s.status === "In-Progress" ? "text-navy" : "text-muted"}>{s.status}</span>
                 </p>
               );
             })}
@@ -692,23 +692,23 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
         </>
       )}
 
-      <hr className="border-gray-300" />
+      <hr className="border-subtle" />
 
       {/* Notes */}
       <div>
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Notes / special instructions</p>
-        <div className="border border-dashed border-gray-300 rounded h-14" />
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Notes / special instructions</p>
+        <div className="border border-dashed border-subtle rounded h-14" />
       </div>
 
       {/* Sign-off */}
       <div>
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Sign-off</p>
-        <div className="space-y-2 text-xs text-gray-600">
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">Sign-off</p>
+        <div className="space-y-2 text-xs text-muted">
           {[1, 2, 3].map((n) => (
-            <div key={n} className="flex items-end gap-3 border-b border-gray-200 pb-1.5">
-              <div className="flex-1"><span className="text-gray-400 text-[10px]">{n === 1 ? "Started" : "Completed"} by: </span><span className="inline-block w-44 border-b border-gray-300 ml-1" /></div>
-              <div><span className="text-gray-400 text-[10px]">Hours: </span><span className="inline-block w-12 border-b border-gray-300" /></div>
-              <div><span className="text-gray-400 text-[10px]">Date: </span><span className="inline-block w-20 border-b border-gray-300" /></div>
+            <div key={n} className="flex items-end gap-3 border-b border-subtle pb-1.5">
+              <div className="flex-1"><span className="text-muted text-[10px]">{n === 1 ? "Started" : "Completed"} by: </span><span className="inline-block w-44 border-b border-subtle ml-1" /></div>
+              <div><span className="text-muted text-[10px]">Hours: </span><span className="inline-block w-12 border-b border-subtle" /></div>
+              <div><span className="text-muted text-[10px]">Date: </span><span className="inline-block w-20 border-b border-subtle" /></div>
             </div>
           ))}
         </div>
@@ -716,8 +716,8 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
 
       {/* Completion notes */}
       <div className="mt-1">
-        <p className="text-[9px] text-gray-400 mb-0.5">Notes on completion:</p>
-        <div className="border border-dashed border-gray-300 rounded h-10" />
+        <p className="text-[9px] text-muted mb-0.5">Notes on completion:</p>
+        <div className="border border-dashed border-subtle rounded h-10" />
       </div>
     </div>
   );
@@ -789,10 +789,10 @@ function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPd
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">{label}</p>
         <div className="flex items-center gap-2">
-          <p className="text-[9px] text-gray-400 truncate max-w-[260px]">{fileName}</p>
-          <button onClick={onRotate} className="print:hidden p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors" title="Rotate 90°">
+          <p className="text-[9px] text-muted truncate max-w-[260px]">{fileName}</p>
+          <button onClick={onRotate} className="print:hidden p-1 rounded hover:bg-surface-mid text-muted hover:text-foreground transition-colors" title="Rotate 90°">
             <RotateCw className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -822,7 +822,7 @@ function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPd
             }}
           />
         ) : (
-          <p className="text-gray-400 text-sm">Image not available</p>
+          <p className="text-muted text-sm">Image not available</p>
         )}
       </div>
     </div>

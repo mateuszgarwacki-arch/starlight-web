@@ -218,16 +218,16 @@ export default function FreelancerDetailPage() {
   // Editable field component
   const EditableField = ({ field, value, label, type = "text", suffix = "" }: { field: string; value: string | number | null; label: string; type?: string; suffix?: string }) => (
     <div className="min-w-0">
-      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] text-muted uppercase tracking-wider">{label}</p>
       {editingField === field ? (
         <input type={type} value={editValue} onChange={e => setEditValue(e.target.value)}
           onBlur={saveField} onKeyDown={e => { if (e.key === "Enter") saveField(); if (e.key === "Escape") cancelEdit(); }}
-          autoFocus className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-white focus:outline-none" />
+          autoFocus className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-surface focus:outline-none" />
       ) : (
         <p onClick={() => startEdit(field, value)} title={String(value ?? "")}
           className={`text-sm text-navy font-medium truncate ${isAdmin ? "cursor-pointer hover:text-starlight-blue transition-colors group" : ""}`}>
-          {value ?? <span className="text-gray-300">—</span>}{suffix}
-          {isAdmin && <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 inline ml-1" />}
+          {value ?? <span className="text-faint">—</span>}{suffix}
+          {isAdmin && <Pencil className="h-3 w-3 text-faint opacity-0 group-hover:opacity-100 inline ml-1" />}
         </p>
       )}
     </div>
@@ -309,24 +309,24 @@ export default function FreelancerDetailPage() {
   };
 
   const statusColor = (s: string | null) => {
-    if (!s) return "bg-gray-100 text-gray-500";
+    if (!s) return "bg-surface-mid text-muted";
     const m: Record<string, string> = {
-      Booked: "bg-blue-100 text-blue-700", Notified: "bg-amber-100 text-amber-700",
-      Confirmed: "bg-green-100 text-green-700", Declined: "bg-red-100 text-red-700",
-      Unavailable: "bg-gray-200 text-gray-600",
+      Booked: "bg-navy/15 text-navy", Notified: "bg-starlight-amber/15 text-starlight-amber",
+      Confirmed: "bg-starlight-green/15 text-starlight-green", Declined: "bg-starlight-red/15 text-starlight-red",
+      Unavailable: "bg-surface-hi text-muted",
     };
-    return m[s] || "bg-gray-100 text-gray-500";
+    return m[s] || "bg-surface-mid text-muted";
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading...</div>;
-  if (!person) return <div className="text-center py-12 text-gray-400">Freelancer not found</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading...</div>;
+  if (!person) return <div className="text-center py-12 text-muted">Freelancer not found</div>;
 
   const isActive = isTruthy(person.active);
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
       {/* Back */}
-      <Link href="/crew" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors">
+      <Link href="/crew" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors">
         <ArrowLeft className="h-4 w-4" /> All Crew
       </Link>
 
@@ -336,11 +336,11 @@ export default function FreelancerDetailPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <EditableField field="freelancer_name" value={person.freelancer_name} label="" />
-              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? "bg-starlight-green/15 text-starlight-green" : "bg-starlight-red/15 text-starlight-red"}`}>
                 {isActive ? "Active" : "Inactive"}
               </span>
               {person.role && (
-                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{person.role}</span>
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-navy/15 text-navy">{person.role}</span>
               )}
             </div>
           </div>
@@ -359,25 +359,25 @@ export default function FreelancerDetailPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Total Hours</p>
+          <p className="text-xs text-muted">Total Hours</p>
           <p className="text-lg font-semibold text-navy">{stats.totalHours}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Last 30 Days</p>
+          <p className="text-xs text-muted">Last 30 Days</p>
           <p className="text-lg font-semibold text-navy">{stats.last30Hours}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">WOs Completed</p>
+          <p className="text-xs text-muted">WOs Completed</p>
           <p className="text-lg font-semibold text-navy">{stats.totalWOs}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Avg vs Estimate</p>
-          <p className={`text-lg font-semibold ${stats.avgAccuracy === null ? "text-gray-300" : stats.avgAccuracy > 110 ? "text-starlight-red" : stats.avgAccuracy < 90 ? "text-starlight-green" : "text-navy"}`}>
+          <p className="text-xs text-muted">Avg vs Estimate</p>
+          <p className={`text-lg font-semibold ${stats.avgAccuracy === null ? "text-faint" : stats.avgAccuracy > 110 ? "text-starlight-red" : stats.avgAccuracy < 90 ? "text-starlight-green" : "text-navy"}`}>
             {stats.avgAccuracy !== null ? `${stats.avgAccuracy}%` : "—"}
           </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Flag Notes</p>
+          <p className="text-xs text-muted">Flag Notes</p>
           <p className="text-lg font-semibold text-navy">{stats.flagCount}</p>
         </div>
       </div>
@@ -398,44 +398,44 @@ export default function FreelancerDetailPage() {
                 : 0;
               const isStopping = stoppingEntry === entry.entry_id;
               return (
-                <div key={entry.entry_id} className="bg-white rounded-lg border border-gray-100 px-4 py-3 mb-2 last:mb-0">
+                <div key={entry.entry_id} className="bg-surface rounded-lg border border-subtle px-4 py-3 mb-2 last:mb-0">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-starlight-blue animate-pulse shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-navy">{entry.activity_label || "WO"} — {entry.scope_name || "Unknown scope"}</p>
-                      <p className="text-xs text-gray-400 truncate">{entry.job_number} · {entry.job_name}{entry.wo_description ? ` — ${entry.wo_description}` : ""}</p>
+                      <p className="text-xs text-muted truncate">{entry.job_number} · {entry.job_name}{entry.wo_description ? ` — ${entry.wo_description}` : ""}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-lg font-bold text-navy font-mono">{elapsed}h</p>
-                      <p className="text-[9px] text-gray-400">since {entry.system_start_timestamp ? new Date(entry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
+                      <p className="text-[9px] text-muted">since {entry.system_start_timestamp ? new Date(entry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
                     </div>
                     <button onClick={() => { setStoppingEntry(isStopping ? null : entry.entry_id); setStopHours(String(Math.max(0.5, Math.round(elapsed * 2) / 2))); setStopReason(""); }}
-                      className={"p-2 rounded-lg transition-colors " + (isStopping ? "bg-red-50 text-starlight-red" : "text-gray-400 hover:text-starlight-red hover:bg-red-50")}
+                      className={"p-2 rounded-lg transition-colors " + (isStopping ? "bg-starlight-red/10 text-starlight-red" : "text-muted hover:text-starlight-red hover:bg-starlight-red/10")}
                       title="Stop timer & set hours">
                       <Square className="h-4 w-4" />
                     </button>
                   </div>
                   {isStopping && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-end gap-2">
+                    <div className="mt-3 pt-3 border-t border-subtle flex items-end gap-2">
                       <div className="w-20">
-                        <label className="text-[9px] text-gray-400 block mb-0.5">Hours</label>
+                        <label className="text-[9px] text-muted block mb-0.5">Hours</label>
                         <input type="number" step="0.5" min="0.5" value={stopHours}
                           onChange={e => setStopHours(e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" autoFocus />
+                          className="w-full px-2 py-1.5 text-sm text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" autoFocus />
                       </div>
                       <div className="flex-1">
-                        <label className="text-[9px] text-gray-400 block mb-0.5">Reason *</label>
+                        <label className="text-[9px] text-muted block mb-0.5">Reason *</label>
                         <input type="text" value={stopReason} onChange={e => setStopReason(e.target.value)}
                           placeholder="e.g. Forgot to log, end of day, left site"
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" />
+                          className="w-full px-2 py-1.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" />
                       </div>
                       <button onClick={() => handleStopTimer(entry.entry_id)}
                         disabled={!stopReason.trim() || !stopHours}
-                        className="px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded hover:bg-red-700 disabled:opacity-50 shrink-0">
+                        className="px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded hover:bg-starlight-red disabled:opacity-50 shrink-0">
                         Stop & Log
                       </button>
                       <button onClick={() => setStoppingEntry(null)}
-                        className="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 shrink-0">Cancel</button>
+                        className="px-2 py-1.5 text-xs text-muted hover:text-muted shrink-0">Cancel</button>
                     </div>
                   )}
                 </div>
@@ -446,16 +446,16 @@ export default function FreelancerDetailPage() {
       })()}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-subtle">
         <button onClick={() => setActiveTab("timeline")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
-            activeTab === "timeline" ? "border-starlight-red text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+            activeTab === "timeline" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-muted"
           }`}>
           <Clock className="h-4 w-4" /> Activity ({timeEntries.length})
         </button>
         <button onClick={() => setActiveTab("bookings")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
-            activeTab === "bookings" ? "border-starlight-red text-navy" : "border-transparent text-gray-400 hover:text-gray-600"
+            activeTab === "bookings" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-muted"
           }`}>
           <Calendar className="h-4 w-4" /> Bookings ({bookings.length})
         </button>
@@ -467,23 +467,23 @@ export default function FreelancerDetailPage() {
           {/* Show archived toggle */}
           {isAdmin && (
             <div className="flex items-center justify-end">
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                 <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)}
-                  className="rounded border-gray-300" />
+                  className="rounded border-subtle" />
                 Show archived ({timeEntries.filter(e => e.archived_at).length})
               </label>
             </div>
           )}
           {(() => {
             const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
-            if (visible.length === 0) return <div className="card px-6 py-10 text-center text-gray-400 text-sm">No time entries recorded yet.</div>;
+            if (visible.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No time entries recorded yet.</div>;
             return visible.map(e => {
               const isArchived = !!e.archived_at;
               return (
               <div key={e.entry_id} className={`card px-5 py-3.5 flex items-start gap-4 ${e.flag_note && !isArchived ? "border-l-4 border-l-starlight-amber" : ""} ${isArchived ? "opacity-40 border-l-4 border-l-red-300" : ""}`}>
                 {/* Date */}
                 <div className="w-20 shrink-0 text-center">
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted">
                     {e.system_start_timestamp ? new Date(e.system_start_timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
                   </p>
                   {editingEntry === e.entry_id ? (
@@ -505,13 +505,13 @@ export default function FreelancerDetailPage() {
                     {e.activity_label && <span className="text-sm font-semibold text-navy">{e.activity_label}</span>}
                     {e.wo_status && (
                       <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        e.wo_status === "Complete" ? "bg-green-100 text-green-700" :
-                        e.wo_status === "In-Progress" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+                        e.wo_status === "Complete" ? "bg-starlight-green/15 text-starlight-green" :
+                        e.wo_status === "In-Progress" ? "bg-navy/15 text-navy" : "bg-surface-mid text-muted"
                       }`}>{e.wo_status}</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-0.5 leading-relaxed">{e.scope_name || e.wo_description || "—"}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                  <p className="text-sm text-muted mt-0.5 leading-relaxed">{e.scope_name || e.wo_description || "—"}</p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted">
                     {e.job_number && (
                       <Link href={`/jobs/${e.job_id}`} className="hover:text-navy transition-colors">
                         {e.job_number} — {e.job_name}
@@ -520,30 +520,30 @@ export default function FreelancerDetailPage() {
                     {e.entry_cost != null && <span className="font-mono">{formatCurrency(e.entry_cost)}</span>}
                   </div>
                   {e.flag_note && (
-                    <div className="mt-2 flex items-start gap-2 bg-amber-50 rounded px-3 py-2">
+                    <div className="mt-2 flex items-start gap-2 bg-starlight-amber/10 rounded px-3 py-2">
                       <Flag className="h-3.5 w-3.5 text-starlight-amber shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-800 leading-relaxed">{e.flag_note}</p>
+                      <p className="text-xs text-starlight-amber leading-relaxed">{e.flag_note}</p>
                     </div>
                   )}
                   {/* Archive reason (if archived) */}
                   {isArchived && e.archive_reason && (
-                    <div className="mt-2 flex items-start gap-2 bg-red-50 rounded px-3 py-2">
-                      <Archive className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-                      <p className="text-xs text-red-600 leading-relaxed">Archived: {e.archive_reason}</p>
+                    <div className="mt-2 flex items-start gap-2 bg-starlight-red/10 rounded px-3 py-2">
+                      <Archive className="h-3.5 w-3.5 text-starlight-red shrink-0 mt-0.5" />
+                      <p className="text-xs text-starlight-red leading-relaxed">Archived: {e.archive_reason}</p>
                     </div>
                   )}
                   {/* Archive form (when archiving) */}
                   {archivingEntry === e.entry_id && (
-                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded space-y-2">
-                      <p className="text-xs font-medium text-red-700">Archive this time entry — it will be excluded from all costs</p>
+                    <div className="mt-2 p-3 bg-starlight-red/10 border border-starlight-red/20 rounded space-y-2">
+                      <p className="text-xs font-medium text-starlight-red">Archive this time entry — it will be excluded from all costs</p>
                       <input type="text" value={archiveReason} onChange={ev => setArchiveReason(ev.target.value)}
                         onKeyDown={ev => { if (ev.key === "Enter") handleArchive(e.entry_id); if (ev.key === "Escape") setArchivingEntry(null); }}
                         placeholder="Reason (required)..." autoFocus
-                        className="w-full px-3 py-1.5 text-sm border border-red-200 rounded focus:outline-none focus:ring-2 focus:ring-red-300" />
+                        className="w-full px-3 py-1.5 text-sm border border-starlight-red/20 rounded focus:outline-none focus:ring-2 focus:ring-red-300" />
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => setArchivingEntry(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                        <button onClick={() => setArchivingEntry(null)} className="text-xs text-muted hover:text-foreground">Cancel</button>
                         <button onClick={() => handleArchive(e.entry_id)} disabled={!archiveReason.trim()}
-                          className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">Archive</button>
+                          className="text-xs px-3 py-1 bg-starlight-red text-white rounded hover:bg-starlight-red disabled:opacity-50">Archive</button>
                       </div>
                     </div>
                   )}
@@ -553,11 +553,11 @@ export default function FreelancerDetailPage() {
                 {isAdmin && !isArchived && archivingEntry !== e.entry_id && (
                   <div className="flex flex-col gap-1 shrink-0">
                     <button onClick={() => { setEditingEntry(e.entry_id); setEditHoursValue(String(e.actual_hours ?? "")); }}
-                      title="Edit hours" className="p-1.5 text-gray-300 hover:text-starlight-blue hover:bg-blue-50 rounded transition-colors">
+                      title="Edit hours" className="p-1.5 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button onClick={() => { setArchivingEntry(e.entry_id); setArchiveReason(""); }}
-                      title="Archive entry" className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+                      title="Archive entry" className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors">
                       <Archive className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -573,7 +573,7 @@ export default function FreelancerDetailPage() {
       {activeTab === "bookings" && (
         <div className="space-y-2">
           {bookings.length === 0 ? (
-            <div className="card px-6 py-10 text-center text-gray-400 text-sm">No bookings in the last 30 days or upcoming.</div>
+            <div className="card px-6 py-10 text-center text-muted text-sm">No bookings in the last 30 days or upcoming.</div>
           ) : (
             bookings.map(b => (
               <div key={b.schedule_id} className="card px-5 py-3.5 flex items-center gap-4">
@@ -581,7 +581,7 @@ export default function FreelancerDetailPage() {
                   <p className="text-sm font-semibold text-navy">
                     {new Date(b.scheduled_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                   </p>
-                  <p className="text-[10px] text-gray-400">
+                  <p className="text-[10px] text-muted">
                     {new Date(b.scheduled_date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short" })}
                   </p>
                 </div>
@@ -591,11 +591,11 @@ export default function FreelancerDetailPage() {
                       {b.job_number} — {b.job_name}
                     </Link>
                   ) : b.status === "Unavailable" ? (
-                    <p className="text-sm text-gray-500">{b.unavailable_reason || "Unavailable"}</p>
+                    <p className="text-sm text-muted">{b.unavailable_reason || "Unavailable"}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">—</p>
+                    <p className="text-sm text-muted">—</p>
                   )}
-                  {b.notes && <p className="text-xs text-gray-400 mt-0.5">{b.notes}</p>}
+                  {b.notes && <p className="text-xs text-muted mt-0.5">{b.notes}</p>}
                 </div>
                 <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(b.status)}`}>
                   {b.status || "—"}

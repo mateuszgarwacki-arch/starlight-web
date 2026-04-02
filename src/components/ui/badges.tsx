@@ -25,9 +25,9 @@ export function DaysRemainingBadge({
   );
 
   let color = "bg-starlight-green/10 text-starlight-green";
-  if (diff < 0) color = "bg-gray-100 text-gray-500";
-  else if (diff <= 7) color = "bg-red-100 text-starlight-red";
-  else if (diff <= 14) color = "bg-amber-100 text-starlight-amber";
+  if (diff < 0) color = "bg-surface-mid text-muted";
+  else if (diff <= 7) color = "bg-starlight-red/15 text-starlight-red";
+  else if (diff <= 14) color = "bg-starlight-amber/15 text-starlight-amber";
 
   const label = diff < 0 ? `${Math.abs(diff)}d ago` : `${diff}d`;
 
@@ -56,7 +56,7 @@ export function PhasePill({ phase }: { phase: number | null }) {
     <span
       className={cn(
         "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white",
-        phase ? colors[phase] || "bg-gray-400" : "bg-gray-400"
+        phase ? colors[phase] || "bg-surface-bright" : "bg-surface-bright"
       )}
     >
       Phase {phase || "?"}

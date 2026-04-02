@@ -117,7 +117,7 @@ export default function SuppliersPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading suppliers...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading suppliers...</div>;
   }
 
   return (
@@ -125,13 +125,13 @@ export default function SuppliersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Suppliers</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{suppliers.filter(s => isTruthy(s.active)).length} active suppliers</p>
+          <p className="text-sm text-muted mt-0.5">{suppliers.filter(s => isTruthy(s.active)).length} active suppliers</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
-          <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors">
+          <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors">
             <Plus className="h-4 w-4" /> Add Supplier
           </button>
         </div>
@@ -139,19 +139,19 @@ export default function SuppliersPage() {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search suppliers..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+            className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-gray-300" />
+        <label className="flex items-center gap-2 text-sm text-muted cursor-pointer select-none">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-subtle" />
           Show inactive
         </label>
       </div>
 
       <div className="space-y-2">
         {filtered.length === 0 ? (
-          <div className="card px-6 py-10 text-center text-gray-400 text-sm">
+          <div className="card px-6 py-10 text-center text-muted text-sm">
             {search ? "No suppliers match your search" : "No suppliers yet — add your first one"}
           </div>
         ) : filtered.map((s) => {
@@ -159,15 +159,15 @@ export default function SuppliersPage() {
           return (
             <div key={s.supplier_id} className={"card overflow-hidden " + (!isTruthy(s.active) ? "opacity-50" : "")}>
               <div className="flex items-center gap-4 px-5 py-3.5">
-                <button onClick={() => loadDetail(s.supplier_id)} className="shrink-0 text-gray-400">
+                <button onClick={() => loadDetail(s.supplier_id)} className="shrink-0 text-muted">
                   {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-navy">{s.supplier_name}</span>
-                    {s.speciality && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{s.speciality}</span>}
+                    {s.speciality && <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-mid text-muted">{s.speciality}</span>}
                   </div>
-                  <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
+                  <div className="flex items-center gap-4 mt-1 text-xs text-muted">
                     {s.contact_name && <span>{s.contact_name}</span>}
                     {s.contact_phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{s.contact_phone}</span>}
                     {s.contact_email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{s.contact_email}</span>}
@@ -176,57 +176,57 @@ export default function SuppliersPage() {
                 <div className="hidden md:flex items-center gap-6 text-xs shrink-0">
                   <div className="text-center">
                     <p className="font-mono text-navy font-medium">{s.invoice_count || 0}</p>
-                    <p className="text-[10px] text-gray-400">Orders</p>
+                    <p className="text-[10px] text-muted">Orders</p>
                   </div>
                   <div className="text-center">
                     <p className="font-mono text-navy font-medium">{s.total_spend ? formatCurrency(s.total_spend) : "£0"}</p>
-                    <p className="text-[10px] text-gray-400">Total Spend</p>
+                    <p className="text-[10px] text-muted">Total Spend</p>
                   </div>
                   <div className="text-center">
-                    <p className="font-mono text-gray-500">{s.material_count || 0}</p>
-                    <p className="text-[10px] text-gray-400">Materials</p>
+                    <p className="font-mono text-muted">{s.material_count || 0}</p>
+                    <p className="text-[10px] text-muted">Materials</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-gray-500">{s.last_invoice_date ? formatDate(s.last_invoice_date) : "—"}</p>
-                    <p className="text-[10px] text-gray-400">Last Order</p>
+                    <p className="text-muted">{s.last_invoice_date ? formatDate(s.last_invoice_date) : "—"}</p>
+                    <p className="text-[10px] text-muted">Last Order</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => openEdit(s)} className="p-1.5 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => toggleActive(s)} className="p-1.5 text-gray-400 hover:text-starlight-amber hover:bg-amber-50 rounded-md transition-colors"><Archive className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => openEdit(s)} className="p-1.5 text-muted hover:text-navy hover:bg-surface-mid rounded-md transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => toggleActive(s)} className="p-1.5 text-muted hover:text-starlight-amber hover:bg-starlight-amber/10 rounded-md transition-colors"><Archive className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
 
               {/* Expanded detail panel */}
               {isExpanded && (
-                <div className="border-t border-gray-100 bg-gray-50/50">
+                <div className="border-t border-subtle bg-surface-dim/50">
                   <div className="flex gap-1 px-5 pt-3 pb-1">
                     {(["invoices", "materials"] as const).map((t) => (
                       <button key={t} onClick={() => setDetailTab(t)}
                         className={"px-3 py-1.5 rounded-md text-xs font-medium transition-colors " +
-                          (detailTab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-navy")}>
+                          (detailTab === t ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
                         {t === "invoices" ? <span className="flex items-center gap-1.5"><FileText className="h-3 w-3" /> Orders ({invoices.length})</span>
                           : <span className="flex items-center gap-1.5"><Package className="h-3 w-3" /> Materials ({materials.length})</span>}
                       </button>
                     ))}
                   </div>
                   {detailLoading ? (
-                    <div className="px-5 py-4 text-sm text-gray-400 animate-pulse">Loading...</div>
+                    <div className="px-5 py-4 text-sm text-muted animate-pulse">Loading...</div>
                   ) : detailTab === "invoices" ? (
                     <div className="px-5 pb-4">
-                      {invoices.length === 0 ? <p className="text-xs text-gray-400 py-3">No invoices from this supplier</p> : (
+                      {invoices.length === 0 ? <p className="text-xs text-muted py-3">No invoices from this supplier</p> : (
                         <table className="w-full text-xs mt-2">
-                          <thead><tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                          <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider">
                             <th className="py-1.5 font-medium">Invoice #</th><th className="py-1.5 font-medium">Date</th>
                             <th className="py-1.5 font-medium text-right">Total</th><th className="py-1.5 font-medium">Status</th>
                           </tr></thead>
                           <tbody>{invoices.map((inv: any) => (
-                            <tr key={inv.invoice_id} className="border-t border-gray-100">
+                            <tr key={inv.invoice_id} className="border-t border-subtle">
                               <td className="py-1.5 font-mono text-navy">{inv.invoice_number || "—"}</td>
-                              <td className="py-1.5 text-gray-500">{inv.invoice_date ? formatDate(inv.invoice_date) : "—"}</td>
+                              <td className="py-1.5 text-muted">{inv.invoice_date ? formatDate(inv.invoice_date) : "—"}</td>
                               <td className="py-1.5 text-right font-mono text-navy">{inv.total_value ? formatCurrency(inv.total_value) : "—"}</td>
                               <td className="py-1.5"><span className={"px-2 py-0.5 rounded-full text-[10px] font-medium " +
-                                (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-gray-100 text-gray-500")}>{inv.status}</span></td>
+                                (inv.status === "Processed" ? "bg-starlight-green/10 text-starlight-green" : "bg-surface-mid text-muted")}>{inv.status}</span></td>
                             </tr>
                           ))}</tbody>
                         </table>
@@ -234,16 +234,16 @@ export default function SuppliersPage() {
                     </div>
                   ) : (
                     <div className="px-5 pb-4">
-                      {materials.length === 0 ? <p className="text-xs text-gray-400 py-3">No materials linked to this supplier</p> : (
+                      {materials.length === 0 ? <p className="text-xs text-muted py-3">No materials linked to this supplier</p> : (
                         <table className="w-full text-xs mt-2">
-                          <thead><tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                          <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider">
                             <th className="py-1.5 font-medium">Material</th><th className="py-1.5 font-medium">Unit</th>
                             <th className="py-1.5 font-medium text-right">Unit Cost</th>
                           </tr></thead>
                           <tbody>{materials.map((m: any) => (
-                            <tr key={m.material_id} className="border-t border-gray-100">
+                            <tr key={m.material_id} className="border-t border-subtle">
                               <td className="py-1.5 font-medium text-navy">{m.material_name}</td>
-                              <td className="py-1.5 text-gray-500">{m.unit || "—"}</td>
+                              <td className="py-1.5 text-muted">{m.unit || "—"}</td>
                               <td className="py-1.5 text-right font-mono text-navy">{m.current_unit_cost ? formatCurrency(m.current_unit_cost) : "—"}</td>
                             </tr>
                           ))}</tbody>
@@ -261,68 +261,68 @@ export default function SuppliersPage() {
       {/* Add/Edit Dialog */}
       {showDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-subtle flex items-center justify-between sticky top-0 bg-surface rounded-t-xl z-10">
               <h3 className="text-sm font-semibold text-navy">{editing ? "Edit Supplier" : "Add Supplier"}</h3>
-              <button onClick={() => setShowDialog(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowDialog(false)} className="text-muted hover:text-muted"><X className="h-5 w-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Company Name *</label>
+                <label className="block text-xs font-medium text-muted mb-1">Company Name *</label>
                 <input type="text" value={form.supplier_name} onChange={(e) => setForm({ ...form, supplier_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="e.g. Panelco Timber" autoFocus />
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="e.g. Panelco Timber" autoFocus />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Contact Name</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Contact Name</label>
                   <input type="text" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="John Smith" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="John Smith" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Speciality</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Speciality</label>
                   <input type="text" value={form.speciality} onChange={(e) => setForm({ ...form, speciality: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Timber, Sheet goods" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Timber, Sheet goods" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Phone</label>
                   <input type="text" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="01onal 234 567" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="01onal 234 567" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Email</label>
                   <input type="text" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="orders@supplier.co.uk" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="orders@supplier.co.uk" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Payment Terms</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Payment Terms</label>
                   <input type="text" value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="30 days net" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="30 days net" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Account #</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Account #</label>
                   <input type="text" value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="ACC-12345" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="ACC-12345" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Website</label>
+                <label className="block text-xs font-medium text-muted mb-1">Website</label>
                 <input type="text" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="www.supplier.co.uk" />
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="www.supplier.co.uk" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-muted mb-1">Notes</label>
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none" placeholder="Delivery schedule, minimum orders..." />
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none" placeholder="Delivery schedule, minimum orders..." />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white rounded-b-xl">
-              <button onClick={() => setShowDialog(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-2 sticky bottom-0 bg-surface rounded-b-xl">
+              <button onClick={() => setShowDialog(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
               <button onClick={saveSupplier} disabled={saving || !form.supplier_name.trim()}
-                className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors">
                 {saving ? "Saving..." : editing ? "Update" : "Add Supplier"}
               </button>
             </div>

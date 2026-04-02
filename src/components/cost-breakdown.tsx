@@ -191,7 +191,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     }
   };
 
-  if (loading) return <div className="text-xs text-gray-400 py-4">Loading cost analysis...</div>;
+  if (loading) return <div className="text-xs text-muted py-4">Loading cost analysis...</div>;
 
   const estTotal = d.estLabour + d.estMaterials;
   const committedTotal = d.actLabour + d.actMatsPlanned;
@@ -211,7 +211,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
 
   const mc = (pct: number) =>
     pct >= d.targetMarginPct ? "text-starlight-green" :
-    pct >= d.targetMarginPct * 0.5 ? "text-amber-500" : "text-starlight-red";
+    pct >= d.targetMarginPct * 0.5 ? "text-starlight-amber" : "text-starlight-red";
 
   const bestMarginPct = committedTotal > 0 ? liveMarginPct : plannedMarginPct;
   const bestMargin = committedTotal > 0 ? liveMargin : plannedMargin;
@@ -224,24 +224,24 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
   });
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-surface border border-subtle rounded-lg overflow-hidden">
       <button onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-surface-dim transition-colors">
         <div className="flex items-center gap-3">
-          {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
           <span className="text-sm font-semibold text-navy">Cost analysis</span>
-          <span className="text-xs text-gray-400">{d.completedWOs}/{d.woCount} WOs complete</span>
+          <span className="text-xs text-muted">{d.completedWOs}/{d.woCount} WOs complete</span>
         </div>
         <div className="flex items-center gap-4 text-xs">
           {q > 0 && (
-            <span className="text-gray-500">
-              {showBothQuoted ? "Internal " : "Quoted "}<span className="font-semibold text-gray-800">{fmt(q)}</span>
-              {showBothQuoted && <span className="text-gray-400 ml-1">(of {fmt(d.quotedTotal)})</span>}
+            <span className="text-muted">
+              {showBothQuoted ? "Internal " : "Quoted "}<span className="font-semibold text-foreground">{fmt(q)}</span>
+              {showBothQuoted && <span className="text-muted ml-1">(of {fmt(d.quotedTotal)})</span>}
             </span>
           )}
-          {d.pmEstTotal > 0 && <span className="text-gray-500">PM Est. <span className="font-semibold text-orange-700">{fmt(d.pmEstTotal)}</span></span>}
-          {estTotal > 0 && <span className="text-gray-500">Est. <span className="font-semibold text-gray-800">{fmt(estTotal)}</span></span>}
-          {committedTotal > 0 && <span className="text-gray-500">Spent <span className="font-semibold text-gray-800">{fmt(committedTotal)}</span></span>}
+          {d.pmEstTotal > 0 && <span className="text-muted">PM Est. <span className="font-semibold text-starlight-amber">{fmt(d.pmEstTotal)}</span></span>}
+          {estTotal > 0 && <span className="text-muted">Est. <span className="font-semibold text-foreground">{fmt(estTotal)}</span></span>}
+          {committedTotal > 0 && <span className="text-muted">Spent <span className="font-semibold text-foreground">{fmt(committedTotal)}</span></span>}
           {q > 0 && (estTotal > 0 || committedTotal > 0) && (
             <span className={`font-semibold ${mc(bestMarginPct)}`}>{bestMarginPct.toFixed(1)}% margin</span>
           )}
@@ -249,107 +249,107 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-200 px-4 py-4 space-y-4">
+        <div className="border-t border-subtle px-4 py-4 space-y-4">
           {/* Cost layers grid */}
           <div className="grid grid-cols-5 gap-0 text-xs">
-            <div className="text-gray-400 font-medium py-1.5 uppercase tracking-wider text-[10px]">Layer</div>
-            <div className="text-gray-400 font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Labour</div>
-            <div className="text-gray-400 font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Materials</div>
-            <div className="text-gray-400 font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Total</div>
-            <div className="text-gray-400 font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Margin</div>
+            <div className="text-muted font-medium py-1.5 uppercase tracking-wider text-[10px]">Layer</div>
+            <div className="text-muted font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Labour</div>
+            <div className="text-muted font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Materials</div>
+            <div className="text-muted font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Total</div>
+            <div className="text-muted font-medium py-1.5 text-right uppercase tracking-wider text-[10px]">Margin</div>
 
             {q > 0 && (<>
-              <div className="py-2 border-t border-gray-100 font-medium text-purple-700 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-purple-400"></span>{showBothQuoted ? "Quoted (workshop + stock)" : "Quoted"}
+              <div className="py-2 border-t border-subtle font-medium text-phase-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-phase-2"></span>{showBothQuoted ? "Quoted (workshop + stock)" : "Quoted"}
               </div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
-              <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">
-                {fmt(q)}{showBothQuoted && <span className="block text-[10px] text-gray-400 font-normal">of {fmt(d.quotedTotal)} total</span>}
+              <div className="py-2 border-t border-subtle text-right text-muted">—</div>
+              <div className="py-2 border-t border-subtle text-right text-muted">—</div>
+              <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">
+                {fmt(q)}{showBothQuoted && <span className="block text-[10px] text-muted font-normal">of {fmt(d.quotedTotal)} total</span>}
               </div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-400">—</div>
+              <div className="py-2 border-t border-subtle text-right text-muted">—</div>
             </>)}
 
             {/* PM Estimate */}
             {d.pmEstTotal > 0 && (<>
-              <div className="py-2 border-t border-gray-100 font-medium text-orange-700 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-orange-400"></span>PM Estimate
+              <div className="py-2 border-t border-subtle font-medium text-starlight-amber flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-starlight-amber"></span>PM Estimate
               </div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{d.pmEstLabour > 0 ? fmt(d.pmEstLabour) : "—"}</div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{d.pmEstMaterials > 0 ? fmt(d.pmEstMaterials) : "—"}</div>
-              <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">{fmt(d.pmEstTotal)}</div>
-              <div className={`py-2 border-t border-gray-100 text-right font-semibold ${mc(q > 0 ? ((q - d.pmEstTotal) / q) * 100 : 0)}`}>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{d.pmEstLabour > 0 ? fmt(d.pmEstLabour) : "—"}</div>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{d.pmEstMaterials > 0 ? fmt(d.pmEstMaterials) : "—"}</div>
+              <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(d.pmEstTotal)}</div>
+              <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(q > 0 ? ((q - d.pmEstTotal) / q) * 100 : 0)}`}>
                 {q > 0 ? `${(((q - d.pmEstTotal) / q) * 100).toFixed(1)}%` : "—"}
               </div>
             </>)}
 
             {/* Estimated */}
-            <div className="py-2 border-t border-gray-100 font-medium text-blue-700 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-400"></span>Estimated
+            <div className="py-2 border-t border-subtle font-medium text-navy flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-navy"></span>Estimated
             </div>
-            <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.estLabour)}</div>
-            <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.estMaterials)}</div>
-            <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">{fmt(estTotal)}</div>
-            <div className={`py-2 border-t border-gray-100 text-right font-semibold ${mc(plannedMarginPct)}`}>
+            <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.estLabour)}</div>
+            <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.estMaterials)}</div>
+            <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(estTotal)}</div>
+            <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(plannedMarginPct)}`}>
               {q > 0 ? `${plannedMarginPct.toFixed(1)}%` : "—"}
             </div>
 
             {/* Committed */}
             {committedTotal > 0 && (<>
-              <div className="py-2 border-t border-gray-100 font-medium text-teal-700 flex items-center gap-1.5">
+              <div className="py-2 border-t border-subtle font-medium text-teal-700 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-teal-400"></span>Spent
               </div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actLabour)}</div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actMatsPlanned)}</div>
-              <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">{fmt(committedTotal)}</div>
-              <div className={`py-2 border-t border-gray-100 text-right font-semibold ${mc(liveMarginPct)}`}>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.actLabour)}</div>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.actMatsPlanned)}</div>
+              <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(committedTotal)}</div>
+              <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(liveMarginPct)}`}>
                 {q > 0 ? `${liveMarginPct.toFixed(1)}%` : "—"}
               </div>
             </>)}
 
             {/* Reconciled */}
             {hasReconciled && (<>
-              <div className="py-2 border-t border-gray-100 font-medium text-amber-700 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>Reconciled
+              <div className="py-2 border-t border-subtle font-medium text-starlight-amber flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-starlight-amber"></span>Reconciled
               </div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actLabour)}</div>
-              <div className="py-2 border-t border-gray-100 text-right text-gray-700">{fmt(d.actMatsReconciled)}</div>
-              <div className="py-2 border-t border-gray-100 text-right font-semibold text-gray-800">{fmt(reconciledTotal)}</div>
-              <div className={`py-2 border-t border-gray-100 text-right font-semibold ${mc(q > 0 ? ((q - reconciledTotal) / q) * 100 : 0)}`}>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.actLabour)}</div>
+              <div className="py-2 border-t border-subtle text-right text-foreground">{fmt(d.actMatsReconciled)}</div>
+              <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(reconciledTotal)}</div>
+              <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(q > 0 ? ((q - reconciledTotal) / q) * 100 : 0)}`}>
                 {q > 0 ? `${(((q - reconciledTotal) / q) * 100).toFixed(1)}%` : "—"}
               </div>
             </>)}
           </div>
 
           {/* Insight cards */}
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-200">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Target margin</p>
-              <p className="text-lg font-bold text-gray-800">{d.targetMarginPct}%</p>
-              <p className="text-[10px] text-gray-400">{q > 0 ? `Budget: ${fmt(q * (1 - d.targetMarginPct / 100))}` : "No quote linked"}</p>
+          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-subtle">
+            <div className="bg-surface-dim rounded-lg p-3">
+              <p className="text-[10px] text-muted uppercase tracking-wider">Target margin</p>
+              <p className="text-lg font-bold text-foreground">{d.targetMarginPct}%</p>
+              <p className="text-[10px] text-muted">{q > 0 ? `Budget: ${fmt(q * (1 - d.targetMarginPct / 100))}` : "No quote linked"}</p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimate vs budget</p>
-              <p className={`text-lg font-bold ${estVsBudget === 0 ? "text-gray-400" : estVsBudget <= 100 ? "text-starlight-green" : estVsBudget <= 115 ? "text-amber-500" : "text-starlight-red"}`}>
+            <div className="bg-surface-dim rounded-lg p-3">
+              <p className="text-[10px] text-muted uppercase tracking-wider">Estimate vs budget</p>
+              <p className={`text-lg font-bold ${estVsBudget === 0 ? "text-muted" : estVsBudget <= 100 ? "text-starlight-green" : estVsBudget <= 115 ? "text-starlight-amber" : "text-starlight-red"}`}>
                 {budget > 0 && estTotal > 0 ? `${estOverUnder.toFixed(0)}%` : "—"}
               </p>
-              <p className="text-[10px] text-gray-400">{budget > 0 && estTotal > 0 ? (estVsBudget > 100 ? "Over budget" : "Under budget") : "No data yet"}</p>
+              <p className="text-[10px] text-muted">{budget > 0 && estTotal > 0 ? (estVsBudget > 100 ? "Over budget" : "Under budget") : "No data yet"}</p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">{bestLabel}</p>
+            <div className="bg-surface-dim rounded-lg p-3">
+              <p className="text-[10px] text-muted uppercase tracking-wider">{bestLabel}</p>
               <p className={`text-lg font-bold ${mc(bestMarginPct)}`}>{q > 0 ? `${bestMarginPct.toFixed(1)}%` : "—"}</p>
-              <p className="text-[10px] text-gray-400">{q > 0 ? fmt(bestMargin) + " profit" : "No quote linked"}</p>
+              <p className="text-[10px] text-muted">{q > 0 ? fmt(bestMargin) + " profit" : "No quote linked"}</p>
             </div>
           </div>
 
           {/* Per-line breakdown — job level only */}
           {workshopLines.length > 0 && (
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Workshop &amp; stock quote lines</p>
+            <div className="pt-3 border-t border-subtle">
+              <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-2">Workshop &amp; stock quote lines</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-50 text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                    <tr className="bg-surface-dim text-left text-[10px] text-muted uppercase tracking-wider">
                       <th className="px-3 py-2 font-medium w-8">#</th>
                       <th className="px-3 py-2 font-medium">Line</th>
                       <th className="px-3 py-2 font-medium text-center w-14">Scopes</th>
@@ -373,43 +373,43 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                       const wfRows = waterfallCache[l.quote_line_id] || [];
                       return (
                         <Fragment key={l.quote_line_id}>
-                        <tr className={`border-t border-gray-100 ${hasScopes ? "cursor-pointer hover:bg-gray-50/50" : ""}`}
+                        <tr className={`border-t border-subtle ${hasScopes ? "cursor-pointer hover:bg-surface-dim/50" : ""}`}
                           onClick={hasScopes ? () => toggleLineExpand(l.quote_line_id) : undefined}>
-                          <td className="px-3 py-2 text-gray-400 font-mono">
+                          <td className="px-3 py-2 text-muted font-mono">
                             {hasScopes && (isLineExpanded
-                              ? <ChevronDown className="h-3 w-3 inline mr-0.5 text-gray-400" />
-                              : <ChevronRight className="h-3 w-3 inline mr-0.5 text-gray-400" />
+                              ? <ChevronDown className="h-3 w-3 inline mr-0.5 text-muted" />
+                              : <ChevronRight className="h-3 w-3 inline mr-0.5 text-muted" />
                             )}
                             {l.line_number}
                           </td>
-                          <td className="px-3 py-2 text-gray-700 max-w-[300px]">
+                          <td className="px-3 py-2 text-foreground max-w-[300px]">
                             <span className="line-clamp-2">{l.line_text || "—"}</span>
                           </td>
                           <td className="px-3 py-2 text-center">
                             {l.scopeCount > 0
                               ? <span className="text-[10px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium">{l.scopeCount}</span>
-                              : <span className="text-gray-300">—</span>}
+                              : <span className="text-faint">—</span>}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-600">{l.line_value ? fmt(l.line_value) : "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono text-muted">{l.line_value ? fmt(l.line_value) : "—"}</td>
                           <td className="px-3 py-2 text-right font-mono">
                             {spent > 0 ? (
                               <span className={isOverrun ? "text-starlight-red font-semibold" : "text-navy"}>
                                 {fmt(spent)}
                               </span>
-                            ) : <span className="text-gray-300">—</span>}
+                            ) : <span className="text-faint">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono">
                             {committed > 0 ? (
-                              <span className={committed === spent ? "text-navy font-medium" : "text-blue-500"}>
+                              <span className={committed === spent ? "text-navy font-medium" : "text-navy"}>
                                 {fmt(committed)}
-                                {hasRemaining && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                                {hasRemaining && <span className="text-[9px] text-muted ml-0.5">est</span>}
                               </span>
-                            ) : <span className="text-gray-300">—</span>}
+                            ) : <span className="text-faint">—</span>}
                           </td>
                           <td className={`px-3 py-2 text-right font-mono font-semibold ${margin >= 0 ? "text-starlight-green" : "text-starlight-red"}`}>
                             {committed > 0 && l.line_value ? (<>{margin > 0 && <TrendingUp className="h-3 w-3 inline mr-0.5" />}{margin < 0 && <TrendingDown className="h-3 w-3 inline mr-0.5" />}{fmt(margin)}</>) : "—"}
                           </td>
-                          <td className={`px-3 py-2 text-right font-mono ${marginPct >= d.targetMarginPct ? "text-starlight-green" : marginPct > 0 ? "text-amber-500" : "text-starlight-red"}`}>
+                          <td className={`px-3 py-2 text-right font-mono ${marginPct >= d.targetMarginPct ? "text-starlight-green" : marginPct > 0 ? "text-starlight-amber" : "text-starlight-red"}`}>
                             {committed > 0 && l.line_value ? `${marginPct.toFixed(0)}%` : "—"}
                           </td>
                         </tr>
@@ -421,17 +421,17 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                           const wQuoted = w.quoted_value || 0;
                           const wMarginPct = wQuoted > 0 && wCommitted > 0 ? ((wQuoted - wCommitted) / wQuoted) * 100 : null;
                           return (
-                            <tr key={w.scope_item_id} className="bg-gray-50/70 border-t border-gray-100/50">
+                            <tr key={w.scope_item_id} className="bg-surface-dim/70 border-t border-subtle/50">
                               <td className="px-3 py-1.5"></td>
-                              <td className="px-3 py-1.5 text-[11px] text-gray-600 pl-6">
-                                <span className="text-gray-400 mr-1">↳</span>
+                              <td className="px-3 py-1.5 text-[11px] text-muted pl-6">
+                                <span className="text-muted mr-1">↳</span>
                                 {w.scope_name || `Scope #${w.scope_item_id}`}
                                 {w.selected_option && (
-                                  <span className="ml-1.5 text-[9px] bg-green-50 text-starlight-green px-1 py-0.5 rounded">{w.selected_option}</span>
+                                  <span className="ml-1.5 text-[9px] bg-starlight-green/10 text-starlight-green px-1 py-0.5 rounded">{w.selected_option}</span>
                                 )}
                               </td>
                               <td className="px-3 py-1.5"></td>
-                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-gray-500">
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px] text-muted">
                                 {wQuoted > 0 ? fmt(wQuoted) : "—"}
                               </td>
                               <td className="px-3 py-1.5 text-right font-mono text-[11px] text-navy">
@@ -439,16 +439,16 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                               </td>
                               <td className="px-3 py-1.5 text-right font-mono text-[11px]">
                                 {wCommitted > 0 ? (
-                                  <span className={wCommitted > wSpent ? "text-blue-500" : "text-navy"}>
-                                    {fmt(wCommitted)}{wCommitted > wSpent && <span className="text-[9px] text-gray-400 ml-0.5">est</span>}
+                                  <span className={wCommitted > wSpent ? "text-navy" : "text-navy"}>
+                                    {fmt(wCommitted)}{wCommitted > wSpent && <span className="text-[9px] text-muted ml-0.5">est</span>}
                                   </span>
                                 ) : "—"}
                               </td>
                               <td className="px-3 py-1.5"></td>
                               <td className={`px-3 py-1.5 text-right font-mono text-[11px] ${
-                                wMarginPct === null ? "text-gray-300" :
+                                wMarginPct === null ? "text-faint" :
                                 wMarginPct >= 20 ? "text-starlight-green" :
-                                wMarginPct >= 0 ? "text-amber-500" : "text-starlight-red"
+                                wMarginPct >= 0 ? "text-starlight-amber" : "text-starlight-red"
                               }`}>
                                 {wMarginPct !== null ? `${wMarginPct.toFixed(0)}%` : "—"}
                               </td>
@@ -456,8 +456,8 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                           );
                         })}
                         {isLineExpanded && wfRows.length === 0 && (
-                          <tr className="bg-gray-50/70">
-                            <td colSpan={8} className="px-3 py-2 text-[11px] text-gray-400 pl-6">
+                          <tr className="bg-surface-dim/70">
+                            <td colSpan={8} className="px-3 py-2 text-[11px] text-muted pl-6">
                               No scope item cost data for this line
                             </td>
                           </tr>

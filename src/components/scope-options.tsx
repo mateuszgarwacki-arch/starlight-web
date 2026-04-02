@@ -137,7 +137,7 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
     return (
       <button
         onClick={() => setShowForm(true)}
-        className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-starlight-blue transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-starlight-blue transition-colors"
       >
         <Layers className="h-3.5 w-3.5" />
         Add build options
@@ -155,7 +155,7 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-blue-700 transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Option
@@ -178,9 +178,9 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
             <div
               key={opt.option_id}
               className={`rounded-lg border transition-colors ${
-                isSelected ? "border-starlight-green/40 bg-green-50/30" :
-                isRejected ? "border-gray-200 bg-gray-50/50 opacity-60" :
-                "border-gray-200 bg-white"
+                isSelected ? "border-starlight-green/40 bg-starlight-green/10/30" :
+                isRejected ? "border-subtle bg-surface-dim/50 opacity-60" :
+                "border-subtle bg-surface"
               }`}
             >
               {/* Card header — always visible */}
@@ -189,17 +189,17 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
                 onClick={() => setExpandedId(isExpanded ? null : opt.option_id)}
               >
                 {isExpanded
-                  ? <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
-                  : <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                  ? <ChevronDown className="h-4 w-4 text-muted shrink-0" />
+                  : <ChevronRight className="h-4 w-4 text-muted shrink-0" />
                 }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${isRejected ? "line-through text-gray-400" : "text-navy"}`}>
+                    <span className={`text-sm font-medium ${isRejected ? "line-through text-muted" : "text-navy"}`}>
                       {opt.option_label}
                     </span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                       isSelected ? "bg-starlight-green/10 text-starlight-green" :
-                      isRejected ? "bg-gray-100 text-gray-400" :
+                      isRejected ? "bg-surface-mid text-muted" :
                       "bg-starlight-blue/10 text-starlight-blue"
                     }`}>
                       {opt.status}
@@ -208,7 +208,7 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {total > 0 && (
-                    <span className={`text-sm font-mono ${isRejected ? "text-gray-400 line-through" : "text-navy"}`}>
+                    <span className={`text-sm font-mono ${isRejected ? "text-muted line-through" : "text-navy"}`}>
                       {fmt(total)}
                     </span>
                   )}
@@ -233,26 +233,26 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
 
               {/* Expanded detail */}
               {isExpanded && (
-                <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-3">
+                <div className="px-4 pb-4 pt-1 border-t border-subtle space-y-3">
                   {opt.description && (
-                    <p className="text-sm text-gray-600">{opt.description}</p>
+                    <p className="text-sm text-muted">{opt.description}</p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     {opt.pros && (
                       <div>
                         <p className="text-xs font-medium text-starlight-green mb-0.5">Pros</p>
-                        <p className="text-xs text-gray-500">{opt.pros}</p>
+                        <p className="text-xs text-muted">{opt.pros}</p>
                       </div>
                     )}
                     {opt.cons && (
                       <div>
                         <p className="text-xs font-medium text-starlight-red mb-0.5">Cons</p>
-                        <p className="text-xs text-gray-500">{opt.cons}</p>
+                        <p className="text-xs text-muted">{opt.cons}</p>
                       </div>
                     )}
                   </div>
                   {/* Cost breakdown */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <div className="flex items-center gap-4 text-xs text-muted">
                     {opt.est_labour_days != null && (
                       <span>{opt.est_labour_days}d × {fmt(defaultDayRate)}/day = {fmt(labourCost)}</span>
                     )}
@@ -272,7 +272,7 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
                         </button>
                         <button
                           onClick={() => handleReject(opt)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors"
                         >
                           <X className="h-3 w-3" /> Reject
                         </button>
@@ -281,14 +281,14 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
                     {(opt.status === "selected" || opt.status === "rejected") && (
                       <button
                         onClick={() => handleRevert(opt)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors"
                       >
                         Revert to Proposed
                       </button>
                     )}
                     <button
                       onClick={() => handleDelete(opt)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 hover:text-starlight-red transition-colors ml-auto"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-muted hover:text-starlight-red transition-colors ml-auto"
                     >
                       <Trash2 className="h-3 w-3" /> Delete
                     </button>
@@ -302,94 +302,94 @@ export function ScopeOptions({ scopeItemId, jobId, quotedValue }: Props) {
 
       {/* Inline add form */}
       {showForm && (
-        <div className="mt-3 border border-starlight-blue/30 rounded-lg px-4 py-4 bg-blue-50/20 space-y-3">
+        <div className="mt-3 border border-starlight-blue/30 rounded-lg px-4 py-4 bg-navy/10/20 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Option Label *</label>
+            <label className="block text-xs font-medium text-muted mb-1">Option Label *</label>
             <input
               type="text"
               value={formLabel}
               onChange={(e) => setFormLabel(e.target.value)}
               placeholder="e.g. Option A: Solid Oak Frame"
-              className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+            <label className="block text-xs font-medium text-muted mb-1">Description</label>
             <textarea
               value={formDesc}
               onChange={(e) => setFormDesc(e.target.value)}
               placeholder="What does this approach involve..."
               rows={2}
-              className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+              className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Pros</label>
+              <label className="block text-xs font-medium text-muted mb-1">Pros</label>
               <textarea
                 value={formPros}
                 onChange={(e) => setFormPros(e.target.value)}
                 placeholder="Advantages..."
                 rows={2}
-                className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+                className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Cons</label>
+              <label className="block text-xs font-medium text-muted mb-1">Cons</label>
               <textarea
                 value={formCons}
                 onChange={(e) => setFormCons(e.target.value)}
                 placeholder="Disadvantages..."
                 rows={2}
-                className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+                className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
               />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Labour Days</label>
+              <label className="block text-xs font-medium text-muted mb-1">Labour Days</label>
               <input
                 type="number"
                 step="0.5"
                 value={formLabourDays}
                 onChange={(e) => setFormLabourDays(e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Materials £</label>
+              <label className="block text-xs font-medium text-muted mb-1">Materials £</label>
               <input
                 type="number"
                 step="0.01"
                 value={formMaterialCost}
                 onChange={(e) => setFormMaterialCost(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                className="w-full px-3 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Total (auto)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Total (auto)</label>
               <p className="text-sm font-mono text-navy px-3 py-1.5">
                 {fmt(calcTotal(parseFloat(formLabourDays) || 0, parseFloat(formMaterialCost) || 0))}
               </p>
             </div>
           </div>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-muted">
             Day rate: {fmt(defaultDayRate)} (from rate card)
           </p>
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={handleAdd}
               disabled={!formLabel.trim()}
-              className="px-4 py-1.5 text-xs font-medium bg-starlight-blue text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-medium bg-starlight-blue text-white rounded-lg hover:bg-navy transition-colors disabled:opacity-50"
             >
               Add Option
             </button>
             <button
               onClick={resetForm}
-              className="px-4 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              className="px-4 py-1.5 text-xs text-muted hover:bg-surface-mid rounded-lg transition-colors"
             >
               Cancel
             </button>

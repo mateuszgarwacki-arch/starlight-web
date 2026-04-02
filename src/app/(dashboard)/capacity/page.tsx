@@ -280,8 +280,8 @@ export default function CapacityPage() {
     return Math.ceil((new Date(eventDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   };
   const daysTier = (days: number | null) => {
-    if (days === null) return "text-gray-400";
-    if (days < 0) return "text-gray-400";
+    if (days === null) return "text-muted";
+    if (days < 0) return "text-muted";
     if (days <= 7) return "text-starlight-red";
     if (days <= 14) return "text-starlight-amber";
     return "text-starlight-green";
@@ -290,14 +290,14 @@ export default function CapacityPage() {
     switch (status) {
       case "Complete": return "bg-starlight-green/10 text-starlight-green";
       case "In-Progress": return "bg-starlight-blue/10 text-starlight-blue";
-      case "Ready": return "bg-gray-100 text-gray-700";
+      case "Ready": return "bg-surface-mid text-foreground";
       case "On-Hold": return "bg-starlight-amber/10 text-starlight-amber";
-      default: return "bg-gray-50 text-gray-500";
+      default: return "bg-surface-dim text-muted";
     }
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading capacity data...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading capacity data...</div>;
   }
 
   return (
@@ -306,13 +306,13 @@ export default function CapacityPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Capacity Planning</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Demand vs supply · next 4 weeks · {jobDemands.length} active jobs</p>
+          <p className="text-sm text-muted mt-0.5">Demand vs supply · next 4 weeks · {jobDemands.length} active jobs</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/capacity/add-booking" className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-blue/10 text-starlight-blue text-sm font-medium rounded-lg hover:bg-starlight-blue/20 transition-colors">
             <Plus className="h-4 w-4" /> Add booking
           </Link>
-          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={loadData} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
@@ -321,30 +321,30 @@ export default function CapacityPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="card px-4 py-3">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Estimated Total</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">Estimated Total</p>
           <p className="text-lg font-semibold text-navy font-mono">{Math.round(totalEstimated)}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Hours Logged</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">Hours Logged</p>
           <p className="text-lg font-semibold text-starlight-green font-mono">{Math.round(totalActual)}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Remaining</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">Remaining</p>
           <p className="text-lg font-semibold text-navy font-mono">{Math.round(totalRemaining)}h</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Booked (4 wks)</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">Booked (4 wks)</p>
           <p className="text-lg font-semibold text-starlight-blue font-mono">{Math.round(totalBookedHours)}h</p>
           {generalWorkshopHours > 0 && (
-            <p className="text-[10px] text-gray-400 mt-0.5">{Math.round(generalWorkshopHours)}h general</p>
+            <p className="text-[10px] text-muted mt-0.5">{Math.round(generalWorkshopHours)}h general</p>
           )}
         </div>
         <div className={"card px-4 py-3 border-l-4 " + (gapTier === "green" ? "border-l-starlight-green" : gapTier === "amber" ? "border-l-starlight-amber" : "border-l-starlight-red")}>
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Gap</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">Gap</p>
           <p className={"text-lg font-semibold font-mono " + (gapTier === "green" ? "text-starlight-green" : gapTier === "amber" ? "text-starlight-amber" : "text-starlight-red")}>
             {gap >= 0 ? "+" : ""}{Math.round(gap)}h
           </p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{gap >= 0 ? "Surplus capacity" : "Shortfall — book more crew"}</p>
+          <p className="text-[10px] text-muted mt-0.5">{gap >= 0 ? "Surplus capacity" : "Shortfall — book more crew"}</p>
         </div>
       </div>
 
@@ -357,14 +357,14 @@ export default function CapacityPage() {
           </div>
           <div className="space-y-1.5">
             {conflicts.map((c, idx) => (
-              <div key={idx} className="text-xs text-gray-600">
+              <div key={idx} className="text-xs text-muted">
                 <span className="font-medium text-navy">{c.freelancer_name}</span>
-                <span className="text-gray-400"> · </span>
-                <span className="font-mono text-gray-500">{formatDate(c.date)}</span>
-                <span className="text-gray-400"> — booked on: </span>
+                <span className="text-muted"> · </span>
+                <span className="font-mono text-muted">{formatDate(c.date)}</span>
+                <span className="text-muted"> — booked on: </span>
                 {c.jobs.map((j, ji) => (
                   <span key={j.job_id}>
-                    {ji > 0 && <span className="text-gray-400"> &amp; </span>}
+                    {ji > 0 && <span className="text-muted"> &amp; </span>}
                     <span className="font-medium text-starlight-red">{j.job_name}</span>
                   </span>
                 ))}
@@ -397,7 +397,7 @@ export default function CapacityPage() {
         </h2>
         <div className="space-y-2">
           {jobDemands.length === 0 ? (
-            <div className="card px-6 py-10 text-center text-gray-400 text-sm">No work orders found across active jobs</div>
+            <div className="card px-6 py-10 text-center text-muted text-sm">No work orders found across active jobs</div>
           ) : (
             jobDemands.map((j) => {
               const days = daysRemaining(j.event_date);
@@ -405,25 +405,25 @@ export default function CapacityPage() {
               const progressPct = Math.min(100, j.complete_pct);
               return (
                 <div key={j.job_id} className="card overflow-hidden">
-                  <button onClick={() => toggleJobExpand(j.job_id)} className="w-full px-5 py-3.5 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left">
-                    {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />}
+                  <button onClick={() => toggleJobExpand(j.job_id)} className="w-full px-5 py-3.5 flex items-center gap-4 hover:bg-surface-dim transition-colors text-left">
+                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-navy">{j.job_name}</span>
-                        <span className="text-xs font-mono text-gray-400">{j.job_number}</span>
+                        <span className="text-xs font-mono text-muted">{j.job_number}</span>
                       </div>
                       <div className="mt-1.5 flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[200px]">
+                        <div className="flex-1 h-2 bg-surface-mid rounded-full overflow-hidden max-w-[200px]">
                           <div className="h-full bg-starlight-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                         </div>
-                        <span className="text-[10px] text-gray-400 font-mono">{j.wo_complete}/{j.wo_count} WOs</span>
+                        <span className="text-[10px] text-muted font-mono">{j.wo_complete}/{j.wo_count} WOs</span>
                       </div>
                     </div>
                     <div className="hidden md:flex items-center gap-6 text-xs shrink-0">
-                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.total_estimated)}h</p><p className="text-[10px] text-gray-400">Estimated</p></div>
-                      <div className="text-center"><p className="font-mono text-starlight-green font-medium">{Math.round(j.total_actual)}h</p><p className="text-[10px] text-gray-400">Logged</p></div>
-                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.remaining)}h</p><p className="text-[10px] text-gray-400">Remaining</p></div>
-                      <div className="text-center"><p className="font-mono text-starlight-blue font-medium">{j.booked_hours}h</p><p className="text-[10px] text-gray-400">Booked</p></div>
+                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.total_estimated)}h</p><p className="text-[10px] text-muted">Estimated</p></div>
+                      <div className="text-center"><p className="font-mono text-starlight-green font-medium">{Math.round(j.total_actual)}h</p><p className="text-[10px] text-muted">Logged</p></div>
+                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.remaining)}h</p><p className="text-[10px] text-muted">Remaining</p></div>
+                      <div className="text-center"><p className="font-mono text-starlight-blue font-medium">{j.booked_hours}h</p><p className="text-[10px] text-muted">Booked</p></div>
                     </div>
                     <div className={"text-right shrink-0 " + daysTier(days)}>
                       <p className="text-sm font-semibold font-mono">{days !== null ? (days < 0 ? `${Math.abs(days)}d ago` : `${days}d`) : "—"}</p>
@@ -432,14 +432,14 @@ export default function CapacityPage() {
                   </button>
                   {/* Expanded WO details */}
                   {isExpanded && (
-                    <div className="border-t border-gray-100 bg-gray-50/50">
+                    <div className="border-t border-subtle bg-surface-dim/50">
                       {woDetails.length === 0 ? (
-                        <div className="px-6 py-4 text-sm text-gray-400">Loading...</div>
+                        <div className="px-6 py-4 text-sm text-muted">Loading...</div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs">
                             <thead>
-                              <tr className="text-left text-[10px] text-gray-400 uppercase tracking-wider">
+                              <tr className="text-left text-[10px] text-muted uppercase tracking-wider">
                                 <th className="px-5 py-2 font-medium">Scope Item</th>
                                 <th className="px-3 py-2 font-medium">Work Order</th>
                                 <th className="px-3 py-2 font-medium">Status</th>
@@ -455,20 +455,20 @@ export default function CapacityPage() {
                                 const act = w.actual_hours || 0;
                                 const rem = w.status === "Complete" ? 0 : Math.max(0, est - act);
                                 return (
-                                  <tr key={w.work_order_id} className="border-t border-gray-100">
+                                  <tr key={w.work_order_id} className="border-t border-subtle">
                                     <td className="px-5 py-2 text-navy font-medium max-w-[150px] truncate">{w.scope_name}</td>
-                                    <td className="px-3 py-2 text-gray-600 max-w-[200px] truncate">
+                                    <td className="px-3 py-2 text-muted max-w-[200px] truncate">
                                       {w.activity_label && <span className="text-navy font-medium">{w.activity_label}</span>}
-                                      {w.activity_label && w.description && <span className="text-gray-400"> — </span>}
+                                      {w.activity_label && w.description && <span className="text-muted"> — </span>}
                                       {w.description || (!w.activity_label ? "—" : "")}
                                     </td>
                                     <td className="px-3 py-2">
                                       <span className={"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " + statusColor(w.status)}>{w.status}</span>
                                     </td>
-                                    <td className="px-3 py-2 text-gray-500">{w.lead_name}</td>
-                                    <td className="px-3 py-2 text-right font-mono text-gray-600">{est ? `${est}h` : "—"}</td>
+                                    <td className="px-3 py-2 text-muted">{w.lead_name}</td>
+                                    <td className="px-3 py-2 text-right font-mono text-muted">{est ? `${est}h` : "—"}</td>
                                     <td className="px-3 py-2 text-right font-mono text-starlight-green">{act ? `${Math.round(act * 10) / 10}h` : "—"}</td>
-                                    <td className={"px-3 py-2 text-right font-mono font-medium " + (rem > 0 ? "text-navy" : "text-gray-400")}>{rem > 0 ? `${Math.round(rem * 10) / 10}h` : "—"}</td>
+                                    <td className={"px-3 py-2 text-right font-mono font-medium " + (rem > 0 ? "text-navy" : "text-muted")}>{rem > 0 ? `${Math.round(rem * 10) / 10}h` : "—"}</td>
                                   </tr>
                                 );
                               })}

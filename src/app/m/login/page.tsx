@@ -35,7 +35,7 @@ export default function MobileLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-navy flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-base flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-starlight-amber/10 mb-4">
@@ -45,14 +45,14 @@ export default function MobileLoginPage() {
           <p className="text-white/40 text-sm mt-1">Workshop</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-2xl space-y-5" >
+        <div className="bg-surface rounded-2xl p-6 shadow-2xl space-y-5" >
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Phone Number</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">Phone Number</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-4 py-3 border border-subtle rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               placeholder="07712 345 678"
               autoComplete="tel"
               inputMode="tel"
@@ -60,12 +60,12 @@ export default function MobileLoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">PIN</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">PIN</label>
             <input
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-center text-2xl tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+              className="w-full px-4 py-3 border border-subtle rounded-xl text-center text-2xl tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
               placeholder="* * * *"
               inputMode="numeric"
               maxLength={6}
@@ -74,7 +74,7 @@ export default function MobileLoginPage() {
           </div>
 
           {error && (
-            <div className="text-sm text-starlight-red bg-red-50 rounded-xl px-4 py-2.5 text-center">
+            <div className="text-sm text-starlight-red bg-starlight-red/10 rounded-xl px-4 py-2.5 text-center">
               {error}
             </div>
           )}
@@ -82,7 +82,7 @@ export default function MobileLoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading || !phone.trim() || !pin.trim()}
-            className="w-full py-3.5 bg-starlight-red text-white text-base font-semibold rounded-xl hover:bg-red-700 active:bg-red-800 transition-colors disabled:opacity-50"
+            className="w-full py-3.5 bg-starlight-red text-white text-base font-semibold rounded-xl hover:bg-starlight-red active:bg-starlight-red transition-colors disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Clock In"}
           </button>

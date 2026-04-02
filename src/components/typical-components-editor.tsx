@@ -208,18 +208,18 @@ export function TypicalComponentsEditor() {
     setPrompts(prev => prev.map(p => p.prompt_id === promptId ? { ...p, prompt_group: group } : p));
   };
 
-  if (loading) return <div className="text-sm text-gray-400 animate-pulse">Loading categories...</div>;
+  if (loading) return <div className="text-sm text-muted animate-pulse">Loading categories...</div>;
 
 
   return (
     <div className="space-y-5">
       {/* Category selector */}
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Category</label>
+        <label className="block text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">Category</label>
         <select
           value={selectedCatId || ""}
           onChange={(e) => e.target.value && handleCategoryChange(Number(e.target.value))}
-          className="w-full max-w-xs px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+          className="w-full max-w-xs px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue"
         >
           <option value="">Select a category...</option>
           {categories.map(c => (
@@ -234,10 +234,10 @@ export function TypicalComponentsEditor() {
         <>
           {/* Guidance note */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">
+            <label className="block text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">
               Category Guidance Note
             </label>
-            <p className="text-xs text-gray-400 mb-2">
+            <p className="text-xs text-muted mb-2">
               Shown at the top of Typical Components on scope pages. Tips, reminders, category-specific instructions.
             </p>
             <textarea
@@ -246,7 +246,7 @@ export function TypicalComponentsEditor() {
               onBlur={saveGuidance}
               rows={3}
               placeholder="e.g. Check deck sizes against venue plan. Allow 2 bolts per join. Triangle decks for curved edges only."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none placeholder:text-gray-300"
+              className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none placeholder:text-faint"
             />
           </div>
 
@@ -265,7 +265,7 @@ export function TypicalComponentsEditor() {
                 </button>
                 <button
                   onClick={() => { setShowAddBespoke(true); setShowStockSearch(false); }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-navy border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-navy border border-subtle rounded-lg hover:bg-surface-dim transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Bespoke
                 </button>
@@ -283,23 +283,23 @@ export function TypicalComponentsEditor() {
                     onChange={(e) => setStockQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && searchStock()}
                     placeholder="Search stock by name or code..."
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                    className="flex-1 px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                     autoFocus
                   />
                   <button onClick={searchStock} disabled={stockQuery.length < 2}
-                    className="px-3 py-2 bg-starlight-blue text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    className="px-3 py-2 bg-starlight-blue text-white text-xs font-medium rounded-lg hover:bg-navy disabled:opacity-50">
                     <Search className="h-4 w-4" />
                   </button>
                   <button onClick={() => setShowStockSearch(false)}
-                    className="px-3 py-2 text-xs text-gray-400 hover:text-gray-600">
+                    className="px-3 py-2 text-xs text-muted hover:text-muted">
                     Cancel
                   </button>
                 </div>
                 <div className="mb-3 flex gap-1.5 items-end">
                   <div className="w-36">
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Group</label>
                     <select value={stockAddGroup} onChange={e => { setStockAddGroup(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                      className="w-full px-2 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                       <option value="">No group</option>
                       {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
                       <option value="__new__">+ New group...</option>
@@ -309,21 +309,21 @@ export function TypicalComponentsEditor() {
                     <div className="w-32">
                       <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
                         placeholder="Group name"
-                        className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                        className="w-full px-2 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                     </div>
                   )}
                 </div>
-                {stockSearching && <p className="text-xs text-gray-400 animate-pulse">Searching...</p>}
+                {stockSearching && <p className="text-xs text-muted animate-pulse">Searching...</p>}
                 {stockResults.length > 0 && (
                   <div className="space-y-1 max-h-60 overflow-y-auto">
                     {stockResults.map(item => (
-                      <div key={item.stock_id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <div key={item.stock_id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-surface-dim">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-navy truncate">{item.description}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">{item.product_code} · {item.category || "—"}</p>
+                          <p className="text-[10px] text-muted font-mono">{item.product_code} · {item.category || "—"}</p>
                         </div>
                         <button onClick={() => addStockPrompt(item)}
-                          className="ml-2 p-1.5 text-starlight-green hover:bg-green-50 rounded-md shrink-0">
+                          className="ml-2 p-1.5 text-starlight-green hover:bg-starlight-green/10 rounded-md shrink-0">
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
@@ -331,7 +331,7 @@ export function TypicalComponentsEditor() {
                   </div>
                 )}
                 {!stockSearching && stockResults.length === 0 && stockQuery.length >= 2 && (
-                  <p className="text-xs text-gray-400">No stock items found</p>
+                  <p className="text-xs text-muted">No stock items found</p>
                 )}
               </div>
             )}
@@ -341,39 +341,39 @@ export function TypicalComponentsEditor() {
               <div className="card p-4 mb-3">
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Description</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Description</label>
                     <input type="text" value={bespokeDesc} onChange={(e) => setBespokeDesc(e.target.value)}
                       placeholder="e.g. M10 60mm bolts"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
+                      className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                       autoFocus />
                   </div>
                   <div className="w-20">
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Default qty</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Default qty</label>
                     <input type="number" value={bespokeQty} onChange={(e) => setBespokeQty(e.target.value)} min="1"
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                      className="w-full px-2 py-2 border border-subtle rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                   </div>
                   <div className="w-28">
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Type</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Type</label>
                     <select value={bespokeType} onChange={(e) => setBespokeType(e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                      className="w-full px-2 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                       <option value="Bespoke">Bespoke</option>
                       <option value="Stock-Needs-Work">Stock-Needs-Work</option>
                     </select>
                   </div>
                   <button onClick={addBespoke} disabled={!bespokeDesc.trim()}
-                    className="px-3 py-2 bg-navy text-white text-xs font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 shrink-0">
+                    className="px-3 py-2 bg-navy text-white text-xs font-medium rounded-lg hover:bg-surface-top disabled:opacity-50 shrink-0">
                     Add
                   </button>
                   <button onClick={() => setShowAddBespoke(false)}
-                    className="px-2 py-2 text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                    className="px-2 py-2 text-xs text-muted hover:text-muted shrink-0">
                     Cancel
                   </button>
                 </div>
                 <div className="mt-2 flex gap-1.5 items-end">
                   <div className="w-36">
-                    <label className="text-[10px] text-gray-400 block mb-0.5">Group</label>
+                    <label className="text-[10px] text-muted block mb-0.5">Group</label>
                     <select value={addGroup} onChange={e => { setAddGroup(e.target.value); if (e.target.value !== "__new__") setNewGroupName(""); }}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                      className="w-full px-2 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue">
                       <option value="">No group</option>
                       {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
                       <option value="__new__">+ New group...</option>
@@ -383,7 +383,7 @@ export function TypicalComponentsEditor() {
                     <div className="w-32">
                       <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
                         placeholder="Group name"
-                        className="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                        className="w-full px-2 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                     </div>
                   )}
                 </div>
@@ -393,26 +393,26 @@ export function TypicalComponentsEditor() {
 
             {/* Prompt items — grouped */}
             {prompts.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-sm">
+              <div className="text-center py-8 text-muted text-sm">
                 No typical components defined for {selectedCat?.category_name}. Add some above.
               </div>
             ) : (() => {
               const ungrouped = prompts.filter(p => !p.prompt_group);
               const groups = existingGroups;
               const renderItem = (p: PromptRow, idx: number, list: PromptRow[]) => (
-                <div key={p.prompt_id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-gray-200 bg-white group">
+                <div key={p.prompt_id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-subtle hover:border-subtle bg-surface group">
                   <div className="flex flex-col gap-0.5 shrink-0">
                     <button onClick={() => movePrompt(p.prompt_id, "up")} disabled={idx === 0}
-                      className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
+                      className="p-0.5 text-faint hover:text-navy disabled:opacity-20 transition-colors">
                       <ArrowUp className="h-3 w-3" />
                     </button>
                     <button onClick={() => movePrompt(p.prompt_id, "down")} disabled={idx === list.length - 1}
-                      className="p-0.5 text-gray-300 hover:text-navy disabled:opacity-20 transition-colors">
+                      className="p-0.5 text-faint hover:text-navy disabled:opacity-20 transition-colors">
                       <ArrowDown className="h-3 w-3" />
                     </button>
                   </div>
                   <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                    p.stock_item_id ? "bg-starlight-blue/10 text-starlight-blue" : "bg-gray-100 text-gray-500"
+                    p.stock_item_id ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted"
                   }`}>
                     {p.stock_item_id ? "Stock" : (p.typical_item_type || "Bespoke")}
                   </span>
@@ -420,16 +420,16 @@ export function TypicalComponentsEditor() {
                     <p className="text-sm text-navy truncate">{p.stock_description || p.description}</p>
                   </div>
                   {p.quantity_default && p.quantity_default > 1 && (
-                    <span className="text-xs text-gray-400 shrink-0">×{p.quantity_default}</span>
+                    <span className="text-xs text-muted shrink-0">×{p.quantity_default}</span>
                   )}
                   <select value={p.prompt_group || ""} onChange={e => changeGroup(p.prompt_id, e.target.value || null)}
-                    className="text-[10px] text-gray-400 border-0 bg-transparent focus:outline-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity w-20 shrink-0"
+                    className="text-[10px] text-muted border-0 bg-transparent focus:outline-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity w-20 shrink-0"
                     title="Change group">
                     <option value="">No group</option>
                     {existingGroups.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
                   <button onClick={() => deletePrompt(p.prompt_id)}
-                    className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                    className="p-1 text-faint hover:text-starlight-red opacity-0 group-hover:opacity-100 transition-all shrink-0">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -444,10 +444,10 @@ export function TypicalComponentsEditor() {
                   {groups.map(groupName => {
                     const groupItems = prompts.filter(p => p.prompt_group === groupName);
                     return (
-                      <div key={groupName} className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-2 flex items-center gap-2">
+                      <div key={groupName} className="border border-subtle rounded-lg overflow-hidden">
+                        <div className="bg-surface-dim px-3 py-2 flex items-center gap-2">
                           <span className="text-xs font-semibold text-navy uppercase tracking-wider">{groupName}</span>
-                          <span className="text-[10px] text-gray-400">{groupItems.length}</span>
+                          <span className="text-[10px] text-muted">{groupItems.length}</span>
                         </div>
                         <div className="p-1 space-y-1">
                           {groupItems.map((p, idx) => renderItem(p, idx, groupItems))}

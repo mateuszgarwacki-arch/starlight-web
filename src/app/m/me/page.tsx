@@ -27,7 +27,7 @@ const REQUEST_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   acknowledged: { label: "Seen", cls: "bg-starlight-blue/10 text-starlight-blue" },
   in_progress: { label: "In Progress", cls: "bg-starlight-blue/10 text-starlight-blue" },
   resolved: { label: "Resolved", cls: "bg-starlight-green/10 text-starlight-green" },
-  dismissed: { label: "Dismissed", cls: "bg-gray-100 text-gray-500" },
+  dismissed: { label: "Dismissed", cls: "bg-surface-mid text-muted" },
 };
 
 function localDateStr(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -119,7 +119,7 @@ export default function MobileProfilePage() {
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/m/login"); };
 
-  if (loading) { return <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>; }
+  if (loading) { return <div className="flex items-center justify-center h-40 text-muted text-sm animate-pulse">Loading...</div>; }
 
   return (
     <div className="space-y-5">
@@ -128,7 +128,7 @@ export default function MobileProfilePage() {
           <div className="w-11 h-11 rounded-full bg-navy/10 flex items-center justify-center"><User className="h-5 w-5 text-navy" /></div>
           <p className="text-lg font-semibold text-navy">Hi {name.split(" ")[0]}</p>
         </div>
-        <button onClick={handleLogout} className="text-gray-400 active:text-starlight-red p-2"><LogOut className="h-5 w-5" /></button>
+        <button onClick={handleLogout} className="text-muted active:text-starlight-red p-2"><LogOut className="h-5 w-5" /></button>
       </div>
 
       {activeTimer && (
@@ -144,24 +144,24 @@ export default function MobileProfilePage() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center"><p className="text-2xl font-bold text-navy">{Number(hoursSummary.hours_this_week).toFixed(1)}</p><p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">This Week</p></div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center"><p className="text-2xl font-bold text-navy">{Number(hoursSummary.hours_this_month).toFixed(1)}</p><p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">This Month</p></div>
+        <div className="bg-surface rounded-xl border border-subtle p-4 text-center"><p className="text-2xl font-bold text-navy">{Number(hoursSummary.hours_this_week).toFixed(1)}</p><p className="text-[10px] text-muted font-medium uppercase tracking-wider mt-0.5">This Week</p></div>
+        <div className="bg-surface rounded-xl border border-subtle p-4 text-center"><p className="text-2xl font-bold text-navy">{Number(hoursSummary.hours_this_month).toFixed(1)}</p><p className="text-[10px] text-muted font-medium uppercase tracking-wider mt-0.5">This Month</p></div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => router.push("/m/task")} className="flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-navy active:bg-gray-50"><Clock className="h-4 w-4" />Log Task</button>
-        <button onClick={() => router.push("/m/request")} className="flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-navy active:bg-gray-50"><ClipboardList className="h-4 w-4" />Raise Request</button>
+        <button onClick={() => router.push("/m/task")} className="flex items-center justify-center gap-2 py-3 bg-surface border border-subtle rounded-xl text-sm font-medium text-navy active:bg-surface-dim"><Clock className="h-4 w-4" />Log Task</button>
+        <button onClick={() => router.push("/m/request")} className="flex items-center justify-center gap-2 py-3 bg-surface border border-subtle rounded-xl text-sm font-medium text-navy active:bg-surface-dim"><ClipboardList className="h-4 w-4" />Raise Request</button>
       </div>
 
       <div>
         <h2 className="text-sm font-semibold text-navy mb-2">Recent Entries</h2>
-        {recentEntries.length === 0 ? (<p className="text-xs text-gray-400 bg-white rounded-xl border border-gray-200 p-4 text-center">No entries yet</p>) : (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {recentEntries.length === 0 ? (<p className="text-xs text-muted bg-surface rounded-xl border border-subtle p-4 text-center">No entries yet</p>) : (
+          <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
             {recentEntries.map((entry) => (
               <div key={`${entry.type}-${entry.id}`} className="px-4 py-3 flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2"><p className="text-sm text-navy truncate">{entry.title}</p>{entry.type === "task" && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>)}</div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
                     <span>{formatDateShort(entry.date)}</span>{entry.job_number && <span className="font-mono">{entry.job_number}</span>}
                     {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
                   </div>
@@ -175,28 +175,28 @@ export default function MobileProfilePage() {
 
       {myRequests.length > 0 && (<div>
         <h2 className="text-sm font-semibold text-navy mb-2">My Requests</h2>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
           {myRequests.map((req) => { const Icon = REQUEST_ICONS[req.category] || MessageSquare; const badge = REQUEST_STATUS_BADGE[req.status]; return (
             <div key={req.request_id} className="px-4 py-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0"><Icon className="h-3.5 w-3.5 text-gray-400 shrink-0" /><p className="text-sm text-navy truncate">{req.title}</p>{req.urgency === "urgent" && (<span className="text-[9px] px-1.5 py-0.5 rounded-full bg-starlight-red/10 text-starlight-red font-medium shrink-0">Urgent</span>)}</div>
+                <div className="flex items-center gap-2 min-w-0"><Icon className="h-3.5 w-3.5 text-muted shrink-0" /><p className="text-sm text-navy truncate">{req.title}</p>{req.urgency === "urgent" && (<span className="text-[9px] px-1.5 py-0.5 rounded-full bg-starlight-red/10 text-starlight-red font-medium shrink-0">Urgent</span>)}</div>
                 {badge && (<span className={"text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ml-2 " + badge.cls}>{badge.label}</span>)}
               </div>
-              {req.resolution_note && (<p className="text-[10px] text-gray-400 mt-1 ml-5 italic">{req.resolution_note}</p>)}
+              {req.resolution_note && (<p className="text-[10px] text-muted mt-1 ml-5 italic">{req.resolution_note}</p>)}
             </div>); })}
         </div>
       </div>)}
 
       {myTasks.length > 0 && (<div>
         <h2 className="text-sm font-semibold text-navy mb-2">My Tasks</h2>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
           {myTasks.map((task) => { const badge = TASK_STATUS_BADGE[task.status]; return (
             <div key={task.task_id} className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1"><p className="text-sm text-navy truncate">{task.title}</p></div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">{task.hours != null && (<span className="text-xs text-gray-400 tabular-nums">{Number(task.hours).toFixed(1)}h</span>)}{badge && (<span className={"text-[10px] px-2 py-0.5 rounded-full font-medium " + badge.cls}>{badge.label}</span>)}</div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">{task.hours != null && (<span className="text-xs text-muted tabular-nums">{Number(task.hours).toFixed(1)}h</span>)}{badge && (<span className={"text-[10px] px-2 py-0.5 rounded-full font-medium " + badge.cls}>{badge.label}</span>)}</div>
               </div>
-              {task.review_note && (<p className="text-[10px] text-gray-400 mt-1 italic">{task.review_note}</p>)}
+              {task.review_note && (<p className="text-[10px] text-muted mt-1 italic">{task.review_note}</p>)}
             </div>); })}
         </div>
       </div>)}
@@ -204,10 +204,10 @@ export default function MobileProfilePage() {
       {showLogSheet && activeTimer && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowLogSheet(false)} />
-          <div className="relative w-full bg-white rounded-t-2xl p-6 space-y-4 animate-in slide-in-from-bottom duration-200">
-            <div className="flex items-center justify-between"><h3 className="text-base font-semibold text-navy">Log Timer: {activeTimer.title}</h3><button onClick={() => setShowLogSheet(false)} className="text-gray-400"><X className="h-5 w-5" /></button></div>
-            <p className="text-xs text-gray-400">Started {new Date(activeTimer.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {elapsedSince(activeTimer.started_at)} ago</p>
-            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">Hours</label><input type="number" value={logHours} onChange={(e) => setLogHours(e.target.value)} step="0.5" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-lg text-center font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" autoFocus /></div>
+          <div className="relative w-full bg-surface rounded-t-2xl p-6 space-y-4 animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between"><h3 className="text-base font-semibold text-navy">Log Timer: {activeTimer.title}</h3><button onClick={() => setShowLogSheet(false)} className="text-muted"><X className="h-5 w-5" /></button></div>
+            <p className="text-xs text-muted">Started {new Date(activeTimer.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {elapsedSince(activeTimer.started_at)} ago</p>
+            <div><label className="text-xs font-medium text-muted mb-1.5 block">Hours</label><input type="number" value={logHours} onChange={(e) => setLogHours(e.target.value)} step="0.5" className="w-full px-4 py-3 bg-surface-dim border border-subtle rounded-xl text-lg text-center font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" autoFocus /></div>
             <button onClick={handleLogTimer} disabled={logSubmitting} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl active:bg-navy/90 disabled:opacity-40">{logSubmitting ? "Logging..." : "Log & Submit for Review"}</button>
           </div>
         </div>

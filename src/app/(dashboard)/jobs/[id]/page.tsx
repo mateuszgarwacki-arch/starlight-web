@@ -78,7 +78,7 @@ const FILTERS: FilterDef[] = [
     key: "provisional",
     label: "Provisional",
     filter: (l) => l.category === "Provisional",
-    color: "bg-gray-100 text-gray-600 border-gray-200",
+    color: "bg-surface-mid text-muted border-subtle",
   },
   {
     key: "subcontracted",
@@ -546,14 +546,14 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">
+      <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">
         Loading job...
       </div>
     );
   }
 
   if (!job) {
-    return <div className="text-center py-12 text-gray-400">Job not found</div>;
+    return <div className="text-center py-12 text-muted">Job not found</div>;
   }
 
   // ================================================================
@@ -569,26 +569,26 @@ export default function JobDetailPage() {
     const calcLabour = (Number(labourDays) || 0) * rate;
     const calcTotal = calcLabour + (Number(materialCost) || 0);
     return (
-      <tr className="bg-blue-50/30 border-t border-blue-100">
+      <tr className="bg-navy/10/30 border-t border-navy/15">
         <td colSpan={10} className="px-6 py-3">
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Labour Days</label>
-              <input type="number" step="0.5" value={labourDays} onChange={(e) => setLabourDays(e.target.value)} className="w-20 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
+              <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Labour Days</label>
+              <input type="number" step="0.5" value={labourDays} onChange={(e) => setLabourDays(e.target.value)} className="w-20 px-2 py-1.5 border border-subtle rounded text-sm text-center bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
             </div>
             <div>
-              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Day Rate</label>
-              <input type="number" step="1" value={rateOverride} onChange={(e) => setRateOverride(e.target.value)} className="w-20 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder={String(defaultRate)} />
+              <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Day Rate</label>
+              <input type="number" step="1" value={rateOverride} onChange={(e) => setRateOverride(e.target.value)} className="w-20 px-2 py-1.5 border border-subtle rounded text-sm text-center bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder={String(defaultRate)} />
             </div>
-            <div className="text-xs text-gray-400 pb-2">= {formatCurrency(calcLabour)} labour</div>
+            <div className="text-xs text-muted pb-2">= {formatCurrency(calcLabour)} labour</div>
             <div>
-              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Materials</label>
-              <input type="number" step="0.01" value={materialCost} onChange={(e) => setMaterialCost(e.target.value)} className="w-24 px-2 py-1.5 border border-gray-200 rounded text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
+              <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Materials</label>
+              <input type="number" step="0.01" value={materialCost} onChange={(e) => setMaterialCost(e.target.value)} className="w-24 px-2 py-1.5 border border-subtle rounded text-sm text-center bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="0" />
             </div>
             <div className="text-sm font-semibold text-navy pb-2">= {formatCurrency(calcTotal)} total</div>
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">Basis / Notes</label>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="e.g. Similar to Claridge's job..." />
+              <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Basis / Notes</label>
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" placeholder="e.g. Similar to Claridge's job..." />
             </div>
             <button disabled={saving} onClick={async () => { setSaving(true); await onSave(line.quote_line_id, Number(labourDays) || null, Number(materialCost) || null, Number(rateOverride) || null, notes.trim() || null); setSaving(false); }} className="px-3 py-1.5 text-xs font-medium bg-navy text-white rounded hover:bg-navy/90 disabled:opacity-40">
               {saving ? "..." : "Save"}
@@ -614,21 +614,21 @@ export default function JobDetailPage() {
     return (
       <Fragment key={line.quote_line_id}>
       <tr
-        className={`border-t border-gray-100 transition-colors ${
+        className={`border-t border-subtle transition-colors ${
           isUninterpreted
-            ? "bg-amber-50/60 border-l-4 border-l-starlight-amber"
+            ? "bg-starlight-amber/10/60 border-l-4 border-l-starlight-amber"
             : lineIsDone
-            ? "bg-green-50/20"
+            ? "bg-starlight-green/10/20"
             : ""
         }`}
       >
         {/* Line number */}
-        <td className="px-3 py-2.5 font-mono text-xs text-gray-400">
+        <td className="px-3 py-2.5 font-mono text-xs text-muted">
           {line.line_number}
         </td>
 
         {/* Zone */}
-        <td className="px-3 py-2.5 text-xs text-gray-500">
+        <td className="px-3 py-2.5 text-xs text-muted">
           {line.event_zone}
         </td>
 
@@ -641,13 +641,13 @@ export default function JobDetailPage() {
               onBlur={saveLineEdit}
               onKeyDown={(e) => { if (e.key === "Escape") cancelLineEdit(); }}
               autoFocus rows={3}
-              className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue"
+              className="w-full px-2 py-1 text-sm border border-starlight-blue rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue"
             />
           ) : (
             <p onClick={() => startLineEdit(line.quote_line_id, "line_text", line.line_text)}
-              className="text-sm text-gray-700 leading-relaxed cursor-pointer hover:bg-blue-50/50 rounded px-1 -mx-1 transition-colors group">
-              {line.line_text || <span className="text-gray-300 italic">Click to add description</span>}
-              <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 inline ml-1.5 transition-opacity" />
+              className="text-sm text-foreground leading-relaxed cursor-pointer hover:bg-navy/10/50 rounded px-1 -mx-1 transition-colors group">
+              {line.line_text || <span className="text-faint italic">Click to add description</span>}
+              <Pencil className="h-3 w-3 text-faint opacity-0 group-hover:opacity-100 inline ml-1.5 transition-opacity" />
             </p>
           )}
           <input
@@ -666,7 +666,7 @@ export default function JobDetailPage() {
               updateLine(line.quote_line_id, "pm_note", e.target.value || null)
             }
             placeholder="PM note..."
-            className="mt-1 w-full px-2 py-1 text-xs border-0 border-b border-transparent hover:border-gray-200 focus:border-starlight-blue focus:outline-none bg-transparent text-gray-500 placeholder:text-gray-300"
+            className="mt-1 w-full px-2 py-1 text-xs border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none bg-transparent text-muted placeholder:text-faint"
           />
           {config.showContractor && (
             <div className="mt-1.5">
@@ -682,7 +682,7 @@ export default function JobDetailPage() {
           )}
           {config.showStockTag && (
             <div className="mt-1.5">
-              <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-xs bg-phase-2/10 text-phase-2 px-2 py-0.5 rounded">
                 <Package className="h-3 w-3" />
                 Stock Pick
               </span>
@@ -707,11 +707,11 @@ export default function JobDetailPage() {
               onChange={(e) => setEditLineCellValue(e.target.value)}
               onBlur={saveLineEdit}
               onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-              autoFocus className="w-16 px-2 py-1 text-sm text-center border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+              autoFocus className="w-16 px-2 py-1 text-sm text-center border border-starlight-blue rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
           ) : (
             <span onClick={() => startLineEdit(line.quote_line_id, "quantity", line.quantity)}
-              className="inline-block min-w-[2rem] px-1 py-0.5 text-sm tabular-nums cursor-pointer hover:bg-blue-50 rounded transition-colors text-gray-700">
-              {line.quantity != null ? line.quantity : <span className="text-gray-300">—</span>}
+              className="inline-block min-w-[2rem] px-1 py-0.5 text-sm tabular-nums cursor-pointer hover:bg-navy/10 rounded transition-colors text-foreground">
+              {line.quantity != null ? line.quantity : <span className="text-faint">—</span>}
             </span>
           )}
         </td>
@@ -723,11 +723,11 @@ export default function JobDetailPage() {
               onChange={(e) => setEditLineCellValue(e.target.value)}
               onBlur={saveLineEdit}
               onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
           ) : (
             <span onClick={() => startLineEdit(line.quote_line_id, "unit_price", line.unit_price)}
-              className="text-sm tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-500">
-              {line.unit_price != null ? formatCurrency(line.unit_price) : <span className="text-gray-300">—</span>}
+              className="text-sm tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-muted">
+              {line.unit_price != null ? formatCurrency(line.unit_price) : <span className="text-faint">—</span>}
             </span>
           )}
         </td>
@@ -739,11 +739,11 @@ export default function JobDetailPage() {
               onChange={(e) => setEditLineCellValue(e.target.value)}
               onBlur={saveLineEdit}
               onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-              autoFocus className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+              autoFocus className="w-24 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
           ) : (
             <span onClick={() => startLineEdit(line.quote_line_id, "line_value", line.line_value)}
-              className="font-medium text-gray-700 tabular-nums cursor-pointer hover:text-starlight-blue transition-colors">
-              {line.line_value ? formatCurrency(line.line_value) : <span className="text-gray-300">—</span>}
+              className="font-medium text-foreground tabular-nums cursor-pointer hover:text-starlight-blue transition-colors">
+              {line.line_value ? formatCurrency(line.line_value) : <span className="text-faint">—</span>}
             </span>
           )}
         </td>
@@ -755,16 +755,16 @@ export default function JobDetailPage() {
               onChange={(e) => setEditLineCellValue(e.target.value)}
               onBlur={saveLineEdit}
               onKeyDown={(e) => { if (e.key === "Enter") saveLineEdit(); if (e.key === "Escape") cancelLineEdit(); }}
-              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-white focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+              autoFocus className="w-20 px-2 py-1 text-sm text-right border border-starlight-blue rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
           ) : line.pm_est_cost != null ? (
             <div>
               <div className="flex items-center justify-end gap-1.5">
                 <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", line.pm_est_cost)}
-                  className="text-sm font-medium tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-gray-700">
+                  className="text-sm font-medium tabular-nums cursor-pointer hover:text-starlight-blue transition-colors text-foreground">
                   {formatCurrency(line.pm_est_cost)}
                 </span>
                 <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
-                  className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200")} title="Breakdown">
+                  className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-surface-mid text-muted hover:bg-surface-hi")} title="Breakdown">
                   <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
                 </button>
               </div>
@@ -777,11 +777,11 @@ export default function JobDetailPage() {
           ) : (
             <div className="flex items-center justify-end gap-1.5">
               <span onClick={() => startLineEdit(line.quote_line_id, "pm_est_cost", null)}
-                className="inline-block px-2 py-0.5 text-xs text-gray-300 border border-dashed border-gray-200 rounded cursor-pointer hover:border-starlight-blue hover:text-starlight-blue transition-colors">
+                className="inline-block px-2 py-0.5 text-xs text-faint border border-dashed border-subtle rounded cursor-pointer hover:border-starlight-blue hover:text-starlight-blue transition-colors">
                 Est...
               </span>
               <button onClick={() => setExpandedPmEst(expandedPmEst === line.quote_line_id ? null : line.quote_line_id)}
-                className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200")} title="Breakdown">
+                className={"w-5 h-5 rounded flex items-center justify-center transition-colors " + (expandedPmEst === line.quote_line_id ? "bg-navy text-white" : "bg-surface-mid text-muted hover:bg-surface-hi")} title="Breakdown">
                 <ChevronDown className={"h-3 w-3 transition-transform " + (expandedPmEst === line.quote_line_id ? "rotate-180" : "")} />
               </button>
             </div>
@@ -805,13 +805,13 @@ export default function JobDetailPage() {
                   ? isAutoCompleted && !isManuallyDone
                     ? "bg-starlight-green/60 border-starlight-green/60 text-white"
                     : "bg-starlight-green border-starlight-green text-white"
-                  : "border-gray-300 hover:border-starlight-amber"
+                  : "border-subtle hover:border-starlight-amber"
               }`}
             >
               {lineIsDone && <Check className="h-3.5 w-3.5" />}
             </button>
           ) : (
-            <span className="text-gray-300">&mdash;</span>
+            <span className="text-faint">&mdash;</span>
           )}
         </td>
 
@@ -821,7 +821,7 @@ export default function JobDetailPage() {
             <button
               onClick={() => setScopeDialogLine(line)}
               title="Create Scope Item from this line"
-              className="p-1.5 text-starlight-red hover:bg-red-50 rounded-md transition-colors"
+              className="p-1.5 text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -830,7 +830,7 @@ export default function JobDetailPage() {
             <a
               href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
               title="Open scope item"
-              className="inline-flex items-center text-starlight-green hover:text-green-700 transition-colors"
+              className="inline-flex items-center text-starlight-green hover:text-starlight-green transition-colors"
             >
               <FileText className="h-4 w-4" />
             </a>
@@ -839,7 +839,7 @@ export default function JobDetailPage() {
             <button
               onClick={() => handleDeleteLine(line)}
               title="Delete line"
-              className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+              className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -858,17 +858,17 @@ export default function JobDetailPage() {
   // ================================================================
   const tableHead = (
     <thead>
-      <tr className="bg-starlight-bg text-left">
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-12">#</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-24">Zone</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500">Description</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-52">Category</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Qty</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Unit Price</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-24 text-right">Value</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-28 text-right">PM Est</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-16 text-center">Done</th>
-        <th className="px-3 py-2.5 font-medium text-gray-500 w-16"></th>
+      <tr className="bg-base text-left">
+        <th className="px-3 py-2.5 font-medium text-muted w-12">#</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-24">Zone</th>
+        <th className="px-3 py-2.5 font-medium text-muted">Description</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-52">Category</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Qty</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-24 text-right">Unit Price</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-24 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-28 text-right">PM Est</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Done</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-16"></th>
       </tr>
     </thead>
   );
@@ -882,7 +882,7 @@ export default function JobDetailPage() {
       <div className="flex items-center justify-between">
         <Link
           href="/jobs"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           All Jobs
@@ -894,7 +894,7 @@ export default function JobDetailPage() {
       <div className="card px-6 py-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1.5 flex-1 min-w-0">
-            <p className="text-xs text-gray-400 font-mono">{job.job_number}</p>
+            <p className="text-xs text-muted font-mono">{job.job_number}</p>
 
             {/* Job name — editable */}
             {editingField === "job_name" ? (
@@ -906,7 +906,7 @@ export default function JobDetailPage() {
               <h1 onClick={() => startEdit("job_name", job.job_name)}
                 className="text-xl font-bold text-navy cursor-pointer hover:text-starlight-blue transition-colors group flex items-center gap-1.5">
                 {job.job_name || "Untitled Job"}
-                <Pencil className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="h-3.5 w-3.5 text-faint opacity-0 group-hover:opacity-100 transition-opacity" />
               </h1>
             )}
 
@@ -915,12 +915,12 @@ export default function JobDetailPage() {
               <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") saveJobField(); if (e.key === "Escape") cancelEdit(); }}
                 onBlur={saveJobField} autoFocus
-                className="text-sm text-gray-500 w-full border-b border-starlight-blue bg-transparent outline-none" />
+                className="text-sm text-muted w-full border-b border-starlight-blue bg-transparent outline-none" />
             ) : (
               <p onClick={() => startEdit("client_name", job.client_name)}
-                className="text-sm text-gray-500 cursor-pointer hover:text-navy transition-colors group flex items-center gap-1.5">
+                className="text-sm text-muted cursor-pointer hover:text-navy transition-colors group flex items-center gap-1.5">
                 {job.client_name || "No client"}
-                <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="h-3 w-3 text-faint opacity-0 group-hover:opacity-100 transition-opacity" />
               </p>
             )}
           </div>
@@ -932,12 +932,12 @@ export default function JobDetailPage() {
               <input type="date" value={editValue} onChange={e => { setEditValue(e.target.value); }}
                 onKeyDown={e => { if (e.key === "Escape") cancelEdit(); }}
                 onBlur={saveJobField} autoFocus
-                className="text-sm text-gray-500 border-b border-starlight-blue bg-transparent outline-none text-right" />
+                className="text-sm text-muted border-b border-starlight-blue bg-transparent outline-none text-right" />
             ) : (
               <p onClick={() => startEdit("event_date", job.event_date)}
-                className="text-sm text-gray-500 cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1.5">
+                className="text-sm text-muted cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1.5">
                 {formatDate(job.event_date)}
-                <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="h-3 w-3 text-faint opacity-0 group-hover:opacity-100 transition-opacity" />
               </p>
             )}
 
@@ -946,16 +946,16 @@ export default function JobDetailPage() {
               <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") saveJobField(); if (e.key === "Escape") cancelEdit(); }}
                 onBlur={saveJobField} autoFocus
-                className="text-xs text-gray-400 w-48 border-b border-starlight-blue bg-transparent outline-none text-right" />
+                className="text-xs text-muted w-48 border-b border-starlight-blue bg-transparent outline-none text-right" />
             ) : job.event_location ? (
               <p onClick={() => startEdit("event_location", job.event_location)}
-                className="text-xs text-gray-400 cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1">
+                className="text-xs text-muted cursor-pointer hover:text-navy transition-colors group flex items-center justify-end gap-1">
                 {job.event_location}
-                <Pencil className="h-2.5 w-2.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="h-2.5 w-2.5 text-faint opacity-0 group-hover:opacity-100 transition-opacity" />
               </p>
             ) : (
               <button onClick={() => startEdit("event_location", "")}
-                className="text-xs text-gray-300 hover:text-gray-500 transition-colors">+ Location</button>
+                className="text-xs text-faint hover:text-muted transition-colors">+ Location</button>
             )}
           </div>
         </div>
@@ -964,31 +964,31 @@ export default function JobDetailPage() {
       {/* Summary bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Total Lines</p>
+          <p className="text-xs text-muted">Total Lines</p>
           <p className="text-lg font-semibold text-navy">{lines.length}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Quote Value</p>
+          <p className="text-xs text-muted">Quote Value</p>
           <p className="text-lg font-semibold text-navy">{formatCurrency(totalValue)}</p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Interpreted</p>
+          <p className="text-xs text-muted">Interpreted</p>
           <p className="text-lg font-semibold text-navy">
             {doneCount}/{lines.length}
-            <span className="text-xs font-normal text-gray-400 ml-1">lines done</span>
+            <span className="text-xs font-normal text-muted ml-1">lines done</span>
           </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-xs text-gray-400">Value Covered</p>
+          <p className="text-xs text-muted">Value Covered</p>
           <p className="text-lg font-semibold text-navy">{formatCurrency(doneValue)}</p>
         </div>
       </div>
 
       {/* Needs action alert */}
       {needsActionCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
+        <div className="bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-4 py-3 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-starlight-amber animate-pulse" />
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-starlight-amber">
             <span className="font-semibold">{needsActionCount}</span> lines need
             attention (scope, contractor, or decision required)
           </p>
@@ -1008,13 +1008,13 @@ export default function JobDetailPage() {
       </div>
 
       {/* Main tabs: Quote Lines / Scope Items */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-subtle">
         <button
           onClick={() => setActiveTab("lines")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === "lines"
               ? "border-starlight-red text-navy"
-              : "border-transparent text-gray-400 hover:text-gray-600"
+              : "border-transparent text-muted hover:text-muted"
           }`}
         >
           Quote Lines ({lines.length})
@@ -1024,7 +1024,7 @@ export default function JobDetailPage() {
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === "scopes"
               ? "border-starlight-red text-navy"
-              : "border-transparent text-gray-400 hover:text-gray-600"
+              : "border-transparent text-muted hover:text-muted"
           }`}
         >
           Scope Items ({scopes.length})
@@ -1034,7 +1034,7 @@ export default function JobDetailPage() {
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
             activeTab === "wo"
               ? "border-starlight-red text-navy"
-              : "border-transparent text-gray-400 hover:text-gray-600"
+              : "border-transparent text-muted hover:text-muted"
           }`}
         >
           Work Orders ({woData.length})
@@ -1046,13 +1046,13 @@ export default function JobDetailPage() {
         <div className="space-y-3">
           {/* Filter pills */}
           <div className="flex flex-wrap gap-2 items-center">
-            <Filter className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-muted" />
             <button
               onClick={() => setActiveFilter(null)}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 activeFilter === null
                   ? "bg-navy text-white border-navy"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                  : "bg-surface text-muted border-subtle hover:border-subtle"
               }`}
             >
               All ({lines.length})
@@ -1064,7 +1064,7 @@ export default function JobDetailPage() {
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                   activeFilter === f.key
                     ? f.color + " border-current"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                    : "bg-surface text-muted border-subtle hover:border-subtle"
                 }`}
               >
                 {f.label} ({filterCounts[f.key]})
@@ -1075,7 +1075,7 @@ export default function JobDetailPage() {
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 activeFilter === "zone"
                   ? "bg-navy/10 text-navy border-navy/30"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                  : "bg-surface text-muted border-subtle hover:border-subtle"
               }`}
             >
               By Zone ({filterCounts.zone})
@@ -1090,7 +1090,7 @@ export default function JobDetailPage() {
                 <div key={zone}>
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-sm font-semibold text-navy">{zone}</h3>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted">
                       ({zoneLines.length} lines &middot; {formatCurrency(zoneLines.reduce((s, l) => s + (l.line_value || 0), 0))})
                     </span>
                   </div>
@@ -1115,7 +1115,7 @@ export default function JobDetailPage() {
                     {filteredLines.map(renderLineRow)}
                     {filteredLines.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">
+                        <td colSpan={9} className="px-4 py-8 text-center text-muted text-sm">
                           No lines match this filter
                         </td>
                       </tr>
@@ -1130,7 +1130,7 @@ export default function JobDetailPage() {
           {!showAddLine ? (
             <button
               onClick={() => setShowAddLine(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-starlight-red border-2 border-dashed border-starlight-red/30 rounded-lg hover:bg-red-50/50 hover:border-starlight-red/50 transition-colors w-full justify-center"
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-starlight-red border-2 border-dashed border-starlight-red/30 rounded-lg hover:bg-starlight-red/10/50 hover:border-starlight-red/50 transition-colors w-full justify-center"
             >
               <Plus className="h-4 w-4" />
               Add Quote Line
@@ -1139,23 +1139,23 @@ export default function JobDetailPage() {
             <div className="card px-5 py-4 border-2 border-starlight-blue/30 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-navy">New Quote Line</h3>
-                <button onClick={() => setShowAddLine(false)} className="text-gray-400 hover:text-gray-600">
+                <button onClick={() => setShowAddLine(false)} className="text-muted hover:text-muted">
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Description <span className="text-starlight-red">*</span></label>
+                <label className="block text-xs font-medium text-muted mb-1">Description <span className="text-starlight-red">*</span></label>
                 <textarea
                   value={newLine.line_text}
                   onChange={(e) => setNewLine({ ...newLine, line_text: e.target.value })}
                   placeholder="What needs to be built or supplied..."
                   rows={2} autoFocus
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
+                  className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
                 />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Qty</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Qty</label>
                   <input type="number" step="1" value={newLine.quantity}
                     onChange={(e) => {
                       const q = e.target.value;
@@ -1164,10 +1164,10 @@ export default function JobDetailPage() {
                       setNewLine({ ...newLine, quantity: q, line_value: autoVal });
                     }}
                     placeholder="e.g. 10"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Unit Price</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Unit Price</label>
                   <input type="number" step="0.01" value={newLine.unit_price}
                     onChange={(e) => {
                       const up = e.target.value;
@@ -1176,31 +1176,31 @@ export default function JobDetailPage() {
                       setNewLine({ ...newLine, unit_price: up, line_value: autoVal });
                     }}
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Total Value</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Total Value</label>
                   <input type="number" step="0.01" value={newLine.line_value}
                     onChange={(e) => setNewLine({ ...newLine, line_value: e.target.value })}
                     placeholder="0.00"
-                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue ${newLine.quantity && newLine.unit_price ? "bg-gray-50 text-gray-400" : ""}`} />
+                    className={`w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue ${newLine.quantity && newLine.unit_price ? "bg-surface-dim text-muted" : ""}`} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Zone</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Zone</label>
                   <input type="text" value={newLine.event_zone}
                     onChange={(e) => setNewLine({ ...newLine, event_zone: e.target.value })}
                     placeholder="e.g. Entrance"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Sub-group</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Sub-group</label>
                   <input type="text" value={newLine.line_sub_group}
                     onChange={(e) => setNewLine({ ...newLine, line_sub_group: e.target.value })}
                     placeholder="e.g. Décor"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                  <label className="block text-xs font-medium text-muted mb-1">Category</label>
                   <LookupCombo category="QUOTE_LINE_CATEGORY" value={newLine.category}
                     onChange={(val) => setNewLine({ ...newLine, category: val || "Workshop Build" })}
                     className="w-full text-xs" />
@@ -1208,9 +1208,9 @@ export default function JobDetailPage() {
               </div>
               <div className="flex justify-end gap-3 pt-1">
                 <button onClick={() => setShowAddLine(false)}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+                  className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors">Cancel</button>
                 <button onClick={handleAddLine} disabled={addingSaving || !newLine.line_text.trim()}
-                  className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  className="px-5 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                   {addingSaving ? "Adding..." : "Add Line"}
                 </button>
               </div>
@@ -1223,7 +1223,7 @@ export default function JobDetailPage() {
       {activeTab === "scopes" && (
         <div className="space-y-3">
           {scopes.length === 0 ? (
-            <div className="card px-6 py-10 text-center text-gray-400 text-sm">
+            <div className="card px-6 py-10 text-center text-muted text-sm">
               No scope items yet. Create one from the Quote Lines tab.
             </div>
           ) : (
@@ -1246,12 +1246,12 @@ export default function JobDetailPage() {
                       </h3>
                       <StatusBadge status={scope.status} />
                       {isTruthy(scope.is_general) && (
-                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] bg-surface-mid text-muted px-1.5 py-0.5 rounded">
                           General
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-4 mt-1.5 text-xs text-gray-400">
+                    <div className="flex gap-4 mt-1.5 text-xs text-muted">
                       {scope.event_zone && <span>{scope.event_zone}</span>}
                       {scope.complexity_construction && (
                         <span>Complexity: {scope.complexity_construction}</span>
@@ -1267,7 +1267,7 @@ export default function JobDetailPage() {
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-gray-300 shrink-0" />
+                  <ChevronRight className="h-5 w-5 text-faint shrink-0" />
                 </Link>
               );
             })
@@ -1279,7 +1279,7 @@ export default function JobDetailPage() {
       {activeTab === "wo" && (
         <div className="space-y-2">
           {woData.length === 0 ? (
-            <div className="card px-6 py-10 text-center text-gray-400 text-sm">
+            <div className="card px-6 py-10 text-center text-muted text-sm">
               No work orders yet. Create them from within Scope Items.
             </div>
           ) : (
@@ -1294,18 +1294,18 @@ export default function JobDetailPage() {
                   {wo.prev_wo_status !== null ? (
                     <span className={"text-[9px] " + (
                       wo.prev_wo_status === "Complete" ? "text-starlight-green" :
-                      wo.prev_wo_status === "In-Progress" ? "text-starlight-blue" : "text-gray-400"
+                      wo.prev_wo_status === "In-Progress" ? "text-starlight-blue" : "text-muted"
                     )}>
                       {wo.prev_wo_status === "Complete" ? "prev: done" :
                        wo.prev_wo_status === "In-Progress" ? "prev: active" : "prev: wait"}
                     </span>
                   ) : wo.wo_sequence === 1 ? (
-                    <span className="text-[9px] text-gray-300">first</span>
+                    <span className="text-[9px] text-faint">first</span>
                   ) : null}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-navy truncate">{wo.activity_label}</p>
-                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                  <p className="text-xs text-muted truncate mt-0.5">
                     {wo.scope_name}
                     {wo.description ? ` — ${wo.description}` : ""}
                   </p>

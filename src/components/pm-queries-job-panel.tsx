@@ -101,8 +101,8 @@ export function PmQueriesJobPanel({ jobId, jobName }: PmQueriesJobPanelProps) {
   return (
     <div className={"card overflow-hidden " + (openCount > 0 ? "border-l-4 border-l-starlight-amber" : "")}>
       <button onClick={() => setExpanded(!expanded)}
-        className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-        {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+        className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-surface-dim transition-colors text-left">
+        {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
         <MessageCircleQuestion className="h-4 w-4 text-starlight-amber" />
         <span className="text-sm font-semibold text-navy">PM Queries</span>
         {openCount > 0 && (
@@ -143,7 +143,7 @@ export function PmQueriesJobPanel({ jobId, jobName }: PmQueriesJobPanelProps) {
                   <p className="text-xs text-navy">{q.question}</p>
                   {q.photo_url && (
                     <div className="mt-1.5">
-                      <img src={q.photo_url} alt="" className="max-h-28 rounded border border-gray-200" />
+                      <img src={q.photo_url} alt="" className="max-h-28 rounded border border-subtle" />
                     </div>
                   )}
                   {answeringId === q.query_id ? (
@@ -151,10 +151,10 @@ export function PmQueriesJobPanel({ jobId, jobName }: PmQueriesJobPanelProps) {
                       <input type="text" value={answerText} onChange={(e) => setAnswerText(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") answerQuery(q.query_id); }}
                         placeholder="Type answer..."
-                        className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-green"
+                        className="flex-1 px-2 py-1 border border-subtle rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-green"
                         autoFocus />
                       <button onClick={() => answerQuery(q.query_id)} className="p-1 text-starlight-green hover:bg-starlight-green/10 rounded"><Send className="h-3 w-3" /></button>
-                      <button onClick={() => { setAnsweringId(null); setAnswerText(""); }} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><span className="text-xs">✕</span></button>
+                      <button onClick={() => { setAnsweringId(null); setAnswerText(""); }} className="p-1 text-muted hover:bg-surface-mid rounded"><span className="text-xs">✕</span></button>
                     </div>
                   ) : (
                     <button onClick={() => { setAnsweringId(q.query_id); setAnswerText(""); }}
@@ -167,13 +167,13 @@ export function PmQueriesJobPanel({ jobId, jobName }: PmQueriesJobPanelProps) {
 
           {answeredQueries.length > 0 && (
             <details className="mt-2">
-              <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">
+              <summary className="text-[10px] text-muted cursor-pointer hover:text-muted">
                 {answeredQueries.length} answered
               </summary>
               <div className="mt-1 space-y-1">
                 {answeredQueries.map((q) => (
                   <div key={q.query_id} className="px-3 py-1.5 bg-starlight-green/5 border border-starlight-green/20 rounded-lg text-xs">
-                    <span className="text-gray-500">{q.scope_name}: </span>
+                    <span className="text-muted">{q.scope_name}: </span>
                     <span className="text-navy">{q.question}</span>
                     {q.answer && <p className="text-starlight-green italic mt-0.5">↳ {q.answer}</p>}
                   </div>

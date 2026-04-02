@@ -65,28 +65,28 @@ export function ContractorPicker({
 
   if (!isOpen) {
     return (
-      <button onClick={() => setIsOpen(true)} className="inline-flex items-center gap-1.5 text-xs hover:bg-blue-50 px-2 py-1 rounded transition-colors">
+      <button onClick={() => setIsOpen(true)} className="inline-flex items-center gap-1.5 text-xs hover:bg-navy/10 px-2 py-1 rounded transition-colors">
         <Building2 className="h-3.5 w-3.5 text-starlight-blue" />
         {currentContractorName ? (
           <span className="text-starlight-blue font-medium">{currentContractorName}</span>
         ) : (
-          <span className="text-gray-400">Assign supplier...</span>
+          <span className="text-muted">Assign supplier...</span>
         )}
         {currentQuoteValue && (
-          <span className="text-gray-400 ml-1">({formatCurrency(currentQuoteValue)})</span>
+          <span className="text-muted ml-1">({formatCurrency(currentQuoteValue)})</span>
         )}
       </button>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 space-y-3 min-w-[280px]">
+    <div className="bg-surface border border-subtle rounded-lg shadow-lg p-3 space-y-3 min-w-[280px]">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-500">Assign Supplier / Subcontractor</span>
-        <button onClick={() => setIsOpen(false)} className="p-0.5 hover:bg-gray-100 rounded"><X className="h-3.5 w-3.5 text-gray-400" /></button>
+        <span className="text-xs font-medium text-muted">Assign Supplier / Subcontractor</span>
+        <button onClick={() => setIsOpen(false)} className="p-0.5 hover:bg-surface-mid rounded"><X className="h-3.5 w-3.5 text-muted" /></button>
       </div>
       <select value={selectedId || ""} onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+        className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
         <option value="">Select supplier...</option>
         {suppliers.map((s) => (
           <option key={s.supplier_id} value={s.supplier_id}>
@@ -95,19 +95,19 @@ export function ContractorPicker({
         ))}
       </select>
       <div>
-        <label className="block text-[10px] text-gray-400 mb-0.5">Their quote (£)</label>
+        <label className="block text-[10px] text-muted mb-0.5">Their quote (£)</label>
         <input type="number" step="0.01" value={quoteValue} onChange={(e) => setQuoteValue(e.target.value)} placeholder="0.00"
-          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+          className="w-full px-2 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
       </div>
       <div>
-        <label className="block text-[10px] text-gray-400 mb-0.5">What they provide</label>
+        <label className="block text-[10px] text-muted mb-0.5">What they provide</label>
         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Full AV setup and operation"
-          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+          className="w-full px-2 py-1.5 border border-subtle rounded text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
       </div>
       <div className="flex justify-between items-center">
         <a href="/suppliers" className="text-xs text-starlight-blue hover:underline">Manage suppliers</a>
         <button onClick={handleSave} disabled={saving}
-          className="px-3 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
+          className="px-3 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-navy transition-colors disabled:opacity-50">
           {saving ? "Saving..." : "Save"}
         </button>
       </div>

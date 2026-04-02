@@ -98,8 +98,8 @@ export function CompletedWorkTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="flex items-center justify-center h-32 text-gray-400 text-sm animate-pulse">Loading completed work...</div>;
-  if (items.length === 0) return <div className="card px-6 py-10 text-center text-gray-400 text-sm">No completed work orders with photos yet</div>;
+  if (loading) return <div className="flex items-center justify-center h-32 text-muted text-sm animate-pulse">Loading completed work...</div>;
+  if (items.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No completed work orders with photos yet</div>;
 
   // Group by job
   const byJob: Record<string, CompletedWO[]> = {};
@@ -118,19 +118,19 @@ export function CompletedWorkTab() {
             <div className="flex items-center gap-2 mb-3 px-1">
               <span className="text-sm font-bold font-mono text-navy">{first.job_number}</span>
               <span className="text-sm font-semibold text-navy">{first.job_name}</span>
-              <span className="text-[10px] text-gray-400">{jobItems.length} completed</span>
+              <span className="text-[10px] text-muted">{jobItems.length} completed</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {jobItems.map(item => (
                 <Link key={item.work_order_id} href={`/jobs/${item.job_id}/scope/${item.scope_item_id}/wo`}
                   className="card overflow-hidden hover:shadow-md transition-shadow group">
                   {/* Photo */}
-                  <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
+                  <div className="aspect-[4/3] bg-surface-mid relative overflow-hidden">
                     {item.photoUrl ? (
                       <img src={item.photoUrl} alt={item.scope_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                     ) : (
                       <div className="flex items-center justify-center h-full">
-                        <Loader2 className="h-5 w-5 text-gray-300 animate-spin" />
+                        <Loader2 className="h-5 w-5 text-faint animate-spin" />
                       </div>
                     )}
                     <div className="absolute top-2 right-2">
@@ -140,9 +140,9 @@ export function CompletedWorkTab() {
                   {/* Info */}
                   <div className="px-3 py-2">
                     <p className="text-xs font-semibold text-navy truncate">{item.activity_label}</p>
-                    <p className="text-[10px] text-gray-500 truncate mt-0.5">{item.scope_name}</p>
+                    <p className="text-[10px] text-muted truncate mt-0.5">{item.scope_name}</p>
                     {item.actual_complete_timestamp && (
-                      <p className="text-[9px] text-gray-400 mt-1">{formatDate(item.actual_complete_timestamp)}</p>
+                      <p className="text-[9px] text-muted mt-1">{formatDate(item.actual_complete_timestamp)}</p>
                     )}
                   </div>
                 </Link>

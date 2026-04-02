@@ -32,7 +32,7 @@ export function PresenceAvatars({ others, className = "" }: Props) {
 
   return (
     <div className={`flex items-center gap-1 ${className}`}>
-      <span className="text-xs text-gray-400 mr-1">Also viewing:</span>
+      <span className="text-xs text-muted mr-1">Also viewing:</span>
       <div className="flex -space-x-1.5">
         {others.map((user) => (
           <div
@@ -58,14 +58,14 @@ export function PresenceAvatars({ others, className = "" }: Props) {
             {/* Tooltip on hover */}
             {hoveredUser === user.userId && (
               <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap">
-                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+                <div className="bg-surface-top text-white text-xs rounded-lg px-3 py-2 shadow-lg">
                   <p className="font-medium">{user.userName}</p>
                   {user.editingField && (
-                    <p className="text-amber-300 mt-0.5">
+                    <p className="text-starlight-amber mt-0.5">
                       Editing: {user.editingField.replace(/_/g, " ")}
                     </p>
                   )}
-                  <p className="text-gray-400 mt-0.5">
+                  <p className="text-muted mt-0.5">
                     Viewing since {timeAgo(user.enteredAt)}
                   </p>
                 </div>

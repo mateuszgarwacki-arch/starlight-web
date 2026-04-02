@@ -1,1 +1,13 @@
-docs: Session 17 final tracker update with unified items and grouping  
+Dark Theme Migration: Option B - semantic token system  
+  
+- Replaced light palette with dark tonal layering (#0c0d14 base, #111219 surface)  
+- Brand colours: steel blue #7BA4D4 (primary), dusty rose #D47BA0 (accent)  
+- Navy token redefined from #1A1A2E to brand blue #7BA4D4  
+- New semantic tokens: base, surface/dim/mid/hi/top/bright, foreground, muted, faint, subtle  
+- Batch-replaced 2875 color references across 64 tsx files  
+- Status colours adjusted for dark bg: red #ff716c, green #4ade80, amber #fbbf24  
+- Sidebar: bg-base with brand-blue active highlights  
+- Global dark input styling (bg-surface-mid, text-foreground)  
+- Traveller print CSS hardened: forces dark-on-white for all traveller content  
+- Login pages use bg-base  
+- Phase pills, starlight-pink, print styles preserved  

@@ -75,12 +75,12 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
   return (
     <div className="card overflow-hidden h-full">
       <button onClick={() => setCollapsed(!collapsed)}
-        className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+        className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-dim/50 transition-colors">
         <div className="flex items-center gap-2">
-          {collapsed ? <ChevronRight className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+          {collapsed ? <ChevronRight className="h-4 w-4 text-muted" /> : <ChevronDown className="h-4 w-4 text-muted" />}
           <ShoppingCart className="h-4 w-4 text-navy" />
           <h3 className="text-sm font-semibold text-navy">Orders</h3>
-          <span className="text-[10px] text-gray-400 font-mono">
+          <span className="text-[10px] text-muted font-mono">
             {outstanding.length > 0 && <span className="text-starlight-amber">{outstanding.length} outstanding</span>}
             {outstanding.length > 0 && ordered.length > 0 && " · "}
             {ordered.length > 0 && <span className="text-starlight-green">{ordered.length} ordered</span>}
@@ -92,7 +92,7 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
       </button>
 
       {!collapsed && (
-        <div className="border-t border-gray-100 max-h-80 overflow-y-auto">
+        <div className="border-t border-subtle max-h-80 overflow-y-auto">
           {/* Outstanding */}
           {outstanding.length > 0 && (
             <div className="px-4 py-2">
@@ -100,13 +100,13 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
                 Outstanding · {formatCurrency(outstandingCost)}
               </p>
               {outstanding.map(i => (
-                <div key={i.bom_id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                <div key={i.bom_id} className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0">
                   <Clock className="h-3 w-3 text-starlight-amber shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-navy truncate">{i.item_description}</p>
-                    {i.scope_name && <p className="text-[9px] text-gray-400 truncate">{i.scope_name}</p>}
+                    {i.scope_name && <p className="text-[9px] text-muted truncate">{i.scope_name}</p>}
                   </div>
-                  <span className="text-[10px] font-mono text-gray-500 shrink-0">{i.quantity} {i.unit}</span>
+                  <span className="text-[10px] font-mono text-muted shrink-0">{i.quantity} {i.unit}</span>
                   <span className="text-[10px] font-mono text-navy shrink-0 w-14 text-right">{formatCurrency((i.quantity || 0) * (i.unit_cost || 0))}</span>
                 </div>
               ))}
@@ -120,17 +120,17 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
                 Ordered · {formatCurrency(orderedCost)}
               </p>
               {ordered.map(i => (
-                <div key={i.bom_id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                <div key={i.bom_id} className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0">
                   <Check className="h-3 w-3 text-starlight-green shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-navy truncate">{i.item_description}</p>
-                    <p className="text-[9px] text-gray-400 truncate">
+                    <p className="text-[9px] text-muted truncate">
                       {i.supplier && <span>{i.supplier} · </span>}
                       {i.ordered_at && formatDate(i.ordered_at)}
                       {i.scope_name && <span> · {i.scope_name}</span>}
                     </p>
                   </div>
-                  <span className="text-[10px] font-mono text-gray-500 shrink-0">{i.quantity} {i.unit}</span>
+                  <span className="text-[10px] font-mono text-muted shrink-0">{i.quantity} {i.unit}</span>
                   <span className="text-[10px] font-mono text-navy shrink-0 w-14 text-right">{formatCurrency((i.quantity || 0) * (i.unit_cost || 0))}</span>
                 </div>
               ))}
@@ -138,7 +138,7 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
           )}
 
           {outstanding.length === 0 && ordered.length === 0 && (
-            <p className="px-4 py-3 text-xs text-gray-400">No materials flagged for ordering</p>
+            <p className="px-4 py-3 text-xs text-muted">No materials flagged for ordering</p>
           )}
         </div>
       )}

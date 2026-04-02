@@ -119,7 +119,7 @@ export default function NotificationsPage() {
   const actionCount = notifications.filter((n) => !n.read_at && (n.severity === "warning" || n.severity === "urgent")).length;
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400 text-sm animate-pulse">Loading notifications...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading notifications...</div>;
   }
 
   return (
@@ -128,19 +128,19 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-navy">Notifications</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <p className="text-sm text-muted mt-0.5">
             {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
             {actionCount > 0 && ` · ${actionCount} need attention`}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
-            <button onClick={markAllRead} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={markAllRead} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
               <CheckCheck className="h-3.5 w-3.5" /> Mark all read
             </button>
           )}
           {notifications.some((n) => n.read_at) && (
-            <button onClick={dismissAllRead} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={dismissAllRead} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">
               <Trash2 className="h-3.5 w-3.5" /> Clear read
             </button>
           )}
@@ -148,7 +148,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-surface-mid rounded-lg p-1 w-fit">
         {([
           { key: "all", label: "All", count: notifications.length },
           { key: "action", label: "Needs attention", count: notifications.filter((n) => n.severity === "warning" || n.severity === "urgent").length },
@@ -156,8 +156,8 @@ export default function NotificationsPage() {
         ] as { key: FilterMode; label: string; count: number }[]).map((f) => (
           <button key={f.key} onClick={() => setFilter(f.key)}
             className={"px-3 py-1.5 text-xs font-medium rounded-md transition-colors " +
-              (filter === f.key ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-navy")}>
-            {f.label} {f.count > 0 && <span className="ml-1 text-gray-400">({f.count})</span>}
+              (filter === f.key ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+            {f.label} {f.count > 0 && <span className="ml-1 text-muted">({f.count})</span>}
           </button>
         ))}
       </div>
@@ -165,8 +165,8 @@ export default function NotificationsPage() {
       {/* Notification list */}
       {filtered.length === 0 ? (
         <div className="card px-6 py-16 text-center">
-          <Bell className="h-8 w-8 text-gray-200 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">{filter === "all" ? "No notifications" : "Nothing matching this filter"}</p>
+          <Bell className="h-8 w-8 text-faint mx-auto mb-3" />
+          <p className="text-sm text-muted">{filter === "all" ? "No notifications" : "Nothing matching this filter"}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -191,23 +191,23 @@ export default function NotificationsPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className={"text-[10px] font-medium px-1.5 py-0.5 rounded " + cfg.bg + " " + cfg.color}>{typeLabel}</span>
-                        <span className="text-[10px] text-gray-400">{timeAgo(n.created_at)}</span>
+                        <span className="text-[10px] text-muted">{timeAgo(n.created_at)}</span>
                         {isUnread && <span className="w-2 h-2 rounded-full bg-starlight-blue shrink-0" />}
                       </div>
-                      <p className={"text-sm " + (isUnread ? "font-medium text-navy" : "text-gray-600")}>{n.title}</p>
-                      {n.detail && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.detail}</p>}
+                      <p className={"text-sm " + (isUnread ? "font-medium text-navy" : "text-muted")}>{n.title}</p>
+                      {n.detail && <p className="text-xs text-muted mt-0.5 line-clamp-2">{n.detail}</p>}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 shrink-0">
                       {n.action_url && (
                         <Link href={n.action_url} onClick={(e) => e.stopPropagation()}
-                          className="p-1.5 text-gray-300 hover:text-starlight-blue hover:bg-starlight-blue/10 rounded-lg transition-colors">
+                          className="p-1.5 text-faint hover:text-starlight-blue hover:bg-starlight-blue/10 rounded-lg transition-colors">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); dismiss(n.notification_id); }}
-                        className="p-1.5 text-gray-300 hover:text-starlight-red hover:bg-red-50 rounded-lg transition-colors">
+                        className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-lg transition-colors">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
