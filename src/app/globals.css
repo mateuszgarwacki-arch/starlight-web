@@ -61,6 +61,12 @@
     @apply text-faint;
   }
 
+  /* Number input spinners — dark theme */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    filter: invert(0.7);
+  }
+
   /* Amber highlight for uninterpreted quote lines */
   .row-amber {
     @apply bg-starlight-amber/5 border-l-4 border-l-starlight-amber;
