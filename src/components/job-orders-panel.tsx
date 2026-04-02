@@ -38,27 +38,44 @@ export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
       .select(`
         bom_id, item_description, quantity, unit, unit_cost,
         needs_ordering, ordered_at, supplier, from_stock,
-        scope_item_id
+        scope_item_id, work_order_id
       `)
       .eq("job_id", jobId)
       .or("needs_ordering.eq.true,ordered_at.not.is.null")
       .order("ordered_at", { ascending: true, nullsFirst: true });
     const bomItems = data || [];
 
-    // Get scope names for context
+    // Get scope names — via direct scope_item_id or through work_order_id → scope
     const scopeIds = [...new Set(bomItems.map(b => b.scope_item_id).filter(Boolean))];
+    const woIds = [...new Set(bomItems.filter(b => !b.scope_item_id && b.work_order_id).map(b => b.work_order_id))];
     let scopeMap: Record<number, string> = {};
+    let woScopeMap: Record<number, number> = {};
+
     if (scopeIds.length > 0) {
       const { data: scopes } = await supabase
         .from("tbl_scope_items").select("scope_item_id, item_name")
         .in("scope_item_id", scopeIds);
       (scopes || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name; });
     }
+    if (woIds.length > 0) {
+      const { data: wos } = await supabase
+        .from("tbl_work_orders").select("work_order_id, scope_item_id")
+        .in("work_order_id", woIds);
+      (wos || []).forEach((w: any) => { if (w.scope_item_id) woScopeMap[w.work_order_id] = w.scope_item_id; });
+      // Fetch any additional scope names from WO chain
+      const extraScopeIds = [...new Set(Object.values(woScopeMap))].filter(id => !scopeMap[id]);
+      if (extraScopeIds.length > 0) {
+        const { data: extraScopes } = await supabase
+          .from("tbl_scope_items").select("scope_item_id, item_name")
+          .in("scope_item_id", extraScopeIds);
+        (extraScopes || []).forEach((s: any) => { scopeMap[s.scope_item_id] = s.item_name; });
+      }
+    }
 
-    setItems(bomItems.map((b: any) => ({
-      ...b,
-      scope_name: b.scope_item_id ? scopeMap[b.scope_item_id] || null : null,
-    })));
+    setItems(bomItems.map((b: any) => {
+      const sid = b.scope_item_id || (b.work_order_id ? woScopeMap[b.work_order_id] : null);
+      return { ...b, scope_name: sid ? scopeMap[sid] || null : null };
+    }));
     setLoading(false);
   }, [jobId]);
 
