@@ -1,1 +1,5 @@
-TRACKER: Session 18 - Dark theme + BOM cost fix  
+Fix: traveller page forced to light mode on screen  
+  
+- .traveller-page content always renders white-on-light regardless of dark theme  
+- BOM table header, task description, painting notes all visible  
+- Status colours mapped to light-safe equivalents inside traveller  

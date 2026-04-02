@@ -92,7 +92,50 @@
 
 
 /* ============================================================
-   Traveller Print Styles — stays light for print
+   Traveller — always renders light (print preview on screen)
+   ============================================================ */
+.traveller-page {
+  background: white !important;
+  color: #1A1A2E !important;
+}
+
+.traveller-page * {
+  color: inherit;
+  border-color: #ddd;
+}
+
+.traveller-page .text-foreground { color: #1A1A2E; }
+.traveller-page .text-muted { color: #555; }
+.traveller-page .text-faint { color: #999; }
+.traveller-page .text-navy { color: #1A1A2E; }
+.traveller-page .text-starlight-red { color: #C0392B; }
+.traveller-page .text-starlight-green { color: #27AE60; }
+.traveller-page .text-starlight-amber { color: #b45309; }
+
+.traveller-page .bg-surface,
+.traveller-page .bg-surface-dim,
+.traveller-page .bg-surface-mid,
+.traveller-page .bg-surface-hi,
+.traveller-page .bg-surface-top,
+.traveller-page .bg-base { background: white !important; }
+
+.traveller-page .bg-surface-mid.print\:bg-surface-mid,
+.traveller-page thead tr,
+.traveller-page .bg-surface-mid { background: #f0f1f3 !important; }
+
+.traveller-page .bg-starlight-amber\/10 { background: #fef3c7 !important; }
+.traveller-page .bg-starlight-green\/10 { background: #ecfdf5 !important; }
+.traveller-page .bg-starlight-red\/10 { background: #fef2f2 !important; }
+
+.traveller-page .border-subtle { border-color: #ddd; }
+.traveller-page hr.border-subtle { border-color: #ddd; }
+
+.traveller-page input,
+.traveller-page textarea,
+.traveller-page select { background: white; color: #1A1A2E; }
+
+/* ============================================================
+   Traveller Print Styles
    ============================================================ */
 @media print {
   nav, .sidebar, header,
