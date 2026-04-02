@@ -1,1 +1,1 @@
-Move Scope column between Value and PM Est, named header, bigger icons  
+WO page: add Job Overview link next to Back to Scope Item  
