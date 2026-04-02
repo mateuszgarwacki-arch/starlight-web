@@ -1,1 +1,1 @@
-Remove auto-tick: Done is manual only. Default filter To Do. All moved to end.  
+Add Install (Materials) category, plain Install no longer needs scope  
