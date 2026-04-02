@@ -1,1 +1,1 @@
-Add Order checkbox to scope-level BOM  
+Add Stock/Order checkboxes to scope-level material rows in job-items-table  

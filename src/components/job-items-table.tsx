@@ -8,6 +8,7 @@ import {
   Warehouse, Paintbrush, ArrowUpCircle, MapPin, Link2, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isTruthy } from "@/lib/types";
 
 interface JobItemRow {
   item_id: number;
@@ -66,7 +67,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
 
   // BOM costs for stock items + scope-level material rows
   const [bomByItem, setBomByItem] = useState<Record<number, { bom_id: number; quantity: number; unit_cost: number; unit: string }>>({});
-  const [materialRows, setMaterialRows] = useState<{ bom_id: number; item_description: string; quantity: number; unit: string; unit_cost: number; material_id: number | null }[]>([]);
+  const [materialRows, setMaterialRows] = useState<{ bom_id: number; item_description: string; quantity: number; unit: string; unit_cost: number; material_id: number | null; from_stock: string | null; needs_ordering: string | null }[]>([]);
 
   // Material search
   const [showMaterialSearch, setShowMaterialSearch] = useState(false);
@@ -76,7 +77,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
   const loadItems = useCallback(async () => {
     const [itemsRes, bomRes] = await Promise.all([
       supabase.from("qry_jobitems_withcoverage").select("*").eq("scope_item_id", scopeItemId).order("item_id"),
-      supabase.from("tbl_wo_bom").select("bom_id, job_item_id, item_description, quantity, unit, unit_cost, material_id, stock_item_id, scope_item_id, work_order_id")
+      supabase.from("tbl_wo_bom").select("bom_id, job_item_id, item_description, quantity, unit, unit_cost, material_id, stock_item_id, scope_item_id, work_order_id, from_stock, needs_ordering")
         .eq("scope_item_id", scopeItemId).is("work_order_id", null),
     ]);
     if (itemsRes.data) setItems(itemsRes.data as JobItemRow[]);
@@ -88,7 +89,7 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       if (b.job_item_id) {
         byItem[b.job_item_id] = { bom_id: b.bom_id, quantity: b.quantity || 0, unit_cost: b.unit_cost || 0, unit: b.unit || "Each" };
       } else {
-        mats.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id });
+        mats.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
       }
     }
     setBomByItem(byItem);
@@ -490,11 +491,15 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
       {/* Material-only BOM rows */}
       {materialRows.length > 0 && (
         <div className="card overflow-hidden divide-y divide-subtle">
-          {materialRows.map(m => (
+          {materialRows.map(m => {
+            const isStock = isTruthy(m.from_stock);
+            const isOrder = isTruthy(m.needs_ordering);
+            return (
             <div key={m.bom_id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="pt-0.5 shrink-0 w-6" />
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-surface-mid text-muted text-[9px] font-semibold rounded shrink-0">
-                <Wrench className="h-2.5 w-2.5" />Material
+              <span className={"inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-semibold rounded shrink-0 " + (isStock ? "bg-starlight-amber/10 text-starlight-amber" : "bg-surface-mid text-muted")}>
+                {isStock ? <Warehouse className="h-2.5 w-2.5" /> : <Wrench className="h-2.5 w-2.5" />}
+                {isStock ? "Stock" : "Material"}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-navy">{m.item_description}</p>
@@ -505,12 +510,34 @@ export function JobItemsTable({ jobId, scopeItemId, onSelectionChange }: JobItem
               <div className="shrink-0 w-20 text-right">
                 <p className="text-sm font-mono text-navy">{formatCurrency(m.quantity * m.unit_cost)}</p>
               </div>
+              <div className="shrink-0 flex items-center gap-3">
+                <label className="flex items-center gap-1 cursor-pointer" title="From workshop stock">
+                  <input type="checkbox" checked={isStock}
+                    onChange={async (e) => {
+                      const val = e.target.checked;
+                      await supabase.from("tbl_wo_bom").update({ from_stock: val ? "true" : "false", ...(val ? { needs_ordering: "false" } : {}) }).eq("bom_id", m.bom_id);
+                      setMaterialRows(prev => prev.map(r => r.bom_id === m.bom_id ? { ...r, from_stock: val ? "true" : "false", ...(val ? { needs_ordering: "false" } : {}) } : r));
+                    }}
+                    className="h-3.5 w-3.5 rounded border-subtle text-starlight-amber focus:ring-starlight-amber" />
+                  <span className="text-[9px] text-muted">Stock</span>
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer" title="Needs ordering">
+                  <input type="checkbox" checked={isOrder} disabled={isStock}
+                    onChange={async (e) => {
+                      await supabase.from("tbl_wo_bom").update({ needs_ordering: e.target.checked ? "true" : "false" }).eq("bom_id", m.bom_id);
+                      setMaterialRows(prev => prev.map(r => r.bom_id === m.bom_id ? { ...r, needs_ordering: e.target.checked ? "true" : "false" } : r));
+                    }}
+                    className="h-3.5 w-3.5 rounded border-subtle text-starlight-blue focus:ring-starlight-blue disabled:opacity-30" />
+                  <span className="text-[9px] text-muted">Order</span>
+                </label>
+              </div>
               <button onClick={() => deleteMaterialRow(m.bom_id)} title="Delete"
                 className="p-1 text-faint hover:text-starlight-red transition-colors shrink-0">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
