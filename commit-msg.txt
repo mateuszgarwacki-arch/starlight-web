@@ -1,1 +1,1 @@
-Add Stock/Order checkboxes to scope-level material rows in job-items-table  
+Remove auto-tick: Done is manual only. Default filter To Do. All moved to end.  

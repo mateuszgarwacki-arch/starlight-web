@@ -58,7 +58,7 @@ function getCategoryConfig(category: string | null) {
 // ================================================================
 // FILTER DEFINITIONS
 // ================================================================
-type FilterKey = "workshop" | "provisional" | "subcontracted" | "done" | "zone";
+type FilterKey = "todo" | "workshop" | "provisional" | "subcontracted" | "done" | "zone";
 
 interface FilterDef {
   key: FilterKey;
@@ -68,6 +68,12 @@ interface FilterDef {
 }
 
 const FILTERS: FilterDef[] = [
+  {
+    key: "todo",
+    label: "To Do",
+    filter: (l) => ["Workshop", "Workshop Build", "Stock-and-Hire", "Stock Pick", "Shared Departments", "Install", "Subcontracted (Partial)"].includes(l.category || ""),
+    color: "bg-starlight-red/10 text-starlight-red border-starlight-red/30",
+  },
   {
     key: "workshop",
     label: "Workshop",
@@ -119,7 +125,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
   const [woData, setWoData] = useState<any[]>([]);
-  const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>("todo");
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
 
@@ -237,26 +243,10 @@ export default function JobDetailPage() {
   }, [job?.job_id]);
 
   // ================================================================
-  // AUTO-TICK LOGIC — check if a line should be auto-completed
+  // DONE = manual tick only (interpretation_complete field)
   // ================================================================
-  function isAutoComplete(line: QuoteLine): boolean {
-    const config = getCategoryConfig(line.category);
-    const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
-    const hasContractor = !!contractorMap[line.quote_line_id];
-
-    switch (config.autoComplete) {
-      case "scope": return hasScope;
-      case "contractor": return hasContractor;
-      case "scope+contractor": return hasScope && hasContractor;
-      case "manual": return false; // only manual tick
-      case "never": return false;
-      default: return false;
-    }
-  }
-
-  // Derived "done" status: manual tick OR auto-complete
   function isDone(line: QuoteLine): boolean {
-    return isTruthy(line.interpretation_complete) || isAutoComplete(line);
+    return isTruthy(line.interpretation_complete);
   }
 
   // ================================================================
@@ -518,6 +508,11 @@ export default function JobDetailPage() {
     if (!activeFilter) return lines;
     if (activeFilter === "zone") return lines; // zone uses grouping, not filtering
     if (activeFilter === "done") return lines.filter((l) => isDone(l));
+    if (activeFilter === "todo") {
+      const filterDef = FILTERS.find((f) => f.key === "todo");
+      if (!filterDef) return lines;
+      return lines.filter((l) => filterDef.filter(l, scopes, contractorMap) && !isDone(l));
+    }
     const filterDef = FILTERS.find((f) => f.key === activeFilter);
     if (!filterDef) return lines;
     return lines.filter((l) => filterDef.filter(l, scopes, contractorMap));
@@ -536,10 +531,15 @@ export default function JobDetailPage() {
   })();
 
   // Filter counts
+  const todoFilter = FILTERS.find((f) => f.key === "todo")!;
+  const workshopFilter = FILTERS.find((f) => f.key === "workshop")!;
+  const provisionalFilter = FILTERS.find((f) => f.key === "provisional")!;
+  const subcontractedFilter = FILTERS.find((f) => f.key === "subcontracted")!;
   const filterCounts = {
-    workshop: lines.filter((l) => FILTERS[0].filter(l, scopes, contractorMap)).length,
-    provisional: lines.filter((l) => FILTERS[1].filter(l, scopes, contractorMap)).length,
-    subcontracted: lines.filter((l) => FILTERS[2].filter(l, scopes, contractorMap)).length,
+    todo: lines.filter((l) => todoFilter.filter(l, scopes, contractorMap) && !isDone(l)).length,
+    workshop: lines.filter((l) => workshopFilter.filter(l, scopes, contractorMap)).length,
+    provisional: lines.filter((l) => provisionalFilter.filter(l, scopes, contractorMap)).length,
+    subcontracted: lines.filter((l) => subcontractedFilter.filter(l, scopes, contractorMap)).length,
     done: doneCount,
     zone: new Set(lines.map((l) => l.event_zone || "No Zone")).size,
   };
@@ -605,7 +605,6 @@ export default function JobDetailPage() {
   function renderLineRow(line: QuoteLine) {
     const config = getCategoryConfig(line.category);
     const lineIsDone = isDone(line);
-    const isAutoCompleted = isAutoComplete(line);
     const isManuallyDone = isTruthy(line.interpretation_complete);
     const isUninterpreted = config.showAmber && !lineIsDone;
     const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
@@ -788,23 +787,15 @@ export default function JobDetailPage() {
           )}
         </td>
 
-        {/* Done — hybrid: shows auto-tick state + manual override */}
+        {/* Done — manual only */}
         <td className="px-3 py-2.5 text-center">
           {config.showDoneCheckbox ? (
             <button
               onClick={() => toggleInterpretation(line)}
-              title={
-                isAutoCompleted && !isManuallyDone
-                  ? "Auto-completed (click to manually override)"
-                  : isManuallyDone
-                  ? "Manually marked done (click to undo)"
-                  : "Mark as done"
-              }
+              title={isManuallyDone ? "Marked done (click to undo)" : "Mark as done"}
               className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
                 lineIsDone
-                  ? isAutoCompleted && !isManuallyDone
-                    ? "bg-starlight-green/60 border-starlight-green/60 text-white"
-                    : "bg-starlight-green border-starlight-green text-white"
+                  ? "bg-starlight-green border-starlight-green text-white"
                   : "border-subtle hover:border-starlight-amber"
               }`}
             >
@@ -1047,16 +1038,6 @@ export default function JobDetailPage() {
           {/* Filter pills */}
           <div className="flex flex-wrap gap-2 items-center">
             <Filter className="h-4 w-4 text-muted" />
-            <button
-              onClick={() => setActiveFilter(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                activeFilter === null
-                  ? "bg-navy text-white border-navy"
-                  : "bg-surface text-muted border-subtle hover:border-subtle"
-              }`}
-            >
-              All ({lines.length})
-            </button>
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -1079,6 +1060,16 @@ export default function JobDetailPage() {
               }`}
             >
               By Zone ({filterCounts.zone})
+            </button>
+            <button
+              onClick={() => setActiveFilter(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                activeFilter === null
+                  ? "bg-navy text-white border-navy"
+                  : "bg-surface text-muted border-subtle hover:border-subtle"
+              }`}
+            >
+              All ({lines.length})
             </button>
           </div>
 
