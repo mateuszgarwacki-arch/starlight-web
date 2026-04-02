@@ -748,6 +748,28 @@ export default function JobDetailPage() {
           )}
         </td>
 
+        {/* Scope — create or link */}
+        <td className="px-3 py-2.5 text-center">
+          {config.canCreateScope && !hasScope && (
+            <button
+              onClick={() => setScopeDialogLine(line)}
+              title="Create Scope Item from this line"
+              className="p-1 text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          )}
+          {hasScope && (
+            <a
+              href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
+              title="Open scope item"
+              className="inline-flex items-center text-starlight-green hover:text-starlight-green/80 transition-colors"
+            >
+              <FileText className="h-5 w-5" />
+            </a>
+          )}
+        </td>
+
         {/* PM Est — Level 1 inline + expand chevron */}
         <td className="px-3 py-2.5 text-right">
           {editingLineCell?.lineId === line.quote_line_id && editingLineCell.field === "pm_est_cost" ? (
@@ -807,31 +829,13 @@ export default function JobDetailPage() {
           )}
         </td>
 
-        {/* Actions */}
-        <td className="px-3 py-2.5">
-          {config.canCreateScope && !hasScope && (
-            <button
-              onClick={() => setScopeDialogLine(line)}
-              title="Create Scope Item from this line"
-              className="p-1.5 text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-          {hasScope && (
-            <a
-              href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
-              title="Open scope item"
-              className="inline-flex items-center text-starlight-green hover:text-starlight-green transition-colors"
-            >
-              <FileText className="h-4 w-4" />
-            </a>
-          )}
+        {/* Delete */}
+        <td className="px-2 py-2.5">
           {!hasScope && (
             <button
               onClick={() => handleDeleteLine(line)}
               title="Delete line"
-              className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
+              className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -858,9 +862,10 @@ export default function JobDetailPage() {
         <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Qty</th>
         <th className="px-3 py-2.5 font-medium text-muted w-24 text-right">Unit Price</th>
         <th className="px-3 py-2.5 font-medium text-muted w-24 text-right">Value</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Scope</th>
         <th className="px-3 py-2.5 font-medium text-muted w-28 text-right">PM Est</th>
         <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Done</th>
-        <th className="px-3 py-2.5 font-medium text-muted w-16"></th>
+        <th className="px-3 py-2.5 font-medium text-muted w-10"></th>
       </tr>
     </thead>
   );

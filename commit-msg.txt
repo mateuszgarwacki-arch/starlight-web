@@ -1,1 +1,1 @@
-Crew: timestamps on time entries. Mobile: auto-stop open WO entries on START/JOIN  
+Move Scope column between Value and PM Est, named header, bigger icons  
