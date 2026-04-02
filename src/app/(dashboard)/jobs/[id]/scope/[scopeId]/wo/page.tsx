@@ -578,12 +578,10 @@ export default function ScopeWorkOrdersPage() {
   (materials || []).forEach((m) => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
 
   // Length-aware row total
+  // unit_cost is ALWAYS per-unit: if unit=Metre, cost is per metre; if unit=Length, cost is per length
   const bomRowTotal = (row: BomRow) => {
     const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
     const qty = row.quantity || 0;
-    if (row.unit === "Length" && row.material_id && stdLengthMap[row.material_id]) {
-      return qty * (stdLengthMap[row.material_id] / 1000) * cost;
-    }
     return qty * cost;
   };
 
@@ -1087,7 +1085,22 @@ export default function ScopeWorkOrdersPage() {
                                       {canToggle ? (
                                         <div>
                                           <button
-                                            onClick={() => updateBomField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
+                                            onClick={async () => {
+                                              const stdLenM = stdLen! / 1000;
+                                              const currentCost = row.actual_unit_cost ?? row.unit_cost ?? 0;
+                                              const currentQty = row.quantity || 0;
+                                              if (isLengthMode) {
+                                                // Length → Metre: qty × stdLen, cost ÷ stdLen
+                                                await updateBomField(row.bom_id, "unit", "Metre");
+                                                if (currentQty) await updateBomField(row.bom_id, "quantity", Math.round(currentQty * stdLenM * 100) / 100);
+                                                if (currentCost) await updateBomField(row.bom_id, "unit_cost", Math.round((currentCost / stdLenM) * 100) / 100);
+                                              } else {
+                                                // Metre → Length: qty ÷ stdLen (ceil for whole lengths), cost × stdLen
+                                                await updateBomField(row.bom_id, "unit", "Length");
+                                                if (currentQty) await updateBomField(row.bom_id, "quantity", Math.ceil(currentQty / stdLenM));
+                                                if (currentCost) await updateBomField(row.bom_id, "unit_cost", Math.round(currentCost * stdLenM * 100) / 100);
+                                              }
+                                            }}
                                             className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-surface-mid text-muted border-subtle hover:bg-surface-hi")}
                                             title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
                                           >
@@ -1095,7 +1108,7 @@ export default function ScopeWorkOrdersPage() {
                                             <span className="text-[9px] text-muted">⇄</span>
                                           </button>
                                           {isLengthMode && (
-                                            <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                                            <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m · {formatCurrency(cost / (stdLen! / 1000))}/m</p>
                                           )}
                                         </div>
                                       ) : (

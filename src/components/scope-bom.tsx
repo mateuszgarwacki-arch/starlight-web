@@ -128,13 +128,10 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
   const stdLengthMap: Record<number, number> = {};
   (materials || []).forEach((m) => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
 
-  // Compute row total — handles "Length" mode: qty × (stdLen_mm / 1000) × unit_cost
+  // Compute row total — unit_cost is always per-unit (per metre, per length, per sheet)
   const rowTotal = (row: WoBom) => {
     const cost = row.actual_unit_cost ?? row.unit_cost ?? 0;
     const qty = row.quantity || 0;
-    if (row.unit === "Length" && row.material_id && stdLengthMap[row.material_id]) {
-      return qty * (stdLengthMap[row.material_id] / 1000) * cost;
-    }
     return qty * cost;
   };
 
@@ -205,7 +202,22 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                     <td className="py-1.5 px-2">
                       {canToggle ? (
                         <button
-                          onClick={() => updateField(row.bom_id, "unit", isLengthMode ? "Metre" : "Length")}
+                          onClick={async () => {
+                            const stdLenM = stdLen! / 1000;
+                            const currentCost = row.actual_unit_cost ?? row.unit_cost ?? 0;
+                            const currentQty = row.quantity || 0;
+                            if (isLengthMode) {
+                              // Length → Metre
+                              await updateField(row.bom_id, "unit", "Metre");
+                              if (currentQty) await updateField(row.bom_id, "quantity", Math.round(currentQty * stdLenM * 100) / 100);
+                              if (currentCost) await updateField(row.bom_id, "unit_cost", Math.round((currentCost / stdLenM) * 100) / 100);
+                            } else {
+                              // Metre → Length
+                              await updateField(row.bom_id, "unit", "Length");
+                              if (currentQty) await updateField(row.bom_id, "quantity", Math.ceil(currentQty / stdLenM));
+                              if (currentCost) await updateField(row.bom_id, "unit_cost", Math.round(currentCost * stdLenM * 100) / 100);
+                            }
+                          }}
                           className={"inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border transition-colors " + (isLengthMode ? "bg-navy/10 text-navy border-navy/20 hover:bg-navy/20" : "bg-surface-mid text-muted border-subtle hover:bg-surface-hi")}
                           title={isLengthMode ? `Switch to metres (std length: ${stdLen}mm)` : `Switch to lengths of ${stdLen}mm`}
                         >
@@ -218,7 +230,7 @@ export function ScopeBom({ scopeItemId, jobId }: ScopeBomProps) {
                           className="w-16 text-sm text-muted bg-transparent border-0 focus:outline-none focus:bg-surface-dim rounded" />
                       )}
                       {isLengthMode && (
-                        <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m</p>
+                        <p className="text-[9px] text-muted mt-0.5">{row.quantity || 0} × {(stdLen! / 1000).toFixed(1)}m = {((row.quantity || 0) * stdLen! / 1000).toFixed(1)}m · {formatCurrency(cost / (stdLen! / 1000))}/m</p>
                       )}
                     </td>
                     <td className="py-1.5 px-2 text-right">

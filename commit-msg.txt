@@ -1,1 +1,8 @@
-Fix: dark number input spinners  
+Fix: BOM cost double-counting in Length mode  
+  
+Root cause: bomRowTotal multiplied by stdLen when unit_cost was already per-length  
+- Simplified bomRowTotal: total = qty x unit_cost (always, no stdLen multiply)  
+- Toggle now converts both qty AND unit_cost when switching Metre/Length  
+- Subtitle shows per-metre reference: \"39 x 4.8m = 187.2m - œ1.75/m\"  
+- Fixed in both wo/page.tsx and scope-bom.tsx  
+- Matches SQL views which already use qty x NZ(actual_unit_cost, unit_cost)  
