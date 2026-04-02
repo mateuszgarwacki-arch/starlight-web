@@ -1450,26 +1450,94 @@ UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINIS
 - [x] **Subtitle enhanced**: Length mode shows per-metre reference (e.g. "£1.75/m")
 - [x] Fixed in both wo/page.tsx and scope-bom.tsx
 
+#### Traveller Print Preview ✔
+- [x] `.traveller-page` forced light on screen (not just @media print)
+- [x] All surface tokens mapped to white/light-gray inside traveller
+- [x] Text tokens mapped to dark equivalents (foreground→#1A1A2E, muted→#555)
+- [x] BOM table header, task description, painting notes all readable
+
+#### Scope BOM: Stock/Order Checkboxes ✔
+- [x] Order checkbox added to scope-bom.tsx (was missing, WO page had it)
+- [x] Stock + Order checkboxes added to material rows in job-items-table.tsx
+- [x] Stock check auto-clears Order; Order disabled when Stock checked
+- [x] Badge flips Material→Stock (amber) based on from_stock state
+- [x] from_stock + needs_ordering fetched in BOM query
+
+#### Auto-tick Removed / Default Filter ✔
+- [x] Auto-tick logic (`isAutoComplete`) deleted entirely
+- [x] Done = manual only (`interpretation_complete` field)
+- [x] New "To Do" filter: workshop categories not yet marked done (default on page load)
+- [x] Filter order: To Do | Workshop | Provisional | Subcontracted | Done | By Zone | All
+
+#### Install (Materials) Category ✔
+- [x] New category: "Install (Materials)" — install items that need materials/prep
+- [x] Plain "Install" changed: no scope creation, no amber highlight, not in To Do
+- [x] "Install (Materials)": scope creation, amber, appears in To Do filter
+- [x] SQL: new QUOTE_LINE_CATEGORY lookup value needed
+
+#### Crew Page: Time Entry Timestamps ✔
+- [x] Start → end times shown below date (e.g. "09:15 → 13:30")
+- [x] Open entries show start time only
+
+#### Mobile: Auto-Stop Open WO Entries ✔
+- [x] `autoStopOpenEntries()` on START and JOIN
+- [x] Stops open time entries on OTHER work orders for same freelancer
+- [x] Hours = elapsed rounded to 0.5h, costed at day rate
+- [x] Flag note: "Auto-stopped: started another WO"
+- [x] Ad-hoc tasks still auto-closed separately
+
+#### Scope Column Repositioned ✔
+- [x] Scope icon moved between Value and PM Est columns
+- [x] Named "Scope" column header
+- [x] Icons bumped to h-5 w-5 (was h-4 w-4)
+- [x] Delete button moved to own slim column at end
+
+#### WO Page: Job Overview Link ✔
+- [x] "Job Overview" link added next to "Back to Scope Item"
+- [x] Separated by | divider
+
+#### Orders Panel: Scope Names on All Items ✔
+- [x] Resolves scope names through two paths: direct scope_item_id OR work_order_id → scope
+- [x] All order items now show scope context
+
 ### New/Modified Files (Session 18)
 | File | Purpose |
 |------|--------|
-| `tailwind.config.ts` | Dark theme token system (base, surface tiers, foreground, muted, faint, subtle, starlight.pink) |
-| `src/app/globals.css` | Dark body, dark badge/card/input variants, print CSS hardening, number spinner fix |
-| `src/components/sidebar.tsx` | Full rewrite for dark theme (bg-base, navy active, pink accents) |
-| `src/components/floating-action-button.tsx` | text-base on amber button for contrast |
+| `tailwind.config.ts` | Dark theme token system |
+| `src/app/globals.css` | Dark body, inputs, traveller light override, spinner fix |
+| `src/components/sidebar.tsx` | Full rewrite for dark theme |
+| `src/components/floating-action-button.tsx` | text-base on amber button |
 | `src/app/login/page.tsx` | bg-base |
 | `src/app/m/login/page.tsx` | bg-base |
 | `src/app/traveller/page.tsx` | Toolbar bg-base, print button contrast |
-| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | BOM cost fix: simplified bomRowTotal, smart toggle |
-| `src/components/scope-bom.tsx` | BOM cost fix: simplified rowTotal, smart toggle |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Auto-tick removed, To Do filter, Install (Materials), Scope column repositioned |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | BOM cost fix, smart toggle, Job Overview link |
+| `src/components/scope-bom.tsx` | BOM cost fix, smart toggle, Order checkbox |
+| `src/components/job-items-table.tsx` | Stock/Order checkboxes on material rows |
+| `src/components/job-orders-panel.tsx` | Scope name resolution via WO chain |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | Time entry timestamps |
+| `src/app/m/wo/[woId]/page.tsx` | Auto-stop open WO entries on START/JOIN |
 | 64 .tsx files | Batch color token migration |
+
+### SQL to Run (Session 18)
+```sql
+INSERT INTO tbl_master_lookups (category, lookup_value, sort_order)
+SELECT 'QUOTE_LINE_CATEGORY', 'Install (Materials)', COALESCE(MAX(sort_order), 0) + 1
+FROM tbl_master_lookups
+WHERE category = 'QUOTE_LINE_CATEGORY';
+```
 
 ### Conventions Added (Session 18)
 - **unit_cost is ALWAYS per-unit**: total = qty × unit_cost regardless of unit field. No stdLen multiplication in JS
 - **Toggle converts both qty AND unit_cost**: total stays constant across modes
 - **Dark theme tokens**: bg-surface (cards), bg-base (page), text-foreground (primary), text-muted (secondary), text-faint (tertiary), border-subtle
-- **Print pages stay light**: .traveller-page * gets forced dark-on-white via @media print
+- **Print pages stay light**: .traveller-page forced light on screen AND print via CSS overrides in globals.css
 - **Number input spinners**: `filter: invert(0.7)` on ::-webkit-inner/outer-spin-button for dark mode
+- **Done = manual only**: no auto-tick. `isDone()` checks only `interpretation_complete`
+- **Default filter is To Do**: workshop categories not yet done. "All" is last
+- **Install vs Install (Materials)**: plain Install = no prep needed. Install (Materials) = needs scope/ordering
+- **Auto-stop WO entries**: when freelancer START/JOIN a new WO, open entries on other WOs auto-stop with elapsed hours + flag note
+- **Orders panel scope resolution**: resolves through `scope_item_id` directly OR `work_order_id` → `tbl_work_orders.scope_item_id`
 
 ### Conventions Added (Session 17)
 - **Recent jobs strip**: `sessionStorage`-based, session-scoped. `recordJobVisit()` from job/scope/WO pages. Strip hidden on job pages

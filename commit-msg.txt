@@ -1,1 +1,1 @@
-Orders panel: show scope name on all items (resolves through WO chain too)  
+TRACKER + schema: Session 18 wrap-up  
