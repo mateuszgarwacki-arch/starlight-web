@@ -1,1 +1,1 @@
-Scope Inventory: include WO BOM materials with color-coded dots  
+Fix BOM query: fetch WO materials by work_order_id for older rows missing scope_item_id  

@@ -416,7 +416,7 @@ export default function ScopeDetailPage() {
                     </div>
                   </div>
                 ))}
-                {inventory.woBom.filter((r: any) => !r.stock_item_id && !r.job_item_id).map((row: any) => {
+                {inventory.woBom.filter((r: any) => !r.job_item_id).map((row: any) => {
                   const ci = row.wo_color_idx ?? 0;
                   return (
                     <div key={`wbom-${row.bom_id}`} className="px-3 py-2 flex items-center gap-2">

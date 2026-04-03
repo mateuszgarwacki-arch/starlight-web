@@ -173,28 +173,38 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     // ============================================================
 
     const loadAll = useCallback(async () => {
-      const [woRes, freelancerRes, matRes, itemsRes, juncRes, allBomRes] = await Promise.all([
+      const [woRes, freelancerRes, matRes, itemsRes, juncRes] = await Promise.all([
         supabase.from("qry_wo_phase_ordered").select("*").eq("scope_item_id", scopeId),
         supabase.from("tbl_freelancers").select("*").eq("active", true).order("freelancer_name"),
         supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost, material_category, standard_length").eq("active", true).order("material_name"),
         supabase.from("qry_jobitems_withcoverage").select("*").eq("scope_item_id", scopeId).order("item_id"),
         supabase.from("tbl_jobitem_workorder").select("job_item_id, work_order_id"),
-        supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).order("bom_id"),
       ]);
+
+      // Fetch BOM: scope-level rows + WO-linked rows (older rows may lack scope_item_id)
+      const woIds = (woRes.data || []).map((w: WORow) => w.work_order_id);
+      const bomQueries = [
+        supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id"),
+      ];
+      if (woIds.length > 0) {
+        bomQueries.push(supabase.from("tbl_wo_bom").select("*").in("work_order_id", woIds).order("bom_id"));
+      }
+      const bomResults = await Promise.all(bomQueries);
+      const allBomData = [...(bomResults[0].data || []), ...(bomResults[1]?.data || [])] as BomRow[];
 
       if (freelancerRes.data) setFreelancers(freelancerRes.data as Freelancer[]);
       if (matRes.data) setMaterials(matRes.data);
       if (itemsRes.data) setJobItems(itemsRes.data as JobItemRow[]);
 
       // Filter junctions to WOs in this scope
-      const scopeWoIds = new Set((woRes.data || []).map((w: WORow) => w.work_order_id));
+      const scopeWoIds = new Set(woIds);
       const filteredJunctions = (juncRes.data || []).filter((j: any) => scopeWoIds.has(j.work_order_id));
       setJunctions(filteredJunctions);
 
       // Split BOM: scope-level (no WO) vs WO-linked
       const sBom: typeof scopeBomRows = [];
       const wBom: BomRow[] = [];
-      for (const b of (allBomRes.data || []) as BomRow[]) {
+      for (const b of allBomData) {
         if (!b.work_order_id) {
           sBom.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
         } else {
