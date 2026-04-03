@@ -1,1 +1,1 @@
-Add Material button restored, Scope Inventory panel in left column with color-coded WO dots  
+Scope Inventory: include WO BOM materials with color-coded dots  

@@ -60,7 +60,7 @@ export default function ScopeDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [costRefreshKey, setCostRefreshKey] = useState(0);
   const [expandWoId, setExpandWoId] = useState<number | null>(null);
-  const [inventory, setInventory] = useState<{ items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[] } | null>(null);
+  const [inventory, setInventory] = useState<{ items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[]; woBom: any[] } | null>(null);
   const woRef = useRef<WorkOrdersPanelRef>(null);
   const router = useRouter();
 
@@ -381,7 +381,7 @@ export default function ScopeDetailPage() {
         {/* Left: Scope Inventory + Prompt Engine */}
         <div className="lg:col-span-1 space-y-4">
           {/* Scope Inventory */}
-          {inventory && (inventory.items.length > 0 || inventory.scopeBom.length > 0) && (
+          {inventory && (inventory.items.length > 0 || inventory.scopeBom.length > 0 || inventory.woBom.length > 0) && (
             <div className="card">
               <div className="px-3 py-2.5 border-b border-subtle">
                 <h3 className="text-xs font-semibold text-navy uppercase tracking-wider">Scope Inventory</h3>
@@ -416,6 +416,18 @@ export default function ScopeDetailPage() {
                     </div>
                   </div>
                 ))}
+                {inventory.woBom.filter((r: any) => !r.stock_item_id && !r.job_item_id).map((row: any) => {
+                  const ci = row.wo_color_idx ?? 0;
+                  return (
+                    <div key={`wbom-${row.bom_id}`} className="px-3 py-2 flex items-center gap-2">
+                      <div className="shrink-0 w-5"><span className={`w-2 h-2 rounded-full ${WO_COLORS[ci].dot} inline-block`} /></div>
+                      <span className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 bg-surface-mid text-muted"><Wrench className="h-2.5 w-2.5 inline" /></span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground truncate">{row.quantity || 1}× {row.item_description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

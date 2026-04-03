@@ -100,7 +100,7 @@ interface WorkOrdersPanelProps {
   initialExpandId?: number | null;
   onCostChange?: () => void;
   onRequestCreateWO?: (itemIds: number[]) => void;
-  onInventoryUpdate?: (data: { items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[] }) => void;
+  onInventoryUpdate?: (data: { items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[]; woBom: any[] }) => void;
 }
 
 // ============================================================
@@ -257,9 +257,9 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
         const sorted = [...workOrders].sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
         const colorMap: Record<number, number> = {};
         sorted.forEach((wo, idx) => { colorMap[wo.work_order_id] = idx % WO_COLORS.length; });
-        onInventoryUpdate?.({ items: jobItems, junctions, woColorMap: colorMap, sortedWOs: sorted, scopeBom: scopeBomRows });
+        onInventoryUpdate?.({ items: jobItems, junctions, woColorMap: colorMap, sortedWOs: sorted, scopeBom: scopeBomRows, woBom: allBomRows });
       }
-    }, [loading, jobItems, junctions, workOrders, scopeBomRows]);
+    }, [loading, jobItems, junctions, workOrders, scopeBomRows, allBomRows]);
 
     useEffect(() => { loadAll(); }, [loadAll]);
     useEffect(() => { if (initialExpandId) setExpandedWO(initialExpandId); }, [initialExpandId]);
