@@ -250,6 +250,16 @@ export default function ScopeWorkOrdersPage() {
     loadAll();
   }, [loadAll]);
 
+  // Auto-expand WO from query param (e.g. after creating a new WO)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const expandId = params.get("expand");
+    if (expandId) {
+      const id = Number(expandId);
+      if (id) setExpandedWO(id);
+    }
+  }, []);
+
   // Record visit for recent jobs strip
   useEffect(() => {
     if (scope) recordJobVisit({

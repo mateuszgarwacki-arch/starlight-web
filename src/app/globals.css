@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     --base: #0c0d14;
     --surface: #111219;
     --brand-blue: #7BA4D4;
@@ -95,6 +96,7 @@
    Traveller — always renders light (print preview on screen)
    ============================================================ */
 .traveller-page {
+  color-scheme: light;
   background: white !important;
   color: #1A1A2E !important;
 }

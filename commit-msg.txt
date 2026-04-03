@@ -1,1 +1,1 @@
-TRACKER + schema: Session 18 wrap-up  
+Dark theme: color-scheme fix + description rows doubled + WO nav on create  

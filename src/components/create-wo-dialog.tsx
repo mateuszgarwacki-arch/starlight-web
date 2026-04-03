@@ -18,7 +18,7 @@ interface CreateWODialogProps {
   defaultComplexity?: string | null;
   defaultFinish?: string | null;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (workOrderId: number) => void;
 }
 
 export function CreateWODialog({
@@ -149,7 +149,7 @@ export function CreateWODialog({
     }
 
     setSaving(false);
-    onCreated();
+    onCreated(wo.work_order_id);
   };
 
   const available = allActivities.filter(

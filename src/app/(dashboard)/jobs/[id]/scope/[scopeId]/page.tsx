@@ -146,11 +146,10 @@ export default function ScopeDetailPage() {
     toast.success(`Added: ${stockDesc.substring(0, 50)}`);
   };
 
-  const handleWOCreated = () => {
+  const handleWOCreated = (workOrderId: number) => {
     setShowWODialog(false);
     setSelectedItemIds([]);
-    setRefreshKey((k) => k + 1);
-    loadData();
+    router.push(`/jobs/${jobId}/scope/${scopeId}/wo?expand=${workOrderId}`);
   };
 
   const deleteScope = async () => {
@@ -344,7 +343,7 @@ export default function ScopeDetailPage() {
             }
             onFocus={() => presenceSetEditing("description")}
             onBlur={(e) => { presenceSetEditing(null); updateField("description", e.target.value || null); }}
-            rows={2}
+            rows={4}
             className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none"
             placeholder="Describe the scope item..."
           />
