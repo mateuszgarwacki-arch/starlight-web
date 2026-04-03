@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate } from "@/lib/utils";
@@ -12,7 +12,8 @@ import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
-import { ArrowLeft, Hammer, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
+import { WorkOrdersPanel, type WorkOrdersPanelRef } from "@/components/work-orders-panel";
+import { ArrowLeft, Hammer, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
@@ -58,6 +59,9 @@ export default function ScopeDetailPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [costRefreshKey, setCostRefreshKey] = useState(0);
+  const [expandWoId, setExpandWoId] = useState<number | null>(null);
+  const woRef = useRef<WorkOrdersPanelRef>(null);
   const router = useRouter();
 
   // Presence — show who else is viewing this scope item
@@ -84,6 +88,13 @@ export default function ScopeDetailPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Auto-expand WO from query param (e.g. from external links)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("expand");
+    if (id) setExpandWoId(Number(id));
+  }, []);
 
   // Record visit for recent jobs strip
   useEffect(() => {
@@ -146,10 +157,14 @@ export default function ScopeDetailPage() {
     toast.success(`Added: ${stockDesc.substring(0, 50)}`);
   };
 
-  const handleWOCreated = (workOrderId: number) => {
+  const handleWOCreated = async (workOrderId: number) => {
     setShowWODialog(false);
     setSelectedItemIds([]);
-    router.push(`/jobs/${jobId}/scope/${scopeId}/wo?expand=${workOrderId}`);
+    setRefreshKey((k) => k + 1);
+    loadData();
+    // Wait a tick for the WO panel to refresh, then expand
+    await woRef.current?.refresh();
+    woRef.current?.expandWO(workOrderId);
   };
 
   const deleteScope = async () => {
@@ -358,9 +373,9 @@ export default function ScopeDetailPage() {
       <ScopeOptions scopeItemId={scope.scope_item_id} jobId={jobId} quotedValue={scope.line_value || undefined} />
 
       {/* Cost analysis */}
-      <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} />
+      <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} refreshKey={costRefreshKey} />
 
-      {/* Main content: prompt engine + job items + WO link */}
+      {/* Main content: prompt engine + job items */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Left: Prompt Engine */}
         <div className="lg:col-span-1">
@@ -368,21 +383,6 @@ export default function ScopeDetailPage() {
             categoryId={scope.category_id}
             onAddItem={handleAddFromPrompt}
           />
-
-          {/* Work Orders link card */}
-          <Link
-            href={`/jobs/${jobId}/scope/${scopeId}/wo`}
-            className="card px-4 py-4 mt-4 flex items-center justify-between hover:shadow-md transition-shadow block"
-          >
-            <div className="flex items-center gap-2">
-              <Hammer className="h-4 w-4 text-navy" />
-              <div>
-                <p className="text-sm font-medium text-navy">Work Orders</p>
-                <p className="text-xs text-muted">{woCount} WOs</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-faint" />
-          </Link>
         </div>
 
         {/* Right: Job Items table */}
@@ -408,6 +408,16 @@ export default function ScopeDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Work Orders — inline panel */}
+      <WorkOrdersPanel
+        ref={woRef}
+        jobId={jobId}
+        scopeId={scopeId}
+        scope={scope as any}
+        initialExpandId={expandWoId}
+        onCostChange={() => setCostRefreshKey((k) => k + 1)}
+      />
 
       {/* Cancel Dialog */}
       {showCancelDialog && (

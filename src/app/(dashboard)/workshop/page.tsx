@@ -694,7 +694,7 @@ export default function WorkshopPage() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Time Entries</h3>
                       <Link
-                        href={`/jobs/${wo.job_id}/scope/${wo.scope_item_id}/wo`}
+                        href={`/jobs/${wo.job_id}/scope/${wo.scope_item_id}?expand=${wo.work_order_id}`}
                         className="text-xs text-starlight-blue hover:text-navy font-medium"
                       >
                         Open in Work Orders →

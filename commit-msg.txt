@@ -1,1 +1,1 @@
-Dark theme: color-scheme fix + description rows doubled + WO nav on create  
+Merge WO page into scope: inline WorkOrdersPanel, /wo route becomes redirect, update 3 external links  

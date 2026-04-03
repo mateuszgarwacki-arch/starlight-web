@@ -1283,7 +1283,7 @@ export default function JobDetailPage() {
             woData.map((wo: any) => (
               <Link
                 key={wo.work_order_id}
-                href={`/jobs/${jobId}/scope/${wo.scope_item_id}/wo`}
+                href={`/jobs/${jobId}/scope/${wo.scope_item_id}?expand=${wo.work_order_id}`}
                 className="card px-5 py-3.5 flex items-center gap-4 hover:shadow-md transition-shadow block"
               >
                 <div className="flex flex-col items-center w-12 shrink-0">

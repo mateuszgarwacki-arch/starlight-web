@@ -122,7 +122,7 @@ export function CompletedWorkTab() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {jobItems.map(item => (
-                <Link key={item.work_order_id} href={`/jobs/${item.job_id}/scope/${item.scope_item_id}/wo`}
+                <Link key={item.work_order_id} href={`/jobs/${item.job_id}/scope/${item.scope_item_id}?expand=${item.work_order_id}`}
                   className="card overflow-hidden hover:shadow-md transition-shadow group">
                   {/* Photo */}
                   <div className="aspect-[4/3] bg-surface-mid relative overflow-hidden">
