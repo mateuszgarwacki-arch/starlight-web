@@ -1,1 +1,1 @@
-Merge WO page into scope: inline WorkOrdersPanel, /wo route becomes redirect, update 3 external links  
+Unified Build Plan: WO-centric layout with color-coded item chips, unlinked items section, consolidated materials panel  

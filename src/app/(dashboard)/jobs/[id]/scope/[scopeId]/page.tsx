@@ -7,13 +7,12 @@ import { formatDate } from "@/lib/utils";
 import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { PromptPanel } from "@/components/prompt-panel";
-import { JobItemsTable } from "@/components/job-items-table";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef } from "@/components/work-orders-panel";
-import { ArrowLeft, Hammer, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
@@ -155,6 +154,7 @@ export default function ScopeDetailPage() {
     }
     setRefreshKey((k) => k + 1);
     toast.success(`Added: ${stockDesc.substring(0, 50)}`);
+    woRef.current?.refresh();
   };
 
   const handleWOCreated = async (workOrderId: number) => {
@@ -375,7 +375,7 @@ export default function ScopeDetailPage() {
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} refreshKey={costRefreshKey} />
 
-      {/* Main content: prompt engine + job items */}
+      {/* Main content: prompt engine + unified build plan */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Left: Prompt Engine */}
         <div className="lg:col-span-1">
@@ -385,39 +385,19 @@ export default function ScopeDetailPage() {
           />
         </div>
 
-        {/* Right: Job Items table */}
+        {/* Right: Unified Work Orders + Items panel */}
         <div className="lg:col-span-3">
-          <JobItemsTable
-            key={refreshKey}
+          <WorkOrdersPanel
+            ref={woRef}
             jobId={jobId}
-            scopeItemId={scopeId}
-            onSelectionChange={setSelectedItemIds}
+            scopeId={scopeId}
+            scope={scope as any}
+            initialExpandId={expandWoId}
+            onCostChange={() => setCostRefreshKey((k) => k + 1)}
+            onRequestCreateWO={(ids) => { setSelectedItemIds(ids); setShowWODialog(true); }}
           />
-
-          {/* Create WO button — appears when items selected */}
-          {selectedItemIds.length > 0 && (
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={() => setShowWODialog(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors"
-              >
-                <Hammer className="h-4 w-4" />
-                Create Work Order from {selectedItemIds.length} Item{selectedItemIds.length > 1 ? "s" : ""}
-              </button>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Work Orders — inline panel */}
-      <WorkOrdersPanel
-        ref={woRef}
-        jobId={jobId}
-        scopeId={scopeId}
-        scope={scope as any}
-        initialExpandId={expandWoId}
-        onCostChange={() => setCostRefreshKey((k) => k + 1)}
-      />
 
       {/* Cancel Dialog */}
       {showCancelDialog && (
