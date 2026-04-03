@@ -1,1 +1,1 @@
-Promote toggle: clickable button on bespoke items to mark for stock promotion  
+Perf: filter junctions server-side, parallel BOM+activity fetch, single lookup query  

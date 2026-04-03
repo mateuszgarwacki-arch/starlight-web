@@ -175,63 +175,66 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     // ============================================================
 
     const loadAll = useCallback(async () => {
-      const [woRes, freelancerRes, matRes, itemsRes, juncRes] = await Promise.all([
+      // Phase 1: core data (no dependency on WO IDs)
+      const [woRes, freelancerRes, matRes, itemsRes] = await Promise.all([
         supabase.from("qry_wo_phase_ordered").select("*").eq("scope_item_id", scopeId),
         supabase.from("tbl_freelancers").select("*").eq("active", true).order("freelancer_name"),
         supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost, material_category, standard_length").eq("active", true).order("material_name"),
         supabase.from("qry_jobitems_withcoverage").select("*").eq("scope_item_id", scopeId).order("item_id"),
-        supabase.from("tbl_jobitem_workorder").select("job_item_id, work_order_id"),
       ]);
-
-      // Fetch BOM: scope-level rows + WO-linked rows (older rows may lack scope_item_id)
-      const woIds = (woRes.data || []).map((w: WORow) => w.work_order_id);
-      const bomQueries = [
-        supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id"),
-      ];
-      if (woIds.length > 0) {
-        bomQueries.push(supabase.from("tbl_wo_bom").select("*").in("work_order_id", woIds).order("bom_id"));
-      }
-      const bomResults = await Promise.all(bomQueries);
-      const allBomData = [...(bomResults[0].data || []), ...(bomResults[1]?.data || [])] as BomRow[];
 
       if (freelancerRes.data) setFreelancers(freelancerRes.data as Freelancer[]);
       if (matRes.data) setMaterials(matRes.data);
       if (itemsRes.data) setJobItems(itemsRes.data as JobItemRow[]);
 
-      // Filter junctions to WOs in this scope
-      const scopeWoIds = new Set(woIds);
-      const filteredJunctions = (juncRes.data || []).filter((j: any) => scopeWoIds.has(j.work_order_id));
-      setJunctions(filteredJunctions);
+      // Phase 2: queries that depend on WO IDs
+      const woIds = (woRes.data || []).map((w: WORow) => w.work_order_id);
 
-      // Split BOM: scope-level (no WO) vs WO-linked
+      let juncData: any[] = [];
+      let scopeBomData: BomRow[] = [];
+      let woBomData: BomRow[] = [];
+      let actData: any[] = [];
+
+      if (woIds.length > 0) {
+        const [juncRes, scopeBomRes, woBomRes, actRes] = await Promise.all([
+          supabase.from("tbl_jobitem_workorder").select("job_item_id, work_order_id").in("work_order_id", woIds),
+          supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id"),
+          supabase.from("tbl_wo_bom").select("*").in("work_order_id", woIds).order("bom_id"),
+          supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
+        ]);
+        juncData = juncRes.data || [];
+        scopeBomData = (scopeBomRes.data || []) as BomRow[];
+        woBomData = (woBomRes.data || []) as BomRow[];
+        actData = actRes.data || [];
+      } else {
+        // No WOs — just get scope-level BOM
+        const { data } = await supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id");
+        scopeBomData = (data || []) as BomRow[];
+      }
+
+      setJunctions(juncData);
+
+      // Split scope BOM
       const sBom: typeof scopeBomRows = [];
-      const wBom: BomRow[] = [];
-      for (const b of allBomData) {
-        if (!b.work_order_id) {
-          sBom.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
-        } else {
-          wBom.push(b);
-        }
+      for (const b of scopeBomData) {
+        sBom.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
       }
       setScopeBomRows(sBom);
 
-      // Enrich WOs with activity labels
+      // Enrich WOs with activity labels (actData already fetched in phase 2)
       if (woRes.data && woRes.data.length > 0) {
-        const woIds = woRes.data.map((w: WORow) => w.work_order_id);
-        const { data: actData } = await supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence");
-        const activityIds = actData ? [...new Set(actData.map((a: { activity_id: number }) => a.activity_id))] : [];
+        const activityIds = actData.length > 0 ? [...new Set(actData.map((a: { activity_id: number }) => a.activity_id))] : [];
+        const verbIds = woRes.data.map((w: WORow) => w.activity_verb).filter((id: number | null): id is number => id !== null);
+        const allLookupIds = [...new Set([...activityIds, ...verbIds])];
+
         let lookupMap: Record<number, { lookup_value: string; phase_number: number | null }> = {};
-        if (activityIds.length > 0) {
-          const { data: lookups } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").in("lookup_id", activityIds);
+        if (allLookupIds.length > 0) {
+          const { data: lookups } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").in("lookup_id", allLookupIds);
           if (lookups) lookups.forEach((l: any) => { lookupMap[l.lookup_id] = { lookup_value: l.lookup_value || "", phase_number: l.phase_number }; });
         }
-        const verbIds = woRes.data.map((w: WORow) => w.activity_verb).filter((id: number | null): id is number => id !== null);
-        if (verbIds.length > 0) {
-          const { data: vl } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value, phase_number").in("lookup_id", verbIds);
-          if (vl) vl.forEach((l: any) => { if (!lookupMap[l.lookup_id]) lookupMap[l.lookup_id] = { lookup_value: l.lookup_value || "", phase_number: l.phase_number }; });
-        }
+
         const actByWO: Record<number, { activity_id: number; sequence: number }[]> = {};
-        if (actData) actData.forEach((a: any) => { if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = []; actByWO[a.work_order_id].push(a); });
+        actData.forEach((a: any) => { if (!actByWO[a.work_order_id]) actByWO[a.work_order_id] = []; actByWO[a.work_order_id].push(a); });
         const flMap: Record<number, string> = {};
         if (freelancerRes.data) (freelancerRes.data as Freelancer[]).forEach(f => { flMap[f.freelancer_id] = f.freelancer_name || "Unknown"; });
 
@@ -250,11 +253,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
         setWorkOrders(enriched);
 
-        // Enrich allBomRows with WO labels and color indices
         const sortedWOs = [...enriched].sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
         const woColorMap: Record<number, number> = {};
         sortedWOs.forEach((wo, idx) => { woColorMap[wo.work_order_id] = idx % WO_COLORS.length; });
-        setAllBomRows(wBom.map(b => ({ ...b, wo_label: enriched.find(w => w.work_order_id === b.work_order_id)?.activity_label, wo_color_idx: b.work_order_id ? woColorMap[b.work_order_id] : undefined })));
+        setAllBomRows(woBomData.map(b => ({ ...b, wo_label: enriched.find(w => w.work_order_id === b.work_order_id)?.activity_label, wo_color_idx: b.work_order_id ? woColorMap[b.work_order_id] : undefined })));
       } else {
         setWorkOrders([]);
         setAllBomRows([]);
