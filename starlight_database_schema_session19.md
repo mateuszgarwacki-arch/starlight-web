@@ -132,3 +132,29 @@ qry_cost_waterfall, qry_dash_quote_stats, qry_dash_upcoming_jobs, qry_dash_wo_st
 - **Install**: no scope creation, no amber, not in To Do. Just tick done when handled
 - **Install (Materials)**: scope creation, amber highlight, appears in To Do. Same workflow as Workshop
 - **Done = manual only**: `isDone()` checks only `interpretation_complete`. No auto-tick from scope/contractor existence
+
+
+### Scope Page Architecture (Session 19)
+- **WO page merged into scope page**: `/jobs/[id]/scope/[scopeId]/wo` is now a redirect to `/jobs/[id]/scope/[scopeId]?expand={woId}`
+- **WorkOrdersPanel** component: self-contained, ~900 lines. Loads WOs, job items, junctions, BOM, activities, freelancers, materials. Exposes ref: `refresh()`, `expandWO()`, `updateJobItem()`, `deleteJobItem()`
+- **Layout**: Left col (1/4) = editable Job Items + Prompt Panel. Right col (3/4) = Build Plan (unlinked items → WO cards → All Materials)
+- **Color coding**: 6-color palette (blue, green, amber, purple, rose, cyan) assigned by WO sequence. Item chips, WO borders, BOM tags, and inventory dots all match
+
+### RLS Policy Pattern (Session 19 — consolidated)
+- **Before**: ~150 overlapping policies (533 Supabase warnings). Two generations: old `{public}` role policies + new `{authenticated}` role policies both active
+- **After**: ~120 clean policies, ONE per (table, action). All use `TO authenticated` with `get_my_role()` CASE expressions
+- **Tier 1 (PM-only)**: tbl_business_settings, tbl_rate_card, tbl_quotes, tbl_quote_lines, tbl_quote_line_contractors, tbl_invoices, tbl_invoice_lines, tbl_invoice_allocations, tbl_suppliers, tbl_material_prices, tbl_material_aliases
+- **Tier 2 (role-filtered)**: tbl_work_orders (freelancers: Ready/In-Progress only), tbl_wo_time_entries (freelancers: own rows), tbl_freelancer_schedule (freelancers: own rows), tbl_freelancers (freelancers: own row), tbl_notifications (freelancers: own-triggered)
+- **Tier 3 (all read, PM write)**: all other tables. `USING (true)` for SELECT, `get_my_role() IN ('production_manager','admin')` for write
+- Scripts: `sql/rls-consolidation-drop.sql` + `sql/rls-consolidation-create.sql`
+
+### Index Changes (Session 19)
+- **Dropped duplicates**: idx_schedule_date, idx_schedule_freelancer_date, idx_quotelines_job, idx_scope_job
+- **Added 38 FK indexes**: covering all unindexed foreign keys across all tables
+- **Function search_path**: SET search_path = public on all 12 functions
+
+### Frontend Query Pattern (Session 19)
+- **Scope page loads in 2 phases**: Phase 1 (parallel): WOs + freelancers + materials + job items. Phase 2 (parallel, depends on WO IDs): junctions + scope BOM + WO BOM + activities
+- **Junctions filtered server-side** by WO IDs (was fetching ALL rows globally)
+- **Single combined lookup query** for activity IDs + verb IDs (was 2 sequential)
+- **BOM query split**: scope-level by `scope_item_id` (no WO) + WO-level by `work_order_id IN (ids)`. Handles older rows without `scope_item_id`
