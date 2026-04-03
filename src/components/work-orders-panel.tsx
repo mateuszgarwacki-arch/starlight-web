@@ -91,6 +91,8 @@ export const WO_COLORS = [
 export interface WorkOrdersPanelRef {
   refresh: () => Promise<void>;
   expandWO: (woId: number) => void;
+  updateJobItem: (itemId: number, field: string, value: any) => Promise<void>;
+  deleteJobItem: (itemId: number) => Promise<void>;
 }
 
 interface WorkOrdersPanelProps {
@@ -282,6 +284,8 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     useImperativeHandle(ref, () => ({
       refresh: loadAll,
       expandWO: (woId: number) => { setExpandedWO(woId); loadBOM(woId); loadLinkedItems(woId); },
+      updateJobItem: async (itemId: number, field: string, value: any) => { await updateJobItem(itemId, field, value); },
+      deleteJobItem: async (itemId: number) => { await deleteJobItem(itemId); },
     }));
 
     // ============================================================

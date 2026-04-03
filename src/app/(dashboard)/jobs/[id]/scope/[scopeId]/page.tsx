@@ -12,7 +12,7 @@ import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
-import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush, Wrench } from "lucide-react";
+import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
@@ -380,50 +380,65 @@ export default function ScopeDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Left: Scope Inventory + Prompt Engine */}
         <div className="lg:col-span-1 space-y-4">
-          {/* Scope Inventory */}
-          {inventory && (inventory.items.length > 0 || inventory.scopeBom.length > 0 || inventory.woBom.length > 0) && (
+          {/* Scope Inventory — editable job items */}
+          {inventory && inventory.items.length > 0 && (
             <div className="card">
               <div className="px-3 py-2.5 border-b border-subtle">
-                <h3 className="text-xs font-semibold text-navy uppercase tracking-wider">Scope Inventory</h3>
+                <h3 className="text-xs font-semibold text-navy uppercase tracking-wider">Job Items ({inventory.items.length})</h3>
               </div>
-              <div className="divide-y divide-subtle max-h-[50vh] overflow-y-auto">
+              <div className="divide-y divide-subtle max-h-[60vh] overflow-y-auto">
                 {inventory.items.map((item: any) => {
                   const itemWOs = inventory.junctions.filter((j: any) => j.job_item_id === item.item_id).map((j: any) => j.work_order_id);
                   const isStock = item.item_source === "stock" || item.item_source === "promoted";
+                  const hasWo = item.has_wo === "true";
+                  const isPromote = item.notes === "PROMOTE_TO_STOCK";
                   return (
-                    <div key={item.item_id} className="px-3 py-2 flex items-center gap-2">
-                      <div className="flex gap-0.5 shrink-0 w-5">
-                        {itemWOs.length > 0 ? itemWOs.map((woId: number) => {
-                          const ci = inventory.woColorMap[woId] ?? 0;
-                          return <span key={woId} className={`w-2 h-2 rounded-full ${WO_COLORS[ci].dot}`} />;
-                        }) : <span className="w-2 h-2 rounded-full bg-faint" title="Unassigned" />}
+                    <div key={item.item_id} className="px-3 py-2.5 space-y-1.5">
+                      {/* Row 1: Badge + WO dots + Description */}
+                      <div className="flex items-start gap-2">
+                        <span className={"inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-semibold rounded shrink-0 mt-0.5 " + (isStock ? "bg-starlight-amber/10 text-starlight-amber" : "bg-starlight-blue/10 text-starlight-blue")}>
+                          {isStock ? <><Warehouse className="h-2.5 w-2.5" />Stock</> : <><Paintbrush className="h-2.5 w-2.5" />Bespoke</>}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground font-medium leading-snug">{item.description || "Untitled"}</p>
+                          {item.stock_reference && <p className="text-[10px] font-mono text-muted mt-0.5">{item.stock_reference}</p>}
+                        </div>
+                        <div className="flex gap-0.5 shrink-0 mt-1">
+                          {itemWOs.length > 0 ? itemWOs.map((woId: number) => {
+                            const ci = inventory.woColorMap[woId] ?? 0;
+                            return <span key={woId} className={`w-2.5 h-2.5 rounded-full ${WO_COLORS[ci].dot}`} title={inventory.sortedWOs.find((w: any) => w.work_order_id === woId)?.activity_label || "WO"} />;
+                          }) : <span className="text-[9px] text-faint italic">no WO</span>}
+                        </div>
                       </div>
-                      <span className={"text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 " + (isStock ? "bg-starlight-amber/10 text-starlight-amber" : "bg-starlight-blue/10 text-starlight-blue")}>
-                        {isStock ? "S" : "B"}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-foreground truncate">{item.quantity && item.quantity > 1 ? `${item.quantity}× ` : ""}{item.description || "Untitled"}</p>
+                      {/* Row 2: Qty + Finish editable */}
+                      <div className="flex items-center gap-2 pl-1">
+                        <div className="flex items-center gap-1">
+                          <label className="text-[9px] text-faint">Qty</label>
+                          <input type="number" defaultValue={item.quantity ?? 1} min={1}
+                            onBlur={e => { const v = parseFloat(e.target.value) || null; woRef.current?.updateJobItem(item.item_id, "quantity", v); }}
+                            className="w-12 px-1.5 py-0.5 text-xs text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface" />
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <label className="text-[9px] text-faint shrink-0">Finish</label>
+                          <input type="text" defaultValue={item.finish_required || ""}
+                            onBlur={e => { const v = e.target.value.trim() || null; woRef.current?.updateJobItem(item.item_id, "finish_required", v); }}
+                            placeholder="—"
+                            className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface placeholder:text-faint" />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {inventory.scopeBom.map((row: any) => (
-                  <div key={`bom-${row.bom_id}`} className="px-3 py-2 flex items-center gap-2">
-                    <div className="shrink-0 w-5"><span className="w-2 h-2 rounded-full bg-faint inline-block" /></div>
-                    <span className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 bg-surface-mid text-muted"><Wrench className="h-2.5 w-2.5 inline" /></span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground truncate">{row.quantity}× {row.item_description}</p>
-                    </div>
-                  </div>
-                ))}
-                {inventory.woBom.filter((r: any) => !r.job_item_id).map((row: any) => {
-                  const ci = row.wo_color_idx ?? 0;
-                  return (
-                    <div key={`wbom-${row.bom_id}`} className="px-3 py-2 flex items-center gap-2">
-                      <div className="shrink-0 w-5"><span className={`w-2 h-2 rounded-full ${WO_COLORS[ci].dot} inline-block`} /></div>
-                      <span className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 bg-surface-mid text-muted"><Wrench className="h-2.5 w-2.5 inline" /></span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-foreground truncate">{row.quantity || 1}× {row.item_description}</p>
+                      {/* Row 3: Notes editable + delete */}
+                      <div className="flex items-center gap-1 pl-1">
+                        <input type="text" defaultValue={isPromote ? "" : (item.notes || "")}
+                          onBlur={e => { const v = e.target.value.trim() || null; woRef.current?.updateJobItem(item.item_id, "notes", v); }}
+                          placeholder="Add note..."
+                          className="flex-1 px-1.5 py-0.5 text-[10px] text-muted border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none bg-transparent placeholder:text-faint" />
+                        {isPromote && <span className="text-[8px] text-starlight-green font-semibold bg-starlight-green/10 px-1 py-0.5 rounded shrink-0">PROMOTE</span>}
+                        {!hasWo && (
+                          <button onClick={() => { if (confirm("Delete this item?")) woRef.current?.deleteJobItem(item.item_id); }}
+                            className="p-0.5 text-faint hover:text-starlight-red transition-colors shrink-0" title="Delete">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
