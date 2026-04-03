@@ -1,1 +1,1 @@
-Job Items panel: rich editable cards with qty, finish, notes, WO color dots. Materials removed from inventory.  
+Promote toggle: clickable button on bespoke items to mark for stock promotion  

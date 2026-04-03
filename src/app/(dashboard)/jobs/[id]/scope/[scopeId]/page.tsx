@@ -426,13 +426,21 @@ export default function ScopeDetailPage() {
                             className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface placeholder:text-faint" />
                         </div>
                       </div>
-                      {/* Row 3: Notes editable + delete */}
+                      {/* Row 3: Notes + promote toggle + delete */}
                       <div className="flex items-center gap-1 pl-1">
                         <input type="text" defaultValue={isPromote ? "" : (item.notes || "")}
-                          onBlur={e => { const v = e.target.value.trim() || null; woRef.current?.updateJobItem(item.item_id, "notes", v); }}
+                          onBlur={e => { const v = e.target.value.trim() || null; if (!isPromote) woRef.current?.updateJobItem(item.item_id, "notes", v); }}
                           placeholder="Add note..."
                           className="flex-1 px-1.5 py-0.5 text-[10px] text-muted border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none bg-transparent placeholder:text-faint" />
-                        {isPromote && <span className="text-[8px] text-starlight-green font-semibold bg-starlight-green/10 px-1 py-0.5 rounded shrink-0">PROMOTE</span>}
+                        {!isStock && (
+                          <button
+                            onClick={() => woRef.current?.updateJobItem(item.item_id, "notes", isPromote ? null : "PROMOTE_TO_STOCK")}
+                            className={"text-[8px] font-semibold px-1.5 py-0.5 rounded shrink-0 transition-colors " + (isPromote ? "bg-starlight-green/15 text-starlight-green hover:bg-starlight-green/25" : "bg-surface-mid text-faint hover:text-muted hover:bg-surface-hi")}
+                            title={isPromote ? "Remove from stock promotion" : "Promote to stock catalogue after build"}
+                          >
+                            → STOCK
+                          </button>
+                        )}
                         {!hasWo && (
                           <button onClick={() => { if (confirm("Delete this item?")) woRef.current?.deleteJobItem(item.item_id); }}
                             className="p-0.5 text-faint hover:text-starlight-red transition-colors shrink-0" title="Delete">
