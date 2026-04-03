@@ -11,8 +11,8 @@ import { CreateWODialog } from "@/components/create-wo-dialog";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
-import { WorkOrdersPanel, type WorkOrdersPanelRef } from "@/components/work-orders-panel";
-import { ArrowLeft, Trash2, AlertTriangle } from "lucide-react";
+import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
+import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush, Wrench } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
@@ -60,6 +60,7 @@ export default function ScopeDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [costRefreshKey, setCostRefreshKey] = useState(0);
   const [expandWoId, setExpandWoId] = useState<number | null>(null);
+  const [inventory, setInventory] = useState<{ items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[] } | null>(null);
   const woRef = useRef<WorkOrdersPanelRef>(null);
   const router = useRouter();
 
@@ -375,17 +376,57 @@ export default function ScopeDetailPage() {
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} refreshKey={costRefreshKey} />
 
-      {/* Main content: prompt engine + unified build plan */}
+      {/* Main content: inventory + prompt (left) | build plan (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        {/* Left: Prompt Engine */}
-        <div className="lg:col-span-1">
+        {/* Left: Scope Inventory + Prompt Engine */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Scope Inventory */}
+          {inventory && (inventory.items.length > 0 || inventory.scopeBom.length > 0) && (
+            <div className="card">
+              <div className="px-3 py-2.5 border-b border-subtle">
+                <h3 className="text-xs font-semibold text-navy uppercase tracking-wider">Scope Inventory</h3>
+              </div>
+              <div className="divide-y divide-subtle max-h-[50vh] overflow-y-auto">
+                {inventory.items.map((item: any) => {
+                  const itemWOs = inventory.junctions.filter((j: any) => j.job_item_id === item.item_id).map((j: any) => j.work_order_id);
+                  const isStock = item.item_source === "stock" || item.item_source === "promoted";
+                  return (
+                    <div key={item.item_id} className="px-3 py-2 flex items-center gap-2">
+                      <div className="flex gap-0.5 shrink-0 w-5">
+                        {itemWOs.length > 0 ? itemWOs.map((woId: number) => {
+                          const ci = inventory.woColorMap[woId] ?? 0;
+                          return <span key={woId} className={`w-2 h-2 rounded-full ${WO_COLORS[ci].dot}`} />;
+                        }) : <span className="w-2 h-2 rounded-full bg-faint" title="Unassigned" />}
+                      </div>
+                      <span className={"text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 " + (isStock ? "bg-starlight-amber/10 text-starlight-amber" : "bg-starlight-blue/10 text-starlight-blue")}>
+                        {isStock ? "S" : "B"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground truncate">{item.quantity && item.quantity > 1 ? `${item.quantity}× ` : ""}{item.description || "Untitled"}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {inventory.scopeBom.map((row: any) => (
+                  <div key={`bom-${row.bom_id}`} className="px-3 py-2 flex items-center gap-2">
+                    <div className="shrink-0 w-5"><span className="w-2 h-2 rounded-full bg-faint inline-block" /></div>
+                    <span className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 bg-surface-mid text-muted"><Wrench className="h-2.5 w-2.5 inline" /></span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground truncate">{row.quantity}× {row.item_description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <PromptPanel
             categoryId={scope.category_id}
             onAddItem={handleAddFromPrompt}
           />
         </div>
 
-        {/* Right: Unified Work Orders + Items panel */}
+        {/* Right: Unified Build Plan */}
         <div className="lg:col-span-3">
           <WorkOrdersPanel
             ref={woRef}
@@ -395,6 +436,7 @@ export default function ScopeDetailPage() {
             initialExpandId={expandWoId}
             onCostChange={() => setCostRefreshKey((k) => k + 1)}
             onRequestCreateWO={(ids) => { setSelectedItemIds(ids); setShowWODialog(true); }}
+            onInventoryUpdate={setInventory}
           />
         </div>
       </div>

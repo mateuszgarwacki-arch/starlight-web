@@ -1,1 +1,1 @@
-Unified Build Plan: WO-centric layout with color-coded item chips, unlinked items section, consolidated materials panel  
+Add Material button restored, Scope Inventory panel in left column with color-coded WO dots  

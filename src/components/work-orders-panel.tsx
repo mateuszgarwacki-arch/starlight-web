@@ -79,7 +79,7 @@ interface StockItemResult {
 }
 
 // Color palette for WO→item linking
-const WO_COLORS = [
+export const WO_COLORS = [
   { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", dot: "bg-blue-400" },
   { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30", dot: "bg-emerald-400" },
   { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", dot: "bg-amber-400" },
@@ -100,6 +100,7 @@ interface WorkOrdersPanelProps {
   initialExpandId?: number | null;
   onCostChange?: () => void;
   onRequestCreateWO?: (itemIds: number[]) => void;
+  onInventoryUpdate?: (data: { items: any[]; junctions: any[]; woColorMap: Record<number, number>; sortedWOs: any[]; scopeBom: any[] }) => void;
 }
 
 // ============================================================
@@ -107,7 +108,7 @@ interface WorkOrdersPanelProps {
 // ============================================================
 
 export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelProps>(
-  function WorkOrdersPanel({ jobId, scopeId, scope, initialExpandId, onCostChange, onRequestCreateWO }, ref) {
+  function WorkOrdersPanel({ jobId, scopeId, scope, initialExpandId, onCostChange, onRequestCreateWO, onInventoryUpdate }, ref) {
     const supabase = createClient();
 
     // WO state
@@ -249,6 +250,16 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       setLoading(false);
       setSelectedItemIds(new Set());
     }, [scopeId]);
+
+    // Push inventory data to parent after each load
+    useEffect(() => {
+      if (!loading) {
+        const sorted = [...workOrders].sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
+        const colorMap: Record<number, number> = {};
+        sorted.forEach((wo, idx) => { colorMap[wo.work_order_id] = idx % WO_COLORS.length; });
+        onInventoryUpdate?.({ items: jobItems, junctions, woColorMap: colorMap, sortedWOs: sorted, scopeBom: scopeBomRows });
+      }
+    }, [loading, jobItems, junctions, workOrders, scopeBomRows]);
 
     useEffect(() => { loadAll(); }, [loadAll]);
     useEffect(() => { if (initialExpandId) setExpandedWO(initialExpandId); }, [initialExpandId]);
@@ -513,6 +524,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
             <button onClick={() => { setShowBespokeDialog(true); loadJobBespokeItems(); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-starlight-blue bg-starlight-blue/10 hover:bg-starlight-blue/20 rounded-lg transition-colors">
               <Paintbrush className="h-3.5 w-3.5" /> Add Bespoke Item
+            </button>
+            <button onClick={() => { setShowScopeMaterialSearch(true); setScopeMatQuery(""); setScopeMatResults([]); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted bg-surface-mid hover:bg-surface-hi rounded-lg transition-colors">
+              <Wrench className="h-3.5 w-3.5" /> Add Material
             </button>
           </div>
         </div>
@@ -806,14 +821,6 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                   </tbody>
                   <tfoot><tr className="border-t border-subtle"><td colSpan={4} className="py-2 text-right text-xs font-medium text-muted">Grand Total</td><td className="py-2 px-2 text-right text-sm font-bold text-navy font-mono">{formatCurrency(consolidatedTotal)}</td><td></td></tr></tfoot>
                 </table>
-                {/* Scope material search */}
-                {showScopeMaterialSearch && (
-                  <div className="mt-3 p-3 bg-base rounded-lg border border-subtle">
-                    <input type="text" value={scopeMatQuery} onChange={e => { setScopeMatQuery(e.target.value); if (e.target.value.length >= 2) { const l = e.target.value.toLowerCase(); setScopeMatResults(materials.filter(m => m.material_name?.toLowerCase().includes(l)).slice(0, 8)); } else setScopeMatResults([]); }} placeholder="Search materials..." className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue mb-2" autoFocus />
-                    {scopeMatResults.map(m => <button key={m.material_id} onClick={() => addScopeMaterial(m)} className="w-full text-left px-3 py-2 hover:bg-surface-dim rounded-lg"><p className="text-sm text-navy">{m.material_name}</p><p className="text-xs text-muted">{m.unit}{m.current_unit_cost ? ` · ${formatCurrency(m.current_unit_cost)}` : ""}</p></button>)}
-                    <button onClick={() => setShowScopeMaterialSearch(false)} className="mt-1 text-xs text-muted hover:text-navy">Cancel</button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -890,6 +897,21 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                 <label className="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1"><input type="checkbox" checked={bespokeForm.promote_to_stock} onChange={e => setBespokeForm({ ...bespokeForm, promote_to_stock: e.target.checked })} className="rounded border-subtle text-starlight-green focus:ring-starlight-green" />Add to stock catalogue when complete</label>
               </div>
               <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3"><button onClick={() => setShowBespokeDialog(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button><button onClick={addBespokeItem} disabled={!bespokeForm.description.trim()} className="px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-navy disabled:opacity-50">Add Item</button></div>
+            </div>
+          </div>
+        )}
+
+        {/* Scope Material Search dialog */}
+        {showScopeMaterialSearch && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md">
+              <div className="px-5 py-4 border-b border-subtle"><h3 className="text-sm font-semibold text-navy flex items-center gap-2"><Wrench className="h-4 w-4 text-muted" /> Add Material</h3></div>
+              <div className="px-5 py-3">
+                <input type="text" value={scopeMatQuery} onChange={e => { setScopeMatQuery(e.target.value); if (e.target.value.length >= 2) { const l = e.target.value.toLowerCase(); setScopeMatResults(materials.filter(m => m.material_name?.toLowerCase().includes(l)).slice(0, 8)); } else setScopeMatResults([]); }} placeholder="Search materials catalogue..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
+                {scopeMatResults.length > 0 && <div className="mt-2 max-h-48 overflow-y-auto border border-subtle rounded-lg divide-y divide-subtle">{scopeMatResults.map(m => <button key={m.material_id} onClick={() => addScopeMaterial(m)} className="w-full text-left px-3 py-2 hover:bg-base transition-colors"><p className="text-sm text-navy font-medium">{m.material_name}</p><p className="text-xs text-muted">{m.unit}{m.current_unit_cost ? ` · ${formatCurrency(m.current_unit_cost)}` : ""}</p></button>)}</div>}
+                {scopeMatQuery.length >= 2 && scopeMatResults.length === 0 && <p className="text-xs text-muted mt-2">No matches</p>}
+              </div>
+              <div className="px-5 py-3 border-t border-subtle flex justify-end"><button onClick={() => setShowScopeMaterialSearch(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button></div>
             </div>
           </div>
         )}
