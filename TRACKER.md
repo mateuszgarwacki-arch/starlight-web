@@ -1578,3 +1578,81 @@ UPDATE tbl_master_lookups SET lookup_value = 'Raw' WHERE category = 'FINISH_RELA
 UPDATE tbl_master_lookups SET lookup_value = 'Good' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Neutral';
 UPDATE tbl_master_lookups SET lookup_value = 'Spotlight' WHERE category = 'FINISH_RELATIVE' AND lookup_value = 'Harder-than-warrants';
 ```
+
+
+### Session 19 (3 Apr 2026) — Scope Page Unification + Performance Overhaul
+~12 commits. Major scope page restructure + database performance cleanup.
+
+#### Dark Theme Fixes
+- [x] `color-scheme: dark` on `:root`, `color-scheme: light` on `.traveller-page` — fixes native scrollbar arrows, select arrows, resize handles
+- [x] Description textarea doubled from `rows={2}` to `rows={4}`
+
+#### Scope Page Unification — WO-Centric Build Plan ✔
+Merged separate Work Orders page into scope page. Everything on one screen.
+- [x] Created `WorkOrdersPanel` component (~900 lines) — self-contained WO list, expand/collapse, BOM editing, void/material dialogs
+- [x] `/wo` route converted to redirect (preserves bookmarks/browser history)
+- [x] Updated 3 external links (job detail, workshop, completed-work-tab) → scope page with `?expand={woId}`
+- [x] Auto-expand WO from `?expand=` query param
+- [x] WO creation from scope → auto-expands new WO in panel (no navigation)
+- [x] `CreateWODialog` returns `workOrderId` to parent for expansion
+
+#### Option A: WO-Centric Unified Layout ✔
+- [x] **Unlinked Items** section at top (amber warning) — items not assigned to any WO, with selection checkboxes + "Create WO" button
+- [x] **WO list with color-coded item chips** — 6-color palette (blue, green, amber, purple, rose, cyan), items shown as pills on collapsed WO rows
+- [x] **Consolidated Materials** panel at bottom — expandable, groups by WO with color-matched chips, grand total
+- [x] Colored left borders on WO cards matching palette
+
+#### Left Column: Job Items Panel ✔
+- [x] Rich editable cards replacing old compact inventory
+- [x] Row 1: Stock/Bespoke badge + description + stock reference + WO color dots
+- [x] Row 2: Editable quantity + editable finish field
+- [x] Row 3: Editable notes + clickable "→ STOCK" promote toggle + delete button
+- [x] `updateJobItem` and `deleteJobItem` exposed via panel ref
+- [x] Prompt Panel stays below for quick item addition
+
+#### Frontend Performance ✔
+- [x] `tbl_jobitem_workorder` query: fetched ALL rows → now filtered by WO IDs server-side
+- [x] Activities + BOM + junctions: sequential → parallel (phase 2 depends on WO IDs from phase 1)
+- [x] Two separate lookup queries → single combined query
+- [x] BOM query split: scope-level (by scope_item_id) + WO-level (by work_order_id IN) — catches older rows without scope_item_id
+- [x] Total round-trips: ~10 sequential → 4 parallel + 4 parallel + 1 = faster
+
+#### Database Performance ✔
+- [x] **RLS consolidation**: 533 warnings → 12 intentional. Dropped ~150 overlapping policies, created ~120 clean ones (1 per table/action). Pattern: `TO authenticated` with `get_my_role()` CASE expressions
+- [x] **Duplicate indexes dropped**: `idx_schedule_date`, `idx_schedule_freelancer_date`, `idx_quotelines_job`, `idx_scope_job`
+- [x] **Function search_path**: fixed on all 12 functions (`SET search_path = public`)
+- [x] **38 FK indexes added**: covering all unindexed foreign keys flagged by Supabase advisor
+- [x] **Leaked password protection**: enabled in Supabase Auth settings
+
+### New/Modified Files (Session 19)
+| File | Purpose |
+|------|--------|
+| `src/components/work-orders-panel.tsx` | Complete rewrite — unified WO + items + BOM panel with color coding |
+| `src/components/create-wo-dialog.tsx` | Returns `workOrderId` to parent |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Unified layout: Job Items panel + Build Plan |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/wo/page.tsx` | Converted to redirect |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | WO links → scope page with `?expand=` |
+| `src/app/(dashboard)/workshop/page.tsx` | WO link → scope page with `?expand=` |
+| `src/components/completed-work-tab.tsx` | WO link → scope page with `?expand=` |
+| `src/app/globals.css` | `color-scheme: dark/light`, description rows |
+| `sql/rls-consolidation-drop.sql` | DROP all old overlapping policies |
+| `sql/rls-consolidation-create.sql` | CREATE clean consolidated policies |
+
+### SQL Run (Session 19)
+```sql
+-- RLS: Drop ~150 overlapping policies (rls-consolidation-drop.sql)
+-- RLS: Create ~120 clean policies (rls-consolidation-create.sql)
+-- Function search_path: 12 ALTER FUNCTION ... SET search_path = public
+-- Duplicate indexes: DROP 4 duplicate indexes
+-- FK indexes: CREATE 38 indexes on unindexed foreign keys
+-- Leaked password protection: enabled via dashboard
+```
+
+### Conventions Added (Session 19)
+- **WO color palette**: 6 colors cycle: blue, green, amber, purple, rose, cyan. Assigned by WO sequence index. Used for item chips, left borders, consolidated BOM tags, and inventory dots
+- **Scope page layout**: Left col (1/4) = Job Items + Prompt Panel. Right col (3/4) = Build Plan (unlinked items → WO cards → All Materials)
+- **Panel ref pattern**: `WorkOrdersPanelRef` exposes `refresh()`, `expandWO(id)`, `updateJobItem()`, `deleteJobItem()` for parent coordination
+- **Inventory callback**: `onInventoryUpdate` prop pushes items/junctions/colorMap to parent for left-column rendering
+- **BOM query pattern**: scope-level rows by `scope_item_id` + WO rows by `work_order_id IN (ids)` — handles older rows without `scope_item_id`
+- **RLS policy pattern**: ONE policy per (table, action). `TO authenticated` with `get_my_role()` CASE for role filtering. No `{public}` role policies
+- **Promote toggle**: `notes = "PROMOTE_TO_STOCK"` flag, clickable on all bespoke items. Shows as green "→ STOCK" button

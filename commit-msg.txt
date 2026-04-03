@@ -1,1 +1,1 @@
-Perf: filter junctions server-side, parallel BOM+activity fetch, single lookup query  
+Session 19: TRACKER.md + SQL scripts for RLS consolidation  
