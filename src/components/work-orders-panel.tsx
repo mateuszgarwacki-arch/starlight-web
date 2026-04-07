@@ -121,7 +121,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     const [bomRows, setBomRows] = useState<BomRow[]>([]);
     const [bomLoading, setBomLoading] = useState(false);
     const [materials, setMaterials] = useState<
-      { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_length: number | null }[]
+      { material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_length: number | null; standard_width: number | null }[]
     >([]);
     const [voidDialog, setVoidDialog] = useState<{ woId: number; status: string } | null>(null);
     const [voidReason, setVoidReason] = useState("");
@@ -158,7 +158,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     // Scope-level material add
     const [showScopeMaterialSearch, setShowScopeMaterialSearch] = useState(false);
     const [scopeMatQuery, setScopeMatQuery] = useState("");
-    const [scopeMatResults, setScopeMatResults] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null }[]>([]);
+    const [scopeMatResults, setScopeMatResults] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_width: number | null }[]>([]);
+    const [scopeMatSelected, setScopeMatSelected] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; standard_width: number | null } | null>(null);
+    const [scopeMatQty, setScopeMatQty] = useState("1");
+    const [scopeMatUnit, setScopeMatUnit] = useState("");
 
     // Consolidated BOM expanded
     const [bomExpanded, setBomExpanded] = useState(false);
@@ -179,7 +182,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       const [woRes, freelancerRes, matRes, itemsRes] = await Promise.all([
         supabase.from("qry_wo_phase_ordered").select("*").eq("scope_item_id", scopeId),
         supabase.from("tbl_freelancers").select("*").eq("active", true).order("freelancer_name"),
-        supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost, material_category, standard_length").eq("active", true).order("material_name"),
+        supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost, material_category, standard_length, standard_width").eq("active", true).order("material_name"),
         supabase.from("qry_jobitems_withcoverage").select("*").eq("scope_item_id", scopeId).order("item_id"),
       ]);
 
@@ -485,9 +488,34 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       setJobItems(prev => prev.map(i => i.item_id === itemId ? { ...i, [field]: value } : i));
     };
     // Scope-level material add
-    const addScopeMaterial = async (mat: { material_id: number; material_name: string; unit: string; current_unit_cost: number | null }) => {
-      await supabase.from("tbl_wo_bom").insert({ scope_item_id: scopeId, job_id: jobId, material_id: mat.material_id, item_description: mat.material_name, quantity: 1, unit: mat.unit, unit_cost: mat.current_unit_cost || 0, needs_ordering: "true" });
-      toast.success(`Added: ${mat.material_name}`); setShowScopeMaterialSearch(false); setScopeMatQuery(""); loadAll(); bumpCost();
+    const selectScopeMaterial = (mat: typeof scopeMatSelected) => {
+      if (!mat) return;
+      setScopeMatSelected(mat);
+      setScopeMatQty("1");
+      setScopeMatUnit(mat.unit || "Each");
+    };
+    const confirmScopeMaterial = async () => {
+      if (!scopeMatSelected) return;
+      const qty = parseFloat(scopeMatQty) || 1;
+      const unit = scopeMatUnit || scopeMatSelected.unit || "Each";
+      // Cost conversion: if buying unit differs from catalogue unit, adjust
+      let unitCost = scopeMatSelected.current_unit_cost || 0;
+      const catUnit = (scopeMatSelected.unit || "").toLowerCase();
+      const buyUnit = unit.toLowerCase();
+      // m² → linear metre conversion: cost_per_lm = cost_per_m2 × (standard_width / 1000)
+      if (catUnit === "m²" && (buyUnit === "linear metre" || buyUnit === "metre") && scopeMatSelected.standard_width) {
+        unitCost = Math.round(unitCost * (scopeMatSelected.standard_width / 1000) * 100) / 100;
+      }
+      // metre → length conversion (timber pattern)
+      if (catUnit === "metre" && buyUnit === "length") {
+        // Would need standard_length — skip for now, handle in Phase B
+      }
+      await supabase.from("tbl_wo_bom").insert({
+        scope_item_id: scopeId, job_id: jobId, material_id: scopeMatSelected.material_id,
+        item_description: scopeMatSelected.material_name, quantity: qty, unit, unit_cost: unitCost, needs_ordering: "true",
+      });
+      toast.success(`Added: ${scopeMatSelected.material_name} × ${qty} ${unit}`);
+      setShowScopeMaterialSearch(false); setScopeMatSelected(null); setScopeMatQuery(""); loadAll(); bumpCost();
     };
     const deleteScopeBomRow = async (bomId: number) => {
       await supabase.from("tbl_wo_bom").delete().eq("bom_id", bomId); loadAll(); bumpCost();
@@ -802,7 +830,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
             {bomExpanded && (
               <div className="border-t border-subtle px-4 py-3">
                 <div className="flex justify-end mb-2">
-                  <button onClick={() => { setShowScopeMaterialSearch(true); setScopeMatQuery(""); setScopeMatResults([]); }} className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium"><Plus className="h-3.5 w-3.5" />Add Scope Material</button>
+                  <button onClick={() => { setShowScopeMaterialSearch(true); setScopeMatQuery(""); setScopeMatResults([]); setScopeMatSelected(null); }} className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium"><Plus className="h-3.5 w-3.5" />Add Scope Material</button>
                 </div>
                 <table className="w-full text-sm">
                   <thead><tr className="text-[10px] text-muted uppercase tracking-wider border-b border-subtle">
@@ -828,7 +856,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                       <tr key={row.bom_id} className="border-b border-subtle last:border-0">
                         <td className="py-1.5 pr-3 text-sm text-navy">{row.item_description}</td>
                         <td className="py-1.5 px-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-mid text-muted">Scope</span></td>
-                        <td className="py-1.5 px-2 text-right text-sm font-mono text-muted">{row.quantity}</td>
+                        <td className="py-1.5 px-2"><input type="number" step="0.5" defaultValue={row.quantity} onBlur={async e => { const v = parseFloat(e.target.value) || 0; if (v === row.quantity) return; await supabase.from("tbl_wo_bom").update({ quantity: v }).eq("bom_id", row.bom_id); setScopeBomRows(prev => prev.map(r => r.bom_id === row.bom_id ? { ...r, quantity: v } : r)); bumpCost(); }} className="w-14 px-1.5 py-0.5 text-sm text-right font-mono border border-transparent hover:border-subtle focus:border-starlight-blue rounded bg-transparent focus:bg-surface focus:outline-none" /></td>
                         <td className="py-1.5 px-2 text-xs text-muted">{row.unit}</td>
                         <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{formatCurrency(row.quantity * row.unit_cost)}</td>
                         <td className="py-1.5"><button onClick={() => deleteScopeBomRow(row.bom_id)} className="p-1 text-faint hover:text-starlight-red transition-colors"><Trash2 className="h-3 w-3" /></button></td>
@@ -917,17 +945,85 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
           </div>
         )}
 
-        {/* Scope Material Search dialog */}
+        {/* Scope Material Search dialog — two-step: pick → configure → add */}
         {showScopeMaterialSearch && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md">
-              <div className="px-5 py-4 border-b border-subtle"><h3 className="text-sm font-semibold text-navy flex items-center gap-2"><Wrench className="h-4 w-4 text-muted" /> Add Material</h3></div>
-              <div className="px-5 py-3">
-                <input type="text" value={scopeMatQuery} onChange={e => { setScopeMatQuery(e.target.value); if (e.target.value.length >= 2) { const l = e.target.value.toLowerCase(); setScopeMatResults(materials.filter(m => m.material_name?.toLowerCase().includes(l)).slice(0, 8)); } else setScopeMatResults([]); }} placeholder="Search materials catalogue..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
-                {scopeMatResults.length > 0 && <div className="mt-2 max-h-48 overflow-y-auto border border-subtle rounded-lg divide-y divide-subtle">{scopeMatResults.map(m => <button key={m.material_id} onClick={() => addScopeMaterial(m)} className="w-full text-left px-3 py-2 hover:bg-base transition-colors"><p className="text-sm text-navy font-medium">{m.material_name}</p><p className="text-xs text-muted">{m.unit}{m.current_unit_cost ? ` · ${formatCurrency(m.current_unit_cost)}` : ""}</p></button>)}</div>}
-                {scopeMatQuery.length >= 2 && scopeMatResults.length === 0 && <p className="text-xs text-muted mt-2">No matches</p>}
+              <div className="px-5 py-4 border-b border-subtle">
+                <h3 className="text-sm font-semibold text-navy flex items-center gap-2"><Wrench className="h-4 w-4 text-muted" /> Add Scope Material</h3>
+                {scopeMatSelected && <p className="text-xs text-muted mt-1">{scopeMatSelected.material_name}</p>}
               </div>
-              <div className="px-5 py-3 border-t border-subtle flex justify-end"><button onClick={() => setShowScopeMaterialSearch(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button></div>
+              <div className="px-5 py-3">
+                {!scopeMatSelected ? (
+                  <>
+                    <input type="text" value={scopeMatQuery} onChange={e => { setScopeMatQuery(e.target.value); if (e.target.value.length >= 2) { const l = e.target.value.toLowerCase(); setScopeMatResults(materials.filter(m => (m.material_name || "").toLowerCase().includes(l)).slice(0, 8) as any); } else setScopeMatResults([]); }} placeholder="Search materials catalogue..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
+                    {scopeMatResults.length > 0 && <div className="mt-2 max-h-48 overflow-y-auto border border-subtle rounded-lg divide-y divide-subtle">{scopeMatResults.map(m => <button key={m.material_id} onClick={() => selectScopeMaterial(m)} className="w-full text-left px-3 py-2 hover:bg-base transition-colors"><p className="text-sm text-navy font-medium">{m.material_name}</p><p className="text-xs text-muted">{m.unit}{m.current_unit_cost ? ` · ${formatCurrency(m.current_unit_cost)}/${m.unit}` : ""}</p></button>)}</div>}
+                    {scopeMatQuery.length >= 2 && scopeMatResults.length === 0 && <p className="text-xs text-muted mt-2">No matches</p>}
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Quantity</label>
+                        <input type="number" step="0.5" min={0.1} value={scopeMatQty} onChange={e => setScopeMatQty(e.target.value)} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" autoFocus />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Unit</label>
+                        <select value={scopeMatUnit} onChange={e => setScopeMatUnit(e.target.value)} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                          <option value={scopeMatSelected.unit}>{scopeMatSelected.unit}</option>
+                          {["Each", "Metre", "Linear Metre", "Length", "Sheet", "M²", "Kg", "Litre", "Day"].filter(u => u !== scopeMatSelected.unit).map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="bg-surface-dim rounded-lg px-3 py-2 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted">Catalogue price</span>
+                        <span className="text-navy font-mono">{scopeMatSelected.current_unit_cost ? `${formatCurrency(scopeMatSelected.current_unit_cost)} / ${scopeMatSelected.unit}` : "—"}</span>
+                      </div>
+                      {scopeMatSelected.unit.toLowerCase() === "m²" && scopeMatUnit.toLowerCase() !== "m²" && scopeMatSelected.standard_width && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted">Roll width</span>
+                          <span className="text-navy font-mono">{scopeMatSelected.standard_width}mm ({scopeMatSelected.standard_width / 1000}m)</span>
+                        </div>
+                      )}
+                      {(() => {
+                        const qty = parseFloat(scopeMatQty) || 0;
+                        const catUnit = (scopeMatSelected.unit || "").toLowerCase();
+                        const buyUnit = scopeMatUnit.toLowerCase();
+                        let effectiveCost = scopeMatSelected.current_unit_cost || 0;
+                        if (catUnit === "m²" && (buyUnit === "linear metre" || buyUnit === "metre") && scopeMatSelected.standard_width) {
+                          effectiveCost = Math.round(effectiveCost * (scopeMatSelected.standard_width / 1000) * 100) / 100;
+                        }
+                        const total = qty * effectiveCost;
+                        return (
+                          <>
+                            {effectiveCost !== (scopeMatSelected.current_unit_cost || 0) && (
+                              <div className="flex justify-between text-xs">
+                                <span className="text-starlight-blue">Converted cost</span>
+                                <span className="text-starlight-blue font-mono font-medium">{formatCurrency(effectiveCost)} / {scopeMatUnit}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-xs font-medium border-t border-subtle pt-1 mt-1">
+                              <span className="text-muted">Total</span>
+                              <span className="text-navy font-mono">{formatCurrency(total)}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <button onClick={() => setScopeMatSelected(null)} className="text-xs text-starlight-blue hover:text-navy">← Pick different material</button>
+                  </div>
+                )}
+              </div>
+              <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3">
+                <button onClick={() => { setShowScopeMaterialSearch(false); setScopeMatSelected(null); }} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
+                {scopeMatSelected && (
+                  <button onClick={confirmScopeMaterial} disabled={!scopeMatQty || parseFloat(scopeMatQty) <= 0}
+                    className="px-4 py-2 bg-starlight-green text-white text-sm font-medium rounded-lg hover:bg-starlight-green/90 disabled:opacity-50">
+                    Add to BOM
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
