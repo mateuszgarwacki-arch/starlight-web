@@ -1,1 +1,1 @@
-Scope material add: two-step dialog (pick → set qty/unit/preview cost → add), m² to linear metre conversion, inline-editable scope BOM qty
+Session 20 wrap-up: TRACKER.md + schema doc updated to session 20

@@ -1,24 +1,23 @@
-# Starlight Database Schema — Session 18 (2 Apr 2026)
+# Starlight Database Schema — Session 20 (7 Apr 2026)
 
-Verified from live database. 42 tables, 38 views, 6 RPC functions, 7 utility functions, 115+ indexes.
+Verified from live database. 43 tables, 38 views, 6 RPC functions, 7 utility functions, 116+ indexes.
 
-## Changes from Session 17
+## Changes from Session 19
 
-### Schema Changes (Session 18)
-- `tbl_master_lookups`: New QUOTE_LINE_CATEGORY value: "Install (Materials)" — install items that need materials/ordering prep (distinct from plain "Install" which needs no prep)
+### Schema Changes (Session 20)
+- `tbl_materials`: Added `standard_width INT` — roll/bolt width in mm for floor covering, fabric
+- `tbl_material_category_config`: **NEW TABLE** — configures pricing/buying/packing behaviour per material category
+- `tbl_master_lookups`: New MATERIAL_CATEGORY value: "Floor Covering". New UNIT values: "M²", "Linear Metre"
+- 4 RLS policies on `tbl_material_category_config` (select/insert/update/delete)
+- 1 new index: `idx_mat_cat_config_category`
 
-### No new tables, columns, views, or indexes
-
-### Frontend-Only Changes (Session 18)
-- **Dark theme migration**: Full token system (base/surface/foreground/muted/faint/subtle). 2875 color replacements across 64 files. Brand palette: steel blue #7BA4D4, dusty rose #D47BA0
-- **BOM cost fix**: `bomRowTotal` simplified to `qty × unit_cost` (was incorrectly multiplying by stdLen for Length unit). Toggle now converts both qty AND unit_cost
-- **Auto-tick removed**: Done = manual only. `isDone()` checks only `interpretation_complete`
-- **Default filter**: "To Do" (workshop categories not done) is default on job page. "All" moved to end
-- **Auto-stop WO entries**: freelancer START/JOIN auto-stops open time entries on other WOs
-- **Crew timestamps**: time entries show start→end times
-- **Traveller**: forced light on screen (not just print)
-- **Scope column**: repositioned between Value and PM Est with named header
-- **Orders panel**: resolves scope names through WO chain (work_order_id→scope_item_id)
+### Frontend-Only Changes (Session 20)
+- **Settings → Material Categories tab**: CRUD for category pricing/buying/packing config
+- **Cut list material override**: ⇄ swap button on each material row, inline catalogue search, recalculates bin packing
+- **Scope material dialog**: two-step (pick → configure qty/unit → preview cost → confirm). m² → Linear Metre conversion
+- **Scope BOM inline edit**: qty field editable directly in All Materials table
+- **WO description**: full-width resizable textarea replaces single-line input
+- **UI polish**: number spinner opacity, audit log wider, job items sync on external changes
 
 ## Tables (42)
 
@@ -49,10 +48,11 @@ Verified from live database. 42 tables, 38 views, 6 RPC functions, 7 utility fun
 - **tbl_freelancer_schedule**: schedule_id PK, freelancer_id FK, scheduled_date, status, job_id FK, booking_group UUID, notified_at, notes, unavailable_reason
 
 ### Materials & Suppliers
-- **tbl_materials**: material_id PK, material_name, material_category, unit, standard_length, standard_sheet_size, current_unit_cost, primary_supplier, spec_val_1/2/3, spec_text_1/2, paint_finish, active
+- **tbl_materials**: material_id PK, material_name, material_category, unit, standard_length, standard_sheet_size, standard_width INT, current_unit_cost, primary_supplier, spec_val_1/2/3, spec_text_1/2, paint_finish, active
 - **tbl_material_prices**: price_id PK, material_id FK, unit_cost, effective_date, supplier, source
 - **tbl_material_aliases**: alias_id PK, material_id FK, alias_text, supplier
 - **tbl_material_spec_defs**: spec_def_id PK, category_name, slot, label, unit
+- **tbl_material_category_config**: config_id PK, category_id FK→tbl_master_lookups, pricing_unit VARCHAR(30), buying_unit VARCHAR(30), fixed_dimension VARCHAR(30), bin_pack_mode VARCHAR(10), notes TEXT, active BOOLEAN, created_at, updated_at
 - **tbl_suppliers**: supplier_id PK, supplier_name, phone, email, contact_name, speciality, payment_terms, active
 - **tbl_invoices**: invoice_id PK, supplier, invoice_number, invoice_date, total_value, job_id FK, status, supplier_id FK
 - **tbl_invoice_lines**: line_id PK, invoice_id FK, line_number, raw_description, quantity, unit, unit_cost, line_total, material_id FK, match_status, job_id FK

@@ -1656,3 +1656,75 @@ Merged separate Work Orders page into scope page. Everything on one screen.
 - **BOM query pattern**: scope-level rows by `scope_item_id` + WO rows by `work_order_id IN (ids)` — handles older rows without `scope_item_id`
 - **RLS policy pattern**: ONE policy per (table, action). `TO authenticated` with `get_my_role()` CASE for role filtering. No `{public}` role policies
 - **Promote toggle**: `notes = "PROMOTE_TO_STOCK"` flag, clickable on all bespoke items. Shows as green "→ STOCK" button
+
+
+### Session 20 (7 Apr 2026) — Material Categories Config, Cut List Override, Scope Material Dialog
+
+7 commits. Material category behaviour made configurable from Settings UI. Cut list material matching now supports manual override before BOM commit. Scope material add redesigned as two-step dialog with unit/qty/cost preview and m² conversion.
+
+#### UI Polish
+- [x] Settings audit log: container widens to `max-w-6xl` on audit tab so Revert column isn't clipped
+- [x] Number input spinners: `opacity: 0.4` replaces `filter: invert(0.7)` — arrows no longer glare white on dark theme
+- [x] Left panel Job Items: qty/finish/notes inputs sync when changed from Build Plan (key-based remount for uncontrolled inputs)
+- [x] WO description: full-width resizable textarea (was single-line input squeezed into 6-col grid). `resize-y`, `min-h-[60px]`, `rows={2}`. Collapsed header no longer truncates description
+
+#### Cut List Material Override ✅
+- [x] Each material row in "Materials to Order" has ⇄ swap button
+- [x] Inline catalogue search dropdown — sorted by name similarity, shows dimensions + unit cost
+- [x] Match status: "✓ matched", strikethrough old name on override, "no match — click ⇄" prompt
+- [x] Swap triggers bin packing recalculation (1D/2D) with new material's standard dimensions
+- [x] `addToBom` uses `_catalogueMatch` override for material_id, unit_cost, and BOM description
+- [x] `CatalogueMat` interface added to `cutlist-extractor.tsx`
+
+#### Material Category Config ✅
+- [x] New table `tbl_material_category_config`: category_id FK, pricing_unit, buying_unit, fixed_dimension, bin_pack_mode, notes
+- [x] "Floor Covering" added to MATERIAL_CATEGORY lookups
+- [x] "M²" and "Linear Metre" added to UNIT lookups
+- [x] Config seeded for all existing categories (Timber→metre/length/1d, Sheet→sheet/sheet/2d, Floor Covering→m²/linear metre/area, etc.)
+- [x] Settings → Material Categories tab: configurable dropdowns per category (supplier prices in / you buy in / fixed dimension / cut list packing)
+- [x] Add/delete categories from Settings UI. Delete blocked if materials exist in category
+- [x] Conversion preview shown when pricing_unit ≠ buying_unit
+- [x] `standard_width` column added to `tbl_materials` (roll/bolt width for floor covering, fabric)
+- [x] Materials page: "Roll / Bolt Dimensions" section appears for Floor Covering / Fabric categories
+- [x] `Material` interface in `types.ts` updated with `standard_width`
+- [x] RLS: read all authenticated, write PM/admin only
+
+#### Scope Material Add — Two-Step Dialog ✅
+- [x] Step 1: search and pick material from catalogue (unchanged)
+- [x] Step 2: set quantity + unit dropdown, live cost preview panel
+- [x] m² → Linear Metre conversion: `cost_per_lm = cost_per_m² × (standard_width / 1000)`
+- [x] Shows catalogue price, roll width, converted cost, and total before confirming
+- [x] "← Pick different material" back link in step 2
+- [x] Scope BOM rows now inline-editable (qty field editable directly in All Materials table)
+
+### New/Modified Files (Session 20)
+| File | Purpose |
+|------|---------|
+| `src/components/material-categories-editor.tsx` | **NEW** — Settings tab for category config CRUD |
+| `src/components/cutlist-extractor.tsx` | Material override picker, CatalogueMat interface, swap + recalc |
+| `src/components/work-orders-panel.tsx` | Two-step scope material dialog, inline scope BOM edit, standard_width in queries |
+| `src/app/(dashboard)/settings/page.tsx` | Material Categories tab, wider container for audit+materials tabs |
+| `src/app/(dashboard)/materials/page.tsx` | standard_width in form/save, Roll/Bolt Dimensions section |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Key-based remount for qty/finish/notes uncontrolled inputs |
+| `src/lib/types.ts` | `standard_width` on Material interface |
+| `src/app/globals.css` | Number spinner opacity fix |
+| `sql/020_material_category_config.sql` | Schema + seed + RLS for category config table |
+
+### SQL Run (Session 20)
+```sql
+-- sql/020_material_category_config.sql:
+-- ALTER TABLE tbl_materials ADD COLUMN standard_width INT
+-- CREATE TABLE tbl_material_category_config (config_id, category_id FK, pricing_unit, buying_unit, fixed_dimension, bin_pack_mode, notes, active)
+-- INSERT Floor Covering into MATERIAL_CATEGORY lookups
+-- INSERT M², Linear Metre into UNIT lookups
+-- DO $$ seed config for all existing categories
+-- RLS: 4 policies (select/insert/update/delete)
+-- INDEX: idx_mat_cat_config_category
+```
+
+### Conventions Added (Session 20)
+- **Category config pattern**: pricing/buying/packing behaviour per material category stored in `tbl_material_category_config`, not hardcoded. Settings UI for CRUD
+- **Cut list override flow**: AI extracts → user reviews materials → swap ⇄ overrides catalogue match → recalculates bin packing → then "Add to BOM" uses override
+- **Scope material two-step**: pick → configure (qty/unit/cost preview) → confirm. Never auto-insert with qty=1
+- **Unit conversion (m² → linear metre)**: `unit_cost_per_lm = catalogue_cost_per_m² × (standard_width_mm / 1000)`. Applied in scope add dialog and will be used in cut list extractor Phase B
+- **Uncontrolled input sync**: When `defaultValue` inputs need to reflect external state changes, add `key` prop including the value (e.g. `key={`qty-${id}-${value}`}`) to force remount
