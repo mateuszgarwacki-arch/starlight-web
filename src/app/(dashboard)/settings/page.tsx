@@ -170,7 +170,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className={`${activeTab === "audit" ? "max-w-6xl" : "max-w-4xl"} mx-auto space-y-6 transition-all`}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <Shield className="h-6 w-6 text-muted" />
@@ -393,8 +393,8 @@ export default function SettingsPage() {
             <button onClick={loadAudit} className="text-xs text-muted hover:text-navy transition-colors">Refresh</button>
           </div>
 
-          <div className="card overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="card overflow-x-auto">
+            <table className="w-full text-sm min-w-[800px]">
               <thead>
                 <tr className="bg-base text-left text-xs text-muted uppercase tracking-wider">
                   <th className="px-3 py-2.5 font-medium">When</th>

@@ -1,1 +1,1 @@
-Schema doc renamed to session19  
+Settings: widen audit log table — container expands to max-w-6xl on audit tab, overflow-x-auto on card
