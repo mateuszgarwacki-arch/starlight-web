@@ -1,1 +1,1 @@
-Fix left panel job items not updating when qty/finish/notes changed on right panel — add keys to force uncontrolled inputs to re-mount
+WO description: full-width resizable textarea above the field grid, remove truncation from collapsed header

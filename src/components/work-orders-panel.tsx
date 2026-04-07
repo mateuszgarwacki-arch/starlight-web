@@ -630,7 +630,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         <p className="text-sm font-semibold text-navy">{wo.activity_label}</p>
                         {wo.paint_notes && <Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" />}
                       </div>
-                      {wo.description && <p className="text-xs text-muted truncate mt-0.5">{wo.description}</p>}
+                      {wo.description && <p className="text-xs text-muted mt-0.5">{wo.description}</p>}
                       {/* Linked item chips */}
                       {woItems.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
@@ -671,11 +671,11 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                           <button onClick={e => { e.stopPropagation(); reorderWO(wo.work_order_id, -1); }} disabled={woIdx === 0} className="p-1 rounded text-muted hover:text-navy hover:bg-surface-mid disabled:opacity-30 transition-colors" title="Move up"><ArrowUp className="h-3.5 w-3.5" /></button>
                           <button onClick={e => { e.stopPropagation(); reorderWO(wo.work_order_id, 1); }} disabled={woIdx === sortedWOs.length - 1} className="p-1 rounded text-muted hover:text-navy hover:bg-surface-mid disabled:opacity-30 transition-colors" title="Move down"><ArrowDown className="h-3.5 w-3.5" /></button>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Description</label>
-                            <input type="text" defaultValue={wo.description || ""} onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_desc`)} onBlur={e => { presenceSetEditing(null); updateWODescription(wo.work_order_id, e.target.value); }} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="What needs doing..." />
-                          </div>
+                        <div className="mb-3">
+                          <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Description</label>
+                          <textarea defaultValue={wo.description || ""} onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_desc`)} onBlur={e => { presenceSetEditing(null); updateWODescription(wo.work_order_id, e.target.value); }} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-y min-h-[60px]" placeholder="What needs doing..." rows={2} />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                           <div>
                             <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Est. Hours</label>
                             <input type="number" step="0.5" defaultValue={wo.estimated_duration_hrs ?? ""} onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_hrs`)} onBlur={e => { presenceSetEditing(null); updateEstimatedHrs(wo.work_order_id, e.target.value); }} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
