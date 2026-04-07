@@ -65,7 +65,7 @@
   /* Number input spinners — dark theme */
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
-    filter: invert(0.7);
+    opacity: 0.4;
   }
 
   /* Amber highlight for uninterpreted quote lines */
