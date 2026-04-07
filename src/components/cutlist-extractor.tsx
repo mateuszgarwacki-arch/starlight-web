@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { getAuthHeaders } from "@/lib/auth-headers";
-import { Loader2, Check, Plus, FileText, Zap } from "lucide-react";
+import { Loader2, Check, Plus, FileText, Zap, ArrowRightLeft, Search } from "lucide-react";
 
 interface ExtractedLine {
   line_number: number;
@@ -32,6 +32,17 @@ interface MaterialSummary {
   piece_lengths?: number[];
   anomalies?: string[];
   _selected?: boolean;
+  _catalogueMatch?: CatalogueMat | null;
+}
+
+interface CatalogueMat {
+  material_id: number;
+  material_name: string;
+  standard_length: number | null;
+  standard_sheet_size: string | null;
+  unit: string;
+  current_unit_cost: number | null;
+  material_category: number | null;
 }
 
 interface CutListExtractorProps {
@@ -237,7 +248,7 @@ function buildMaterialSummary(
         total_parts: totalParts, total_linear_mm: totalLinearMm,
         lengths_needed: lengthsNeeded, standard_length_mm: stdLen,
         waste_pct: waste, piece_lengths: pieceLengths,
-        anomalies, _selected: true,
+        anomalies, _selected: true, _catalogueMatch: catMat || null,
       };
     }
 
@@ -276,13 +287,13 @@ function buildMaterialSummary(
         material: materialName, material_category: "Sheet",
         total_parts: totalParts, sheets_needed: sheets,
         standard_sheet_size: `${sheetW}x${sheetH}`,
-        waste_pct: wastePct, anomalies, _selected: true,
+        waste_pct: wastePct, anomalies, _selected: true, _catalogueMatch: catMat || null,
       };
     }
 
     return {
       material: materialName, material_category: category,
-      total_parts: totalParts, anomalies, _selected: true,
+      total_parts: totalParts, anomalies, _selected: true, _catalogueMatch: catMat || null,
     };
   });
 }
@@ -301,14 +312,18 @@ export function CutListExtractor({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showParts, setShowParts] = useState(false);
+  const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
+  const [catSearch, setCatSearch] = useState("");
+  const [allCatMats, setAllCatMats] = useState<CatalogueMat[]>([]);
 
   // Recalculate material summary from parts data whenever parts change
   useEffect(() => {
     if (parts.length === 0 || status === "pending") return;
     const recalc = async () => {
       const { data: catMats } = await supabase.from("tbl_materials")
-        .select("material_id, material_name, standard_length, standard_sheet_size, unit")
+        .select("material_id, material_name, standard_length, standard_sheet_size, unit, current_unit_cost, material_category")
         .eq("active", true);
+      setAllCatMats((catMats || []) as CatalogueMat[]);
       const recalced = buildMaterialSummary(parts, catMats || []);
       setMatSummary(recalced);
     };
@@ -389,6 +404,61 @@ export function CutListExtractor({
     setMatSummary(prev => prev.map((m, i) => i === idx ? { ...m, _selected: !m._selected } : m));
   };
 
+  // Swap catalogue material for a summary row and recalculate bin packing
+  const swapCatalogueMat = (idx: number, newCat: CatalogueMat) => {
+    setMatSummary(prev => prev.map((m, i) => {
+      if (i !== idx) return m;
+      const updated = { ...m, _catalogueMatch: newCat };
+      // Recalculate bin packing with new material's dimensions
+      const matLower = (m.material || "").toLowerCase();
+      const matParts = parts.filter(p => (p.material || "").toLowerCase() === matLower);
+      if (m.material_category.toLowerCase() === "timber") {
+        const pieceLengths: number[] = [];
+        for (const p of matParts) {
+          const l = p.length_mm || 0;
+          if (l > 0) { for (let q = 0; q < (p.quantity || 1); q++) pieceLengths.push(l); }
+        }
+        const totalLinearMm = pieceLengths.reduce((a, b) => a + b, 0);
+        const stdLen = newCat.standard_length || 4800;
+        const lengthsNeeded = pieceLengths.length > 0 ? binPackLengths(pieceLengths, stdLen) : Math.max(1, Math.ceil(totalLinearMm / stdLen));
+        const usedMm = lengthsNeeded * stdLen;
+        updated.standard_length_mm = stdLen;
+        updated.lengths_needed = lengthsNeeded;
+        updated.total_linear_mm = totalLinearMm;
+        updated.waste_pct = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
+        updated.piece_lengths = pieceLengths;
+      } else if (m.material_category.toLowerCase() === "sheet") {
+        const catSheet = parseSheetSize(newCat.standard_sheet_size);
+        const sheetW = catSheet?.w || 2440;
+        const sheetH = catSheet?.h || 1220;
+        const rects: Rect[] = [];
+        for (const p of matParts) {
+          const l = p.length_mm || 0; const w = p.width_mm || 0;
+          if (l > 0 && w > 0) { for (let q = 0; q < (p.quantity || 1); q++) rects.push({ w: l, h: w }); }
+        }
+        const anomalies: string[] = [];
+        for (const p of matParts) {
+          const l = p.length_mm || 0; const w = p.width_mm || 0;
+          const fits = (l <= sheetW && w <= sheetH) || (l <= sheetH && w <= sheetW);
+          if (l > 0 && w > 0 && !fits) {
+            const msg = `${p.description}: ${l}×${w}mm does not fit on ${sheetW}×${sheetH}mm sheet`;
+            if (!anomalies.includes(msg)) anomalies.push(msg);
+          }
+        }
+        const { sheets } = guillotinePack(rects, sheetW, sheetH);
+        const sheetArea = sheetW * sheetH;
+        const partArea = rects.reduce((s, r) => s + r.w * r.h, 0);
+        updated.sheets_needed = sheets;
+        updated.standard_sheet_size = `${sheetW}x${sheetH}`;
+        updated.waste_pct = sheets > 0 ? Math.round((1 - partArea / (sheets * sheetArea)) * 100) : 0;
+        updated.anomalies = anomalies;
+      }
+      return updated;
+    }));
+    setSwappingIdx(null);
+    setCatSearch("");
+  };
+
   const addToBom = async () => {
     const selected = matSummary.filter(m => m._selected);
     if (selected.length === 0) return;
@@ -407,16 +477,26 @@ export function CutListExtractor({
 
     // Recalculate inline from parts — deterministic JS math
     const recalced = buildMaterialSummary(parts, materials || []);
-    // Apply user's checkbox selections from matSummary state
+    // Apply user's checkbox selections and catalogue overrides from matSummary state
     const selectedMats = new Set(matSummary.filter(m => m._selected).map(m => (m.material || "").toLowerCase()));
-    for (const m of recalced) { m._selected = selectedMats.has((m.material || "").toLowerCase()); }
+    const overrideMap: Record<string, CatalogueMat | null> = {};
+    for (const m of matSummary) { if (m._catalogueMatch) overrideMap[(m.material || "").toLowerCase()] = m._catalogueMatch; }
+    for (const m of recalced) {
+      m._selected = selectedMats.has((m.material || "").toLowerCase());
+      const override = overrideMap[(m.material || "").toLowerCase()];
+      if (override) m._catalogueMatch = override;
+    }
     console.log("[CutList][addToBom] recalced:", JSON.stringify(recalced.map(m => ({ mat: m.material, cat: m.material_category, totalMm: m.total_linear_mm, lengths: m.lengths_needed, sheets: m.sheets_needed }))));
 
     for (const mat of recalced) {
       if (!mat._selected) continue;
       const matLower = (mat.material || "").toLowerCase();
-      let matched = (materials || []).find(m => (m.material_name || "").toLowerCase() === matLower);
-      if (!matched) matched = (materials || []).find(m => matLower.includes((m.material_name || "").toLowerCase()) || (m.material_name || "").toLowerCase().includes(matLower));
+      // Use catalogue override if set, otherwise fall back to auto-match
+      let matched: any = mat._catalogueMatch || null;
+      if (!matched) {
+        matched = (materials || []).find(m => (m.material_name || "").toLowerCase() === matLower);
+        if (!matched) matched = (materials || []).find(m => matLower.includes((m.material_name || "").toLowerCase()) || (m.material_name || "").toLowerCase().includes(matLower));
+      }
 
       const catKey = (mat.material_category || "other").toLowerCase();
 
@@ -445,9 +525,10 @@ export function CutListExtractor({
         : mat.sheets_needed ? "Sheet"
         : mat.lengths_needed ? "Length"
         : (matched?.unit || "Each");
+      const displayName = matched?.material_name || mat.material;
       const bomDesc = isTimber
-        ? `${mat.material} - ${totalMetresActual}m actual (${lengthsNeeded}× ${stdLen / 1000}m)`
-        : mat.material + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
+        ? `${displayName} - ${totalMetresActual}m actual (${lengthsNeeded}× ${stdLen / 1000}m)`
+        : displayName + (mat.standard_sheet_size ? ` (${mat.standard_sheet_size})` : "");
 
       console.log(`[CutList][addToBom] inserting: ${bomDesc} qty=${bomQty} unit=${bomUnit}`);
 
@@ -542,36 +623,109 @@ export function CutListExtractor({
         <div className="px-3 py-2">
           <p className="text-[9px] text-muted uppercase tracking-wider font-semibold mb-1.5">Materials to Order</p>
           <div className="space-y-1.5">
-            {matSummary.map((mat, idx) => (
-              <div key={idx}>
-                <div className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-surface-dim opacity-50")}>
-                  <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-subtle" />
-                  <span className="text-xs text-navy font-medium flex-1">{mat.material}</span>
-                  {mat.total_linear_mm != null && mat.total_linear_mm > 0 && (
-                    <span className="text-[10px] font-mono text-muted">{mat.total_linear_mm}mm total</span>
+            {matSummary.map((mat, idx) => {
+              const hasOverride = mat._catalogueMatch && mat._catalogueMatch.material_name.toLowerCase() !== (mat.material || "").toLowerCase();
+              const isSwapping = swappingIdx === idx;
+              // Filter catalogue materials: same category first, then rest
+              const searchLower = catSearch.toLowerCase();
+              const filtered = allCatMats.filter(m => !searchLower || (m.material_name || "").toLowerCase().includes(searchLower));
+              // Sort: name-matched materials first, then alphabetical
+              const sorted = [...filtered].sort((a, b) => {
+                const aName = (a.material_name || "").toLowerCase();
+                const bName = (b.material_name || "").toLowerCase();
+                const aiName = (mat.material || "").toLowerCase();
+                const aMatch = aName.includes(aiName) || aiName.includes(aName);
+                const bMatch = bName.includes(aiName) || aiName.includes(bName);
+                if (aMatch && !bMatch) return -1;
+                if (!aMatch && bMatch) return 1;
+                return aName.localeCompare(bName);
+              });
+
+              return (
+                <div key={idx}>
+                  <div className={"flex items-center gap-2 py-1 px-2 rounded-lg " + (mat._selected ? "bg-starlight-green/5" : "bg-surface-dim opacity-50")}>
+                    <input type="checkbox" checked={!!mat._selected} onChange={() => toggleMat(idx)} className="h-3 w-3 rounded border-subtle" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-navy font-medium">{hasOverride ? mat._catalogueMatch!.material_name : mat.material}</span>
+                        <button onClick={() => { setSwappingIdx(isSwapping ? null : idx); setCatSearch(""); }}
+                          className={"p-0.5 rounded transition-colors " + (isSwapping ? "text-starlight-blue bg-starlight-blue/10" : "text-faint hover:text-starlight-blue")}
+                          title="Change catalogue material">
+                          <ArrowRightLeft className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {hasOverride && (
+                        <p className="text-[9px] text-muted line-through">{mat.material}</p>
+                      )}
+                      {!hasOverride && mat._catalogueMatch && (
+                        <p className="text-[9px] text-starlight-green">✓ matched to catalogue</p>
+                      )}
+                      {!mat._catalogueMatch && (
+                        <p className="text-[9px] text-starlight-amber">no catalogue match — click ⇄ to assign</p>
+                      )}
+                    </div>
+                    {mat.total_linear_mm != null && mat.total_linear_mm > 0 && (
+                      <span className="text-[10px] font-mono text-muted shrink-0">{mat.total_linear_mm}mm</span>
+                    )}
+                    {mat.lengths_needed != null && mat.lengths_needed > 0 && (
+                      <span className="text-xs font-mono text-starlight-blue font-medium shrink-0">{mat.lengths_needed}× {mat.standard_length_mm || 4800}mm</span>
+                    )}
+                    {mat.sheets_needed != null && mat.sheets_needed > 0 && (
+                      <span className="text-xs font-mono text-starlight-blue font-medium shrink-0">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
+                    )}
+                    <span className="text-[10px] text-muted shrink-0">{mat.total_parts} parts</span>
+                    {mat.waste_pct != null && (
+                      <span className={"text-[10px] shrink-0 " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-muted")}>{mat.waste_pct}% waste</span>
+                    )}
+                  </div>
+
+                  {/* Catalogue material search dropdown */}
+                  {isSwapping && (
+                    <div className="ml-7 mt-1 mb-1 border border-starlight-blue/30 rounded-lg bg-surface overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-subtle">
+                        <Search className="h-3 w-3 text-muted shrink-0" />
+                        <input type="text" value={catSearch} onChange={e => setCatSearch(e.target.value)}
+                          placeholder="Search catalogue materials..."
+                          autoFocus
+                          className="flex-1 text-xs bg-transparent focus:outline-none placeholder:text-faint" />
+                      </div>
+                      <div className="max-h-40 overflow-y-auto">
+                        {sorted.slice(0, 20).map(cm => {
+                          const isCurrent = mat._catalogueMatch?.material_id === cm.material_id;
+                          return (
+                            <button key={cm.material_id}
+                              onClick={() => swapCatalogueMat(idx, cm)}
+                              className={"w-full text-left px-2 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-starlight-blue/5 transition-colors border-b border-subtle last:border-0 " + (isCurrent ? "bg-starlight-green/5 text-starlight-green" : "text-navy")}>
+                              <div className="min-w-0">
+                                <span className="font-medium">{cm.material_name}</span>
+                                <span className="text-[10px] text-muted ml-1.5">
+                                  {cm.standard_sheet_size ? `Sheet: ${cm.standard_sheet_size}` : cm.standard_length ? `${cm.standard_length}mm` : cm.unit}
+                                </span>
+                              </div>
+                              {cm.current_unit_cost != null && (
+                                <span className="text-[10px] text-muted font-mono shrink-0">£{cm.current_unit_cost.toFixed(2)}/{cm.unit}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                        {sorted.length === 0 && <p className="px-2 py-2 text-[10px] text-muted">No materials match</p>}
+                        {sorted.length > 20 && <p className="px-2 py-1 text-[10px] text-muted">Type to narrow — {sorted.length - 20} more</p>}
+                      </div>
+                    </div>
                   )}
-                  {mat.lengths_needed != null && mat.lengths_needed > 0 && (
-                    <span className="text-xs font-mono text-starlight-blue font-medium">{mat.lengths_needed}× {mat.standard_length_mm || 4800}mm</span>
-                  )}
-                  {mat.sheets_needed != null && mat.sheets_needed > 0 && (
-                    <span className="text-xs font-mono text-starlight-blue font-medium">{mat.sheets_needed} sheet{mat.sheets_needed > 1 ? "s" : ""}</span>
-                  )}
-                  <span className="text-[10px] text-muted">{mat.total_parts} parts</span>
-                  {mat.waste_pct != null && (
-                    <span className={"text-[10px] " + (mat.waste_pct > 40 ? "text-starlight-amber" : "text-muted")}>{mat.waste_pct}% waste</span>
+
+                  {mat.anomalies && mat.anomalies.length > 0 && (
+                    <div className="ml-7 mt-0.5 mb-1">
+                      {mat.anomalies.map((a, ai) => (
+                        <p key={ai} className="text-[10px] text-starlight-amber flex items-start gap-1">
+                          <span className="shrink-0">⚠</span> {a}
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {mat.anomalies && mat.anomalies.length > 0 && (
-                  <div className="ml-7 mt-0.5 mb-1">
-                    {mat.anomalies.map((a, ai) => (
-                      <p key={ai} className="text-[10px] text-starlight-amber flex items-start gap-1">
-                        <span className="shrink-0">⚠</span> {a}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
