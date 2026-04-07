@@ -4,15 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { toast } from "sonner";
-import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown, Lightbulb } from "lucide-react";
+import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown, Lightbulb, Package } from "lucide-react";
 import { TypicalComponentsEditor } from "@/components/typical-components-editor";
+import { MaterialCategoriesEditor } from "@/components/material-categories-editor";
 
 interface RateCard { id: number; complexity: number; label: string; rate_per_hour: number; description: string | null; }
 interface BusinessSetting { id: number; setting_key: string; setting_value: string; description: string | null; }
 interface StaffUser { auth_id: string; email: string; name: string; role: string; freelancer_id: number | null; created_at: string; last_sign_in: string | null; }
 interface AuditEntry { audit_id: number; user_name: string; user_role: string; table_name: string; record_id: number; field_name: string; old_value: string | null; new_value: string | null; changed_at: string; job_id: number | null; action_type: string; reverted_at: string | null; reverted_by: string | null; }
 
-type TabKey = "rates" | "defaults" | "users" | "audit" | "prompts";
+type TabKey = "rates" | "defaults" | "users" | "audit" | "prompts" | "materials";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -167,10 +168,11 @@ export default function SettingsPage() {
     { key: "users", label: "Users", icon: Users, show: canManageUsers },
     { key: "audit", label: "Audit Log", icon: History, show: canManageUsers },
     { key: "prompts", label: "Typical Components", icon: Lightbulb, show: true },
+    { key: "materials", label: "Material Categories", icon: Package, show: canManageUsers },
   ];
 
   return (
-    <div className={`${activeTab === "audit" ? "max-w-6xl" : "max-w-4xl"} mx-auto space-y-6 transition-all`}>
+    <div className={`${activeTab === "audit" || activeTab === "materials" ? "max-w-6xl" : "max-w-4xl"} mx-auto space-y-6 transition-all`}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <Shield className="h-6 w-6 text-muted" />
@@ -458,6 +460,16 @@ export default function SettingsPage() {
             Manage suggested items shown on scope breakdown pages. Add stock items or bespoke descriptions per category.
           </p>
           <TypicalComponentsEditor />
+        </section>
+      )}
+
+      {/* Material Categories */}
+      {activeTab === "materials" && canManageUsers && (
+        <section className="space-y-4">
+          <p className="text-sm text-muted">
+            Configure how each material category is priced by suppliers, how you order it, and how cut lists calculate quantities.
+          </p>
+          <MaterialCategoriesEditor />
         </section>
       )}
     </div>

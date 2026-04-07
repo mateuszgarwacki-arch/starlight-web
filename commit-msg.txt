@@ -1,1 +1,1 @@
-Cut list extractor: material override picker — swap catalogue match before adding to BOM, with inline search dropdown and bin packing recalculation
+Material Categories settings tab — configurable pricing/buying/packing per category, Floor Covering support, standard_width on materials

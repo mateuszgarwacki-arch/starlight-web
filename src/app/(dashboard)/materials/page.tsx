@@ -42,6 +42,7 @@ const EMPTY_FORM = {
   unit: "",
   standard_length: "",
   standard_sheet_size: "",
+  standard_width: "",
   sheet_length_mm: "",
   sheet_width_mm: "",
   sheet_thickness_mm: "",
@@ -178,6 +179,7 @@ export default function MaterialsPage() {
       unit: m.unit || "",
       standard_length: m.standard_length ? String(m.standard_length) : "",
       standard_sheet_size: m.standard_sheet_size || "",
+      standard_width: m.standard_width ? String(m.standard_width) : "",
       sheet_length_mm: sheetL,
       sheet_width_mm: sheetW,
       sheet_thickness_mm: m.spec_val_1 ? String(m.spec_val_1) : "",
@@ -213,6 +215,7 @@ export default function MaterialsPage() {
       unit: form.unit.trim() || null,
       standard_length: form.standard_length ? Number(form.standard_length) : null,
       standard_sheet_size: isSheet ? composedSheetSize : form.standard_sheet_size.trim() || null,
+      standard_width: form.standard_width ? Number(form.standard_width) : null,
       current_unit_cost: form.current_unit_cost ? Number(form.current_unit_cost) : null,
       primary_supplier: form.primary_supplier.trim() || null,
       notes: form.notes.trim() || null,
@@ -316,6 +319,7 @@ export default function MaterialsPage() {
 
   const showLength = selectedCategoryName === "Timber" || selectedCategoryName === "Metal" || selectedCategoryName === "Steel" || selectedCategoryName === "Fabric";
   const showSheetSize = selectedCategoryName === "Sheet";
+  const showWidth = selectedCategoryName === "Floor Covering" || selectedCategoryName === "Fabric";
 
   // ============================================================
   // Render
@@ -922,6 +926,21 @@ export default function MaterialsPage() {
                     <div>
                       <label className="block text-[10px] font-medium text-muted mb-1">Thickness (mm)</label>
                       <input type="number" value={form.spec_val_2} onChange={(e) => setForm({ ...form, spec_val_2: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="19" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showWidth && (
+                <div className="border-t border-subtle pt-4">
+                  <p className="text-[10px] uppercase tracking-wider text-muted font-medium mb-3">Roll / Bolt Dimensions</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-medium text-muted mb-1">Standard Width (mm)</label>
+                      <input type="number" value={form.standard_width} onChange={(e) => setForm({ ...form, standard_width: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="2000 or 4000" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted mt-5">Width of the roll. Used to convert m² pricing to linear metre ordering.</p>
                     </div>
                   </div>
                 </div>

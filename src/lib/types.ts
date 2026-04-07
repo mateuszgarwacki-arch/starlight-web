@@ -212,6 +212,7 @@ export interface Material {
   unit: string | null;
   standard_length: number | null;
   standard_sheet_size: string | null;
+  standard_width: number | null;
   current_unit_cost: number | null;
   primary_supplier: string | null;
   notes: string | null;
