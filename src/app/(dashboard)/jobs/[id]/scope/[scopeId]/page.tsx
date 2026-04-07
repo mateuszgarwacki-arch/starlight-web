@@ -414,13 +414,13 @@ export default function ScopeDetailPage() {
                       <div className="flex items-center gap-2 pl-1">
                         <div className="flex items-center gap-1">
                           <label className="text-[9px] text-faint">Qty</label>
-                          <input type="number" defaultValue={item.quantity ?? 1} min={1}
+                          <input type="number" key={`qty-${item.item_id}-${item.quantity}`} defaultValue={item.quantity ?? 1} min={1}
                             onBlur={e => { const v = parseFloat(e.target.value) || null; woRef.current?.updateJobItem(item.item_id, "quantity", v); }}
                             className="w-12 px-1.5 py-0.5 text-xs text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface" />
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
                           <label className="text-[9px] text-faint shrink-0">Finish</label>
-                          <input type="text" defaultValue={item.finish_required || ""}
+                          <input type="text" key={`fin-${item.item_id}-${item.finish_required}`} defaultValue={item.finish_required || ""}
                             onBlur={e => { const v = e.target.value.trim() || null; woRef.current?.updateJobItem(item.item_id, "finish_required", v); }}
                             placeholder="—"
                             className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface placeholder:text-faint" />
@@ -428,7 +428,7 @@ export default function ScopeDetailPage() {
                       </div>
                       {/* Row 3: Notes + promote toggle + delete */}
                       <div className="flex items-center gap-1 pl-1">
-                        <input type="text" defaultValue={isPromote ? "" : (item.notes || "")}
+                        <input type="text" key={`note-${item.item_id}-${item.notes}`} defaultValue={isPromote ? "" : (item.notes || "")}
                           onBlur={e => { const v = e.target.value.trim() || null; if (!isPromote) woRef.current?.updateJobItem(item.item_id, "notes", v); }}
                           placeholder="Add note..."
                           className="flex-1 px-1.5 py-0.5 text-[10px] text-muted border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none bg-transparent placeholder:text-faint" />

@@ -1,1 +1,1 @@
-Fix number input spinner arrows too bright — use opacity instead of invert filter
+Fix left panel job items not updating when qty/finish/notes changed on right panel — add keys to force uncontrolled inputs to re-mount
