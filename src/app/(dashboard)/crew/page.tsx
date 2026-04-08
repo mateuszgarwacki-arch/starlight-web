@@ -8,7 +8,7 @@ import type { Freelancer } from "@/lib/types";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import {
   Users, Plus, Key, Pencil, X, Check, Smartphone,
-  UserCheck, UserX, Copy, Eye, EyeOff,
+  UserCheck, UserX, Copy, Eye, EyeOff, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -204,6 +204,15 @@ export default function CrewPage() {
     toast.success("Copied to clipboard");
   };
 
+  const sendWhatsAppInvite = (f: FreelancerRow, pin?: string) => {
+    const phone = (f.phone || "").replace(/\D/g, "");
+    if (!phone) { toast.error("No phone number"); return; }
+    const waPhone = phone.startsWith("0") ? "44" + phone.slice(1) : phone;
+    const firstName = (f.freelancer_name || "").split(" ")[0];
+    const msg = `Hi ${firstName}, here are your Starlight workshop app login details:\n\nURL: workshop-five-gamma.vercel.app/m/login\nPhone: ${f.phone}\nPIN: ${pin || "(your existing PIN)"}\n\nSave the link to your home screen.`;
+    window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -277,6 +286,9 @@ export default function CrewPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => openPinDialog(f)} className="p-1.5 text-faint hover:text-starlight-green hover:bg-starlight-green/10 rounded-lg transition-colors" title="Send invitation">
+                          <Send className="h-3.5 w-3.5" />
+                        </button>
                         <button onClick={() => openEdit(f)} className="p-1.5 text-faint hover:text-navy hover:bg-surface-mid rounded-lg transition-colors" title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -334,13 +346,24 @@ export default function CrewPage() {
               {newPin.length >= 4 && showPin && (
                 <div className="bg-base rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-[10px] font-medium text-muted uppercase tracking-wider">Message to copy</p>
-                    <button
-                      onClick={() => copyToClipboard(`Hi ${pinDialog.name.split(" ")[0]}, here are your Starlight workshop app login details:\n\nURL: workshop-five-gamma.vercel.app/m/login\nPhone: ${crew.find(f => f.freelancer_id === pinDialog.id)?.phone || ""}\nPIN: ${newPin}\n\nSave the link to your home screen.`)}
-                      className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium"
-                    >
-                      <Copy className="h-3 w-3" /> Copy
-                    </button>
+                    <p className="text-[10px] font-medium text-muted uppercase tracking-wider">Invitation message</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => copyToClipboard(`Hi ${pinDialog.name.split(" ")[0]}, here are your Starlight workshop app login details:\n\nURL: workshop-five-gamma.vercel.app/m/login\nPhone: ${crew.find(f => f.freelancer_id === pinDialog.id)?.phone || ""}\nPIN: ${newPin}\n\nSave the link to your home screen.`)}
+                        className="inline-flex items-center gap-1 text-xs text-starlight-blue hover:text-navy font-medium"
+                      >
+                        <Copy className="h-3 w-3" /> Copy
+                      </button>
+                      <button
+                        onClick={() => {
+                          const f = crew.find(c => c.freelancer_id === pinDialog.id);
+                          if (f) sendWhatsAppInvite(f, newPin);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-starlight-green hover:text-green-400 font-medium"
+                      >
+                        <Send className="h-3 w-3" /> WhatsApp
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs text-muted whitespace-pre-line leading-relaxed">
                     Hi {pinDialog.name.split(" ")[0]}, here are your Starlight workshop app login details:{"\n\n"}

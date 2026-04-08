@@ -1,1 +1,5 @@
-Session 20 wrap-up: TRACKER.md + schema doc updated to session 20
+Crew: add WhatsApp invitation send button
+
+- Send icon in table row opens PIN dialog for quick invite flow
+- WhatsApp button in PIN dialog opens wa.me with pre-filled credentials message
+- Same phone cleaning pattern as booking notifications (0→44)
