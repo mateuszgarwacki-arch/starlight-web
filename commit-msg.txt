@@ -1,5 +1,6 @@
-Crew: add WhatsApp invitation send button
+Crew: Review sidebar badge + pending tasks on freelancer detail page
 
-- Send icon in table row opens PIN dialog for quick invite flow
-- WhatsApp button in PIN dialog opens wa.me with pre-filled credentials message
-- Same phone cleaning pattern as booking notifications (0→44)
+- Sidebar: amber badge on Review showing pending inbox count (tasks + requests), realtime updates
+- Crew detail: amber pending tasks panel above timeline with Route to WO / Approve Overhead / Reject
+- Route to WO modal with WO search, hours adjust, notification to freelancer
+- Same action handlers as /review/inbox for consistency

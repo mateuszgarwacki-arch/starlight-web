@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
-import { getAuditContext, auditedUpdate } from "@/lib/audit";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users } from "lucide-react";
+import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { notify } from "@/lib/notifications";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -52,6 +53,28 @@ interface Stats {
   flagCount: number;
 }
 
+interface PendingTask {
+  task_id: number;
+  title: string;
+  description: string | null;
+  category: string;
+  hours: number | null;
+  worked_date: string | null;
+  job_id: number | null;
+  job_name?: string | null;
+  job_number?: string | null;
+  created_at: string;
+}
+
+interface WOOption {
+  work_order_id: number;
+  description: string | null;
+  scope_name: string;
+  job_number: string;
+  job_id: number;
+  status: string;
+}
+
 export default function FreelancerDetailPage() {
   const params = useParams();
   const freelancerId = Number(params.id);
@@ -73,6 +96,18 @@ export default function FreelancerDetailPage() {
   const [archiveReason, setArchiveReason] = useState("");
   const [stoppingEntry, setStoppingEntry] = useState<number | null>(null);
   const [stopHours, setStopHours] = useState("");
+
+  // Pending tasks state
+  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([]);
+  const [routingTask, setRoutingTask] = useState<PendingTask | null>(null);
+  const [woOptions, setWoOptions] = useState<WOOption[]>([]);
+  const [woSearch, setWoSearch] = useState("");
+  const [selectedWo, setSelectedWo] = useState<number | null>(null);
+  const [routeHours, setRouteHours] = useState("");
+  const [routeNote, setRouteNote] = useState("");
+  const [routeSubmitting, setRouteSubmitting] = useState(false);
+  const [rejectingTask, setRejectingTask] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [stopReason, setStopReason] = useState("");
 
   const loadData = useCallback(async () => {
@@ -191,6 +226,29 @@ export default function FreelancerDetailPage() {
       })));
     }
 
+    // Load pending tasks
+    const { data: taskData } = await supabase
+      .from("tbl_tasks")
+      .select("task_id, title, description, category, hours, worked_date, job_id, created_at")
+      .eq("freelancer_id", freelancerId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (taskData && taskData.length > 0) {
+      const tJobIds = [...new Set(taskData.map(t => t.job_id).filter(Boolean))];
+      const { data: tJobs } = tJobIds.length > 0
+        ? await supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", tJobIds)
+        : { data: [] };
+      const tjMap: Record<number, any> = {};
+      (tJobs || []).forEach(j => { tjMap[j.job_id] = j; });
+      setPendingTasks(taskData.map(t => ({
+        ...t,
+        job_name: t.job_id ? tjMap[t.job_id]?.job_name || null : null,
+        job_number: t.job_id ? tjMap[t.job_id]?.job_number || null : null,
+      })));
+    } else {
+      setPendingTasks([]);
+    }
+
     setLoading(false);
   }, [freelancerId]);
 
@@ -307,6 +365,73 @@ export default function FreelancerDetailPage() {
     setStopReason("");
     toast.success(`Timer stopped — ${hours}h logged`);
   };
+
+  // ============================================================
+  // Task Actions (approve / reject / route to WO)
+  // ============================================================
+  const openRouteModal = async (task: PendingTask) => {
+    setRoutingTask(task); setRouteHours(String(task.hours || "")); setRouteNote(""); setSelectedWo(null); setWoSearch("");
+    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
+    if (!wos) { setWoOptions([]); return; }
+    const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
+    const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
+    const [scopeRes, jobRes] = await Promise.all([
+      scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+      jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
+    ]);
+    const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
+    const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
+    const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
+    if (task.job_id) { enriched.sort((a, b) => { if (a.job_id === task.job_id && b.job_id !== task.job_id) return -1; if (b.job_id === task.job_id && a.job_id !== task.job_id) return 1; return 0; }); }
+    setWoOptions(enriched);
+  };
+
+  const handleRouteToWO = async () => {
+    if (!routingTask || !selectedWo) return;
+    const hrs = parseFloat(routeHours); if (!hrs || hrs <= 0) { toast.error("Enter valid hours"); return; }
+    setRouteSubmitting(true);
+    try {
+      const ctx = await getAuditContext(supabase);
+      const wo = woOptions.find((w) => w.work_order_id === selectedWo);
+      const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
+      await auditedInsert(ctx, "tbl_wo_time_entries", {
+        work_order_id: selectedWo, freelancer_id: freelancerId,
+        actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: hrs * hourlyRate,
+        actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00Z" : null,
+      }, wo?.job_id);
+      await supabase.from("tbl_tasks").update({
+        status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs,
+        reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: routeNote || null,
+      }).eq("task_id", routingTask.task_id);
+      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${hrs}h routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: selectedWo, jobId: wo?.job_id });
+      toast.success("Task routed to WO");
+      setRoutingTask(null);
+      setPendingTasks(prev => prev.filter(t => t.task_id !== routingTask.task_id));
+      loadData();
+    } catch { toast.error("Failed to route task"); }
+    setRouteSubmitting(false);
+  };
+
+  const handleApproveOverhead = async (task: PendingTask) => {
+    const ctx = await getAuditContext(supabase);
+    await supabase.from("tbl_tasks").update({ status: "approved_overhead", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString() }).eq("task_id", task.task_id);
+    await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: "Approved as overhead", severity: "info", freelancerId });
+    toast.success("Approved as overhead");
+    setPendingTasks(prev => prev.filter(t => t.task_id !== task.task_id));
+  };
+
+  const handleRejectTask = async (taskId: number) => {
+    if (!rejectReason.trim()) { toast.error("Rejection needs a reason"); return; }
+    const task = pendingTasks.find(t => t.task_id === taskId);
+    const ctx = await getAuditContext(supabase);
+    await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: rejectReason.trim() }).eq("task_id", taskId);
+    await notify({ supabase, type: "task_reviewed", title: `Task rejected: ${task?.title || ""}`, detail: rejectReason.trim(), severity: "warning", freelancerId });
+    toast.success("Task rejected");
+    setRejectingTask(null); setRejectReason("");
+    setPendingTasks(prev => prev.filter(t => t.task_id !== taskId));
+  };
+
+  const filteredWos = woOptions.filter((w) => (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) || w.job_number.toLowerCase().includes(woSearch.toLowerCase()));
 
   const statusColor = (s: string | null) => {
     if (!s) return "bg-surface-mid text-muted";
@@ -444,6 +569,63 @@ export default function FreelancerDetailPage() {
           </div>
         );
       })()}
+
+      {/* Pending Tasks — needs PM action */}
+      {pendingTasks.length > 0 && (
+        <div className="bg-starlight-amber/5 border border-starlight-amber/20 rounded-xl px-5 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-starlight-amber" />
+            <p className="text-sm font-semibold text-starlight-amber">
+              {pendingTasks.length} pending task{pendingTasks.length !== 1 ? "s" : ""} — needs your review
+            </p>
+          </div>
+          <div className="space-y-2">
+            {pendingTasks.map(task => (
+              <div key={task.task_id} className="bg-surface rounded-lg border border-subtle px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-amber/10 text-starlight-amber uppercase tracking-wider">{task.category.replace("_", " ")}</span>
+                      {task.hours != null && <span className="text-sm font-semibold text-navy">{task.hours}h</span>}
+                      {task.worked_date && <span className="text-xs text-muted">{formatDate(task.worked_date)}</span>}
+                    </div>
+                    <p className="text-sm font-medium text-navy mt-1">{task.title}</p>
+                    {task.description && <p className="text-xs text-muted mt-0.5">{task.description}</p>}
+                    {task.job_number && <p className="text-xs text-muted mt-0.5 font-mono">{task.job_number} — {task.job_name}</p>}
+                  </div>
+                </div>
+                {rejectingTask === task.task_id ? (
+                  <div className="mt-3 pt-3 border-t border-subtle flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-[9px] text-muted block mb-0.5">Reason *</label>
+                      <input type="text" value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleRejectTask(task.task_id); if (e.key === "Escape") { setRejectingTask(null); setRejectReason(""); } }}
+                        placeholder="Reason for rejection..."
+                        className="w-full px-2 py-1.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-red" autoFocus />
+                    </div>
+                    <button onClick={() => handleRejectTask(task.task_id)} disabled={!rejectReason.trim()}
+                      className="px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded hover:bg-starlight-red disabled:opacity-50 shrink-0">Reject</button>
+                    <button onClick={() => { setRejectingTask(null); setRejectReason(""); }}
+                      className="px-2 py-1.5 text-xs text-muted hover:text-muted shrink-0">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-subtle">
+                    <button onClick={() => openRouteModal(task)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 transition-colors">
+                      <CornerDownRight className="h-3 w-3" /> Route to WO
+                    </button>
+                    <button onClick={() => handleApproveOverhead(task)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors">
+                      <Check className="h-3 w-3" /> Approve Overhead
+                    </button>
+                    <button onClick={() => { setRejectingTask(task.task_id); setRejectReason(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors">
+                      <X className="h-3 w-3" /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-subtle">
@@ -607,6 +789,58 @@ export default function FreelancerDetailPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Route to WO Modal */}
+      {routingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setRoutingTask(null)} />
+          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-navy">Route Task to Work Order</h3>
+            <p className="text-sm text-muted">{routingTask.title} — {person?.freelancer_name}</p>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
+              <input type="text" value={woSearch} onChange={(e) => setWoSearch(e.target.value)} placeholder="Search work orders..."
+                className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            </div>
+            <div className="border border-subtle rounded-lg max-h-48 overflow-y-auto divide-y divide-subtle">
+              {filteredWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
+                filteredWos.slice(0, 20).map((wo) => (
+                  <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)}
+                    className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
+                    <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
+                      <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
+                      <span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted mb-1 block">Hours</label>
+                <input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5"
+                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                {routingTask.hours && routeHours && parseFloat(routeHours) !== routingTask.hours && (
+                  <p className="text-[10px] text-starlight-amber mt-1">Claimed: {routingTask.hours}h</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label>
+                <input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..."
+                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
+              <button onClick={handleRouteToWO} disabled={!selectedWo || routeSubmitting}
+                className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">
+                {routeSubmitting ? "Routing..." : "Route & Create Entry"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

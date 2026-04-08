@@ -31,7 +31,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, zone: 1 },
   { href: "/jobs", label: "Jobs", icon: Briefcase, zone: 1 },
   { href: "/workshop", label: "Workshop", icon: Hammer, zone: 2 },
-  { href: "/review", label: "Review", icon: AlertTriangle, zone: 3 },
+  { href: "/review", label: "Review", icon: AlertTriangle, zone: 3, hasInboxBadge: true },
   { href: "/capacity", label: "Capacity", icon: Users, zone: 1 },
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
   { href: "/stock", label: "Stock", icon: Warehouse, zone: 1 },
@@ -50,6 +50,7 @@ export function Sidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [inboxCount, setInboxCount] = useState(0);
 
   // Fetch unread notification count
   const fetchCount = useCallback(async () => {
@@ -62,10 +63,21 @@ export function Sidebar() {
     setUnreadCount(count || 0);
   }, []);
 
-  useEffect(() => { fetchCount(); }, [fetchCount]);
+  // Fetch inbox count (pending tasks + open requests)
+  const fetchInboxCount = useCallback(async () => {
+    const supabase = createClient();
+    const [{ count: taskCount }, { count: reqCount }] = await Promise.all([
+      supabase.from("tbl_tasks").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("tbl_workshop_requests").select("*", { count: "exact", head: true }).in("status", ["open", "acknowledged"]),
+    ]);
+    setInboxCount((taskCount || 0) + (reqCount || 0));
+  }, []);
+
+  useEffect(() => { fetchCount(); fetchInboxCount(); }, [fetchCount, fetchInboxCount]);
 
   // Real-time: update badge instantly when notifications change
   useRealtimeRefresh("tbl_notifications", fetchCount);
+  useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], fetchInboxCount);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -98,6 +110,8 @@ export function Sidebar() {
               ? pathname === "/"
               : pathname.startsWith(item.href);
           const showBadge = (item as any).hasBadge && unreadCount > 0;
+          const showInbox = (item as any).hasInboxBadge && inboxCount > 0;
+          const badgeCount = showBadge ? unreadCount : showInbox ? inboxCount : 0;
 
           return (
             <Link
@@ -112,9 +126,9 @@ export function Sidebar() {
             >
               <div className="relative shrink-0">
                 <item.icon className="h-4.5 w-4.5" />
-                {showBadge && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-starlight-pink text-white text-[10px] font-bold flex items-center justify-center">
-                    {unreadCount > 99 ? "99+" : unreadCount}
+                {(showBadge || showInbox) && (
+                  <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${showBadge ? "bg-starlight-pink" : "bg-starlight-amber"}`}>
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}
               </div>
