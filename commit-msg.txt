@@ -1,7 +1,7 @@
-Crew detail: show ad-hoc tasks in Activity tab with inline editing
+Crew detail: By Day view for spotting hour discrepancies
 
-- Activity tab now shows reviewed tasks (routed/approved/rejected) below WO entries
-- Ad-hoc Tasks section with category badge, status badge, job reference, cost calc
-- Inline editing: pencil icon opens hours + title editing (same pattern as WO entries)
-- Tab count includes both WO entries and tasks
-- Loads all task statuses: pending → amber panel, rest → timeline
+- Flat/By Day toggle on Activity tab
+- Day cards: date, total hours, entry count, daily cost
+- Red OVER badge when hours exceed standard_day_hours
+- Click to expand: shows each WO entry + ad-hoc task with hours, activity, scope, cost
+- Combines WO time entries and reviewed tasks in unified day groups

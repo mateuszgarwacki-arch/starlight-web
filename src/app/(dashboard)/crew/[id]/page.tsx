@@ -8,7 +8,7 @@ import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -92,6 +92,8 @@ export default function FreelancerDetailPage() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [activeTab, setActiveTab] = useState<"timeline" | "bookings">("timeline");
+  const [viewMode, setViewMode] = useState<"flat" | "by-day">("flat");
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [editingEntry, setEditingEntry] = useState<number | null>(null);
   const [editHoursValue, setEditHoursValue] = useState("");
@@ -667,9 +669,19 @@ export default function FreelancerDetailPage() {
       {/* TAB: Activity Timeline */}
       {activeTab === "timeline" && (
         <div className="space-y-2">
-          {/* Show archived toggle */}
+          {/* Controls */}
           {isAdmin && (
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
+                <button onClick={() => setViewMode("flat")}
+                  className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "flat" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+                  Flat
+                </button>
+                <button onClick={() => setViewMode("by-day")}
+                  className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "by-day" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+                  By Day
+                </button>
+              </div>
               <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                 <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)}
                   className="rounded border-subtle" />
@@ -677,6 +689,7 @@ export default function FreelancerDetailPage() {
               </label>
             </div>
           )}
+          {viewMode === "flat" && (<>
           {(() => {
             const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
             if (visible.length === 0 && reviewedTasks.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No activity recorded yet.</div>;
@@ -845,6 +858,111 @@ export default function FreelancerDetailPage() {
               })}
             </>
           )}
+          </>)}
+
+          {/* BY DAY VIEW */}
+          {viewMode === "by-day" && (() => {
+            const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
+            const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
+            const maxHours = person?.standard_day_hours || 10;
+
+            // Build unified items with a common date key
+            type DayItem = { _type: "wo"; data: TimeEntryRow } | { _type: "task"; data: PendingTask };
+            const allItems: DayItem[] = [
+              ...visible.map(e => ({ _type: "wo" as const, data: e })),
+              ...reviewedTasks.map(t => ({ _type: "task" as const, data: t })),
+            ];
+
+            // Group by date
+            const dayMap = new Map<string, { items: DayItem[]; totalHours: number }>();
+            allItems.forEach(item => {
+              let dateStr: string;
+              if (item._type === "wo") {
+                dateStr = item.data.system_start_timestamp ? item.data.system_start_timestamp.split("T")[0] : "unknown";
+              } else {
+                dateStr = item.data.worked_date || item.data.created_at.split("T")[0];
+              }
+              if (!dayMap.has(dateStr)) dayMap.set(dateStr, { items: [], totalHours: 0 });
+              const day = dayMap.get(dateStr)!;
+              day.items.push(item);
+              const hrs = item._type === "wo" ? (item.data.actual_hours || 0) : (item.data.hours || 0);
+              if (item._type === "wo" && (item.data as TimeEntryRow).archived_at) { /* don't count archived */ }
+              else day.totalHours += hrs;
+            });
+
+            const sortedDays = [...dayMap.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+
+            if (sortedDays.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No activity recorded yet.</div>;
+
+            const toggleDay = (d: string) => {
+              setExpandedDays(prev => {
+                const next = new Set(prev);
+                if (next.has(d)) next.delete(d); else next.add(d);
+                return next;
+              });
+            };
+
+            return sortedDays.map(([dateStr, day]) => {
+              const isExpanded = expandedDays.has(dateStr);
+              const isOver = day.totalHours > maxHours;
+              const dateObj = dateStr !== "unknown" ? new Date(dateStr + "T12:00:00") : null;
+              const woCount = day.items.filter(i => i._type === "wo").length;
+              const taskCount = day.items.filter(i => i._type === "task").length;
+              const cost = day.totalHours * hourlyRate;
+
+              return (
+                <div key={dateStr} className="card overflow-hidden">
+                  <button onClick={() => toggleDay(dateStr)}
+                    className={"w-full px-5 py-3 flex items-center gap-4 text-left hover:bg-surface-dim transition-colors " + (isOver ? "bg-starlight-red/5" : "")}>
+                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted shrink-0" />}
+                    <div className="w-24 shrink-0">
+                      <p className="text-sm font-semibold text-navy">
+                        {dateObj ? dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "Unknown"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 flex-1">
+                      <span className={"text-lg font-bold font-mono " + (isOver ? "text-starlight-red" : "text-navy")}>{Math.round(day.totalHours * 10) / 10}h</span>
+                      {isOver && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-red/10 text-starlight-red">OVER {maxHours}h</span>}
+                      <span className="text-xs text-muted">{woCount} WO entr{woCount !== 1 ? "ies" : "y"}{taskCount > 0 ? ` + ${taskCount} task${taskCount !== 1 ? "s" : ""}` : ""}</span>
+                      {hourlyRate > 0 && <span className="text-xs text-muted font-mono ml-auto">{formatCurrency(cost)}</span>}
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t border-subtle px-5 py-2 space-y-1.5">
+                      {day.items.map((item, idx) => {
+                        if (item._type === "wo") {
+                          const e = item.data;
+                          const isArchived = !!(e as TimeEntryRow).archived_at;
+                          return (
+                            <div key={`wo-${e.entry_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (isArchived ? "opacity-40 line-through" : "")}>
+                              <span className="w-12 text-right font-mono font-semibold text-navy">{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-navy/10 text-navy">{e.activity_label || "WO"}</span>
+                              <span className="text-muted truncate flex-1">{e.scope_name || e.wo_description || "—"}</span>
+                              {e.job_number && <span className="text-xs text-muted font-mono shrink-0">{e.job_number}</span>}
+                              {e.entry_cost != null && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(e.entry_cost)}</span>}
+                              {e.flag_note && <Flag className="h-3 w-3 text-starlight-amber shrink-0" />}
+                            </div>
+                          );
+                        } else {
+                          const t = item.data;
+                          const taskCost = (t.hours || 0) * hourlyRate;
+                          return (
+                            <div key={`task-${t.task_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (t.status === "rejected" ? "opacity-40 line-through" : "")}>
+                              <span className="w-12 text-right font-mono font-semibold text-navy">{t.hours != null ? `${t.hours}h` : "—"}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-starlight-amber/10 text-starlight-amber">Ad-hoc</span>
+                              <span className="text-muted truncate flex-1">{t.title}</span>
+                              {t.job_number && <span className="text-xs text-muted font-mono shrink-0">{t.job_number}</span>}
+                              {hourlyRate > 0 && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(taskCost)}</span>}
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
