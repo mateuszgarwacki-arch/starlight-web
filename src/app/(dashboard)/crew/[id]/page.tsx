@@ -64,6 +64,9 @@ interface PendingTask {
   job_name?: string | null;
   job_number?: string | null;
   created_at: string;
+  status: string;
+  review_note?: string | null;
+  routed_to_wo_id?: number | null;
 }
 
 interface WOOption {
@@ -97,8 +100,8 @@ export default function FreelancerDetailPage() {
   const [stoppingEntry, setStoppingEntry] = useState<number | null>(null);
   const [stopHours, setStopHours] = useState("");
 
-  // Pending tasks state
-  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([]);
+  // Tasks state (all statuses)
+  const [allTasks, setAllTasks] = useState<PendingTask[]>([]);
   const [routingTask, setRoutingTask] = useState<PendingTask | null>(null);
   const [woOptions, setWoOptions] = useState<WOOption[]>([]);
   const [woSearch, setWoSearch] = useState("");
@@ -108,6 +111,9 @@ export default function FreelancerDetailPage() {
   const [routeSubmitting, setRouteSubmitting] = useState(false);
   const [rejectingTask, setRejectingTask] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [editTaskHours, setEditTaskHours] = useState("");
+  const [editTaskTitle, setEditTaskTitle] = useState("");
   const [stopReason, setStopReason] = useState("");
 
   const loadData = useCallback(async () => {
@@ -226,12 +232,11 @@ export default function FreelancerDetailPage() {
       })));
     }
 
-    // Load pending tasks
+    // Load all tasks (any status)
     const { data: taskData } = await supabase
       .from("tbl_tasks")
-      .select("task_id, title, description, category, hours, worked_date, job_id, created_at")
+      .select("task_id, title, description, category, hours, worked_date, job_id, created_at, status, review_note, routed_to_wo_id")
       .eq("freelancer_id", freelancerId)
-      .eq("status", "pending")
       .order("created_at", { ascending: false });
     if (taskData && taskData.length > 0) {
       const tJobIds = [...new Set(taskData.map(t => t.job_id).filter(Boolean))];
@@ -240,13 +245,13 @@ export default function FreelancerDetailPage() {
         : { data: [] };
       const tjMap: Record<number, any> = {};
       (tJobs || []).forEach(j => { tjMap[j.job_id] = j; });
-      setPendingTasks(taskData.map(t => ({
+      setAllTasks(taskData.map(t => ({
         ...t,
         job_name: t.job_id ? tjMap[t.job_id]?.job_name || null : null,
         job_number: t.job_id ? tjMap[t.job_id]?.job_number || null : null,
       })));
     } else {
-      setPendingTasks([]);
+      setAllTasks([]);
     }
 
     setLoading(false);
@@ -406,7 +411,7 @@ export default function FreelancerDetailPage() {
       await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${hrs}h routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: selectedWo, jobId: wo?.job_id });
       toast.success("Task routed to WO");
       setRoutingTask(null);
-      setPendingTasks(prev => prev.filter(t => t.task_id !== routingTask.task_id));
+      setAllTasks(prev => prev.map(t => t.task_id === routingTask.task_id ? { ...t, status: "routed" } : t));
       loadData();
     } catch { toast.error("Failed to route task"); }
     setRouteSubmitting(false);
@@ -417,21 +422,37 @@ export default function FreelancerDetailPage() {
     await supabase.from("tbl_tasks").update({ status: "approved_overhead", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString() }).eq("task_id", task.task_id);
     await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: "Approved as overhead", severity: "info", freelancerId });
     toast.success("Approved as overhead");
-    setPendingTasks(prev => prev.filter(t => t.task_id !== task.task_id));
+    setAllTasks(prev => prev.map(t => t.task_id === task.task_id ? { ...t, status: "approved_overhead" } : t));
   };
 
   const handleRejectTask = async (taskId: number) => {
     if (!rejectReason.trim()) { toast.error("Rejection needs a reason"); return; }
-    const task = pendingTasks.find(t => t.task_id === taskId);
+    const task = allTasks.find(t => t.task_id === taskId);
     const ctx = await getAuditContext(supabase);
     await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: rejectReason.trim() }).eq("task_id", taskId);
     await notify({ supabase, type: "task_reviewed", title: `Task rejected: ${task?.title || ""}`, detail: rejectReason.trim(), severity: "warning", freelancerId });
     toast.success("Task rejected");
     setRejectingTask(null); setRejectReason("");
-    setPendingTasks(prev => prev.filter(t => t.task_id !== taskId));
+    setAllTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: "rejected" } : t));
   };
 
   const filteredWos = woOptions.filter((w) => (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) || w.job_number.toLowerCase().includes(woSearch.toLowerCase()));
+
+  // Edit task hours/title
+  const handleEditTask = async (taskId: number) => {
+    const hrs = parseFloat(editTaskHours);
+    if (isNaN(hrs) || hrs < 0) { toast.error("Invalid hours"); return; }
+    const updates: Record<string, any> = { hours: hrs };
+    if (editTaskTitle.trim()) updates.title = editTaskTitle.trim();
+    await supabase.from("tbl_tasks").update(updates).eq("task_id", taskId);
+    setAllTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, ...updates } : t));
+    setEditingTask(null);
+    toast.success("Task updated");
+  };
+
+  // Derived: split tasks by status
+  const pendingTasks = allTasks.filter(t => t.status === "pending");
+  const reviewedTasks = allTasks.filter(t => t.status !== "pending");
 
   const statusColor = (s: string | null) => {
     if (!s) return "bg-surface-mid text-muted";
@@ -633,7 +654,7 @@ export default function FreelancerDetailPage() {
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
             activeTab === "timeline" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-muted"
           }`}>
-          <Clock className="h-4 w-4" /> Activity ({timeEntries.length})
+          <Clock className="h-4 w-4" /> Activity ({timeEntries.length + reviewedTasks.length})
         </button>
         <button onClick={() => setActiveTab("bookings")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
@@ -658,7 +679,7 @@ export default function FreelancerDetailPage() {
           )}
           {(() => {
             const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
-            if (visible.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No time entries recorded yet.</div>;
+            if (visible.length === 0 && reviewedTasks.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No activity recorded yet.</div>;
             return visible.map(e => {
               const isArchived = !!e.archived_at;
               return (
@@ -752,6 +773,78 @@ export default function FreelancerDetailPage() {
               );
             });
           })()}
+
+          {/* Ad-hoc Tasks */}
+          {reviewedTasks.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mt-4 mb-1">
+                <span className="text-xs font-semibold text-muted uppercase tracking-wider">Ad-hoc Tasks</span>
+                <span className="text-[10px] text-faint">({reviewedTasks.length})</span>
+              </div>
+              {reviewedTasks.map(t => {
+                const isEditing = editingTask === t.task_id;
+                const taskStatusStyle: Record<string, string> = {
+                  routed: "bg-starlight-blue/10 text-starlight-blue",
+                  approved_overhead: "bg-starlight-green/10 text-starlight-green",
+                  rejected: "bg-starlight-red/10 text-starlight-red",
+                  in_progress: "bg-navy/10 text-navy",
+                };
+                const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
+                return (
+                  <div key={`task-${t.task_id}`} className={"card px-5 py-3.5 flex items-start gap-4 border-l-4 " + (t.status === "rejected" ? "border-l-red-300 opacity-50" : "border-l-starlight-amber/40")}>
+                    <div className="w-20 shrink-0 text-center">
+                      <p className="text-xs text-muted">
+                        {t.worked_date ? new Date(t.worked_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : new Date(t.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </p>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <input type="number" step="0.5" value={editTaskHours}
+                            onChange={ev => setEditTaskHours(ev.target.value)}
+                            onKeyDown={ev => { if (ev.key === "Enter") handleEditTask(t.task_id); if (ev.key === "Escape") setEditingTask(null); }}
+                            autoFocus className="w-14 px-1 py-0.5 text-sm text-center border border-starlight-blue rounded" />
+                          <button onClick={() => handleEditTask(t.task_id)} className="text-starlight-green"><CheckCircle2 className="h-4 w-4" /></button>
+                        </div>
+                      ) : (
+                        <p className="text-lg font-semibold text-navy">{t.hours != null ? `${t.hours}h` : "—"}</p>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-starlight-amber/10 text-starlight-amber uppercase">Ad-hoc</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-surface-mid text-muted">{t.category.replace("_", " ")}</span>
+                        <span className={"text-[10px] px-1.5 py-0.5 rounded font-medium " + (taskStatusStyle[t.status] || "bg-surface-mid text-muted")}>{t.status.replace("_", " ")}</span>
+                      </div>
+                      {isEditing ? (
+                        <input type="text" value={editTaskTitle} onChange={ev => setEditTaskTitle(ev.target.value)}
+                          onKeyDown={ev => { if (ev.key === "Enter") handleEditTask(t.task_id); if (ev.key === "Escape") setEditingTask(null); }}
+                          className="w-full mt-1 px-2 py-1 text-sm border border-starlight-blue rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                      ) : (
+                        <p className="text-sm text-muted mt-0.5 leading-relaxed">{t.title}</p>
+                      )}
+                      {t.description && !isEditing && <p className="text-xs text-faint mt-0.5">{t.description}</p>}
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted">
+                        {t.job_number && <span className="font-mono">{t.job_number} — {t.job_name}</span>}
+                        {t.hours != null && hourlyRate > 0 && <span className="font-mono">{formatCurrency(t.hours * hourlyRate)}</span>}
+                      </div>
+                      {t.review_note && (
+                        <div className="mt-2 flex items-start gap-2 bg-navy/5 rounded px-3 py-2">
+                          <p className="text-xs text-muted leading-relaxed">PM note: {t.review_note}</p>
+                        </div>
+                      )}
+                    </div>
+                    {isAdmin && t.status !== "rejected" && !isEditing && (
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button onClick={() => { setEditingTask(t.task_id); setEditTaskHours(String(t.hours ?? "")); setEditTaskTitle(t.title || ""); }}
+                          title="Edit task" className="p-1.5 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 

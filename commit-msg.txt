@@ -1,6 +1,7 @@
-Crew: Review sidebar badge + pending tasks on freelancer detail page
+Crew detail: show ad-hoc tasks in Activity tab with inline editing
 
-- Sidebar: amber badge on Review showing pending inbox count (tasks + requests), realtime updates
-- Crew detail: amber pending tasks panel above timeline with Route to WO / Approve Overhead / Reject
-- Route to WO modal with WO search, hours adjust, notification to freelancer
-- Same action handlers as /review/inbox for consistency
+- Activity tab now shows reviewed tasks (routed/approved/rejected) below WO entries
+- Ad-hoc Tasks section with category badge, status badge, job reference, cost calc
+- Inline editing: pencil icon opens hours + title editing (same pattern as WO entries)
+- Tab count includes both WO entries and tasks
+- Loads all task statuses: pending → amber panel, rest → timeline
