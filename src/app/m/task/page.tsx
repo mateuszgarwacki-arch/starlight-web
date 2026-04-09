@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { ArrowLeft, Clock, Timer, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 
@@ -11,6 +11,18 @@ interface ActiveJob {
   job_id: number;
   job_name: string;
   job_number: string;
+}
+
+interface RecentTask {
+  task_id: number;
+  title: string;
+  category: string;
+  hours: number | null;
+  worked_date: string | null;
+  status: string;
+  created_at: string;
+  job_name?: string | null;
+  job_number?: string | null;
 }
 
 const CATEGORIES = [
@@ -41,6 +53,7 @@ export default function MobileTaskPage() {
   const [showJobPicker, setShowJobPicker] = useState(false);
   const [activeWarning, setActiveWarning] = useState<string | null>(null);
   const [hasActiveTask, setHasActiveTask] = useState(false);
+  const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -54,6 +67,14 @@ export default function MobileTaskPage() {
       if (openEntries && openEntries.length > 0) { setActiveWarning("You have a WO session in progress. Starting a timer will overlap."); }
       const { data: activeTasks } = await supabase.from("tbl_tasks").select("task_id").eq("freelancer_id", fId).eq("status", "in_progress");
       if (activeTasks && activeTasks.length > 0) { setHasActiveTask(true); }
+      // Load recent tasks
+      const { data: recent } = await supabase.from("tbl_tasks").select("task_id, title, category, hours, worked_date, status, created_at, job_id").eq("freelancer_id", fId).order("created_at", { ascending: false }).limit(10);
+      if (recent && recent.length > 0) {
+        const rJobIds = [...new Set(recent.map(t => t.job_id).filter(Boolean))];
+        const { data: rJobs } = rJobIds.length > 0 ? await supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", rJobIds) : { data: [] };
+        const rjMap: Record<number, any> = {}; (rJobs || []).forEach(j => { rjMap[j.job_id] = j; });
+        setRecentTasks(recent.map(t => ({ ...t, job_name: t.job_id ? rjMap[t.job_id]?.job_name || null : null, job_number: t.job_id ? rjMap[t.job_id]?.job_number || null : null })));
+      }
     };
     load();
   }, []);
@@ -146,6 +167,39 @@ export default function MobileTaskPage() {
       <button onClick={handleQuickLog} disabled={submitting || !title.trim() || hours <= 0} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
         <Clock className="h-4 w-4" />{submitting ? "Logging..." : "Log Task"}
       </button>
+
+      {/* Recent Tasks */}
+      {recentTasks.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Recent Tasks</p>
+          <div className="space-y-1.5">
+            {recentTasks.map(t => {
+              const statusStyle: Record<string, string> = {
+                pending: "bg-starlight-amber/10 text-starlight-amber",
+                in_progress: "bg-starlight-blue/10 text-starlight-blue",
+                routed: "bg-starlight-blue/10 text-starlight-blue",
+                approved_overhead: "bg-starlight-green/10 text-starlight-green",
+                rejected: "bg-starlight-red/10 text-starlight-red",
+              };
+              return (
+                <div key={t.task_id} className={"bg-surface border border-subtle rounded-xl px-4 py-3 " + (t.status === "rejected" ? "opacity-50" : "")}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-navy font-medium truncate">{t.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={"text-[10px] px-1.5 py-0.5 rounded font-medium " + (statusStyle[t.status] || "bg-surface-mid text-muted")}>{t.status.replace("_", " ")}</span>
+                        {t.worked_date && <span className="text-[10px] text-muted">{new Date(t.worked_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                        {t.job_number && <span className="text-[10px] text-muted font-mono">{t.job_number}</span>}
+                      </div>
+                    </div>
+                    {t.hours != null && <span className="text-sm font-semibold text-navy shrink-0">{t.hours}h</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

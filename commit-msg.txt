@@ -1,7 +1,12 @@
-Crew detail: By Day view for spotting hour discrepancies
+Manual hour entry: PM add entry + mobile recent tasks
 
-- Flat/By Day toggle on Activity tab
-- Day cards: date, total hours, entry count, daily cost
-- Red OVER badge when hours exceed standard_day_hours
-- Click to expand: shows each WO entry + ad-hoc task with hours, activity, scope, cost
-- Combines WO time entries and reviewed tasks in unified day groups
+PM crew detail:
+- "Add Entry" button in Activity controls opens modal
+- Type toggle: WO Time Entry or Ad-hoc Task
+- Date picker, hours, WO search or title/category, optional note
+- WO entries get flag_note "PM added manually", ad-hoc tasks auto-approved
+
+Mobile /m/task:
+- Recent Tasks section below Log button showing last 10 tasks
+- Status badges, dates, job references, hours per task
+- Freelancers can already pick previous dates via existing date picker

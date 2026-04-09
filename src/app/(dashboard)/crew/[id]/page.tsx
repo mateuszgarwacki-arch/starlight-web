@@ -8,7 +8,7 @@ import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -116,6 +116,19 @@ export default function FreelancerDetailPage() {
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editTaskHours, setEditTaskHours] = useState("");
   const [editTaskTitle, setEditTaskTitle] = useState("");
+
+  // Add entry dialog
+  const [showAddEntry, setShowAddEntry] = useState(false);
+  const [addEntryType, setAddEntryType] = useState<"wo" | "adhoc">("wo");
+  const [addEntryDate, setAddEntryDate] = useState("");
+  const [addEntryHours, setAddEntryHours] = useState("1");
+  const [addEntryWoId, setAddEntryWoId] = useState<number | null>(null);
+  const [addEntryTitle, setAddEntryTitle] = useState("");
+  const [addEntryCategory, setAddEntryCategory] = useState("job_work");
+  const [addEntryNote, setAddEntryNote] = useState("");
+  const [addEntrySubmitting, setAddEntrySubmitting] = useState(false);
+  const [addWoSearch, setAddWoSearch] = useState("");
+  const [addWoOptions, setAddWoOptions] = useState<WOOption[]>([]);
   const [stopReason, setStopReason] = useState("");
 
   const loadData = useCallback(async () => {
@@ -452,6 +465,61 @@ export default function FreelancerDetailPage() {
     toast.success("Task updated");
   };
 
+  // Open add entry dialog
+  const openAddEntry = async () => {
+    const d = new Date();
+    setAddEntryDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    setAddEntryHours("1"); setAddEntryWoId(null); setAddEntryTitle(""); setAddEntryCategory("job_work"); setAddEntryNote(""); setAddWoSearch(""); setAddEntryType("wo");
+    setShowAddEntry(true);
+    // Load WOs
+    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
+    if (!wos) { setAddWoOptions([]); return; }
+    const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
+    const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
+    const [scopeRes, jobRes] = await Promise.all([
+      scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+      jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
+    ]);
+    const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
+    const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
+    setAddWoOptions(wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" })));
+  };
+
+  const handleAddEntry = async () => {
+    const hrs = parseFloat(addEntryHours);
+    if (isNaN(hrs) || hrs <= 0) { toast.error("Enter valid hours"); return; }
+    if (!addEntryDate) { toast.error("Pick a date"); return; }
+    setAddEntrySubmitting(true);
+    try {
+      const ctx = await getAuditContext(supabase);
+      if (addEntryType === "wo") {
+        if (!addEntryWoId) { toast.error("Pick a work order"); setAddEntrySubmitting(false); return; }
+        const wo = addWoOptions.find(w => w.work_order_id === addEntryWoId);
+        const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
+        await auditedInsert(ctx, "tbl_wo_time_entries", {
+          work_order_id: addEntryWoId, freelancer_id: freelancerId,
+          actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: Math.round(hrs * hourlyRate * 100) / 100,
+          actual_start_timestamp: addEntryDate + "T09:00:00Z",
+          flag_note: addEntryNote.trim() ? `PM added: ${addEntryNote.trim()}` : "PM added manually",
+        }, wo?.job_id);
+        toast.success(`${hrs}h WO entry created`);
+      } else {
+        if (!addEntryTitle.trim()) { toast.error("Enter a title"); setAddEntrySubmitting(false); return; }
+        await supabase.from("tbl_tasks").insert({
+          freelancer_id: freelancerId, title: addEntryTitle.trim(), description: addEntryNote.trim() || null,
+          category: addEntryCategory, hours: hrs, worked_date: addEntryDate, status: "approved_overhead",
+          reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "PM added manually",
+        });
+        toast.success(`${hrs}h ad-hoc task created`);
+      }
+      setShowAddEntry(false);
+      loadData();
+    } catch { toast.error("Failed to add entry"); }
+    setAddEntrySubmitting(false);
+  };
+
+  const filteredAddWos = addWoOptions.filter((w) => (w.description || "").toLowerCase().includes(addWoSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(addWoSearch.toLowerCase()) || w.job_number.toLowerCase().includes(addWoSearch.toLowerCase()));
+
   // Derived: split tasks by status
   const pendingTasks = allTasks.filter(t => t.status === "pending");
   const reviewedTasks = allTasks.filter(t => t.status !== "pending");
@@ -672,14 +740,20 @@ export default function FreelancerDetailPage() {
           {/* Controls */}
           {isAdmin && (
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
-                <button onClick={() => setViewMode("flat")}
-                  className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "flat" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
-                  Flat
-                </button>
-                <button onClick={() => setViewMode("by-day")}
-                  className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "by-day" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
-                  By Day
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
+                  <button onClick={() => setViewMode("flat")}
+                    className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "flat" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+                    Flat
+                  </button>
+                  <button onClick={() => setViewMode("by-day")}
+                    className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "by-day" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+                    By Day
+                  </button>
+                </div>
+                <button onClick={openAddEntry}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue/10 text-starlight-blue rounded-lg hover:bg-starlight-blue/20 transition-colors">
+                  <Plus className="h-3 w-3" /> Add Entry
                 </button>
               </div>
               <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
@@ -1049,6 +1123,91 @@ export default function FreelancerDetailPage() {
               <button onClick={handleRouteToWO} disabled={!selectedWo || routeSubmitting}
                 className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">
                 {routeSubmitting ? "Routing..." : "Route & Create Entry"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add Entry Modal */}
+      {showAddEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddEntry(false)} />
+          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-navy">Add Entry for {person?.freelancer_name}</h3>
+            {/* Type toggle */}
+            <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
+              <button onClick={() => setAddEntryType("wo")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "wo" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>WO Time Entry</button>
+              <button onClick={() => setAddEntryType("adhoc")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "adhoc" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>Ad-hoc Task</button>
+            </div>
+            {/* Date + Hours */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted mb-1 block">Date</label>
+                <input type="date" value={addEntryDate} onChange={e => setAddEntryDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted mb-1 block">Hours</label>
+                <input type="number" value={addEntryHours} onChange={e => setAddEntryHours(e.target.value)} step="0.5" min="0.5"
+                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+              </div>
+            </div>
+            {/* WO picker */}
+            {addEntryType === "wo" && (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
+                  <input type="text" value={addWoSearch} onChange={e => setAddWoSearch(e.target.value)} placeholder="Search work orders..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <div className="border border-subtle rounded-lg max-h-40 overflow-y-auto divide-y divide-subtle">
+                  {filteredAddWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
+                    filteredAddWos.slice(0, 20).map(wo => (
+                      <button key={wo.work_order_id} onClick={() => setAddEntryWoId(wo.work_order_id)}
+                        className={"w-full text-left px-4 py-2.5 hover:bg-surface-dim transition-colors " + (addEntryWoId === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
+                        <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
+                          <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
+                          <span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+            {/* Ad-hoc fields */}
+            {addEntryType === "adhoc" && (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-muted mb-1 block">Title</label>
+                  <input type="text" value={addEntryTitle} onChange={e => setAddEntryTitle(e.target.value)} placeholder="What was done?"
+                    className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted mb-1.5 block">Category</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[{ v: "job_work", l: "Job Work" }, { v: "maintenance", l: "Maintenance" }, { v: "workshop_general", l: "Workshop General" }, { v: "other", l: "Other" }].map(c => (
+                      <button key={c.v} onClick={() => setAddEntryCategory(c.v)}
+                        className={"px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors " + (addEntryCategory === c.v ? "bg-navy/10 text-navy border-navy/30" : "bg-surface-dim text-muted border-subtle")}>
+                        {c.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {/* Note */}
+            <div>
+              <label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label>
+              <input type="text" value={addEntryNote} onChange={e => setAddEntryNote(e.target.value)} placeholder="e.g. Forgot to clock in, covering for sick leave..."
+                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowAddEntry(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
+              <button onClick={handleAddEntry} disabled={addEntrySubmitting}
+                className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">
+                {addEntrySubmitting ? "Adding..." : "Add Entry"}
               </button>
             </div>
           </div>
