@@ -1,10 +1,1 @@
-Mobile task: WO category with QR scanner, time range, recent tasks
-
-- New "Task (WO)" category on /m/task — pick a WO by search or QR scan
-- QR scanner: full-screen camera overlay, reads traveller QR codes, auto-selects WO
-- Time input toggle: "Hours" stepper or "From → To" time range with auto-calc
-- Creates tbl_tasks with routed_to_wo_id pre-filled → inbox for PM review
-- Recent Tasks section showing last 10 tasks with status badges
-- Review inbox + crew detail: pre-select WO when routed_to_wo_id already set
-- html5-qrcode dependency added for QR scanning
-- SQL: qry_review_inbox view update to expose routed_to_wo_id (run manually)
+Fix: wrap UNION ORDER BY in subquery for review inbox view
