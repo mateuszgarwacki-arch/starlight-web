@@ -36,7 +36,7 @@ export default function ReviewInboxPage() {
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], loadInbox);
 
   const openRouteModal = async (task: InboxItem) => {
-    setRoutingTask(task); setRouteHours(String(task.claimed_hours || "")); setRouteNote(""); setSelectedWo(null); setWoSearch("");
+    setRoutingTask(task); setRouteHours(String(task.claimed_hours || "")); setRouteNote(""); setSelectedWo(task.work_order_id || null); setWoSearch("");
     const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
     if (!wos) { setWoOptions([]); return; }
     const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];

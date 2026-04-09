@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight } from "lucide-react";
+import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight, QrCode, X, Search } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 
@@ -25,10 +25,20 @@ interface RecentTask {
   job_number?: string | null;
 }
 
+interface WOOption {
+  work_order_id: number;
+  description: string | null;
+  scope_name: string;
+  job_number: string;
+  job_id: number;
+  status: string;
+}
+
 const CATEGORIES = [
-  { value: "job_work", label: "Job Work", color: "bg-starlight-blue/10 text-starlight-blue border-starlight-blue/30" },
+  { value: "task", label: "Task (WO)", color: "bg-starlight-blue/10 text-starlight-blue border-starlight-blue/30" },
+  { value: "job_work", label: "Job Work", color: "bg-navy/10 text-navy border-navy/30" },
   { value: "maintenance", label: "Maintenance", color: "bg-starlight-amber/10 text-starlight-amber border-starlight-amber/30" },
-  { value: "workshop_general", label: "Workshop General", color: "bg-navy/10 text-navy border-navy/30" },
+  { value: "workshop_general", label: "Workshop General", color: "bg-surface-mid text-muted border-subtle" },
   { value: "other", label: "Other", color: "bg-surface-mid text-muted border-subtle" },
 ];
 
@@ -42,7 +52,7 @@ export default function MobileTaskPage() {
   const router = useRouter();
   const [myId, setMyId] = useState(0);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("job_work");
+  const [category, setCategory] = useState("task");
   const [jobId, setJobId] = useState<number | null>(null);
   const [jobSearch, setJobSearch] = useState("");
   const [hours, setHours] = useState(1.0);
@@ -54,6 +64,29 @@ export default function MobileTaskPage() {
   const [activeWarning, setActiveWarning] = useState<string | null>(null);
   const [hasActiveTask, setHasActiveTask] = useState(false);
   const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
+
+  // WO picker state (for "task" category)
+  const [woOptions, setWoOptions] = useState<WOOption[]>([]);
+  const [selectedWo, setSelectedWo] = useState<WOOption | null>(null);
+  const [woSearch, setWoSearch] = useState("");
+  const [showWoPicker, setShowWoPicker] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const scannerRef = useRef<any>(null);
+
+  // Time mode: "total" or "range"
+  const [timeMode, setTimeMode] = useState<"total" | "range">("total");
+  const [timeFrom, setTimeFrom] = useState("09:00");
+  const [timeTo, setTimeTo] = useState("17:00");
+
+  // Calculate hours from time range
+  const calcRangeHours = () => {
+    if (!timeFrom || !timeTo) return 0;
+    const [fh, fm] = timeFrom.split(":").map(Number);
+    const [th, tm] = timeTo.split(":").map(Number);
+    const diff = (th * 60 + tm) - (fh * 60 + fm);
+    return diff > 0 ? Math.round((diff / 60) * 2) / 2 : 0; // round to 0.5
+  };
+  const effectiveHours = timeMode === "range" ? calcRangeHours() : hours;
 
   useEffect(() => {
     const load = async () => {
@@ -75,19 +108,93 @@ export default function MobileTaskPage() {
         const rjMap: Record<number, any> = {}; (rJobs || []).forEach(j => { rjMap[j.job_id] = j; });
         setRecentTasks(recent.map(t => ({ ...t, job_name: t.job_id ? rjMap[t.job_id]?.job_name || null : null, job_number: t.job_id ? rjMap[t.job_id]?.job_number || null : null })));
       }
+      // Load WOs for "task" category
+      const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
+      if (wos) {
+        const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
+        const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
+        const [scopeRes, jobRes] = await Promise.all([
+          scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+          jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
+        ]);
+        const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
+        const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
+        setWoOptions(wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" })));
+      }
     };
     load();
   }, []);
 
   const filteredJobs = jobs.filter((j) => j.job_name?.toLowerCase().includes(jobSearch.toLowerCase()) || j.job_number?.toLowerCase().includes(jobSearch.toLowerCase()));
+  const filteredWos = woOptions.filter((w) => (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) || w.job_number.toLowerCase().includes(woSearch.toLowerCase()));
+
+  // QR Scanner
+  const startScanner = async () => {
+    setShowScanner(true);
+    // Dynamic import to avoid SSR issues
+    const { Html5Qrcode } = await import("html5-qrcode");
+    const scanner = new Html5Qrcode("qr-reader");
+    scannerRef.current = scanner;
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText: string) => {
+          // Extract work_order_id from URL like /m/wo/123
+          const match = decodedText.match(/\/m\/wo\/(\d+)/);
+          if (match) {
+            const woId = parseInt(match[1]);
+            const wo = woOptions.find(w => w.work_order_id === woId);
+            if (wo) {
+              setSelectedWo(wo);
+              setTitle(`${wo.scope_name} — ${wo.description || "WO"}`);
+              toast.success(`WO found: ${wo.scope_name}`);
+            } else {
+              toast.error("WO not found or not active");
+            }
+          } else {
+            toast.error("Not a valid WO QR code");
+          }
+          stopScanner();
+        },
+        () => {} // ignore scan failures
+      );
+    } catch (err) {
+      toast.error("Camera access denied");
+      setShowScanner(false);
+    }
+  };
+
+  const stopScanner = () => {
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {});
+      scannerRef.current = null;
+    }
+    setShowScanner(false);
+  };
 
   const handleQuickLog = async () => {
+    const logHours = effectiveHours;
+    if (category === "task" && !selectedWo) { toast.error("Pick a work order"); return; }
     if (!title.trim()) { toast.error("What did you do?"); return; }
-    if (hours <= 0) { toast.error("Hours must be greater than 0"); return; }
+    if (logHours <= 0) { toast.error("Hours must be greater than 0"); return; }
     setSubmitting(true);
-    const { error } = await supabase.from("tbl_tasks").insert({ freelancer_id: myId, title: title.trim(), description: notes.trim() || null, category, job_id: category === "job_work" ? jobId : null, hours, worked_date: workedDate, status: "pending" });
+    const timeNote = timeMode === "range" ? `${timeFrom}–${timeTo}` : null;
+    const desc = [notes.trim(), timeNote].filter(Boolean).join(" | ") || null;
+
+    const insertData: any = {
+      freelancer_id: myId, title: title.trim(), description: desc,
+      category: category === "task" ? "job_work" : category,
+      job_id: category === "task" ? selectedWo?.job_id : (category === "job_work" ? jobId : null),
+      hours: logHours, worked_date: workedDate, status: "pending",
+    };
+    if (category === "task" && selectedWo) {
+      insertData.routed_to_wo_id = selectedWo.work_order_id;
+    }
+    const { error } = await supabase.from("tbl_tasks").insert(insertData);
     if (error) { toast.error("Failed to log task"); setSubmitting(false); return; }
-    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${hours}h on ${workedDate} — ${CATEGORIES.find((c) => c.value === category)?.label}`, severity: "info", freelancerId: myId, jobId: category === "job_work" ? jobId : null, actionUrl: "/review/inbox" });
+    const catLabel = category === "task" ? `WO: ${selectedWo?.scope_name}` : CATEGORIES.find((c) => c.value === category)?.label;
+    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${logHours}h on ${workedDate} — ${catLabel}`, severity: "info", freelancerId: myId, jobId: insertData.job_id, woId: selectedWo?.work_order_id, actionUrl: "/review/inbox" });
     toast.success("Task logged — pending review");
     router.back();
   };
@@ -96,7 +203,16 @@ export default function MobileTaskPage() {
     if (!title.trim()) { toast.error("What are you doing?"); return; }
     if (hasActiveTask) { toast.error("Log your current task first"); return; }
     setSubmitting(true);
-    const { error } = await supabase.from("tbl_tasks").insert({ freelancer_id: myId, title: title.trim(), description: notes.trim() || null, category, job_id: category === "job_work" ? jobId : null, started_at: new Date().toISOString(), status: "in_progress" });
+    const insertData: any = {
+      freelancer_id: myId, title: title.trim(), description: notes.trim() || null,
+      category: category === "task" ? "job_work" : category,
+      job_id: category === "task" ? selectedWo?.job_id : (category === "job_work" ? jobId : null),
+      started_at: new Date().toISOString(), status: "in_progress",
+    };
+    if (category === "task" && selectedWo) {
+      insertData.routed_to_wo_id = selectedWo.work_order_id;
+    }
+    const { error } = await supabase.from("tbl_tasks").insert(insertData);
     if (error) { toast.error("Failed to start task"); setSubmitting(false); return; }
     toast.success("Timer started");
     router.back();
@@ -112,16 +228,61 @@ export default function MobileTaskPage() {
         <h1 className="text-lg font-bold text-navy">Log a Task</h1>
       </div>
       {activeWarning && (<div className="bg-starlight-amber/10 border border-starlight-amber/30 rounded-xl px-4 py-3 text-xs text-starlight-amber">{activeWarning}</div>)}
+
+      {/* Title */}
       <div>
         <label className="text-xs font-medium text-muted mb-1.5 block">What did you do?</label>
         <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Reorganised timber rack" className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" autoFocus />
       </div>
+
+      {/* Categories */}
       <div>
         <label className="text-xs font-medium text-muted mb-1.5 block">Category</label>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((cat) => (<button key={cat.value} onClick={() => setCategory(cat.value)} className={"px-3.5 py-2 rounded-full text-xs font-medium border transition-all " + (category === cat.value ? cat.color + " ring-2 ring-offset-1 ring-current" : "bg-surface-dim text-muted border-subtle")}>{cat.label}</button>))}
+          {CATEGORIES.map((cat) => (<button key={cat.value} onClick={() => { setCategory(cat.value); if (cat.value !== "task") setSelectedWo(null); }} className={"px-3.5 py-2 rounded-full text-xs font-medium border transition-all " + (category === cat.value ? cat.color + " ring-2 ring-offset-1 ring-current" : "bg-surface-dim text-muted border-subtle")}>{cat.label}</button>))}
         </div>
       </div>
+
+      {/* WO Picker (for "task" category) */}
+      {category === "task" && (
+        <div>
+          <label className="text-xs font-medium text-muted mb-1.5 block">Work Order</label>
+          {selectedWo ? (
+            <div className="flex items-center justify-between bg-surface border border-starlight-blue/30 rounded-xl px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-navy">{selectedWo.scope_name}</p>
+                <p className="text-[10px] text-muted">{selectedWo.job_number} · {selectedWo.description || "—"} · {selectedWo.status}</p>
+              </div>
+              <button onClick={() => setSelectedWo(null)} className="text-xs text-starlight-red">Clear</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
+                  <input type="text" value={woSearch} onChange={(e) => { setWoSearch(e.target.value); setShowWoPicker(true); }} onFocus={() => setShowWoPicker(true)} placeholder="Search work orders..." className="w-full pl-10 pr-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <button onClick={startScanner} className="px-4 py-3 bg-starlight-blue text-white rounded-xl flex items-center gap-2 active:bg-starlight-blue/90 shrink-0">
+                  <QrCode className="h-4 w-4" />
+                </button>
+              </div>
+              {showWoPicker && filteredWos.length > 0 && (
+                <div className="bg-surface border border-subtle rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                  {filteredWos.slice(0, 10).map((wo) => (
+                    <button key={wo.work_order_id} onClick={() => { setSelectedWo(wo); setWoSearch(""); setShowWoPicker(false); setTitle(`${wo.scope_name} — ${wo.description || "WO"}`); }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-surface-dim active:bg-surface-mid border-b border-subtle last:border-0">
+                      <p className="text-sm text-navy">{wo.scope_name}</p>
+                      <p className="text-[10px] text-muted">{wo.job_number} · {wo.description || "—"} · {wo.status}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Job Picker (for "job_work" category) */}
       {category === "job_work" && (
         <div>
           <label className="text-xs font-medium text-muted mb-1.5 block">Job (optional)</label>
@@ -142,31 +303,77 @@ export default function MobileTaskPage() {
           )}
         </div>
       )}
-      <button onClick={handleStartTimer} disabled={submitting || !title.trim() || hasActiveTask} className="w-full py-3.5 bg-surface border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-        <Timer className="h-4 w-4" />{hasActiveTask ? "Task timer already active" : "Start Timer"}
-      </button>
+
+      {/* Timer button */}
+      {category !== "task" && (
+        <button onClick={handleStartTimer} disabled={submitting || !title.trim() || hasActiveTask} className="w-full py-3.5 bg-surface border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          <Timer className="h-4 w-4" />{hasActiveTask ? "Task timer already active" : "Start Timer"}
+        </button>
+      )}
+
       <div className="flex items-center gap-3"><div className="flex-1 h-px bg-surface-hi" /><span className="text-[10px] text-muted font-medium uppercase tracking-wider">or log completed work</span><div className="flex-1 h-px bg-surface-hi" /></div>
-      <div className="flex gap-3">
-        <div className="shrink-0" style={{width: "130px"}}>
-          <label className="text-xs font-medium text-muted mb-1.5 block">Hours</label>
-          <div className="flex items-center bg-surface border border-subtle rounded-xl overflow-hidden">
-            <button onClick={() => adjustHours(-0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-r border-subtle"><Minus className="h-3.5 w-3.5" /></button>
-            <input type="number" value={hours} onChange={(e) => setHours(Math.max(0, parseFloat(e.target.value) || 0))} step="0.5" className="w-12 text-center py-3 text-sm font-semibold text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-            <button onClick={() => adjustHours(0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-l border-subtle"><Plus className="h-3.5 w-3.5" /></button>
+
+      {/* Time input — toggle between total hours and range */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted">Time</label>
+          <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
+            <button onClick={() => setTimeMode("total")} className={"px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors " + (timeMode === "total" ? "bg-surface text-navy shadow-sm" : "text-muted")}>Hours</button>
+            <button onClick={() => setTimeMode("range")} className={"px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors " + (timeMode === "range" ? "bg-surface text-navy shadow-sm" : "text-muted")}>From → To</button>
           </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <label className="text-xs font-medium text-muted mb-1.5 block">When</label>
-          <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
-        </div>
+        {timeMode === "total" ? (
+          <div className="flex gap-3">
+            <div className="shrink-0" style={{width: "130px"}}>
+              <div className="flex items-center bg-surface border border-subtle rounded-xl overflow-hidden">
+                <button onClick={() => adjustHours(-0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-r border-subtle"><Minus className="h-3.5 w-3.5" /></button>
+                <input type="number" value={hours} onChange={(e) => setHours(Math.max(0, parseFloat(e.target.value) || 0))} step="0.5" className="w-12 text-center py-3 text-sm font-semibold text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                <button onClick={() => adjustHours(0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-l border-subtle"><Plus className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="w-full px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} className="flex-1 px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy text-center focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            <span className="text-xs text-muted font-medium">→</span>
+            <input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} className="flex-1 px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy text-center focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            <div className="shrink-0 w-14 text-center">
+              <p className="text-lg font-bold text-navy">{calcRangeHours()}h</p>
+            </div>
+            <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="flex-1 px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+          </div>
+        )}
       </div>
+
+      {/* Notes */}
       <div>
         <label className="text-xs font-medium text-muted mb-1.5 block">Notes (optional)</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any extra detail..." rows={2} className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" />
       </div>
-      <button onClick={handleQuickLog} disabled={submitting || !title.trim() || hours <= 0} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-        <Clock className="h-4 w-4" />{submitting ? "Logging..." : "Log Task"}
+
+      {/* Submit */}
+      <button onClick={handleQuickLog} disabled={submitting || !title.trim() || effectiveHours <= 0 || (category === "task" && !selectedWo)} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        <Clock className="h-4 w-4" />{submitting ? "Logging..." : `Log ${effectiveHours > 0 ? effectiveHours + "h" : "Task"}`}
       </button>
+
+      {/* QR Scanner Overlay */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 bg-black/80">
+            <p className="text-white text-sm font-medium">Scan WO QR Code</p>
+            <button onClick={stopScanner} className="p-2 text-white"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div id="qr-reader" className="w-full max-w-sm" />
+          </div>
+          <div className="px-4 py-4 bg-black/80 text-center">
+            <p className="text-white/60 text-xs">Point camera at the QR code on the traveller</p>
+          </div>
+        </div>
+      )}
 
       {/* Recent Tasks */}
       {recentTasks.length > 0 && (
