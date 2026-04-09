@@ -97,6 +97,8 @@ export default function FreelancerDetailPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [editingEntry, setEditingEntry] = useState<number | null>(null);
   const [editHoursValue, setEditHoursValue] = useState("");
+  const [editDateValue, setEditDateValue] = useState("");
+  const [editFlagValue, setEditFlagValue] = useState("");
   const [archivingEntry, setArchivingEntry] = useState<number | null>(null);
   const [archiveReason, setArchiveReason] = useState("");
   const [stoppingEntry, setStoppingEntry] = useState<number | null>(null);
@@ -311,23 +313,33 @@ export default function FreelancerDetailPage() {
     </div>
   );
 
-  // Admin: Edit hours
-  const handleEditHours = async (entryId: number) => {
+  // Admin: Edit entry (hours, date, flag)
+  const handleEditEntry = async (entryId: number) => {
     const hours = parseFloat(editHoursValue);
     if (isNaN(hours) || hours < 0) { toast.error("Invalid hours"); return; }
     const entry = timeEntries.find(e => e.entry_id === entryId);
     const rate = person?.day_rate && person?.standard_day_hours ? person.day_rate / person.standard_day_hours : 0;
     const newCost = Math.round(hours * rate * 100) / 100;
 
-    const ctx = await getAuditContext(supabase);
-    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, {
-      actual_hours: hours,
-      entry_cost: newCost,
-    }, entry?.job_id);
+    const updates: Record<string, any> = { actual_hours: hours, entry_cost: newCost };
+    // Update date if changed
+    if (editDateValue) {
+      updates.system_start_timestamp = editDateValue + "T09:00:00";
+      updates.actual_start_timestamp = editDateValue + "T09:00:00";
+    }
+    // Update flag_note
+    updates.flag_note = editFlagValue.trim() || null;
 
-    setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? { ...e, actual_hours: hours, entry_cost: newCost } : e));
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, updates, entry?.job_id);
+
+    setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? {
+      ...e, actual_hours: hours, entry_cost: newCost,
+      flag_note: editFlagValue.trim() || null,
+      system_start_timestamp: editDateValue ? editDateValue + "T09:00:00" : e.system_start_timestamp,
+    } : e));
     setEditingEntry(null);
-    toast.success(`Hours updated to ${hours}h`);
+    toast.success("Entry updated");
   };
 
   // Admin: Archive entry
@@ -499,7 +511,10 @@ export default function FreelancerDetailPage() {
         await auditedInsert(ctx, "tbl_wo_time_entries", {
           work_order_id: addEntryWoId, freelancer_id: freelancerId,
           actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: Math.round(hrs * hourlyRate * 100) / 100,
-          actual_start_timestamp: addEntryDate + "T09:00:00Z",
+          system_start_timestamp: addEntryDate + "T09:00:00",
+          actual_start_timestamp: addEntryDate + "T09:00:00",
+          system_end_timestamp: addEntryDate + "T17:00:00",
+          actual_end_timestamp: addEntryDate + "T17:00:00",
           flag_note: addEntryNote.trim() ? `PM added: ${addEntryNote.trim()}` : "PM added manually",
         }, wo?.job_id);
         toast.success(`${hrs}h WO entry created`);
@@ -770,7 +785,8 @@ export default function FreelancerDetailPage() {
             return visible.map(e => {
               const isArchived = !!e.archived_at;
               return (
-              <div key={e.entry_id} className={`card px-5 py-3.5 flex items-start gap-4 ${e.flag_note && !isArchived ? "border-l-4 border-l-starlight-amber" : ""} ${isArchived ? "opacity-40 border-l-4 border-l-red-300" : ""}`}>
+              <div key={e.entry_id} className={`card px-5 py-3.5 ${e.flag_note && !isArchived ? "border-l-4 border-l-starlight-amber" : ""} ${isArchived ? "opacity-40 border-l-4 border-l-red-300" : ""}`}>
+              <div className="flex items-start gap-4">
                 {/* Date */}
                 <div className="w-20 shrink-0 text-center">
                   <p className="text-xs text-muted">
@@ -781,13 +797,7 @@ export default function FreelancerDetailPage() {
                     {e.system_end_timestamp ? " → " + new Date(e.system_end_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
                   </p>
                   {editingEntry === e.entry_id ? (
-                    <div className="flex items-center gap-1">
-                      <input type="number" step="0.5" value={editHoursValue}
-                        onChange={ev => setEditHoursValue(ev.target.value)}
-                        onKeyDown={ev => { if (ev.key === "Enter") handleEditHours(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
-                        autoFocus className="w-14 px-1 py-0.5 text-sm text-center border border-starlight-blue rounded" />
-                      <button onClick={() => handleEditHours(e.entry_id)} className="text-starlight-green"><CheckCircle2 className="h-4 w-4" /></button>
-                    </div>
+                    <p className="text-lg font-semibold text-starlight-blue">{editHoursValue}h</p>
                   ) : (
                     <p className={`text-lg font-semibold text-navy ${isArchived ? "line-through" : ""}`}>{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</p>
                   )}
@@ -846,14 +856,49 @@ export default function FreelancerDetailPage() {
                 {/* Admin action buttons */}
                 {isAdmin && !isArchived && archivingEntry !== e.entry_id && (
                   <div className="flex flex-col gap-1 shrink-0">
-                    <button onClick={() => { setEditingEntry(e.entry_id); setEditHoursValue(String(e.actual_hours ?? "")); }}
-                      title="Edit hours" className="p-1.5 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors">
+                    <button onClick={() => {
+                        setEditingEntry(e.entry_id);
+                        setEditHoursValue(String(e.actual_hours ?? ""));
+                        setEditDateValue(e.system_start_timestamp ? e.system_start_timestamp.split("T")[0] : "");
+                        setEditFlagValue(e.flag_note || "");
+                      }}
+                      title="Edit entry" className="p-1.5 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button onClick={() => { setArchivingEntry(e.entry_id); setArchiveReason(""); }}
                       title="Archive entry" className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors">
                       <Archive className="h-3.5 w-3.5" />
                     </button>
+                  </div>
+                )}
+                </div>
+                {/* Edit panel */}
+                {editingEntry === e.entry_id && (
+                  <div className="w-full mt-3 pt-3 border-t border-subtle">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-28">
+                        <label className="text-[9px] text-muted block mb-0.5">Date</label>
+                        <input type="date" value={editDateValue} onChange={ev => setEditDateValue(ev.target.value)}
+                          className="w-full px-2 py-1.5 text-xs border border-starlight-blue rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                      </div>
+                      <div className="w-20">
+                        <label className="text-[9px] text-muted block mb-0.5">Hours</label>
+                        <input type="number" step="0.5" value={editHoursValue} onChange={ev => setEditHoursValue(ev.target.value)}
+                          onKeyDown={ev => { if (ev.key === "Enter") handleEditEntry(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                          autoFocus className="w-full px-2 py-1.5 text-xs text-center border border-starlight-blue rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                      </div>
+                      <div className="flex-1 min-w-[180px]">
+                        <label className="text-[9px] text-muted block mb-0.5">Flag / Note</label>
+                        <input type="text" value={editFlagValue} onChange={ev => setEditFlagValue(ev.target.value)}
+                          onKeyDown={ev => { if (ev.key === "Enter") handleEditEntry(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                          placeholder="Flag note..."
+                          className="w-full px-2 py-1.5 text-xs border border-starlight-blue rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                      </div>
+                      <button onClick={() => handleEditEntry(e.entry_id)}
+                        className="px-3 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-starlight-blue/90 shrink-0">Save</button>
+                      <button onClick={() => setEditingEntry(null)}
+                        className="px-2 py-1.5 text-xs text-muted hover:text-foreground shrink-0">Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>

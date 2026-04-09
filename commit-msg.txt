@@ -1,1 +1,1 @@
-Fix: wrap UNION ORDER BY in subquery for review inbox view
+Fix: Add Entry date/timer bugs + expanded edit panel (date, hours, flag)
