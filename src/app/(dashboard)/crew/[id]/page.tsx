@@ -974,6 +974,15 @@ export default function FreelancerDetailPage() {
                           title="Edit task" className="p-1.5 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
+                        <button onClick={async () => {
+                          const ctx = await getAuditContext(supabase);
+                          await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "Archived by PM" }).eq("task_id", t.task_id);
+                          setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "rejected", review_note: "Archived by PM" } : x));
+                          toast.success("Task archived");
+                        }}
+                          title="Archive task" className="p-1.5 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors">
+                          <Archive className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     )}
                   </div>

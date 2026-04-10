@@ -1,1 +1,1 @@
-Fix: Route to WO creates closed entry with correct date (no timer, no date shift)
+Crew detail: archive button on ad-hoc tasks
