@@ -92,11 +92,12 @@ export default function MobileTaskList() {
     const scopeIds = [...new Set(wos.map(w => w.scope_item_id).filter(Boolean))];
     const jobIds = [...new Set(wos.map(w => w.job_id).filter(Boolean))];
 
-    const [actRes, scopeRes, jobRes, timeRes] = await Promise.all([
+    const [actRes, scopeRes, jobRes, timeRes, activeWorkersRes] = await Promise.all([
       supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
       supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds),
       supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_end_timestamp").in("work_order_id", woIds).is("archived_at", null),
+      supabase.rpc("rpc_active_workers"),
     ]);
 
     const allActIds = [
@@ -111,12 +112,12 @@ export default function MobileTaskList() {
     const lk: Record<number, { v: string; p: number | null }> = {};
     (lookups || []).forEach((l: any) => { lk[l.lookup_id] = { v: l.lookup_value, p: l.phase_number }; });
 
-    const workerIds = [...new Set((timeRes.data || []).map((t: any) => t.freelancer_id))];
-    const { data: freelancers } = workerIds.length > 0
-      ? await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", workerIds)
-      : { data: [] };
-    const fNames: Record<number, string> = {};
-    (freelancers || []).forEach((f: any) => { fNames[f.freelancer_id] = f.freelancer_name; });
+    // Build active workers map from RPC (bypasses RLS, returns all active workers)
+    const activeWorkersByWO: Record<number, { freelancer_id: number; name: string }[]> = {};
+    ((activeWorkersRes.data || []) as any[]).forEach((aw: any) => {
+      if (!activeWorkersByWO[aw.work_order_id]) activeWorkersByWO[aw.work_order_id] = [];
+      activeWorkersByWO[aw.work_order_id].push({ freelancer_id: aw.freelancer_id, name: aw.freelancer_name });
+    });
 
     const actByWO: Record<number, any[]> = {};
     (actRes.data || []).forEach((a: any) => {
@@ -149,9 +150,7 @@ export default function MobileTaskList() {
       }
 
       const entries = timeByWO[wo.work_order_id] || [];
-      const workers = entries
-        .filter((e: any) => !e.system_end_timestamp)
-        .map((e: any) => ({ freelancer_id: e.freelancer_id, name: fNames[e.freelancer_id] || "Unknown", open: true }));
+      const workers = (activeWorkersByWO[wo.work_order_id] || []).map(w => ({ ...w, open: true }));
       const myOpen = entries.find((e: any) => e.freelancer_id === fId && !e.system_end_timestamp);
       const job = jobMap[wo.job_id] || { name: "—", number: "—" };
 

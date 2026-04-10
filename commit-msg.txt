@@ -1,1 +1,1 @@
-Mobile tasks: active freelancers shown as pulsing name pills on each WO row
+Mobile tasks: use rpc_active_workers to show all freelancers working (bypasses RLS for non-sensitive data)
