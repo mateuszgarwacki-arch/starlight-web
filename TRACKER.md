@@ -1728,3 +1728,96 @@ Merged separate Work Orders page into scope page. Everything on one screen.
 - **Scope material two-step**: pick → configure (qty/unit/cost preview) → confirm. Never auto-insert with qty=1
 - **Unit conversion (m² → linear metre)**: `unit_cost_per_lm = catalogue_cost_per_m² × (standard_width_mm / 1000)`. Applied in scope add dialog and will be used in cut list extractor Phase B
 - **Uncontrolled input sync**: When `defaultValue` inputs need to reflect external state changes, add `key` prop including the value (e.g. `key={`qty-${id}-${value}`}`) to force remount
+
+
+### Session 21 (10 Apr 2026) — Crew Management, Task Workflow, Time Entry Fixes
+
+~10 commits. Crew page polish, task review workflow, time entry editing, mobile task overhaul.
+
+**Crew Page — WhatsApp Invitation:**
+- Send icon (↗) added to crew table rows — opens PIN dialog for quick invite
+- "WhatsApp" button in PIN dialog — `wa.me` link with pre-filled credentials message (login URL, phone, PIN)
+- Same phone cleaning pattern as booking notifications (strip non-digits, leading 0→44)
+
+**Sidebar — Review Inbox Badge:**
+- Amber badge on Review nav item showing count of pending tasks + open requests
+- Realtime updates via `tbl_tasks` + `tbl_workshop_requests` subscriptions
+- Separate from notification bell (pink) — Review badge is amber for visual distinction
+
+**Crew Detail — Pending Tasks Panel:**
+- Amber panel above Activity tab shows freelancer's pending tasks needing PM review
+- Route to WO / Approve Overhead / Reject actions — same as `/review/inbox`
+- Route to WO modal with WO search, hour adjustment, note
+
+**Crew Detail — Ad-hoc Task History:**
+- Activity tab now shows reviewed tasks (routed/approved/rejected) below WO entries
+- "Ad-hoc Tasks" section with category badge, status badge, job reference, calculated cost
+- Inline editing: pencil icon opens hours + title editing
+- Archive button: sets task to "rejected" with "Archived by PM" note
+
+**Crew Detail — By Day View:**
+- Flat / By Day toggle on Activity tab controls
+- Day cards: date, total hours, entry count, daily cost
+- Red "OVER Xh" badge when total hours exceed `standard_day_hours`
+- Click to expand: shows each WO entry + ad-hoc task with hours, activity, scope, cost
+- Unified grouping: WO time entries + reviewed tasks combined by date
+
+**Crew Detail — Add Entry:**
+- "+ Add Entry" button in Activity controls opens modal
+- Type toggle: WO Time Entry or Ad-hoc Task
+- Date picker, hours, WO search or title/category, optional note
+- WO entries: sets all 4 timestamps (no phantom timers), no Z suffix (no date shift)
+- Ad-hoc tasks: auto-approved as overhead with "PM added manually"
+
+**Crew Detail — Expanded Edit Panel:**
+- Pencil icon on any WO time entry opens inline edit row
+- Edit: Date, Hours, Flag/Note — all three fields editable at once
+- Save commits all changes atomically via `auditedUpdate`
+
+**Mobile `/m/task` — Full Rebuild:**
+- **"Task (WO)" category** (first option, blue) — log time against an existing WO
+- **WO picker**: search field + QR scan button (blue)
+- **QR scanner**: full-screen camera overlay via `html5-qrcode`, reads traveller QR codes, auto-selects WO + pre-fills title
+- **Time input toggle**: "Hours" (stepper, default) or "From → To" (two time pickers, auto-calculates rounded to 0.5h)
+- **Recent Tasks** section below Log button showing last 10 tasks with status badges
+- Task (WO) submissions: `tbl_tasks` with `routed_to_wo_id` pre-filled → inbox pre-selects WO for one-click routing
+- Categories: Task (WO), Job Work, Maintenance, Workshop General, Other
+
+**Route to WO — Date & Timer Fixes:**
+- Review inbox + crew detail: routed entries now set all 4 timestamps (system_start, actual_start, system_end, actual_end)
+- Uses task's `worked_date` without Z suffix — BST no longer shifts dates
+- Flag note auto-set to "Routed from ad-hoc task" or custom note
+
+**Review Inbox — WO Pre-selection:**
+- `qry_review_inbox` view updated to expose `routed_to_wo_id` as `work_order_id` for tasks
+- Route to WO modal pre-selects the WO when freelancer already picked one (one-click routing)
+- SQL: `session21-inbox-view-update.sql` (UNION wrapped in subquery for ORDER BY)
+
+**npm Fix:**
+- Local npm had `omit=dev` globally — devDependencies (including tailwindcss) not installed
+- Fixed with `npm ci --include=dev`
+- `html5-qrcode` dependency added for QR scanning
+
+### New/Modified Files (Session 21)
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/crew/page.tsx` | WhatsApp send icon + invite button in PIN dialog |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | Pending tasks panel, ad-hoc task history, By Day view, Add Entry, expanded edit panel, archive tasks |
+| `src/app/(dashboard)/review/inbox/page.tsx` | Route to WO: fixed timestamps, WO pre-selection |
+| `src/components/sidebar.tsx` | Amber inbox badge on Review with realtime |
+| `src/app/m/task/page.tsx` | Full rebuild: Task (WO) category, QR scanner, time range, recent tasks |
+| `sql/session21-inbox-view-update.sql` | qry_review_inbox view with routed_to_wo_id |
+
+### SQL Run (Session 21)
+```sql
+-- sql/session21-inbox-view-update.sql:
+-- DROP VIEW IF EXISTS qry_review_inbox
+-- CREATE VIEW qry_review_inbox WITH (security_invoker = true) AS SELECT * FROM (...UNION ALL...) sub ORDER BY urgency, created_at DESC
+-- Now exposes routed_to_wo_id as work_order_id for tasks
+```
+
+### Conventions Added (Session 21)
+- **Manual time entries**: Always set all 4 timestamps (system_start, actual_start, system_end, actual_end) — never leave system_end_timestamp NULL or it creates a phantom active timer
+- **Timezone-safe timestamps**: Never use `Z` suffix on timestamp strings for date-anchored entries — use `"YYYY-MM-DDT09:00:00"` (no Z) to prevent BST date shifts
+- **Task → WO routing**: `routed_to_wo_id` on `tbl_tasks` pre-selects WO in review inbox. PM can one-click confirm instead of searching
+- **npm omit=dev**: Local machine has `omit=dev` globally. Always use `--include=dev` flag for `npm install`/`npm ci` commands
