@@ -1,1 +1,1 @@
-Mobile header: clickable logo → Me tab, active timer / last task indicator
+Mobile tasks: tree layout (Job → Scope → WO), collapsible jobs, compact WO rows with description as headline
