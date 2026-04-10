@@ -3,33 +3,26 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { Check, ChevronLeft, ChevronRight, X, Plus, Trash2, CalendarPlus, AlertTriangle } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X, CalendarPlus, AlertTriangle, Save } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/auth-headers";
+import { auditedUpdate } from "@/lib/audit";
 
-// Timezone-safe date string
 function localDateStr(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 function todayLocal(): string {
-  const d = new Date();
-  return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+  const d = new Date(); return localDateStr(d.getFullYear(), d.getMonth(), d.getDate());
 }
 function fmtDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 interface ScheduleRow {
-  schedule_id: number;
-  freelancer_id: number;
-  scheduled_date: string;
-  status: string;
-  job_id: number | null;
-  notes: string | null;
-  booking_group: string | null;
-  notified_at: string | null;
-  unavailable_reason: string | null;
+  schedule_id: number; freelancer_id: number; scheduled_date: string; status: string;
+  job_id: number | null; notes: string | null; booking_group: string | null;
+  notified_at: string | null; unavailable_reason: string | null;
 }
 interface JobInfo { job_id: number; job_name: string | null; job_number: string | null; event_date: string | null; }
 interface BookingGroup {
@@ -37,6 +30,12 @@ interface BookingGroup {
   dateRange: string; dayCount: number; status: "pending" | "confirmed" | "partial" | "declined";
 }
 interface DayInfo { status: string; job: JobInfo | null; row: ScheduleRow; }
+interface TimeEntry {
+  entry_id: number; work_order_id: number; system_start_timestamp: string;
+  system_end_timestamp: string | null; actual_hours: number | null; flag_note: string | null;
+  activity_label: string; scope_name: string; job_number: string;
+}
+interface DayEntries { date: string; entries: TimeEntry[]; totalHours: number; }
 
 function dateRange(rows: ScheduleRow[]): string {
   if (rows.length === 0) return "";
@@ -59,17 +58,17 @@ export default function MobileSchedule() {
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<ScheduleRow[]>([]);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
-  const [unavailable, setUnavailable] = useState<ScheduleRow[]>([]);
   const [jobMap, setJobMap] = useState<Record<number, JobInfo>>({});
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [dayToggles, setDayToggles] = useState<Record<number, boolean>>({});
   const [acting, setActing] = useState(false);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
-
-  // Day action sheet
   const [selectedDay, setSelectedDay] = useState<{ date: string; info: DayInfo | null } | null>(null);
-  // Unavailability inline
   const [unavailReason, setUnavailReason] = useState("");
+  // Time entries
+  const [timeByDate, setTimeByDate] = useState<Record<string, DayEntries>>({});
+  const [allTimeEntries, setAllTimeEntries] = useState<TimeEntry[]>([]);
+  const [editingNote, setEditingNote] = useState<{ entryId: number; note: string } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -84,19 +83,76 @@ export default function MobileSchedule() {
 
     const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     const pastStr = localDateStr(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth(), threeMonthsAgo.getDate());
-    const { data: rows } = await supabase.from("tbl_freelancer_schedule").select("*").eq("freelancer_id", fId).gte("scheduled_date", pastStr).order("scheduled_date");
-    const all = (rows || []) as ScheduleRow[];
+
+    // Load schedule rows + time entries in parallel
+    const [schedRes, timeRes] = await Promise.all([
+      supabase.from("tbl_freelancer_schedule").select("*").eq("freelancer_id", fId).gte("scheduled_date", pastStr).order("scheduled_date"),
+      supabase.from("tbl_wo_time_entries")
+        .select("entry_id, work_order_id, system_start_timestamp, system_end_timestamp, actual_hours, flag_note")
+        .eq("freelancer_id", fId).is("archived_at", null)
+        .gte("system_start_timestamp", pastStr + "T00:00:00")
+        .order("system_start_timestamp"),
+    ]);
+    const all = (schedRes.data || []) as ScheduleRow[];
     setAllRows(all);
 
+    // Enrich time entries with WO context
+    const rawEntries = (timeRes.data || []) as any[];
+    const woIds = [...new Set(rawEntries.map((e: any) => e.work_order_id))];
+    let woMap: Record<number, any> = {};
+    if (woIds.length > 0) {
+      const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, activity_verb, scope_item_id, job_id").in("work_order_id", woIds);
+      const sIds = [...new Set((wos || []).map((w: any) => w.scope_item_id).filter(Boolean))];
+      const jIds = [...new Set((wos || []).map((w: any) => w.job_id).filter(Boolean))];
+      const actIds = [...new Set((wos || []).map((w: any) => w.activity_verb).filter(Boolean))];
+      const [scopeR, jobR, actR] = await Promise.all([
+        sIds.length ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", sIds) : { data: [] },
+        jIds.length ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jIds) : { data: [] },
+        actIds.length ? supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", actIds) : { data: [] },
+      ]);
+      const sm: Record<number, string> = {}; ((scopeR.data || []) as any[]).forEach((s: any) => { sm[s.scope_item_id] = s.item_name; });
+      const jm: Record<number, string> = {}; ((jobR.data || []) as any[]).forEach((j: any) => { jm[j.job_id] = j.job_number; });
+      const am: Record<number, string> = {}; ((actR.data || []) as any[]).forEach((a: any) => { am[a.lookup_id] = a.lookup_value; });
+      (wos || []).forEach((w: any) => {
+        woMap[w.work_order_id] = {
+          activity_label: am[w.activity_verb] || "Task",
+          scope_name: sm[w.scope_item_id] || "",
+          job_number: jm[w.job_id] || "",
+        };
+      });
+    }
+
+    const enriched: TimeEntry[] = rawEntries.map((e: any) => ({
+      entry_id: e.entry_id,
+      work_order_id: e.work_order_id,
+      system_start_timestamp: e.system_start_timestamp,
+      system_end_timestamp: e.system_end_timestamp,
+      actual_hours: e.actual_hours,
+      flag_note: e.flag_note,
+      ...(woMap[e.work_order_id] || { activity_label: "Task", scope_name: "", job_number: "" }),
+    }));
+    setAllTimeEntries(enriched);
+
+    // Group time entries by date
+    const byDate: Record<string, DayEntries> = {};
+    enriched.forEach((e) => {
+      const dateStr = e.system_start_timestamp?.slice(0, 10);
+      if (!dateStr) return;
+      if (!byDate[dateStr]) byDate[dateStr] = { date: dateStr, entries: [], totalHours: 0 };
+      byDate[dateStr].entries.push(e);
+      byDate[dateStr].totalHours += e.actual_hours || 0;
+    });
+    setTimeByDate(byDate);
+
+    // Booking groups (existing logic)
     const todayStr = todayLocal();
     const futureRows = all.filter((r) => r.scheduled_date >= todayStr);
-    setUnavailable(futureRows.filter((r) => r.status === "Unavailable"));
     const bookingRows = futureRows.filter((r) => r.status !== "Unavailable");
 
-    const jobIds = [...new Set(all.map((r) => r.job_id).filter(Boolean))] as number[];
+    const bookJobIds = [...new Set(all.map((r) => r.job_id).filter(Boolean))] as number[];
     let jMap: Record<number, JobInfo> = {};
-    if (jobIds.length > 0) {
-      const { data: jd } = await supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", jobIds);
+    if (bookJobIds.length > 0) {
+      const { data: jd } = await supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").in("job_id", bookJobIds);
       (jd || []).forEach((j: any) => { jMap[j.job_id] = j; });
     }
     setJobMap(jMap);
@@ -116,7 +172,7 @@ export default function MobileSchedule() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ============================================================
-  // Booking group actions
+  // Booking actions (unchanged)
   // ============================================================
   const confirmAll = async (g: BookingGroup) => {
     setActing(true);
@@ -125,8 +181,7 @@ export default function MobileSchedule() {
       title: `${myName || "Someone"} confirmed ${g.dayCount} day${g.dayCount > 1 ? "s" : ""} on ${g.job?.job_name || "Workshop"}`,
       freelancerId: myId, jobId: g.job?.job_id, actionUrl: "/capacity",
     });
-    await loadData(); setActing(false);
-    toast.success(`Confirmed ${g.dayCount} day${g.dayCount > 1 ? "s" : ""}`);
+    await loadData(); setActing(false); toast.success(`Confirmed ${g.dayCount} day${g.dayCount > 1 ? "s" : ""}`);
   };
   const confirmWithExceptions = async (g: BookingGroup) => {
     setActing(true);
@@ -156,9 +211,7 @@ export default function MobileSchedule() {
     const t: Record<number, boolean> = {}; g.rows.forEach((r) => { t[r.schedule_id] = true; }); setDayToggles(t);
   };
 
-  // ============================================================
-  // Single-day actions (from calendar tap)
-  // ============================================================
+  // Single-day booking actions
   const confirmDay = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Confirmed" }).eq("schedule_id", row.schedule_id);
@@ -167,10 +220,8 @@ export default function MobileSchedule() {
       title: `${myName || "Someone"} confirmed ${fmtDate(row.scheduled_date)} on ${jobName}`,
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
-    setSelectedDay(null); await loadData(); setActing(false);
-    toast.success("Day confirmed");
+    setSelectedDay(null); await loadData(); setActing(false); toast.success("Day confirmed");
   };
-
   const declineDay = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
@@ -179,10 +230,8 @@ export default function MobileSchedule() {
       title: `${myName || "Someone"} declined ${fmtDate(row.scheduled_date)} on ${jobName}`,
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
-    setSelectedDay(null); await loadData(); setActing(false);
-    toast("Day declined", { icon: "✕" });
+    setSelectedDay(null); await loadData(); setActing(false); toast("Day declined", { icon: "✕" });
   };
-
   const withdrawDay = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").update({ status: "Declined" }).eq("schedule_id", row.schedule_id);
@@ -192,24 +241,25 @@ export default function MobileSchedule() {
       detail: `${myName} can no longer work on ${jobName} on ${fmtDate(row.scheduled_date)}. You may need to find a replacement.`,
       freelancerId: myId, jobId: row.job_id, scheduleId: row.schedule_id, actionUrl: "/capacity",
     });
-    setSelectedDay(null); await loadData(); setActing(false);
-    toast.warning("Withdrawal sent — workshop manager notified");
+    setSelectedDay(null); await loadData(); setActing(false); toast.warning("Withdrawal sent — workshop manager notified");
   };
-
   const markDayUnavailable = async (dateStr: string, reason: string) => {
     setActing(true);
-    await supabase.from("tbl_freelancer_schedule").insert({
-      freelancer_id: myId, scheduled_date: dateStr, status: "Unavailable", unavailable_reason: reason.trim() || null,
-    });
-    setSelectedDay(null); setUnavailReason(""); await loadData(); setActing(false);
-    toast.success("Marked as unavailable");
+    await supabase.from("tbl_freelancer_schedule").insert({ freelancer_id: myId, scheduled_date: dateStr, status: "Unavailable", unavailable_reason: reason.trim() || null });
+    setSelectedDay(null); setUnavailReason(""); await loadData(); setActing(false); toast.success("Marked as unavailable");
   };
-
   const removeDayUnavailable = async (row: ScheduleRow) => {
     setActing(true);
     await supabase.from("tbl_freelancer_schedule").delete().eq("schedule_id", row.schedule_id);
-    setSelectedDay(null); await loadData(); setActing(false);
-    toast.success("Availability restored");
+    setSelectedDay(null); await loadData(); setActing(false); toast.success("Availability restored");
+  };
+
+  // Save flag note on time entry
+  const saveNote = async (entryId: number, note: string) => {
+    setActing(true);
+    const ctx = await (async () => { const { data: { user } } = await supabase.auth.getUser(); return { supabase, userId: user?.id || "", userName: myName, userRole: "freelancer" }; })();
+    await auditedUpdate(ctx, "tbl_wo_time_entries", { flag_note: note.trim() || null }, "entry_id", entryId);
+    setEditingNote(null); await loadData(); setActing(false); toast.success("Note saved");
   };
 
   // ============================================================
@@ -245,7 +295,35 @@ export default function MobileSchedule() {
     return null;
   };
 
+  // Monthly total for displayed month
+  const monthPrefix = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}`;
+  const monthHours = Object.entries(timeByDate)
+    .filter(([d]) => d.startsWith(monthPrefix))
+    .reduce((sum, [, de]) => sum + de.totalHours, 0);
+  const monthEntryCount = Object.entries(timeByDate)
+    .filter(([d]) => d.startsWith(monthPrefix))
+    .reduce((sum, [, de]) => sum + de.entries.length, 0);
+
+  // This week totals (Mon-Sun)
+  const now = new Date();
+  const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // Mon=0
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - dayOfWeek);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+  const weekStartStr = localDateStr(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+  const weekEndStr = localDateStr(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
+  const thisWeekEntries = Object.entries(timeByDate).filter(([d]) => d >= weekStartStr && d <= weekEndStr);
+  const thisWeekHours = thisWeekEntries.reduce((s, [, de]) => s + de.totalHours, 0);
+  const thisWeekCount = thisWeekEntries.reduce((s, [, de]) => s + de.entries.length, 0);
+
+  // Last week
+  const lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(lastWeekStart); lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+  const lwStartStr = localDateStr(lastWeekStart.getFullYear(), lastWeekStart.getMonth(), lastWeekStart.getDate());
+  const lwEndStr = localDateStr(lastWeekEnd.getFullYear(), lastWeekEnd.getMonth(), lastWeekEnd.getDate());
+  const lastWeekHours = Object.entries(timeByDate).filter(([d]) => d >= lwStartStr && d <= lwEndStr).reduce((s, [, de]) => s + de.totalHours, 0);
+
   const pendingCount = groups.filter((g) => g.status === "pending").length;
+
   if (loading) return <div className="flex items-center justify-center h-64 text-muted text-sm animate-pulse">Loading schedule...</div>;
 
   return (
@@ -253,8 +331,8 @@ export default function MobileSchedule() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-navy">My schedule</h1>
-          <p className="text-xs text-muted mt-0.5">Tap any day to see options</p>
+          <h1 className="text-lg font-bold text-navy">My Schedule</h1>
+          <p className="text-xs text-muted mt-0.5">Tap any day to see details</p>
         </div>
         {myId && (
           <button onClick={async () => {
@@ -266,16 +344,33 @@ export default function MobileSchedule() {
               window.location.href = url;
             } catch { toast.error("Calendar export failed"); }
           }} className="flex items-center gap-1.5 px-3 py-2 bg-starlight-blue/10 text-starlight-blue text-xs font-medium rounded-lg">
-            <CalendarPlus className="h-3.5 w-3.5" /> Export .ics
+            <CalendarPlus className="h-3.5 w-3.5" /> Export
           </button>
         )}
       </div>
 
+      {/* Weekly summary strip */}
+      <div className="flex gap-2">
+        <div className="flex-1 bg-surface rounded-xl border border-subtle px-3 py-2.5">
+          <p className="text-[10px] text-muted uppercase tracking-wide">This week</p>
+          <p className="text-lg font-bold text-navy">{thisWeekHours.toFixed(1)}h</p>
+          <p className="text-[10px] text-muted">{thisWeekCount} entr{thisWeekCount === 1 ? "y" : "ies"}</p>
+        </div>
+        <div className="flex-1 bg-surface rounded-xl border border-subtle px-3 py-2.5">
+          <p className="text-[10px] text-muted uppercase tracking-wide">Last week</p>
+          <p className="text-lg font-bold text-muted">{lastWeekHours.toFixed(1)}h</p>
+          <p className="text-[10px] text-muted">{thisWeekHours > lastWeekHours ? "↑" : thisWeekHours < lastWeekHours ? "↓" : "="} vs this week</p>
+        </div>
+      </div>
+
       {/* Monthly Calendar */}
       <div className="bg-surface rounded-xl border border-subtle px-3 py-3">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-muted"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="text-sm font-semibold text-navy">{calLabel}</span>
+          <div className="text-center">
+            <span className="text-sm font-semibold text-navy">{calLabel}</span>
+            {monthHours > 0 && <span className="text-xs text-muted ml-2">{monthHours.toFixed(1)}h logged</span>}
+          </div>
           <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-muted"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2 justify-center">
@@ -290,11 +385,13 @@ export default function MobileSchedule() {
           ))}
         </div>
         <div className="grid grid-cols-7 gap-0.5">
-          {Array.from({ length: calPad }).map((_, i) => <div key={`p-${i}`} className="h-11" />)}
+          {Array.from({ length: calPad }).map((_, i) => <div key={`p-${i}`} className="h-12" />)}
           {calDays.map((d) => {
             const info = getCalDayInfo(d.date);
+            const dayTime = timeByDate[d.date];
             const isToday = d.date === todayStr;
             const isPast = d.date < todayStr;
+            const hasGap = info && ["Confirmed", "Booked", "Notified"].includes(info.status) && isPast && !dayTime;
             let bg = ""; let tc = d.isWeekend ? "text-faint" : "text-muted";
             if (info) {
               switch (info.status) {
@@ -305,19 +402,19 @@ export default function MobileSchedule() {
               }
             }
             return (
-              <button key={d.date} onClick={() => !isPast && setSelectedDay({ date: d.date, info })}
-                disabled={isPast}
-                className={"relative flex flex-col items-center justify-center h-11 rounded-lg text-[12px] transition-colors " + bg + " " + tc + (isToday ? " ring-2 ring-navy/30" : "") + (!isPast ? " active:scale-95" : " opacity-50")}>
+              <button key={d.date} onClick={() => { setSelectedDay({ date: d.date, info }); setEditingNote(null); }}
+                className={"relative flex flex-col items-center justify-center h-12 rounded-lg text-[12px] transition-colors " + bg + " " + tc + (isToday ? " ring-2 ring-navy/30" : "") + " active:scale-95"}>
                 <span>{d.num}</span>
-                {info && info.job && <span className="text-[7px] leading-tight truncate w-full text-center opacity-60">{info.job.job_name?.split(" ")[0]}</span>}
-                {info?.status === "Unavailable" && info.row.unavailable_reason && <span className="text-[7px] leading-tight truncate w-full text-center opacity-50">{info.row.unavailable_reason}</span>}
+                {dayTime && <span className="text-[8px] font-mono font-bold text-starlight-blue leading-none">{dayTime.totalHours.toFixed(1)}h</span>}
+                {!dayTime && info && info.job && <span className="text-[7px] leading-tight truncate w-full text-center opacity-60">{info.job.job_name?.split(" ")[0]}</span>}
+                {hasGap && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-starlight-red" />}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Pending bookings — bulk actions */}
+      {/* Pending bookings */}
       {pendingCount > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-navy mb-2">Action needed</h2>
@@ -366,7 +463,7 @@ export default function MobileSchedule() {
         </div>
       )}
 
-      {/* Upcoming bookings summary */}
+      {/* Upcoming bookings */}
       {groups.filter((g) => g.status !== "pending").length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-navy mb-2">Upcoming</h2>
@@ -383,117 +480,152 @@ export default function MobileSchedule() {
                   </div>
                   <span className={"text-[11px] font-medium px-2.5 py-1 rounded-full " + sc}>{sl}</span>
                 </div>
-                {(g.status === "confirmed" || g.status === "partial") && g.rows[0]?.booking_group && myId && (
-                  <button onClick={async () => {
-                    try {
-                      const authH = await getAuthHeaders();
-                      const res = await fetch("/api/calendar/token", { method: "POST", headers: { "Content-Type": "application/json", ...authH }, body: JSON.stringify({ freelancer_id: myId, group: g.rows[0].booking_group }) });
-                      if (!res.ok) { toast.error("Failed to generate link"); return; }
-                      const { url } = await res.json();
-                      window.location.href = url;
-                    } catch { toast.error("Calendar download failed"); }
-                  }}
-                    className="mt-2 flex items-center gap-1.5 text-xs text-starlight-blue font-medium">
-                    <CalendarPlus className="h-3.5 w-3.5" /> Add to my calendar
-                  </button>
-                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* Day action bottom sheet */}
-      {/* ============================================================ */}
-      {selectedDay && (
-        <div className="fixed inset-0 bg-black/40 flex items-end z-50" onClick={(e) => { if (e.target === e.currentTarget) setSelectedDay(null); }}>
-          <div className="bg-surface w-full rounded-t-2xl max-h-[60vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-subtle flex justify-between items-center">
-              <div>
-                <h3 className="text-[15px] font-semibold text-navy">{fmtDate(selectedDay.date)}</h3>
-                {selectedDay.info ? (
-                  <p className="text-xs text-muted mt-0.5">
-                    {selectedDay.info.status === "Unavailable" 
-                      ? `Unavailable${selectedDay.info.row.unavailable_reason ? " — " + selectedDay.info.row.unavailable_reason : ""}`
-                      : `${selectedDay.info.status} — ${selectedDay.info.job?.job_name || "Workshop"}`}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted mt-0.5">No bookings</p>
-                )}
+      {/* Day detail bottom sheet */}
+      {selectedDay && (() => {
+        const dayTime = timeByDate[selectedDay.date];
+        const isPast = selectedDay.date < todayStr;
+        const hasGap = selectedDay.info && ["Confirmed", "Booked", "Notified"].includes(selectedDay.info.status) && isPast && !dayTime;
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-end z-50" onClick={(e) => { if (e.target === e.currentTarget) { setSelectedDay(null); setEditingNote(null); } }}>
+            <div className="bg-surface w-full rounded-t-2xl max-h-[75vh] overflow-y-auto">
+              <div className="px-5 py-4 border-b border-subtle flex justify-between items-center">
+                <div>
+                  <h3 className="text-[15px] font-semibold text-navy">{fmtDate(selectedDay.date)}</h3>
+                  {selectedDay.info ? (
+                    <p className="text-xs text-muted mt-0.5">
+                      {selectedDay.info.status === "Unavailable"
+                        ? `Unavailable${selectedDay.info.row.unavailable_reason ? " — " + selectedDay.info.row.unavailable_reason : ""}`
+                        : `${selectedDay.info.status} — ${selectedDay.info.job?.job_name || "Workshop"}`}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted mt-0.5">{dayTime ? `${dayTime.totalHours.toFixed(1)}h logged` : "No bookings"}</p>
+                  )}
+                </div>
+                <button onClick={() => { setSelectedDay(null); setEditingNote(null); }} className="p-1 text-muted"><X className="h-5 w-5" /></button>
               </div>
-              <button onClick={() => setSelectedDay(null)} className="p-1 text-muted"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="px-5 py-4 space-y-2">
+              <div className="px-5 py-4 space-y-3">
 
-              {/* Empty day — mark unavailable */}
-              {!selectedDay.info && (
-                <>
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-muted mb-1.5">Reason (optional)</label>
-                    <input type="text" value={unavailReason} onChange={(e) => setUnavailReason(e.target.value)}
-                      placeholder="Holiday, other job, appointment..."
-                      className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
-                  </div>
-                  <button onClick={() => markDayUnavailable(selectedDay.date, unavailReason)} disabled={acting}
-                    className="w-full py-3 bg-surface-mid text-foreground font-medium text-sm rounded-lg disabled:opacity-50">
-                    Mark as unavailable
-                  </button>
-                </>
-              )}
-
-              {/* Pending / Notified / Booked — confirm or decline */}
-              {selectedDay.info && ["Booked", "Notified"].includes(selectedDay.info.status) && (
-                <>
-                  <button onClick={() => confirmDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
-                    <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Confirm this day
-                  </button>
-                  <button onClick={() => declineDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
-                    <X className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Decline this day
-                  </button>
-                </>
-              )}
-
-              {/* Confirmed — option to withdraw */}
-              {selectedDay.info?.status === "Confirmed" && (
-                <>
-                  <div className="bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5 mb-1">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-starlight-amber mt-0.5 shrink-0" />
-                      <p className="text-xs text-starlight-amber">Withdrawing will notify the workshop manager so they can find a replacement.</p>
+                {/* Time entries for this day */}
+                {dayTime && dayTime.entries.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-navy uppercase tracking-wide">Time Logged</h4>
+                      <span className="text-xs font-semibold text-starlight-blue">{dayTime.totalHours.toFixed(1)}h · {dayTime.entries.length} entr{dayTime.entries.length === 1 ? "y" : "ies"}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {dayTime.entries.map((e) => {
+                        const startT = new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+                        const endT = e.system_end_timestamp ? new Date(e.system_end_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "Active";
+                        const isEditing = editingNote?.entryId === e.entry_id;
+                        return (
+                          <div key={e.entry_id} className="bg-surface-dim rounded-lg px-3 py-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-navy truncate">{e.activity_label}{e.scope_name ? ` · ${e.scope_name}` : ""}</p>
+                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted">
+                                  <span className="font-mono">{e.job_number}</span>
+                                  <span>{startT} → {endT}</span>
+                                  {e.actual_hours != null && <span className="font-semibold text-starlight-blue">{e.actual_hours}h</span>}
+                                </div>
+                              </div>
+                              <button onClick={() => router.push("/m/wo/" + e.work_order_id)}
+                                className="text-[10px] text-starlight-blue bg-starlight-blue/10 px-2 py-1 rounded shrink-0">View</button>
+                            </div>
+                            {/* Flag note */}
+                            {isEditing ? (
+                              <div className="mt-2 flex gap-2">
+                                <input type="text" value={editingNote.note} onChange={(ev) => setEditingNote({ ...editingNote, note: ev.target.value })}
+                                  placeholder="Add a note..."
+                                  className="flex-1 px-2.5 py-1.5 border border-subtle rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" autoFocus />
+                                <button onClick={() => saveNote(e.entry_id, editingNote.note)} disabled={acting}
+                                  className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs rounded disabled:opacity-50"><Save className="h-3 w-3" /></button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setEditingNote({ entryId: e.entry_id, note: e.flag_note || "" })}
+                                className="mt-1.5 text-[11px] text-muted hover:text-navy transition-colors text-left w-full">
+                                {e.flag_note ? `📝 ${e.flag_note}` : "+ Add note"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  <button onClick={() => withdrawDay(selectedDay.info!.row)} disabled={acting}
-                    className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
-                    I can't make this day anymore
+                )}
+
+                {/* Gap warning */}
+                {hasGap && (
+                  <div className="bg-starlight-red/10 border border-starlight-red/20 rounded-lg px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-starlight-red mt-0.5 shrink-0" />
+                      <p className="text-xs text-starlight-red">You were booked but no hours were logged for this day.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Booking actions */}
+                {!selectedDay.info && !isPast && (
+                  <>
+                    <div className="mb-2">
+                      <label className="block text-xs font-medium text-muted mb-1.5">Reason (optional)</label>
+                      <input type="text" value={unavailReason} onChange={(ev) => setUnavailReason(ev.target.value)}
+                        placeholder="Holiday, other job, appointment..."
+                        className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+                    </div>
+                    <button onClick={() => markDayUnavailable(selectedDay.date, unavailReason)} disabled={acting}
+                      className="w-full py-3 bg-surface-mid text-foreground font-medium text-sm rounded-lg disabled:opacity-50">
+                      Mark as unavailable
+                    </button>
+                  </>
+                )}
+                {selectedDay.info && ["Booked", "Notified"].includes(selectedDay.info.status) && (
+                  <>
+                    <button onClick={() => confirmDay(selectedDay.info!.row)} disabled={acting}
+                      className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
+                      <Check className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Confirm this day
+                    </button>
+                    <button onClick={() => declineDay(selectedDay.info!.row)} disabled={acting}
+                      className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
+                      <X className="h-4 w-4 inline mr-1.5 -mt-0.5" /> Decline this day
+                    </button>
+                  </>
+                )}
+                {selectedDay.info?.status === "Confirmed" && !isPast && (
+                  <>
+                    <div className="bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5 mb-1">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-starlight-amber mt-0.5 shrink-0" />
+                        <p className="text-xs text-starlight-amber">Withdrawing will notify the workshop manager.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => withdrawDay(selectedDay.info!.row)} disabled={acting}
+                      className="w-full py-3 bg-starlight-red/10 text-starlight-red font-medium text-sm rounded-lg disabled:opacity-50">
+                      I can't make this day anymore
+                    </button>
+                  </>
+                )}
+                {selectedDay.info?.status === "Declined" && (
+                  <p className="text-sm text-muted text-center py-2">You declined this day. Contact the workshop manager if you've changed your mind.</p>
+                )}
+                {selectedDay.info?.status === "Unavailable" && (
+                  <button onClick={() => removeDayUnavailable(selectedDay.info!.row)} disabled={acting}
+                    className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
+                    Remove unavailability — I'm free this day
                   </button>
-                </>
-              )}
-
-              {/* Declined — info only */}
-              {selectedDay.info?.status === "Declined" && (
-                <p className="text-sm text-muted text-center py-2">You declined this day. Contact the workshop manager if you've changed your mind.</p>
-              )}
-
-              {/* Unavailable — remove it */}
-              {selectedDay.info?.status === "Unavailable" && (
-                <button onClick={() => removeDayUnavailable(selectedDay.info!.row)} disabled={acting}
-                  className="w-full py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg disabled:opacity-50">
-                  Remove unavailability — I'm free this day
-                </button>
-              )}
-
-              {/* Cancel */}
-              <button onClick={() => { setSelectedDay(null); setUnavailReason(""); }}
-                className="w-full py-2.5 text-muted text-sm mt-1">
-                Cancel
-              </button>
+                )}
+                <button onClick={() => { setSelectedDay(null); setUnavailReason(""); setEditingNote(null); }}
+                  className="w-full py-2.5 text-muted text-sm mt-1">Cancel</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
