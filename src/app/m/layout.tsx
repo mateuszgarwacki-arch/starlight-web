@@ -2,14 +2,13 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ClipboardList, CalendarDays, Camera, User, Star, Wrench } from "lucide-react";
+import { ClipboardList, CalendarDays, User, Star, Wrench } from "lucide-react";
 import { FloatingActionButton } from "@/components/floating-action-button";
 
 const tabs = [
   { href: "/m", icon: ClipboardList, label: "Tasks" },
   { href: "/m/schedule", icon: CalendarDays, label: "Schedule" },
   { href: "/m/maintenance", icon: Wrench, label: "Maint." },
-  { href: "/m/photos", icon: Camera, label: "Photos" },
   { href: "/m/me", icon: User, label: "Me" },
 ];
 
