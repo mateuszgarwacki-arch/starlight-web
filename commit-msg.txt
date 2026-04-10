@@ -1,1 +1,1 @@
-Schedule tab: hours overlay on calendar, weekly/monthly totals, time entry detail with editable notes, gap detection
+fix auditedUpdate param order in schedule note save

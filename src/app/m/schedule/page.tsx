@@ -258,7 +258,7 @@ export default function MobileSchedule() {
   const saveNote = async (entryId: number, note: string) => {
     setActing(true);
     const ctx = await (async () => { const { data: { user } } = await supabase.auth.getUser(); return { supabase, userId: user?.id || "", userName: myName, userRole: "freelancer" }; })();
-    await auditedUpdate(ctx, "tbl_wo_time_entries", { flag_note: note.trim() || null }, "entry_id", entryId);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, { flag_note: note.trim() || null });
     setEditingNote(null); await loadData(); setActing(false); toast.success("Note saved");
   };
 
