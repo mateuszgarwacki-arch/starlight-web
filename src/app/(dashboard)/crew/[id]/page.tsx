@@ -429,7 +429,11 @@ export default function FreelancerDetailPage() {
       await auditedInsert(ctx, "tbl_wo_time_entries", {
         work_order_id: selectedWo, freelancer_id: freelancerId,
         actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: hrs * hourlyRate,
-        actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00Z" : null,
+        system_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null,
+        actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null,
+        system_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null,
+        actual_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null,
+        flag_note: routeNote.trim() ? `Routed: ${routeNote.trim()}` : "Routed from ad-hoc task",
       }, wo?.job_id);
       await supabase.from("tbl_tasks").update({
         status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs,

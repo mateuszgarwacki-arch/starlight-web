@@ -1,1 +1,1 @@
-Fix: Add Entry date/timer bugs + expanded edit panel (date, hours, flag)
+Fix: Route to WO creates closed entry with correct date (no timer, no date shift)
