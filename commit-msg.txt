@@ -1,1 +1,1 @@
-Mobile tasks: tree layout (Job → Scope → WO), collapsible jobs, compact WO rows with description as headline
+Mobile tasks: active freelancers shown as pulsing name pills on each WO row

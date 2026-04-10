@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
-import { Clock, Users, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight } from "lucide-react";
+import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight } from "lucide-react";
 
 interface TaskCard {
   work_order_id: number;
@@ -314,15 +314,18 @@ export default function MobileTaskList() {
                             {/* Description = headline */}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-navy truncate">{task.description || task.activity_label}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {task.workers.length > 0 && task.workers.map((w) => (
+                                  <span key={w.freelancer_id} className="inline-flex items-center gap-1 text-[10px] font-medium text-starlight-blue bg-starlight-blue/10 px-1.5 py-0.5 rounded-full">
+                                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+                                    </span>
+                                    {w.name.split(" ")[0]}
+                                  </span>
+                                ))}
                                 {task.estimated_duration_hrs && (
                                   <span className="text-[10px] text-muted flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" />{task.estimated_duration_hrs}h</span>
-                                )}
-                                {task.workers.length > 0 && (
-                                  <span className="text-[10px] text-starlight-blue flex items-center gap-0.5">
-                                    <Users className="h-2.5 w-2.5" />
-                                    {task.workers.map(w => w.name.split(" ")[0]).join(", ")}
-                                  </span>
                                 )}
                                 {task.paint_notes && <Paintbrush className="h-2.5 w-2.5 text-starlight-amber" />}
                               </div>
