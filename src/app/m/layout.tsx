@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ClipboardList, CalendarDays, User, Star, Wrench } from "lucide-react";
 import { FloatingActionButton } from "@/components/floating-action-button";
+import { MobileHeaderTimer } from "@/components/mobile-header-timer";
 
 const tabs = [
   { href: "/m", icon: ClipboardList, label: "Tasks" },
@@ -24,8 +25,11 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-base flex flex-col">
       {/* Header */}
       <header className="bg-navy px-4 py-3 flex items-center gap-2 shrink-0">
-        <Star className="h-5 w-5 text-starlight-amber" />
-        <span className="text-white font-semibold text-sm tracking-wide">STARLIGHT</span>
+        <Link href="/m/me" className="flex items-center gap-2 shrink-0">
+          <Star className="h-5 w-5 text-starlight-amber" />
+          <span className="text-white font-semibold text-sm tracking-wide">STARLIGHT</span>
+        </Link>
+        <MobileHeaderTimer />
       </header>
 
       {/* Content */}

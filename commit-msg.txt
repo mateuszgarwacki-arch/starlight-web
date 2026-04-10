@@ -1,1 +1,1 @@
-Remove Photos tab from mobile freelancer navigation
+Mobile header: clickable logo → Me tab, active timer / last task indicator
