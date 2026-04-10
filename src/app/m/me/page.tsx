@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare } from "lucide-react";
+import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
+import { auditedUpdate, getAuditContext } from "@/lib/audit";
 
 interface HoursSummary { hours_this_week: number; hours_this_month: number; }
-interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: number | null; date: string; job_number: string | null; status?: string; review_note?: string | null; }
+interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: number | null; date: string; job_number: string | null; status?: string; review_note?: string | null; flag_note?: string | null; }
 interface MyRequest { request_id: number; category: string; title: string; urgency: string; status: string; resolution_note: string | null; created_at: string; }
 interface MyTask { task_id: number; title: string; hours: number | null; status: string; review_note: string | null; started_at: string | null; created_at: string; }
 interface ActiveTimer { task_id: number; title: string; started_at: string; }
@@ -56,9 +57,20 @@ export default function MobileProfilePage() {
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [, setTick] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingNote, setEditingNote] = useState<{ entryId: number; note: string } | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
 
   // Live updates when tasks/requests change
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], () => setRefreshKey((k) => k + 1));
+
+  const saveEntryNote = async (entryId: number, note: string) => {
+    setSavingNote(true);
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_wo_time_entries", entryId, { flag_note: note.trim() || null });
+    setEditingNote(null); setSavingNote(false);
+    setRecentEntries((prev) => prev.map((e) => e.type === "wo" && e.id === entryId ? { ...e, flag_note: note.trim() || null } : e));
+    toast.success("Note saved");
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -68,7 +80,7 @@ export default function MobileProfilePage() {
       setMyId(fId); setName(user.user_metadata?.name || "Unknown");
       const [hoursRes, woEntriesRes, tasksRes, requestsRes, activeTaskRes] = await Promise.all([
         supabase.from("qry_freelancer_hours_summary").select("*").eq("freelancer_id", fId).maybeSingle(),
-        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, actual_hours, system_start_timestamp, actual_start_timestamp").eq("freelancer_id", fId).is("archived_at", null).not("actual_hours", "is", null).order("system_start_timestamp", { ascending: false }).limit(20),
+        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, actual_hours, system_start_timestamp, actual_start_timestamp, flag_note").eq("freelancer_id", fId).is("archived_at", null).not("actual_hours", "is", null).order("system_start_timestamp", { ascending: false }).limit(20),
         supabase.from("tbl_tasks").select("task_id, title, hours, status, review_note, started_at, created_at, job_id").eq("freelancer_id", fId).neq("status", "in_progress").order("created_at", { ascending: false }).limit(20),
         supabase.from("tbl_workshop_requests").select("request_id, category, title, urgency, status, resolution_note, created_at").eq("freelancer_id", fId).order("created_at", { ascending: false }).limit(15),
         supabase.from("tbl_tasks").select("task_id, title, started_at").eq("freelancer_id", fId).eq("status", "in_progress").maybeSingle(),
@@ -86,7 +98,7 @@ export default function MobileProfilePage() {
         (jobData || []).forEach((j: any) => { jobNumMap[j.job_id] = j.job_number; });
         woEntriesRes.data.forEach((e: any) => {
           const wo = woMap[e.work_order_id];
-          woEntries.push({ type: "wo", id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null });
+          woEntries.push({ type: "wo", id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null, flag_note: e.flag_note || null });
         });
       }
       const taskEntries: RecentEntry[] = (tasksRes.data || []).map((t: any) => ({ type: "task" as const, id: t.task_id, title: t.title, hours: t.hours, date: (t.created_at || "").split("T")[0], job_number: null, status: t.status, review_note: t.review_note }));
@@ -158,15 +170,34 @@ export default function MobileProfilePage() {
         {recentEntries.length === 0 ? (<p className="text-xs text-muted bg-surface rounded-xl border border-subtle p-4 text-center">No entries yet</p>) : (
           <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
             {recentEntries.map((entry) => (
-              <div key={`${entry.type}-${entry.id}`} className="px-4 py-3 flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2"><p className="text-sm text-navy truncate">{entry.title}</p>{entry.type === "task" && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>)}</div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
-                    <span>{formatDateShort(entry.date)}</span>{entry.job_number && <span className="font-mono">{entry.job_number}</span>}
-                    {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
+              <div key={`${entry.type}-${entry.id}`} className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2"><p className="text-sm text-navy truncate">{entry.title}</p>{entry.type === "task" && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>)}</div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
+                      <span>{formatDateShort(entry.date)}</span>{entry.job_number && <span className="font-mono">{entry.job_number}</span>}
+                      {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
+                    </div>
                   </div>
+                  <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? `${Number(entry.hours).toFixed(1)}h` : "—"}</span>
                 </div>
-                <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? `${Number(entry.hours).toFixed(1)}h` : "—"}</span>
+                {entry.type === "wo" && (
+                  editingNote?.entryId === entry.id ? (
+                    <div className="mt-2 flex gap-2">
+                      <input type="text" value={editingNote.note} onChange={(ev) => setEditingNote({ ...editingNote, note: ev.target.value })}
+                        placeholder="Add a note..." autoFocus
+                        className="flex-1 px-2.5 py-1.5 border border-subtle rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                      <button onClick={() => saveEntryNote(entry.id, editingNote.note)} disabled={savingNote}
+                        className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs rounded disabled:opacity-50"><Save className="h-3 w-3" /></button>
+                      <button onClick={() => setEditingNote(null)} className="px-2 py-1.5 text-muted text-xs"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditingNote({ entryId: entry.id, note: entry.flag_note || "" })}
+                      className="mt-1 text-[11px] text-muted hover:text-navy transition-colors text-left">
+                      {entry.flag_note ? `📝 ${entry.flag_note}` : "+ Add note"}
+                    </button>
+                  )
+                )}
               </div>
             ))}
           </div>
