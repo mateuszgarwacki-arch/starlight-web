@@ -155,24 +155,24 @@ export function MobileHeaderTimer() {
     >
       {isActive ? (
         <>
-          {/* Pulsing green dot */}
+          {/* Pulsing dot */}
           <span className="relative flex h-2.5 w-2.5 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-starlight-amber opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-starlight-amber" />
           </span>
           <div className="flex flex-col min-w-0">
-            <span className="text-green-400 text-[11px] font-semibold leading-tight truncate">{label}</span>
-            <span className="text-green-300/70 text-[10px] leading-tight">
-              {startTime} · <span className="font-mono">{elapsed}</span>
+            <span className="text-white text-[11px] font-semibold leading-tight truncate">{label}</span>
+            <span className="text-white/60 text-[10px] leading-tight">
+              {startTime} · <span className="font-mono text-starlight-amber">{elapsed}</span>
             </span>
           </div>
         </>
       ) : (
         <>
-          <Clock className="h-3.5 w-3.5 text-muted shrink-0" />
+          <Clock className="h-3.5 w-3.5 text-white/40 shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="text-muted text-[11px] leading-tight truncate">{label}</span>
-            <span className="text-muted/60 text-[10px] leading-tight">{timeAgo}</span>
+            <span className="text-white/50 text-[11px] leading-tight truncate">{label}</span>
+            <span className="text-white/30 text-[10px] leading-tight">{timeAgo}</span>
           </div>
         </>
       )}

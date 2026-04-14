@@ -1,1 +1,1 @@
-Me tab: add/edit flag notes on recent WO time entries
+Mobile header timer: white/amber colors for better contrast on navy background
