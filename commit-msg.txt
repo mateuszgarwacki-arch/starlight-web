@@ -1,1 +1,1 @@
-Mobile header timer: white/amber colors for better contrast on navy background
+Cost analysis: collapsible time entries table on scope-level view

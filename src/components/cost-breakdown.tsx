@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Clock } from "lucide-react";
 
 interface QuoteLine {
   quote_line_id: number;
@@ -45,6 +45,18 @@ interface Props {
   refreshKey?: number;
 }
 
+interface ScopeTimeEntry {
+  entry_id: number;
+  work_order_id: number;
+  freelancer_name: string;
+  actual_hours: number | null;
+  entry_cost: number | null;
+  system_start_timestamp: string;
+  flag_note: string | null;
+  wo_description: string | null;
+  activity_label: string;
+}
+
 function fmt(n: number) {
   return n.toLocaleString("en-GB", { style: "currency", currency: "GBP" });
 }
@@ -56,6 +68,8 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
   const [quoteLines, setQuoteLines] = useState<QuoteLine[]>([]);
   const [expandedLineId, setExpandedLineId] = useState<number | null>(null);
   const [waterfallCache, setWaterfallCache] = useState<Record<number, WaterfallRow[]>>({});
+  const [timeEntries, setTimeEntries] = useState<ScopeTimeEntry[]>([]);
+  const [timeEntriesExpanded, setTimeEntriesExpanded] = useState(false);
   const [d, setD] = useState({
     quotedTotal: 0, quotedWorkshop: 0,
     pmEstTotal: 0, pmEstLabour: 0, pmEstMaterials: 0,
@@ -89,10 +103,16 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     const estMaterials = estRows.reduce((s: number, r: any) => s + (r.estimated_material_cost || 0), 0);
 
     let actLabour = 0, actMatsPlanned = 0, actMatsReconciled = 0;
+    let scopeEntries: ScopeTimeEntry[] = [];
     if (woIds.length > 0) {
-      const [timeRes, bomRes] = await Promise.all([
+      const [timeRes, bomRes, detailTimeRes] = await Promise.all([
         supabase.from("tbl_wo_time_entries").select("entry_cost").in("work_order_id", woIds).is("archived_at", null),
         supabase.from("tbl_wo_bom").select("quantity, unit_cost, actual_unit_cost").in("work_order_id", woIds),
+        scopeItemId
+          ? supabase.from("tbl_wo_time_entries")
+              .select("entry_id, work_order_id, freelancer_id, actual_hours, entry_cost, system_start_timestamp, flag_note")
+              .in("work_order_id", woIds).is("archived_at", null).order("system_start_timestamp", { ascending: false })
+          : { data: [] },
       ]);
       actLabour = (timeRes.data || []).reduce((s: number, r: any) => s + (r.entry_cost || 0), 0);
       for (const b of bomRes.data || []) {
@@ -100,7 +120,39 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
         actMatsPlanned += qty * (b.unit_cost || 0);
         actMatsReconciled += qty * (b.actual_unit_cost || b.unit_cost || 0);
       }
+
+      // Enrich time entries with freelancer names and WO context for scope-level view
+      if (scopeItemId && detailTimeRes.data && detailTimeRes.data.length > 0) {
+        const fIds = [...new Set(detailTimeRes.data.map((e: any) => e.freelancer_id))];
+        const [fRes, woDetailRes] = await Promise.all([
+          supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds),
+          supabase.from("tbl_work_orders").select("work_order_id, description, activity_verb").in("work_order_id", woIds),
+        ]);
+        const fMap: Record<number, string> = {};
+        (fRes.data || []).forEach((f: any) => { fMap[f.freelancer_id] = f.freelancer_name; });
+        const woDescMap: Record<number, { desc: string; verb: number | null }> = {};
+        (woDetailRes.data || []).forEach((w: any) => { woDescMap[w.work_order_id] = { desc: w.description, verb: w.activity_verb }; });
+        const actVerbIds = [...new Set(Object.values(woDescMap).map(w => w.verb).filter(Boolean))] as number[];
+        const { data: lookups } = actVerbIds.length > 0
+          ? await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", actVerbIds)
+          : { data: [] };
+        const lkMap: Record<number, string> = {};
+        (lookups || []).forEach((l: any) => { lkMap[l.lookup_id] = l.lookup_value; });
+
+        scopeEntries = detailTimeRes.data.map((e: any) => ({
+          entry_id: e.entry_id,
+          work_order_id: e.work_order_id,
+          freelancer_name: fMap[e.freelancer_id] || "Unknown",
+          actual_hours: e.actual_hours,
+          entry_cost: e.entry_cost,
+          system_start_timestamp: e.system_start_timestamp,
+          flag_note: e.flag_note,
+          wo_description: woDescMap[e.work_order_id]?.desc || null,
+          activity_label: woDescMap[e.work_order_id]?.verb ? lkMap[woDescMap[e.work_order_id].verb!] || "Task" : "Task",
+        }));
+      }
     }
+    setTimeEntries(scopeEntries);
 
     // Quote lines with estimated costs (job level only)
     let quotedTotal = quotedValue || 0;
@@ -320,6 +372,52 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
               </div>
             </>)}
           </div>
+
+          {/* Time entries — scope level only */}
+          {scopeItemId && timeEntries.length > 0 && (
+            <div className="border-t border-subtle pt-3">
+              <button onClick={() => setTimeEntriesExpanded(!timeEntriesExpanded)}
+                className="flex items-center gap-2 text-xs text-muted hover:text-navy transition-colors w-full">
+                {timeEntriesExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                <Clock className="h-3 w-3" />
+                <span className="font-medium">{timeEntries.length} time entr{timeEntries.length === 1 ? "y" : "ies"}</span>
+                <span className="text-muted">· {timeEntries.reduce((s, e) => s + (e.actual_hours || 0), 0).toFixed(1)}h · {fmt(timeEntries.reduce((s, e) => s + (e.entry_cost || 0), 0))}</span>
+              </button>
+              {timeEntriesExpanded && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-surface-dim text-left text-[10px] text-muted uppercase tracking-wider">
+                        <th className="px-3 py-1.5 font-medium">Date</th>
+                        <th className="px-3 py-1.5 font-medium">Who</th>
+                        <th className="px-3 py-1.5 font-medium">Task</th>
+                        <th className="px-3 py-1.5 font-medium text-right">Hours</th>
+                        <th className="px-3 py-1.5 font-medium text-right">Cost</th>
+                        <th className="px-3 py-1.5 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timeEntries.map(e => (
+                        <tr key={e.entry_id} className="border-t border-subtle/50">
+                          <td className="px-3 py-1.5 text-muted font-mono whitespace-nowrap">
+                            {new Date(e.system_start_timestamp).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                          </td>
+                          <td className="px-3 py-1.5 text-foreground whitespace-nowrap">{e.freelancer_name}</td>
+                          <td className="px-3 py-1.5 text-muted max-w-[200px] truncate">
+                            <span className="text-[10px] bg-surface-top px-1 py-0.5 rounded mr-1">{e.activity_label}</span>
+                            {e.wo_description || ""}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono text-foreground">{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-foreground">{e.entry_cost != null ? fmt(e.entry_cost) : "—"}</td>
+                          <td className="px-3 py-1.5 text-muted max-w-[150px] truncate">{e.flag_note || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Insight cards */}
           <div className="grid grid-cols-3 gap-3 pt-3 border-t border-subtle">
