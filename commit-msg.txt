@@ -1,1 +1,1 @@
-fix: Green photo button on task quick-log to match Me page style
+feat: Quick Timer FAB option - one-tap start, details added when stopping on Me page
