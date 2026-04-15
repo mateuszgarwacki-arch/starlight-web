@@ -9,7 +9,7 @@ import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
-import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -876,8 +876,17 @@ export default function FreelancerDetailPage() {
                     </button>
                   </div>
                 )}
+                {isAdmin && isArchived && (
+                  <button onClick={async () => {
+                    const ctx = await getAuditContext(supabase);
+                    await supabase.from("tbl_wo_time_entries").update({ archived_at: null, archived_by: null, archive_reason: null }).eq("entry_id", e.entry_id);
+                    setTimeEntries(prev => prev.map(x => x.entry_id === e.entry_id ? { ...x, archived_at: null } : x));
+                    toast.success("Entry restored");
+                  }} className="px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors shrink-0">
+                    <RotateCcw className="h-3 w-3 inline mr-1" />Restore
+                  </button>
+                )}
                 </div>
-                {/* Edit panel */}
                 {editingEntry === e.entry_id && (
                   <div className="w-full mt-3 pt-3 border-t border-subtle">
                     <div className="flex flex-wrap items-end gap-3">
@@ -985,6 +994,15 @@ export default function FreelancerDetailPage() {
                           <Archive className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                    )}
+                    {isAdmin && t.status === "rejected" && (
+                      <button onClick={async () => {
+                        await supabase.from("tbl_tasks").update({ status: "approved_overhead", review_note: "Restored by PM" }).eq("task_id", t.task_id);
+                        setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "approved_overhead", review_note: "Restored by PM" } : x));
+                        toast.success("Task restored");
+                      }} className="px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors shrink-0">
+                        <RotateCcw className="h-3 w-3 inline mr-1" />Restore
+                      </button>
                     )}
                   </div>
                 );
@@ -1100,6 +1118,15 @@ export default function FreelancerDetailPage() {
                                     <button onClick={() => setEditingEntry(null)} className="px-2 py-1 text-[10px] text-muted">Cancel</button>
                                   </div>
                                 )}
+                                {isAdmin && isArchived && (
+                                  <button onClick={async () => {
+                                    await supabase.from("tbl_wo_time_entries").update({ archived_at: null, archived_by: null, archive_reason: null }).eq("entry_id", e.entry_id);
+                                    setTimeEntries(prev => prev.map(x => x.entry_id === e.entry_id ? { ...x, archived_at: null } : x));
+                                    toast.success("Entry restored");
+                                  }} className="px-2 py-1 text-[10px] font-medium bg-starlight-green/10 text-starlight-green rounded hover:bg-starlight-green/20 shrink-0">
+                                    <RotateCcw className="h-3 w-3 inline mr-0.5" />Restore
+                                  </button>
+                                )}
                               </div>
                               {isArchivingThis && (
                                 <div className="ml-16 mt-1 mb-1 p-2 bg-starlight-red/10 border border-starlight-red/20 rounded flex items-center gap-2">
@@ -1157,6 +1184,15 @@ export default function FreelancerDetailPage() {
                                     <button onClick={() => handleEditTask(t.task_id)} className="px-2 py-1 bg-starlight-blue text-white text-[10px] font-medium rounded">Save</button>
                                     <button onClick={() => setEditingTask(null)} className="px-2 py-1 text-[10px] text-muted">Cancel</button>
                                   </div>
+                                )}
+                                {isAdmin && t.status === "rejected" && (
+                                  <button onClick={async () => {
+                                    await supabase.from("tbl_tasks").update({ status: "approved_overhead", review_note: "Restored by PM" }).eq("task_id", t.task_id);
+                                    setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "approved_overhead", review_note: "Restored by PM" } : x));
+                                    toast.success("Task restored");
+                                  }} className="px-2 py-1 text-[10px] font-medium bg-starlight-green/10 text-starlight-green rounded hover:bg-starlight-green/20 shrink-0">
+                                    <RotateCcw className="h-3 w-3 inline mr-0.5" />Restore
+                                  </button>
                                 )}
                               </div>
                             </div>
