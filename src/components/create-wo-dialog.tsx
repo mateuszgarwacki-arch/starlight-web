@@ -177,18 +177,10 @@ export function CreateWODialog({
     onCreated(wo.work_order_id);
   };
 
-  // Filter activities: in next-step mode, only show higher phases
-  const predecessorPhase = predecessorWO?.phase_number ?? 0;
+  // Filter activities: remove already-chosen ones. No phase filtering — soft signals only.
   const available = allActivities.filter(
     (a) => !chosenActivities.find((c) => c.lookup_id === a.lookup_id)
   );
-  const filteredAvailable = isNextStep
-    ? available.filter((a) => {
-        // Show activities with higher phase, or null-phase activities (unclassified)
-        const p = a.phase_number;
-        return p === null || p > predecessorPhase;
-      })
-    : available;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -237,12 +229,16 @@ export function CreateWODialog({
               className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue mb-2"
             >
               <option value="">+ Add activity...</option>
-              {filteredAvailable.map((act) => (
-                <option key={act.lookup_id} value={act.lookup_id}>
-                  {act.lookup_value}
-                  {act.phase_number ? ` (Phase ${act.phase_number})` : ""}
-                </option>
-              ))}
+              {available.map((act) => {
+                const predecessorPhase = predecessorWO?.phase_number ?? 0;
+                const isTypicalNext = isNextStep && (act.phase_number ?? 0) > predecessorPhase;
+                return (
+                  <option key={act.lookup_id} value={act.lookup_id}>
+                    {isTypicalNext ? "★ " : ""}{act.lookup_value}
+                    {act.phase_number ? ` (Phase ${act.phase_number})` : ""}
+                  </option>
+                );
+              })}
             </select>
 
             {chosenActivities.length > 0 && (

@@ -1,1 +1,1 @@
-fix: Set phase_number on BUILD (1) and COVER (3), harden null-phase filter in Next Step dialog
+fix: Show all activities in Next Step dialog (soft signals only) - star marks typical next phases
