@@ -1,1 +1,1 @@
-Session 23: formatHours rollout to all pages  
+Session 23: Ad-hoc header timer links to Me page  

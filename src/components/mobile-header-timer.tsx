@@ -190,7 +190,7 @@ export function MobileHeaderTimer() {
   // ---- Ad-hoc task timer ----
   if (info.type === "adhoc") {
     return (
-      <div className="flex items-center gap-2 ml-auto min-w-0 max-w-[60%]">
+      <Link href="/m/me" className="flex items-center gap-2 ml-auto min-w-0 max-w-[60%]">
         <span className="relative flex h-2.5 w-2.5 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-starlight-amber opacity-75" />
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-starlight-amber" />
@@ -203,7 +203,7 @@ export function MobileHeaderTimer() {
             Ad-hoc · <span className="font-mono text-starlight-amber">{elapsed}</span>
           </span>
         </div>
-      </div>
+      </Link>
     );
   }
 
