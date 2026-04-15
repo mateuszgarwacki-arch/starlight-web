@@ -1,1 +1,1 @@
-Session 23: Archive buttons on By Day task rows and Review overhead table  
+Session 23: Edit and archive WO entries from By Day view  

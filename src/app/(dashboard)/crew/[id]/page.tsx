@@ -1066,14 +1066,50 @@ export default function FreelancerDetailPage() {
                         if (item._type === "wo") {
                           const e = item.data;
                           const isArchived = !!(e as TimeEntryRow).archived_at;
+                          const isEditingThis = editingEntry === e.entry_id;
+                          const isArchivingThis = archivingEntry === e.entry_id;
                           return (
-                            <div key={`wo-${e.entry_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (isArchived ? "opacity-40 line-through" : "")}>
-                              <span className="w-16 text-right font-mono font-semibold text-navy">{e.actual_hours != null ? formatHours(e.actual_hours) : "—"}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-navy/10 text-navy">{e.activity_label || "WO"}</span>
-                              <span className="text-muted truncate flex-1">{e.scope_name || e.wo_description || "—"}</span>
-                              {e.job_number && <span className="text-xs text-muted font-mono shrink-0">{e.job_number}</span>}
-                              {e.entry_cost != null && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(e.entry_cost)}</span>}
-                              {e.flag_note && <Flag className="h-3 w-3 text-starlight-amber shrink-0" />}
+                            <div key={`wo-${e.entry_id}`}>
+                              <div className={"flex items-center gap-3 py-1.5 text-sm " + (isArchived ? "opacity-40 line-through" : "")}>
+                                {isEditingThis ? (
+                                  <div className="w-16 flex items-center gap-0.5">
+                                    <input type="number" step="0.25" value={editHoursValue}
+                                      onChange={ev => setEditHoursValue(ev.target.value)}
+                                      onKeyDown={ev => { if (ev.key === "Enter") handleEditEntry(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                                      autoFocus className="w-14 px-1 py-0.5 text-xs text-center border border-starlight-blue rounded" />
+                                  </div>
+                                ) : (
+                                  <span className="w-16 text-right font-mono font-semibold text-navy">{e.actual_hours != null ? formatHours(e.actual_hours) : "—"}</span>
+                                )}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-navy/10 text-navy">{e.activity_label || "WO"}</span>
+                                <span className="text-muted truncate flex-1">{e.scope_name || e.wo_description || "—"}</span>
+                                {e.job_number && <span className="text-xs text-muted font-mono shrink-0">{e.job_number}</span>}
+                                {e.entry_cost != null && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(e.entry_cost)}</span>}
+                                {e.flag_note && <Flag className="h-3 w-3 text-starlight-amber shrink-0" />}
+                                {isAdmin && !isArchived && !isEditingThis && !isArchivingThis && (
+                                  <div className="flex gap-0.5 shrink-0">
+                                    <button onClick={() => { setEditingEntry(e.entry_id); setEditHoursValue(String(e.actual_hours ?? "")); setEditDateValue(e.system_start_timestamp ? e.system_start_timestamp.split("T")[0] : ""); setEditFlagValue(e.flag_note || ""); }}
+                                      title="Edit" className="p-1 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors"><Pencil className="h-3 w-3" /></button>
+                                    <button onClick={() => { setArchivingEntry(e.entry_id); setArchiveReason(""); }}
+                                      title="Archive" className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors"><Archive className="h-3 w-3" /></button>
+                                  </div>
+                                )}
+                                {isEditingThis && (
+                                  <div className="flex gap-1 shrink-0">
+                                    <button onClick={() => handleEditEntry(e.entry_id)} className="px-2 py-1 bg-starlight-blue text-white text-[10px] font-medium rounded">Save</button>
+                                    <button onClick={() => setEditingEntry(null)} className="px-2 py-1 text-[10px] text-muted">Cancel</button>
+                                  </div>
+                                )}
+                              </div>
+                              {isArchivingThis && (
+                                <div className="ml-16 mt-1 mb-1 p-2 bg-starlight-red/10 border border-starlight-red/20 rounded flex items-center gap-2">
+                                  <input type="text" value={archiveReason} onChange={ev => setArchiveReason(ev.target.value)}
+                                    onKeyDown={ev => { if (ev.key === "Enter") handleArchive(e.entry_id); if (ev.key === "Escape") setArchivingEntry(null); }}
+                                    placeholder="Reason..." autoFocus className="flex-1 px-2 py-1 text-xs border border-starlight-red/20 rounded focus:outline-none" />
+                                  <button onClick={() => handleArchive(e.entry_id)} className="text-xs px-2 py-1 bg-starlight-red text-white rounded">Archive</button>
+                                  <button onClick={() => setArchivingEntry(null)} className="text-xs text-muted">Cancel</button>
+                                </div>
+                              )}
                             </div>
                           );
                         } else {
