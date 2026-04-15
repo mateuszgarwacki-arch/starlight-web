@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   TrendingUp, TrendingDown, Clock, AlertTriangle,
@@ -347,7 +348,7 @@ export default function ReviewPage() {
             </div>
             <div className="grid grid-cols-3 gap-4 text-right w-64 shrink-0">
               <div><p className="text-[10px] text-muted">Tasks</p><p className="text-sm font-mono text-navy">{overheadTasks.length}</p></div>
-              <div><p className="text-[10px] text-muted">Hours</p><p className="text-sm font-mono text-navy">{Math.round(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0) * 10) / 10}h</p></div>
+              <div><p className="text-[10px] text-muted">Hours</p><p className="text-sm font-mono text-navy">{formatHours(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0))}</p></div>
               <div><p className="text-[10px] text-muted">Cost</p><p className="text-sm font-mono text-starlight-amber font-semibold">{formatCurrency(overheadTotal)}</p></div>
             </div>
           </summary>
@@ -375,7 +376,7 @@ export default function ReviewPage() {
                       }`}>{t.category === "workshop_general" ? "General" : t.category === "maintenance" ? "Maintenance" : "Other"}</span>
                     </td>
                     <td className="py-1.5 px-2 text-xs text-muted font-mono">{t.worked_date || (t.logged_at ? new Date(t.logged_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—")}</td>
-                    <td className="py-1.5 px-2 text-right font-mono">{t.hours || "—"}h</td>
+                    <td className="py-1.5 px-2 text-right font-mono">{t.hours ? formatHours(t.hours) : "—"}</td>
                     <td className="py-1.5 px-2 text-right text-xs font-mono text-muted">{t.hourly_rate ? formatCurrency(t.hourly_rate) : "—"}</td>
                     <td className="py-1.5 px-5 text-right font-mono font-semibold text-navy">{formatCurrency(t.cost)}</td>
                   </tr>
@@ -384,7 +385,7 @@ export default function ReviewPage() {
               <tfoot>
                 <tr className="border-t border-subtle bg-surface-dim/30">
                   <td colSpan={4} className="py-2 px-5 text-right text-xs font-medium text-muted">Total</td>
-                  <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">{Math.round(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0) * 10) / 10}h</td>
+                  <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">{formatHours(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0))}</td>
                   <td className="py-2 px-2"></td>
                   <td className="py-2 px-5 text-right text-sm font-semibold text-navy font-mono">{formatCurrency(overheadTotal)}</td>
                 </tr>
@@ -685,7 +686,7 @@ export default function ReviewPage() {
                       <td className="px-4 py-2.5 text-xs font-mono text-muted">
                         {e.system_end_timestamp ? new Date(e.system_end_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-navy">{e.actual_hours ? `${e.actual_hours}h` : "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-navy">{e.actual_hours ? formatHours(e.actual_hours) : "—"}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs text-muted">{e.applied_hourly_rate ? formatCurrency(e.applied_hourly_rate) : "—"}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-navy">{e.entry_cost ? formatCurrency(e.entry_cost) : "—"}</td>
                       <td className="px-4 py-2.5 text-xs text-starlight-amber max-w-[150px] truncate">{e.flag_note || ""}</td>
@@ -712,7 +713,7 @@ export default function ReviewPage() {
                     <p className="text-xs text-muted mt-0.5">{e.activity_label}</p>
                     <p className="text-xs text-muted">
                       {new Date(e.system_start_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      {e.actual_hours ? ` · ${e.actual_hours}h logged` : ""}
+                      {e.actual_hours ? ` · ${formatHours(e.actual_hours)} logged` : ""}
                     </p>
                   </div>
                   <Flag className="h-4 w-4 text-starlight-amber shrink-0" />

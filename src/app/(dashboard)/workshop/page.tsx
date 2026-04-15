@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { isTruthy } from "@/lib/types";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
@@ -260,7 +261,7 @@ export default function WorkshopPage() {
     setStoppingWOEntry(null);
     setStopWOHours("");
     setStopWOReason("");
-    toast.success(`Timer stopped — ${hours}h logged`);
+    toast.success(`Timer stopped — ${formatHours(hours)} logged`);
     loadAll();
   };
 
@@ -353,11 +354,11 @@ export default function WorkshopPage() {
         </div>
         <div className="card px-4 py-3">
           <p className="text-xs text-muted">Est. Hours</p>
-          <p className="text-lg font-semibold text-navy">{stats.totalEstHrs}h</p>
+          <p className="text-lg font-semibold text-navy">{formatHours(stats.totalEstHrs)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-xs text-muted">Logged Hours</p>
-          <p className="text-lg font-semibold text-starlight-green">{Math.round(stats.totalLoggedHrs * 10) / 10}h</p>
+          <p className="text-lg font-semibold text-starlight-green">{formatHours(stats.totalLoggedHrs)}</p>
         </div>
       </div>
 
@@ -666,7 +667,7 @@ export default function WorkshopPage() {
                       {wo.total_logged_hrs > 0 ? `${Math.round(wo.total_logged_hrs * 10) / 10}h` : "—"}
                     </p>
                     <p className="text-[10px] text-muted">
-                      {wo.estimated_duration_hrs ? `of ${wo.estimated_duration_hrs}h est.` : "no est."}
+                      {wo.estimated_duration_hrs ? `of ${formatHours(wo.estimated_duration_hrs)} est.` : "no est."}
                     </p>
                   </div>
                   {/* Active workers indicator */}
@@ -731,7 +732,7 @@ export default function WorkshopPage() {
                                     ? new Date(e.system_end_timestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
                                     : "—"}
                                 </td>
-                                <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.actual_hours ? `${e.actual_hours}h` : "—"}</td>
+                                <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.actual_hours ? formatHours(e.actual_hours) : "—"}</td>
                                 <td className="py-1.5 px-2 text-right text-xs font-mono text-muted">{e.applied_hourly_rate ? formatCurrency(e.applied_hourly_rate) : "—"}</td>
                                 <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{e.entry_cost ? formatCurrency(e.entry_cost) : "—"}</td>
                                 <td className="py-1.5 px-2 text-xs text-starlight-amber max-w-[200px] truncate">{e.flag_note || ""}</td>

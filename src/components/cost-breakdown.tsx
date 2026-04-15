@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Clock } from "lucide-react";
+import { formatHours } from "@/lib/format-hours";
 
 interface QuoteLine {
   quote_line_id: number;
@@ -381,7 +382,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                 {timeEntriesExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 <Clock className="h-3 w-3" />
                 <span className="font-medium">{timeEntries.length} time entr{timeEntries.length === 1 ? "y" : "ies"}</span>
-                <span className="text-muted">· {timeEntries.reduce((s, e) => s + (e.actual_hours || 0), 0).toFixed(1)}h · {fmt(timeEntries.reduce((s, e) => s + (e.entry_cost || 0), 0))}</span>
+                <span className="text-muted">· {formatHours(timeEntries.reduce((s, e) => s + (e.actual_hours || 0), 0))} · {fmt(timeEntries.reduce((s, e) => s + (e.entry_cost || 0), 0))}</span>
               </button>
               {timeEntriesExpanded && (
                 <div className="mt-2 overflow-x-auto">
@@ -407,7 +408,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                             <span className="text-[10px] bg-surface-top px-1 py-0.5 rounded mr-1">{e.activity_label}</span>
                             {e.wo_description || ""}
                           </td>
-                          <td className="px-3 py-1.5 text-right font-mono text-foreground">{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-foreground">{e.actual_hours != null ? formatHours(e.actual_hours) : "—"}</td>
                           <td className="px-3 py-1.5 text-right font-mono text-foreground">{e.entry_cost != null ? fmt(e.entry_cost) : "—"}</td>
                           <td className="px-3 py-1.5 text-muted max-w-[150px] truncate">{e.flag_note || ""}</td>
                         </tr>

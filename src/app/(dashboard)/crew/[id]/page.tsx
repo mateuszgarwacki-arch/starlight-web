@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
@@ -395,7 +396,7 @@ export default function FreelancerDetailPage() {
     setStoppingEntry(null);
     setStopHours("");
     setStopReason("");
-    toast.success(`Timer stopped — ${hours}h logged`);
+    toast.success(`Timer stopped — ${formatHours(hours)} logged`);
   };
 
   // ============================================================
@@ -439,7 +440,7 @@ export default function FreelancerDetailPage() {
         status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs,
         reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: routeNote || null,
       }).eq("task_id", routingTask.task_id);
-      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${hrs}h routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: selectedWo, jobId: wo?.job_id });
+      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${formatHours(hrs)} routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: selectedWo, jobId: wo?.job_id });
       toast.success("Task routed to WO");
       setRoutingTask(null);
       setAllTasks(prev => prev.map(t => t.task_id === routingTask.task_id ? { ...t, status: "routed" } : t));
@@ -521,7 +522,7 @@ export default function FreelancerDetailPage() {
           actual_end_timestamp: addEntryDate + "T17:00:00",
           flag_note: addEntryNote.trim() ? `PM added: ${addEntryNote.trim()}` : "PM added manually",
         }, wo?.job_id);
-        toast.success(`${hrs}h WO entry created`);
+        toast.success(`${formatHours(hrs)} WO entry created`);
       } else {
         if (!addEntryTitle.trim()) { toast.error("Enter a title"); setAddEntrySubmitting(false); return; }
         await supabase.from("tbl_tasks").insert({
@@ -529,7 +530,7 @@ export default function FreelancerDetailPage() {
           category: addEntryCategory, hours: hrs, worked_date: addEntryDate, status: "approved_overhead",
           reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "PM added manually",
         });
-        toast.success(`${hrs}h ad-hoc task created`);
+        toast.success(`${formatHours(hrs)} ad-hoc task created`);
       }
       setShowAddEntry(false);
       loadData();
@@ -595,11 +596,11 @@ export default function FreelancerDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="card px-4 py-3">
           <p className="text-xs text-muted">Total Hours</p>
-          <p className="text-lg font-semibold text-navy">{stats.totalHours}h</p>
+          <p className="text-lg font-semibold text-navy">{formatHours(stats.totalHours)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-xs text-muted">Last 30 Days</p>
-          <p className="text-lg font-semibold text-navy">{stats.last30Hours}h</p>
+          <p className="text-lg font-semibold text-navy">{formatHours(stats.last30Hours)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-xs text-muted">WOs Completed</p>
@@ -641,7 +642,7 @@ export default function FreelancerDetailPage() {
                       <p className="text-xs text-muted truncate">{entry.job_number} · {entry.job_name}{entry.wo_description ? ` — ${entry.wo_description}` : ""}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-lg font-bold text-navy font-mono">{elapsed}h</p>
+                      <p className="text-lg font-bold text-navy font-mono">{formatHours(elapsed)}</p>
                       <p className="text-[9px] text-muted">since {entry.system_start_timestamp ? new Date(entry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
                     </div>
                     <button onClick={() => { setStoppingEntry(isStopping ? null : entry.entry_id); setStopHours(String(Math.max(0.5, Math.round(elapsed * 2) / 2))); setStopReason(""); }}
@@ -696,7 +697,7 @@ export default function FreelancerDetailPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-amber/10 text-starlight-amber uppercase tracking-wider">{task.category.replace("_", " ")}</span>
-                      {task.hours != null && <span className="text-sm font-semibold text-navy">{task.hours}h</span>}
+                      {task.hours != null && <span className="text-sm font-semibold text-navy">{formatHours(task.hours)}</span>}
                       {task.worked_date && <span className="text-xs text-muted">{formatDate(task.worked_date)}</span>}
                     </div>
                     <p className="text-sm font-medium text-navy mt-1">{task.title}</p>
@@ -801,9 +802,9 @@ export default function FreelancerDetailPage() {
                     {e.system_end_timestamp ? " → " + new Date(e.system_end_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
                   </p>
                   {editingEntry === e.entry_id ? (
-                    <p className="text-lg font-semibold text-starlight-blue">{editHoursValue}h</p>
+                    <p className="text-lg font-semibold text-starlight-blue">{formatHours(parseFloat(editHoursValue) || 0)}</p>
                   ) : (
-                    <p className={`text-lg font-semibold text-navy ${isArchived ? "line-through" : ""}`}>{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</p>
+                    <p className={`text-lg font-semibold text-navy ${isArchived ? "line-through" : ""}`}>{e.actual_hours != null ? formatHours(e.actual_hours) : "—"}</p>
                   )}
                 </div>
 
@@ -1053,8 +1054,8 @@ export default function FreelancerDetailPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-4 flex-1">
-                      <span className={"text-lg font-bold font-mono " + (isOver ? "text-starlight-red" : "text-navy")}>{Math.round(day.totalHours * 10) / 10}h</span>
-                      {isOver && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-red/10 text-starlight-red">OVER {maxHours}h</span>}
+                      <span className={"text-lg font-bold font-mono " + (isOver ? "text-starlight-red" : "text-navy")}>{formatHours(day.totalHours)}</span>
+                      {isOver && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-starlight-red/10 text-starlight-red">OVER {formatHours(maxHours)}</span>}
                       <span className="text-xs text-muted">{woCount} WO entr{woCount !== 1 ? "ies" : "y"}{taskCount > 0 ? ` + ${taskCount} task${taskCount !== 1 ? "s" : ""}` : ""}</span>
                       {hourlyRate > 0 && <span className="text-xs text-muted font-mono ml-auto">{formatCurrency(cost)}</span>}
                     </div>
@@ -1067,7 +1068,7 @@ export default function FreelancerDetailPage() {
                           const isArchived = !!(e as TimeEntryRow).archived_at;
                           return (
                             <div key={`wo-${e.entry_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (isArchived ? "opacity-40 line-through" : "")}>
-                              <span className="w-12 text-right font-mono font-semibold text-navy">{e.actual_hours != null ? `${e.actual_hours}h` : "—"}</span>
+                              <span className="w-16 text-right font-mono font-semibold text-navy">{e.actual_hours != null ? formatHours(e.actual_hours) : "—"}</span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-navy/10 text-navy">{e.activity_label || "WO"}</span>
                               <span className="text-muted truncate flex-1">{e.scope_name || e.wo_description || "—"}</span>
                               {e.job_number && <span className="text-xs text-muted font-mono shrink-0">{e.job_number}</span>}
@@ -1167,7 +1168,7 @@ export default function FreelancerDetailPage() {
                 <input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5"
                   className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
                 {routingTask.hours && routeHours && parseFloat(routeHours) !== routingTask.hours && (
-                  <p className="text-[10px] text-starlight-amber mt-1">Claimed: {routingTask.hours}h</p>
+                  <p className="text-[10px] text-starlight-amber mt-1">Claimed: {formatHours(routingTask.hours)}</p>
                 )}
               </div>
               <div>

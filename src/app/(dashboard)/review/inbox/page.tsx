@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuditContext, auditedInsert } from "@/lib/audit";
+import { formatHours } from "@/lib/format-hours";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { formatDate } from "@/lib/utils";
@@ -59,7 +60,7 @@ export default function ReviewInboxPage() {
       const hourlyRate = freelancer && freelancer.standard_day_hours > 0 ? freelancer.day_rate / freelancer.standard_day_hours : 0;
       await auditedInsert(ctx, "tbl_wo_time_entries", { work_order_id: selectedWo, freelancer_id: routingTask.freelancer_id, actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: hrs * hourlyRate, system_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null, actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null, system_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null, actual_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null, flag_note: routeNote.trim() ? `Routed: ${routeNote.trim()}` : "Routed from ad-hoc task" }, wo?.job_id);
       await supabase.from("tbl_tasks").update({ status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs, reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: routeNote || null }).eq("task_id", routingTask.item_id);
-      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${hrs}h routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId: routingTask.freelancer_id, woId: selectedWo, jobId: wo?.job_id });
+      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${formatHours(hrs)} routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId: routingTask.freelancer_id, woId: selectedWo, jobId: wo?.job_id });
       toast.success("Task routed to WO"); setRoutingTask(null); loadInbox();
     } catch { toast.error("Failed to route task"); }
     setRouteSubmitting(false);
@@ -128,7 +129,7 @@ export default function ReviewInboxPage() {
                     {item.description && <p className="text-xs text-muted mt-0.5">{item.description}</p>}
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
                       <span>{item.freelancer_name}</span>{item.job_number && <span className="font-mono">{item.job_number} — {item.job_name}</span>}
-                      {item.claimed_hours != null && <span className="font-semibold text-navy">{item.claimed_hours}h</span>}{item.worked_date && <span>{formatDate(item.worked_date)}</span>}
+                      {item.claimed_hours != null && <span className="font-semibold text-navy">{formatHours(item.claimed_hours)}</span>}{item.worked_date && <span>{formatDate(item.worked_date)}</span>}
                       <span>{new Date(item.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   </div>
@@ -167,7 +168,7 @@ export default function ReviewInboxPage() {
                   </button>)))}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted mb-1 block">Hours</label><input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5" className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />{routingTask.claimed_hours && routeHours && parseFloat(routeHours) !== routingTask.claimed_hours && (<p className="text-[10px] text-starlight-amber mt-1">Claimed: {routingTask.claimed_hours}h</p>)}</div>
+              <div><label className="text-xs font-medium text-muted mb-1 block">Hours</label><input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5" className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />{routingTask.claimed_hours && routeHours && parseFloat(routeHours) !== routingTask.claimed_hours && (<p className="text-[10px] text-starlight-amber mt-1">Claimed: {formatHours(routingTask.claimed_hours)}</p>)}</div>
               <div><label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label><input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
             </div>
             <div className="flex justify-end gap-2">

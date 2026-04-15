@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { DaysRemainingBadge } from "@/components/ui/badges";
 import {
   Briefcase, ClipboardList, Package, Users, AlertCircle,
@@ -233,7 +234,7 @@ export default function DashboardPage() {
                         <p className="text-[10px] text-muted">
                           {f.job_name && <><span>{f.job_number || f.job_name}</span> · </>}
                           {f.scope_name && <><span>{f.scope_name}</span> · </>}
-                          {f.actual_hours ? `${f.actual_hours}h` : ""} {f.entry_cost ? `· ${formatCurrency(f.entry_cost)}` : ""}
+                          {f.actual_hours ? formatHours(f.actual_hours) : ""} {f.entry_cost ? `· ${formatCurrency(f.entry_cost)}` : ""}
                         </p>
                       </div>
                     </div>
@@ -300,9 +301,9 @@ export default function DashboardPage() {
                   {manpower.map((row) => (
                     <tr key={row.department} className="border-t border-subtle">
                       <td className="px-4 py-2 font-medium text-navy">{row.department}</td>
-                      <td className="px-4 py-2 text-right font-mono">{Math.round(row.total_hrs || 0)}h</td>
-                      <td className="px-4 py-2 text-right font-mono text-muted">{Math.round(row.hrs_ready || 0)}h</td>
-                      <td className="px-4 py-2 text-right font-mono text-starlight-blue">{Math.round(row.hrs_in_progress || 0)}h</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatHours(row.total_hrs || 0)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-muted">{formatHours(row.hrs_ready || 0)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-starlight-blue">{formatHours(row.hrs_in_progress || 0)}</td>
                     </tr>
                   ))}
                 </tbody>

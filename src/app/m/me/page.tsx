@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { formatHours } from "@/lib/format-hours";
 import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
@@ -125,7 +126,7 @@ export default function MobileProfilePage() {
     setLogSubmitting(true);
     const { error } = await supabase.from("tbl_tasks").update({ hours: hrs, worked_date: activeTimer.started_at.split("T")[0], logged_at: new Date().toISOString(), status: "pending" }).eq("task_id", activeTimer.task_id);
     if (error) { toast.error("Failed to log hours"); setLogSubmitting(false); return; }
-    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${activeTimer.title}`, detail: `${hrs}h — timer logged`, severity: "info", freelancerId: myId, actionUrl: "/review/inbox" });
+    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${activeTimer.title}`, detail: `${formatHours(hrs)} — timer logged`, severity: "info", freelancerId: myId, actionUrl: "/review/inbox" });
     toast.success("Task logged — pending review"); setActiveTimer(null); setShowLogSheet(false); setLogHours(""); setLogSubmitting(false); window.location.reload();
   };
 
@@ -179,7 +180,7 @@ export default function MobileProfilePage() {
                       {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? `${Number(entry.hours).toFixed(1)}h` : "—"}</span>
+                  <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? formatHours(entry.hours) : "—"}</span>
                 </div>
                 {entry.type === "wo" && (
                   editingNote?.entryId === entry.id ? (
@@ -225,7 +226,7 @@ export default function MobileProfilePage() {
             <div key={task.task_id} className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1"><p className="text-sm text-navy truncate">{task.title}</p></div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">{task.hours != null && (<span className="text-xs text-muted tabular-nums">{Number(task.hours).toFixed(1)}h</span>)}{badge && (<span className={"text-[10px] px-2 py-0.5 rounded-full font-medium " + badge.cls}>{badge.label}</span>)}</div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">{task.hours != null && (<span className="text-xs text-muted tabular-nums">{formatHours(task.hours)}</span>)}{badge && (<span className={"text-[10px] px-2 py-0.5 rounded-full font-medium " + badge.cls}>{badge.label}</span>)}</div>
               </div>
               {task.review_note && (<p className="text-[10px] text-muted mt-1 italic">{task.review_note}</p>)}
             </div>); })}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { QRCodeSVG } from "qrcode.react";
 import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
@@ -386,7 +387,7 @@ export default function TravellerPage() {
               <p className="text-2xl font-semibold text-muted mb-4">{wo.activity_label}</p>
               {wo.description && <p className="text-base text-muted max-w-lg mx-auto">{wo.description}</p>}
               <div className="mt-6 flex items-center justify-center gap-4 text-sm text-muted">
-                {wo.estimated_duration_hrs != null && <span>Est. {wo.estimated_duration_hrs}h</span>}
+                {wo.estimated_duration_hrs != null && <span>Est. {formatHours(wo.estimated_duration_hrs)}</span>}
                 {wo.lead_name && <span>Lead: {wo.lead_name}</span>}
               </div>
             </div>

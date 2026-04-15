@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatHours } from "@/lib/format-hours";
 import { isTruthy } from "@/lib/types";
 import {
   Users, RefreshCw, AlertTriangle, ChevronDown, ChevronRight,
@@ -322,21 +323,21 @@ export default function CapacityPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="card px-4 py-3">
           <p className="text-[10px] text-muted uppercase tracking-wider">Estimated Total</p>
-          <p className="text-lg font-semibold text-navy font-mono">{Math.round(totalEstimated)}h</p>
+          <p className="text-lg font-semibold text-navy font-mono">{formatHours(totalEstimated)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-[10px] text-muted uppercase tracking-wider">Hours Logged</p>
-          <p className="text-lg font-semibold text-starlight-green font-mono">{Math.round(totalActual)}h</p>
+          <p className="text-lg font-semibold text-starlight-green font-mono">{formatHours(totalActual)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-[10px] text-muted uppercase tracking-wider">Remaining</p>
-          <p className="text-lg font-semibold text-navy font-mono">{Math.round(totalRemaining)}h</p>
+          <p className="text-lg font-semibold text-navy font-mono">{formatHours(totalRemaining)}</p>
         </div>
         <div className="card px-4 py-3">
           <p className="text-[10px] text-muted uppercase tracking-wider">Booked (4 wks)</p>
-          <p className="text-lg font-semibold text-starlight-blue font-mono">{Math.round(totalBookedHours)}h</p>
+          <p className="text-lg font-semibold text-starlight-blue font-mono">{formatHours(totalBookedHours)}</p>
           {generalWorkshopHours > 0 && (
-            <p className="text-[10px] text-muted mt-0.5">{Math.round(generalWorkshopHours)}h general</p>
+            <p className="text-[10px] text-muted mt-0.5">{formatHours(generalWorkshopHours)} general</p>
           )}
         </div>
         <div className={"card px-4 py-3 border-l-4 " + (gapTier === "green" ? "border-l-starlight-green" : gapTier === "amber" ? "border-l-starlight-amber" : "border-l-starlight-red")}>
@@ -420,10 +421,10 @@ export default function CapacityPage() {
                       </div>
                     </div>
                     <div className="hidden md:flex items-center gap-6 text-xs shrink-0">
-                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.total_estimated)}h</p><p className="text-[10px] text-muted">Estimated</p></div>
-                      <div className="text-center"><p className="font-mono text-starlight-green font-medium">{Math.round(j.total_actual)}h</p><p className="text-[10px] text-muted">Logged</p></div>
-                      <div className="text-center"><p className="font-mono text-navy font-medium">{Math.round(j.remaining)}h</p><p className="text-[10px] text-muted">Remaining</p></div>
-                      <div className="text-center"><p className="font-mono text-starlight-blue font-medium">{j.booked_hours}h</p><p className="text-[10px] text-muted">Booked</p></div>
+                      <div className="text-center"><p className="font-mono text-navy font-medium">{formatHours(j.total_estimated)}</p><p className="text-[10px] text-muted">Estimated</p></div>
+                      <div className="text-center"><p className="font-mono text-starlight-green font-medium">{formatHours(j.total_actual)}</p><p className="text-[10px] text-muted">Logged</p></div>
+                      <div className="text-center"><p className="font-mono text-navy font-medium">{formatHours(j.remaining)}</p><p className="text-[10px] text-muted">Remaining</p></div>
+                      <div className="text-center"><p className="font-mono text-starlight-blue font-medium">{formatHours(j.booked_hours)}</p><p className="text-[10px] text-muted">Booked</p></div>
                     </div>
                     <div className={"text-right shrink-0 " + daysTier(days)}>
                       <p className="text-sm font-semibold font-mono">{days !== null ? (days < 0 ? `${Math.abs(days)}d ago` : `${days}d`) : "—"}</p>
