@@ -1,1 +1,1 @@
-fix: Show all activities in Next Step dialog (soft signals only) - star marks typical next phases
+feat: Next Step dialog - item checkboxes with toggle, no auto-description, scrollable form
