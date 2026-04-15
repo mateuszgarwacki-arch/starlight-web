@@ -1,1 +1,1 @@
-feat: Next Step WO chaining - predecessor_wo_id, streamlined dialog, visual chain indicator
+fix: Set phase_number on BUILD (1) and COVER (3), harden null-phase filter in Next Step dialog

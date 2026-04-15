@@ -183,7 +183,11 @@ export function CreateWODialog({
     (a) => !chosenActivities.find((c) => c.lookup_id === a.lookup_id)
   );
   const filteredAvailable = isNextStep
-    ? available.filter((a) => (a.phase_number ?? 0) > predecessorPhase)
+    ? available.filter((a) => {
+        // Show activities with higher phase, or null-phase activities (unclassified)
+        const p = a.phase_number;
+        return p === null || p > predecessorPhase;
+      })
     : available;
 
   return (
