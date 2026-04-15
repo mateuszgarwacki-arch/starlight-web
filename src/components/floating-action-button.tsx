@@ -9,10 +9,11 @@ export function FloatingActionButton() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Hide on WO detail pages — those have their own primary actions
+  // Hide on pages that have their own primary actions
   if (pathname.startsWith("/m/wo/")) return null;
-  // Hide on login
   if (pathname === "/m/login") return null;
+  if (pathname === "/m/task") return null;
+  if (pathname === "/m/request") return null;
 
   return (
     <>
@@ -26,7 +27,7 @@ export function FloatingActionButton() {
 
       {/* Action buttons (expanded) */}
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3 items-end">
+        <div className="fixed bottom-36 right-4 z-50 flex flex-col gap-3 items-end">
           <button
             onClick={() => { setOpen(false); router.push("/m/task"); }}
             className="flex items-center gap-2 bg-navy text-white pl-4 pr-5 py-3 rounded-full shadow-lg active:bg-navy/90 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"

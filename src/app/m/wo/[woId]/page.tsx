@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { formatHours } from "@/lib/format-hours";
 import { uploadToOneDrive, jobFolder, woPhotoName, getOneDriveUrl } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush, ImageIcon } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
@@ -168,7 +169,7 @@ export default function MobileWODetail() {
         hours: elapsedHrs,
         logged_at: new Date().toISOString(),
       }).eq("task_id", task.task_id);
-      toast.success(`Auto-logged ${elapsedHrs}h for "${task.title}"`);
+      toast.success(`Auto-logged ${formatHours(elapsedHrs)} for "${task.title}"`);
     }
   };
 
@@ -199,7 +200,7 @@ export default function MobileWODetail() {
         actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: cost,
         flag_note: "Auto-stopped: started another WO",
       }).eq("entry_id", oe.entry_id);
-      toast.success(`Auto-logged ${hrs}h on previous task`);
+      toast.success(`Auto-logged ${formatHours(hrs)} on previous task`);
     }
   };
 
@@ -294,7 +295,7 @@ export default function MobileWODetail() {
       });
     }
     await notify({ supabase, type: "hours_logged", severity: "info",
-      title: `${myName || "Someone"} logged ${hrs}h on ${wo?.activity_label || "a task"}`,
+      title: `${myName || "Someone"} logged ${formatHours(hrs)} on ${wo?.activity_label || "a task"}`,
       detail: wo?.scope_name || "",
       freelancerId: myId, jobId: wo?.job_id || undefined, woId,
       actionUrl: `/review`,
@@ -305,7 +306,7 @@ export default function MobileWODetail() {
     setFlagNote("");
     await loadWO();
     setActing(false);
-    toast.success(`${hrs}h logged`);
+    toast.success(`${formatHours(hrs)} logged`);
   };
 
   const openLogSheet = () => {
@@ -426,7 +427,7 @@ export default function MobileWODetail() {
 
         <div className="flex gap-4 mt-3 text-xs text-muted">
           <span className="font-mono">{wo.job_number}</span>
-          {wo.estimated_duration_hrs && <span>{wo.estimated_duration_hrs}h est.</span>}
+          {wo.estimated_duration_hrs && <span>{formatHours(wo.estimated_duration_hrs)} est.</span>}
           {wo.complexity_construction && <span>{wo.complexity_construction}</span>}
         </div>
       </div>
@@ -455,7 +456,7 @@ export default function MobileWODetail() {
       {myOpenEntry && (
         <div className="bg-starlight-green/5 rounded-xl border border-starlight-green/20 px-4 py-4 text-center">
           <Clock className="h-6 w-6 text-starlight-green mx-auto" />
-          <p className="text-2xl font-bold text-navy mt-2 font-mono">{elapsedHours}h</p>
+          <p className="text-2xl font-bold text-navy mt-2 font-mono">{formatHours(elapsedHours)}</p>
           <p className="text-xs text-muted mt-1">
             Started {new Date(myOpenEntry.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
           </p>
@@ -515,7 +516,7 @@ export default function MobileWODetail() {
           {entries.filter(e => e.system_end_timestamp).map(e => (
             <div key={e.entry_id} className="flex justify-between py-1.5 text-sm border-b border-subtle last:border-0">
               <span className="text-muted">{e.freelancer_name}</span>
-              <span className="font-mono text-navy">{e.actual_hours || "—"}h</span>
+              <span className="font-mono text-navy">{e.actual_hours ? formatHours(e.actual_hours) : "—"}</span>
             </div>
           ))}
         </div>

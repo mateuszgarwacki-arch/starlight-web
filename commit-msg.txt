@@ -1,1 +1,1 @@
-TRACKER.md: Session 22 notes
+Session 23: Mobile task logging UX overhaul  

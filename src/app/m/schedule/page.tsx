@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { formatHours } from "@/lib/format-hours";
 import { Check, ChevronLeft, ChevronRight, X, CalendarPlus, AlertTriangle, Save } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
@@ -353,12 +354,12 @@ export default function MobileSchedule() {
       <div className="flex gap-2">
         <div className="flex-1 bg-surface rounded-xl border border-subtle px-3 py-2.5">
           <p className="text-[10px] text-muted uppercase tracking-wide">This week</p>
-          <p className="text-lg font-bold text-navy">{thisWeekHours.toFixed(1)}h</p>
+          <p className="text-lg font-bold text-navy">{formatHours(thisWeekHours)}</p>
           <p className="text-[10px] text-muted">{thisWeekCount} entr{thisWeekCount === 1 ? "y" : "ies"}</p>
         </div>
         <div className="flex-1 bg-surface rounded-xl border border-subtle px-3 py-2.5">
           <p className="text-[10px] text-muted uppercase tracking-wide">Last week</p>
-          <p className="text-lg font-bold text-muted">{lastWeekHours.toFixed(1)}h</p>
+          <p className="text-lg font-bold text-muted">{formatHours(lastWeekHours)}</p>
           <p className="text-[10px] text-muted">{thisWeekHours > lastWeekHours ? "↑" : thisWeekHours < lastWeekHours ? "↓" : "="} vs this week</p>
         </div>
       </div>
@@ -369,7 +370,7 @@ export default function MobileSchedule() {
           <button onClick={() => shiftCalMonth(-1)} className="p-1.5 text-muted"><ChevronLeft className="h-4 w-4" /></button>
           <div className="text-center">
             <span className="text-sm font-semibold text-navy">{calLabel}</span>
-            {monthHours > 0 && <span className="text-xs text-muted ml-2">{monthHours.toFixed(1)}h logged</span>}
+            {monthHours > 0 && <span className="text-xs text-muted ml-2">{formatHours(monthHours)} logged</span>}
           </div>
           <button onClick={() => shiftCalMonth(1)} className="p-1.5 text-muted"><ChevronRight className="h-4 w-4" /></button>
         </div>
@@ -405,7 +406,7 @@ export default function MobileSchedule() {
               <button key={d.date} onClick={() => { setSelectedDay({ date: d.date, info }); setEditingNote(null); }}
                 className={"relative flex flex-col items-center justify-center h-12 rounded-lg text-[12px] transition-colors " + bg + " " + tc + (isToday ? " ring-2 ring-navy/30" : "") + " active:scale-95"}>
                 <span>{d.num}</span>
-                {dayTime && <span className="text-[8px] font-mono font-bold text-starlight-blue leading-none">{dayTime.totalHours.toFixed(1)}h</span>}
+                {dayTime && <span className="text-[8px] font-mono font-bold text-starlight-blue leading-none">{formatHours(dayTime.totalHours)}</span>}
                 {!dayTime && info && info.job && <span className="text-[7px] leading-tight truncate w-full text-center opacity-60">{info.job.job_name?.split(" ")[0]}</span>}
                 {hasGap && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-starlight-red" />}
               </button>
@@ -504,7 +505,7 @@ export default function MobileSchedule() {
                         : `${selectedDay.info.status} — ${selectedDay.info.job?.job_name || "Workshop"}`}
                     </p>
                   ) : (
-                    <p className="text-xs text-muted mt-0.5">{dayTime ? `${dayTime.totalHours.toFixed(1)}h logged` : "No bookings"}</p>
+                    <p className="text-xs text-muted mt-0.5">{dayTime ? `${formatHours(dayTime.totalHours)} logged` : "No bookings"}</p>
                   )}
                 </div>
                 <button onClick={() => { setSelectedDay(null); setEditingNote(null); }} className="p-1 text-muted"><X className="h-5 w-5" /></button>
@@ -516,7 +517,7 @@ export default function MobileSchedule() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-semibold text-navy uppercase tracking-wide">Time Logged</h4>
-                      <span className="text-xs font-semibold text-starlight-blue">{dayTime.totalHours.toFixed(1)}h · {dayTime.entries.length} entr{dayTime.entries.length === 1 ? "y" : "ies"}</span>
+                      <span className="text-xs font-semibold text-starlight-blue">{formatHours(dayTime.totalHours)} · {dayTime.entries.length} entr{dayTime.entries.length === 1 ? "y" : "ies"}</span>
                     </div>
                     <div className="space-y-2">
                       {dayTime.entries.map((e) => {
@@ -531,7 +532,7 @@ export default function MobileSchedule() {
                                 <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted">
                                   <span className="font-mono">{e.job_number}</span>
                                   <span>{startT} → {endT}</span>
-                                  {e.actual_hours != null && <span className="font-semibold text-starlight-blue">{e.actual_hours}h</span>}
+                                  {e.actual_hours != null && <span className="font-semibold text-starlight-blue">{formatHours(e.actual_hours)}</span>}
                                 </div>
                               </div>
                               <button onClick={() => router.push("/m/wo/" + e.work_order_id)}

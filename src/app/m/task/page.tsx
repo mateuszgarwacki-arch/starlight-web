@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight, QrCode, X, Search } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
+import { formatHours } from "@/lib/format-hours";
 
 interface ActiveJob {
   job_id: number;
@@ -84,7 +85,7 @@ export default function MobileTaskPage() {
     const [fh, fm] = timeFrom.split(":").map(Number);
     const [th, tm] = timeTo.split(":").map(Number);
     const diff = (th * 60 + tm) - (fh * 60 + fm);
-    return diff > 0 ? Math.round((diff / 60) * 2) / 2 : 0; // round to 0.5
+    return diff > 0 ? Math.round((diff / 60) * 4) / 4 : 0; // round to 0.25 (15min)
   };
   const effectiveHours = timeMode === "range" ? calcRangeHours() : hours;
 
@@ -194,31 +195,48 @@ export default function MobileTaskPage() {
     const { error } = await supabase.from("tbl_tasks").insert(insertData);
     if (error) { toast.error("Failed to log task"); setSubmitting(false); return; }
     const catLabel = category === "task" ? `WO: ${selectedWo?.scope_name}` : CATEGORIES.find((c) => c.value === category)?.label;
-    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${logHours}h on ${workedDate} — ${catLabel}`, severity: "info", freelancerId: myId, jobId: insertData.job_id, woId: selectedWo?.work_order_id, actionUrl: "/review/inbox" });
+    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${formatHours(logHours)} on ${workedDate} — ${catLabel}`, severity: "info", freelancerId: myId, jobId: insertData.job_id, woId: selectedWo?.work_order_id, actionUrl: "/review/inbox" });
     toast.success("Task logged — pending review");
     router.back();
   };
 
   const handleStartTimer = async () => {
     if (!title.trim()) { toast.error("What are you doing?"); return; }
-    if (hasActiveTask) { toast.error("Log your current task first"); return; }
     setSubmitting(true);
-    const insertData: any = {
-      freelancer_id: myId, title: title.trim(), description: notes.trim() || null,
-      category: category === "task" ? "job_work" : category,
-      job_id: category === "task" ? selectedWo?.job_id : (category === "job_work" ? jobId : null),
-      started_at: new Date().toISOString(), status: "in_progress",
-    };
+
     if (category === "task" && selectedWo) {
-      insertData.routed_to_wo_id = selectedWo.work_order_id;
+      // WO timer → create tbl_wo_time_entries row (shows in header + WO page)
+      const now = new Date();
+      const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+      const { error } = await supabase.from("tbl_wo_time_entries").insert({
+        work_order_id: selectedWo.work_order_id,
+        freelancer_id: myId,
+        system_start_timestamp: ts,
+        actual_start_timestamp: ts,
+      });
+      if (error) { toast.error("Failed to start timer"); setSubmitting(false); return; }
+      // Also update WO status to In-Progress if it's Ready
+      if (selectedWo.status === "Ready" || selectedWo.status === "Not-Started") {
+        await supabase.from("tbl_work_orders").update({ status: "In-Progress" }).eq("work_order_id", selectedWo.work_order_id);
+      }
+      await notify({ supabase, type: "wo_started", title: `Timer started: ${selectedWo.scope_name}`, detail: `${selectedWo.description || "WO"} — ${selectedWo.job_number}`, severity: "info", freelancerId: myId, jobId: selectedWo.job_id, woId: selectedWo.work_order_id, actionUrl: `/m/wo/${selectedWo.work_order_id}` });
+      toast.success("WO timer started");
+    } else {
+      // Ad-hoc timer → tbl_tasks
+      if (hasActiveTask) { toast.error("Log your current task first"); return; }
+      const insertData: any = {
+        freelancer_id: myId, title: title.trim(), description: notes.trim() || null,
+        category, job_id: category === "job_work" ? jobId : null,
+        started_at: new Date().toISOString(), status: "in_progress",
+      };
+      const { error } = await supabase.from("tbl_tasks").insert(insertData);
+      if (error) { toast.error("Failed to start task"); setSubmitting(false); return; }
+      toast.success("Timer started");
     }
-    const { error } = await supabase.from("tbl_tasks").insert(insertData);
-    if (error) { toast.error("Failed to start task"); setSubmitting(false); return; }
-    toast.success("Timer started");
     router.back();
   };
 
-  const adjustHours = (delta: number) => { setHours((prev) => Math.max(0.5, Math.round((prev + delta) * 2) / 2)); };
+  const adjustHours = (delta: number) => { setHours((prev) => Math.max(0.25, Math.round((prev + delta) * 4) / 4)); };
   const selectedJob = jobs.find((j) => j.job_id === jobId);
 
   return (
@@ -268,13 +286,30 @@ export default function MobileTaskPage() {
               </div>
               {showWoPicker && filteredWos.length > 0 && (
                 <div className="bg-surface border border-subtle rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                  {filteredWos.slice(0, 10).map((wo) => (
-                    <button key={wo.work_order_id} onClick={() => { setSelectedWo(wo); setWoSearch(""); setShowWoPicker(false); setTitle(`${wo.scope_name} — ${wo.description || "WO"}`); }}
-                      className="w-full text-left px-4 py-2.5 hover:bg-surface-dim active:bg-surface-mid border-b border-subtle last:border-0">
-                      <p className="text-sm text-navy">{wo.scope_name}</p>
-                      <p className="text-[10px] text-muted">{wo.job_number} · {wo.description || "—"} · {wo.status}</p>
-                    </button>
-                  ))}
+                  {(() => {
+                    // Group WOs by scope
+                    const groups: Record<string, WOOption[]> = {};
+                    filteredWos.slice(0, 20).forEach((wo) => {
+                      const key = `${wo.job_number}|${wo.scope_name}`;
+                      if (!groups[key]) groups[key] = [];
+                      groups[key].push(wo);
+                    });
+                    return Object.entries(groups).map(([key, wos]) => (
+                      <div key={key}>
+                        <div className="px-4 py-1.5 bg-surface-dim/50 border-b border-subtle sticky top-0">
+                          <p className="text-[10px] font-bold text-navy uppercase tracking-wide">{wos[0].scope_name}</p>
+                          <p className="text-[9px] text-muted font-mono">{wos[0].job_number}</p>
+                        </div>
+                        {wos.map((wo) => (
+                          <button key={wo.work_order_id} onClick={() => { setSelectedWo(wo); setWoSearch(""); setShowWoPicker(false); setTitle(`${wo.scope_name} — ${wo.description || "WO"}`); }}
+                            className="w-full text-left pl-7 pr-4 py-2 hover:bg-surface-dim active:bg-surface-mid border-b border-subtle/50 last:border-0">
+                            <p className="text-sm text-navy">{wo.description || "—"}</p>
+                            <p className="text-[10px] text-muted">{wo.status}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
               )}
             </div>
@@ -305,11 +340,18 @@ export default function MobileTaskPage() {
       )}
 
       {/* Timer button */}
-      {category !== "task" && (
-        <button onClick={handleStartTimer} disabled={submitting || !title.trim() || hasActiveTask} className="w-full py-3.5 bg-surface border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-          <Timer className="h-4 w-4" />{hasActiveTask ? "Task timer already active" : "Start Timer"}
-        </button>
-      )}
+      {(() => {
+        const isWo = category === "task";
+        const disabled = submitting || !title.trim() || (isWo ? !selectedWo : hasActiveTask);
+        const label = isWo
+          ? (!selectedWo ? "Pick a WO first" : "Start WO Timer")
+          : (hasActiveTask ? "Task timer already active" : "Start Timer");
+        return (
+          <button onClick={handleStartTimer} disabled={disabled} className="w-full py-3.5 bg-surface border-2 border-dashed border-navy/30 text-navy text-sm font-medium rounded-xl flex items-center justify-center gap-2 active:bg-navy/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            <Timer className="h-4 w-4" />{label}
+          </button>
+        );
+      })()}
 
       <div className="flex items-center gap-3"><div className="flex-1 h-px bg-surface-hi" /><span className="text-[10px] text-muted font-medium uppercase tracking-wider">or log completed work</span><div className="flex-1 h-px bg-surface-hi" /></div>
 
@@ -326,9 +368,9 @@ export default function MobileTaskPage() {
           <div className="flex gap-3">
             <div className="shrink-0" style={{width: "130px"}}>
               <div className="flex items-center bg-surface border border-subtle rounded-xl overflow-hidden">
-                <button onClick={() => adjustHours(-0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-r border-subtle"><Minus className="h-3.5 w-3.5" /></button>
-                <input type="number" value={hours} onChange={(e) => setHours(Math.max(0, parseFloat(e.target.value) || 0))} step="0.5" className="w-12 text-center py-3 text-sm font-semibold text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-                <button onClick={() => adjustHours(0.5)} className="px-2 py-3 text-muted active:bg-surface-dim border-l border-subtle"><Plus className="h-3.5 w-3.5" /></button>
+                <button onClick={() => adjustHours(-0.25)} className="px-2 py-3 text-muted active:bg-surface-dim border-r border-subtle"><Minus className="h-3.5 w-3.5" /></button>
+                <div className="w-16 text-center py-3 text-sm font-semibold text-navy">{formatHours(hours)}</div>
+                <button onClick={() => adjustHours(0.25)} className="px-2 py-3 text-muted active:bg-surface-dim border-l border-subtle"><Plus className="h-3.5 w-3.5" /></button>
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -341,7 +383,7 @@ export default function MobileTaskPage() {
             <span className="text-xs text-muted font-medium">→</span>
             <input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} className="flex-1 px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy text-center focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
             <div className="shrink-0 w-14 text-center">
-              <p className="text-lg font-bold text-navy">{calcRangeHours()}h</p>
+              <p className="text-lg font-bold text-navy">{formatHours(calcRangeHours())}</p>
             </div>
             <input type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)} className="flex-1 px-3 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
           </div>
@@ -356,7 +398,7 @@ export default function MobileTaskPage() {
 
       {/* Submit */}
       <button onClick={handleQuickLog} disabled={submitting || !title.trim() || effectiveHours <= 0 || (category === "task" && !selectedWo)} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-        <Clock className="h-4 w-4" />{submitting ? "Logging..." : `Log ${effectiveHours > 0 ? effectiveHours + "h" : "Task"}`}
+        <Clock className="h-4 w-4" />{submitting ? "Logging..." : `Log ${effectiveHours > 0 ? formatHours(effectiveHours) : "Task"}`}
       </button>
 
       {/* QR Scanner Overlay */}
@@ -399,7 +441,7 @@ export default function MobileTaskPage() {
                         {t.job_number && <span className="text-[10px] text-muted font-mono">{t.job_number}</span>}
                       </div>
                     </div>
-                    {t.hours != null && <span className="text-sm font-semibold text-navy shrink-0">{t.hours}h</span>}
+                    {t.hours != null && <span className="text-sm font-semibold text-navy shrink-0">{formatHours(t.hours)}</span>}
                   </div>
                 </div>
               );

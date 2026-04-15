@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { formatHours } from "@/lib/format-hours";
 import { useRouter } from "next/navigation";
 import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -324,7 +325,7 @@ export default function MobileTaskList() {
                                   </span>
                                 ))}
                                 {task.estimated_duration_hrs && (
-                                  <span className="text-[10px] text-muted flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" />{task.estimated_duration_hrs}h</span>
+                                  <span className="text-[10px] text-muted flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" />{formatHours(task.estimated_duration_hrs)}</span>
                                 )}
                                 {task.paint_notes && <Paintbrush className="h-2.5 w-2.5 text-starlight-amber" />}
                               </div>
