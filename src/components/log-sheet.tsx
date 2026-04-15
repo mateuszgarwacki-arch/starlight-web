@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Minus, Plus, Camera, X } from "lucide-react";
 import { formatHours } from "@/lib/format-hours";
 
@@ -40,6 +40,16 @@ export function LogSheet({
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
 
+  // Reset state every time the sheet opens
+  useEffect(() => {
+    if (open) {
+      setHours(defaultHours);
+      setDate(defaultDate || localDateStr());
+      setNotes("");
+      setPhotos([]);
+    }
+  }, [open, defaultHours, defaultDate]);
+
   if (!open) return null;
 
   const adjustHours = (delta: number) => setHours(prev => Math.max(0.25, Math.round((prev + delta) * 4) / 4));
@@ -71,12 +81,12 @@ export function LogSheet({
         {/* Hours stepper */}
         <div className="flex items-center gap-3">
           <label className="text-xs font-medium text-muted shrink-0 w-12">Hours</label>
-          <div className="flex items-center bg-surface-dim border border-subtle rounded-xl overflow-hidden flex-1">
-            <button onClick={() => adjustHours(-0.25)} className="px-4 py-3 text-muted active:bg-surface-mid border-r border-subtle"><Minus className="h-4 w-4" /></button>
+          <div className="flex items-center bg-surface-dim border border-subtle rounded-xl overflow-hidden flex-1 min-w-0">
+            <button type="button" onClick={() => adjustHours(-0.25)} className="shrink-0 px-4 py-3 text-muted active:bg-surface-mid border-r border-subtle"><Minus className="h-4 w-4" /></button>
             <input type="number" step="0.25" value={hours || ""} onChange={e => setHours(parseFloat(e.target.value) || 0)}
-              className="flex-1 text-center py-3 text-lg font-bold text-navy bg-transparent focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="min-w-0 flex-1 text-center py-3 text-lg font-bold text-navy bg-transparent focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               inputMode="decimal" />
-            <button onClick={() => adjustHours(0.25)} className="px-4 py-3 text-muted active:bg-surface-mid border-l border-subtle"><Plus className="h-4 w-4" /></button>
+            <button type="button" onClick={() => adjustHours(0.25)} className="shrink-0 px-4 py-3 text-muted active:bg-surface-mid border-l border-subtle"><Plus className="h-4 w-4" /></button>
           </div>
         </div>
 
