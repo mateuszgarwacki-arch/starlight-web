@@ -12,12 +12,13 @@ import {
   ChevronDown, ChevronRight, Plus, Trash2, Hammer, ShieldCheck,
   AlertTriangle, Link2, ArrowUp, ArrowDown, Warehouse, Paintbrush,
   CheckCircle2, X, Circle, Search, MapPin, Wrench, Package,
-  ArrowUpCircle,
+  ArrowUpCircle, CornerDownRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
+import { CreateWODialog } from "@/components/create-wo-dialog";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 
 // ============================================================
@@ -42,6 +43,7 @@ interface WORow {
   traveller_printed_at?: string | null;
   paint_notes: string | null;
   completion_photo_path: string | null;
+  predecessor_wo_id: number | null;
   sort_phase: number;
   activity_label?: string;
   phase_number?: number | null;
@@ -165,6 +167,9 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
     // Consolidated BOM expanded
     const [bomExpanded, setBomExpanded] = useState(false);
+
+    // Next Step dialog
+    const [nextStepPredecessor, setNextStepPredecessor] = useState<{ work_order_id: number; activity_label: string; phase_number: number | null; description: string | null; job_item_ids: number[] } | null>(null);
 
     const [costKey, setCostKey] = useState(0);
     const bumpCost = () => { setCostKey(k => k + 1); onCostChange?.(); };
@@ -658,6 +663,21 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         <p className="text-sm font-semibold text-navy">{wo.activity_label}</p>
                         {wo.paint_notes && <Paintbrush className="h-3 w-3 text-starlight-amber shrink-0" />}
                       </div>
+                      {wo.predecessor_wo_id && (() => {
+                        const pred = sortedWOs.find(w => w.work_order_id === wo.predecessor_wo_id);
+                        if (!pred) return null;
+                        const predDone = pred.status === "Complete";
+                        const predActive = pred.status === "In-Progress";
+                        return (
+                          <p className="text-[10px] text-muted flex items-center gap-1 mt-0.5">
+                            <CornerDownRight className="h-2.5 w-2.5 text-faint" />
+                            after <span className="font-medium">{pred.activity_label}</span>
+                            <span className={predDone ? "text-starlight-green" : predActive ? "text-starlight-blue" : "text-muted"}>
+                              ({predDone ? "done" : predActive ? "active" : "waiting"})
+                            </span>
+                          </p>
+                        );
+                      })()}
                       {wo.description && <p className="text-xs text-muted mt-0.5">{wo.description}</p>}
                       {/* Linked item chips */}
                       {woItems.length > 0 && (
@@ -686,6 +706,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                       {wo.status === "Not-Started" && <button onClick={() => updateWOStatus(wo.work_order_id, "Ready")} className="p-1.5 rounded-lg text-starlight-green hover:bg-starlight-green/10 transition-colors" title="Release as Ready"><ShieldCheck className="h-4 w-4" /></button>}
                       {(wo.status === "Not-Started" || wo.status === "Ready") && <button onClick={() => { if (confirm("Delete this work order?")) deleteWO(wo.work_order_id); }} className="p-1.5 rounded-lg text-faint hover:text-starlight-red hover:bg-starlight-red/10 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>}
                       {wo.status !== "Voided" && wo.status !== "Complete" && wo.status !== "Not-Started" && <button onClick={() => setVoidDialog({ woId: wo.work_order_id, status: wo.status || "" })} className="p-1.5 rounded-lg text-faint hover:text-starlight-amber hover:bg-starlight-amber/10 transition-colors" title="Void"><AlertTriangle className="h-4 w-4" /></button>}
+                      {wo.status !== "Voided" && <button onClick={() => { const itemIds = woToItems[wo.work_order_id] || []; setNextStepPredecessor({ work_order_id: wo.work_order_id, activity_label: wo.activity_label || "WO", phase_number: wo.phase_number ?? null, description: wo.description, job_item_ids: itemIds }); }} className="p-1.5 rounded-lg text-faint hover:text-starlight-blue hover:bg-starlight-blue/10 transition-colors" title="Add next step"><CornerDownRight className="h-4 w-4" /></button>}
                     </div>
                   </div>
 
@@ -1026,6 +1047,29 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
               </div>
             </div>
           </div>
+        )}
+
+        {/* Next Step dialog */}
+        {nextStepPredecessor && (
+          <CreateWODialog
+            jobId={jobId}
+            scopeItemId={scopeId}
+            selectedItemIds={[]}
+            defaultComplexity={scope?.complexity_construction}
+            defaultFinish={scope?.finish_relative}
+            predecessorWO={nextStepPredecessor}
+            scopeFinish={scope?.finish_relative}
+            onClose={() => setNextStepPredecessor(null)}
+            onCreated={async (woId) => {
+              setNextStepPredecessor(null);
+              await loadAll();
+              setExpandedWO(woId);
+              loadBOM(woId);
+              loadLinkedItems(woId);
+              bumpCost();
+              toast.success("Next step created");
+            }}
+          />
         )}
 
         {/* Conflict dialog */}

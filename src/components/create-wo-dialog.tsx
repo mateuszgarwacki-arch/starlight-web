@@ -3,12 +3,20 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuditContext, auditedInsert } from "@/lib/audit";
-import { X } from "lucide-react";
+import { X, ArrowRight } from "lucide-react";
 
 interface Activity {
   lookup_id: number;
   lookup_value: string;
   phase_number: number | null;
+}
+
+interface PredecessorWO {
+  work_order_id: number;
+  activity_label: string;
+  phase_number: number | null;
+  description: string | null;
+  job_item_ids: number[];
 }
 
 interface CreateWODialogProps {
@@ -17,6 +25,8 @@ interface CreateWODialogProps {
   selectedItemIds: number[];
   defaultComplexity?: string | null;
   defaultFinish?: string | null;
+  predecessorWO?: PredecessorWO | null;
+  scopeFinish?: string | null;
   onClose: () => void;
   onCreated: (workOrderId: number) => void;
 }
@@ -27,6 +37,8 @@ export function CreateWODialog({
   selectedItemIds,
   defaultComplexity,
   defaultFinish,
+  predecessorWO,
+  scopeFinish,
   onClose,
   onCreated,
 }: CreateWODialogProps) {
@@ -40,6 +52,8 @@ export function CreateWODialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isNextStep = !!predecessorWO;
+
   useEffect(() => {
     supabase
       .from("tbl_master_lookups")
@@ -51,6 +65,15 @@ export function CreateWODialog({
         if (data) setAllActivities(data);
       });
   }, []);
+
+  // Pre-fill description for next-step mode
+  useEffect(() => {
+    if (isNextStep && chosenActivities.length > 0 && !description) {
+      const verb = chosenActivities[0].lookup_value;
+      const finishText = scopeFinish ? ` — ${scopeFinish} finish` : "";
+      setDescription(`${verb} items from ${predecessorWO!.activity_label}${finishText}`);
+    }
+  }, [chosenActivities.length]);
 
   const addActivity = (id: number) => {
     const act = allActivities.find((a) => a.lookup_id === id);
@@ -93,8 +116,9 @@ export function CreateWODialog({
     const nextSeq = (existingWOs && existingWOs.length > 0 && existingWOs[0].wo_sequence)
       ? existingWOs[0].wo_sequence + 1 : 1;
 
-    // 1. Create Work Order (activity_verb = first activity for backwards compat)
+    // 1. Create Work Order
     const ctx = await getAuditContext(supabase);
+    const itemIds = isNextStep ? predecessorWO!.job_item_ids : selectedItemIds;
     const { data: wo, error: woError } = await auditedInsert(ctx, "tbl_work_orders", {
       job_id: jobId,
       scope_item_id: scopeItemId,
@@ -105,6 +129,7 @@ export function CreateWODialog({
       finish_relative: finish || null,
       wo_sequence: nextSeq,
       status: "Not-Started",
+      predecessor_wo_id: isNextStep ? predecessorWO!.work_order_id : null,
     }, jobId);
 
     if (woError || !wo) {
@@ -130,9 +155,9 @@ export function CreateWODialog({
       return;
     }
 
-    // 3. Create junction records linking selected job items
-    if (selectedItemIds.length > 0) {
-      const junctions = selectedItemIds.map((itemId) => ({
+    // 3. Create junction records linking job items
+    if (itemIds.length > 0) {
+      const junctions = itemIds.map((itemId) => ({
         job_item_id: itemId,
         work_order_id: wo.work_order_id,
       }));
@@ -152,16 +177,32 @@ export function CreateWODialog({
     onCreated(wo.work_order_id);
   };
 
+  // Filter activities: in next-step mode, only show higher phases
+  const predecessorPhase = predecessorWO?.phase_number ?? 0;
   const available = allActivities.filter(
     (a) => !chosenActivities.find((c) => c.lookup_id === a.lookup_id)
   );
+  const filteredAvailable = isNextStep
+    ? available.filter((a) => (a.phase_number ?? 0) > predecessorPhase)
+    : available;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-surface rounded-xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
-          <h2 className="text-lg font-semibold text-navy">Create Work Order</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-navy">
+              {isNextStep ? "Add Next Step" : "Create Work Order"}
+            </h2>
+            {isNextStep && (
+              <p className="text-xs text-muted mt-0.5 flex items-center gap-1.5">
+                After: <span className="font-medium text-navy">{predecessorWO!.activity_label}</span>
+                <ArrowRight className="h-3 w-3 text-faint" />
+                <span className="text-faint">new step</span>
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-surface-mid rounded-lg transition-colors">
             <X className="h-5 w-5 text-muted" />
           </button>
@@ -170,7 +211,9 @@ export function CreateWODialog({
         {/* Context */}
         <div className="px-6 py-3 bg-base border-b border-subtle">
           <p className="text-xs text-muted">
-            {selectedItemIds.length} job item{selectedItemIds.length !== 1 ? "s" : ""} will be linked
+            {isNextStep
+              ? `${predecessorWO!.job_item_ids.length} item${predecessorWO!.job_item_ids.length !== 1 ? "s" : ""} inherited from ${predecessorWO!.activity_label}`
+              : `${selectedItemIds.length} job item${selectedItemIds.length !== 1 ? "s" : ""} will be linked`}
           </p>
         </div>
 
@@ -190,9 +233,10 @@ export function CreateWODialog({
               className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue mb-2"
             >
               <option value="">+ Add activity...</option>
-              {available.map((act) => (
+              {filteredAvailable.map((act) => (
                 <option key={act.lookup_id} value={act.lookup_id}>
                   {act.lookup_value}
+                  {act.phase_number ? ` (Phase ${act.phase_number})` : ""}
                 </option>
               ))}
             </select>
@@ -318,7 +362,7 @@ export function CreateWODialog({
             disabled={saving}
             className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors disabled:opacity-50"
           >
-            {saving ? "Creating..." : "Create Work Order"}
+            {saving ? "Creating..." : isNextStep ? "Create Next Step" : "Create Work Order"}
           </button>
         </div>
       </div>
