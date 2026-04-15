@@ -1,1 +1,1 @@
-feat: Quick Timer FAB option - one-tap start, details added when stopping on Me page
+feat: Unified LogSheet component - consistent hours/notes/photos across all mobile logging flows

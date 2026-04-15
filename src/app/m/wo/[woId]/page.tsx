@@ -7,6 +7,7 @@ import { formatHours } from "@/lib/format-hours";
 import { uploadToOneDrive, jobFolder, woPhotoName, getOneDriveUrl } from "@/lib/onedrive-client";
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush, ImageIcon } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
+import { LogSheet, type LogSheetData } from "@/components/log-sheet";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -52,8 +53,7 @@ export default function MobileWODetail() {
 
   // Log Hours sheet
   const [showLogSheet, setShowLogSheet] = useState(false);
-  const [logHours, setLogHours] = useState("");
-  const [flagNote, setFlagNote] = useState("");
+  const [defaultLogHours, setDefaultLogHours] = useState(0);
 
   // Mark Complete
   const [showComplete, setShowComplete] = useState(false);
@@ -260,11 +260,25 @@ export default function MobileWODetail() {
     toast.success("Joined — clock is running");
   };
 
-  const handleLogHours = async () => {
-    if (!myOpenEntry || !logHours) return;
+  const handleLogHours = async (data: LogSheetData) => {
+    if (!myOpenEntry) return;
     setActing(true);
     const now = new Date().toISOString();
-    const hrs = parseFloat(logHours);
+    const hrs = data.hours;
+
+    // Upload photos to OneDrive
+    let photoNote = "";
+    if (data.photos.length > 0) {
+      try {
+        const { uploadToOneDrive } = await import("@/lib/onedrive-client");
+        for (const p of data.photos) {
+          const ts = new Date().toISOString().split("T")[0];
+          const safeName = (wo?.activity_label || "WO").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
+          await uploadToOneDrive(p.file, `Workshop/${wo?.job_number || "Unknown"} - ${wo?.job_name || "Job"}/WO Photos`, `${ts}_${safeName}_${data.photos.indexOf(p) + 1}.jpg`);
+        }
+        photoNote = ` (${data.photos.length} photo${data.photos.length > 1 ? "s" : ""})`;
+      } catch (err) { console.warn("Photo upload failed:", err); }
+    }
 
     // Get freelancer rate
     const { data: fr } = await supabase
@@ -282,40 +296,30 @@ export default function MobileWODetail() {
       actual_hours: hrs,
       applied_hourly_rate: hourlyRate,
       entry_cost: cost,
-      flag_note: flagNote.trim() || null,
+      flag_note: data.notes || null,
     }).eq("entry_id", myOpenEntry.entry_id);
 
-    // Notify: hours logged (flag = warning, no flag = info)
-    if (flagNote.trim()) {
+    // Notify
+    if (data.notes) {
       await notify({ supabase, type: "wo_flagged", severity: "warning",
         title: `${myName || "Someone"} flagged ${wo?.activity_label || "a task"}`,
-        detail: flagNote.trim(),
-        freelancerId: myId, jobId: wo?.job_id || undefined, woId,
-        actionUrl: `/review`,
-      });
+        detail: data.notes, freelancerId: myId, jobId: wo?.job_id || undefined, woId, actionUrl: `/review` });
     }
     await notify({ supabase, type: "hours_logged", severity: "info",
-      title: `${myName || "Someone"} logged ${formatHours(hrs)} on ${wo?.activity_label || "a task"}`,
-      detail: wo?.scope_name || "",
-      freelancerId: myId, jobId: wo?.job_id || undefined, woId,
-      actionUrl: `/review`,
-    });
+      title: `${myName || "Someone"} logged ${formatHours(hrs)} on ${wo?.activity_label || "a task"}${photoNote}`,
+      detail: wo?.scope_name || "", freelancerId: myId, jobId: wo?.job_id || undefined, woId, actionUrl: `/review` });
 
     setShowLogSheet(false);
-    setLogHours("");
-    setFlagNote("");
     await loadWO();
     setActing(false);
     toast.success(`${formatHours(hrs)} logged`);
   };
 
   const openLogSheet = () => {
-    // Pre-fill hours from timestamps
     if (myOpenEntry) {
       const start = new Date(myOpenEntry.system_start_timestamp).getTime();
-      const now = Date.now();
-      const diffHrs = Math.round(((now - start) / 3600000) * 2) / 2; // round to 0.5
-      setLogHours(String(Math.max(diffHrs, 0.5)));
+      const diffHrs = Math.round(((Date.now() - start) / 3600000) * 2) / 2;
+      setDefaultLogHours(Math.max(diffHrs, 0.5));
     }
     setShowLogSheet(true);
   };
@@ -525,52 +529,17 @@ export default function MobileWODetail() {
       {/* Documents — drawings, references, 3D models, cut lists */}
       <MobileWODocs workOrderId={woId} />
 
-      {/* ============ LOG HOURS BOTTOM SHEET ============ */}
-      {showLogSheet && (
-        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
-          <div className="bg-surface w-full max-w-lg rounded-t-2xl p-6 pb-10 space-y-4 animate-slide-up">
-            <h2 className="text-lg font-bold text-navy">Log My Hours</h2>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">Actual Hours *</label>
-              <input
-                type="number"
-                step="0.5"
-                value={logHours}
-                onChange={(e) => setLogHours(e.target.value)}
-                className="w-full px-4 py-3 border border-subtle rounded-xl text-xl text-center font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                autoFocus
-                inputMode="decimal"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">Flag Note (optional)</label>
-              <input
-                type="text"
-                value={flagNote}
-                onChange={(e) => setFlagNote(e.target.value)}
-                placeholder="Material arrived warped, needed extra time..."
-                className="w-full px-4 py-3 border border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                maxLength={200}
-              />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => { setShowLogSheet(false); setLogHours(""); setFlagNote(""); }}
-                className="flex-1 py-3 text-muted bg-surface-mid rounded-xl font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleLogHours}
-                disabled={!logHours || acting}
-                className="flex-1 py-3 bg-navy text-white rounded-xl font-semibold disabled:opacity-50"
-              >
-                {acting ? "Saving..." : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ============ LOG HOURS SHEET ============ */}
+      <LogSheet
+        open={showLogSheet}
+        onClose={() => setShowLogSheet(false)}
+        onSubmit={handleLogHours}
+        contextLabel={wo?.activity_label || "Work Order"}
+        contextSublabel={`${wo?.job_number || ""} · ${wo?.scope_name || ""}`}
+        defaultHours={defaultLogHours}
+        notesPlaceholder="Material arrived warped, needed extra time..."
+        submitting={acting}
+      />
 
       {/* ============ MARK COMPLETE SHEET ============ */}
       {showComplete && (

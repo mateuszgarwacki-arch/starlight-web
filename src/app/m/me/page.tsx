@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
 import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save, Minus, Plus, Camera } from "lucide-react";
 import { notify } from "@/lib/notifications";
+import { LogSheet, type LogSheetData } from "@/components/log-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { auditedUpdate, getAuditContext } from "@/lib/audit";
@@ -54,9 +55,8 @@ export default function MobileProfilePage() {
   const [myTasks, setMyTasks] = useState<MyTask[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [showLogSheet, setShowLogSheet] = useState(false);
-  const [logHours, setLogHours] = useState("");
+  const [defaultLogHours, setDefaultLogHours] = useState(0);
   const [logSubmitting, setLogSubmitting] = useState(false);
-  const [logPhotos, setLogPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [, setTick] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingNote, setEditingNote] = useState<{ entryId: number; note: string } | null>(null);
@@ -120,18 +120,18 @@ export default function MobileProfilePage() {
 
   useEffect(() => { if (!activeTimer) return; const interval = setInterval(() => setTick((t) => t + 1), 30000); return () => clearInterval(interval); }, [activeTimer]);
 
-  const handleLogTimer = async () => {
+  const handleLogTimer = async (data: LogSheetData) => {
     if (!activeTimer) return;
-    const hrs = parseFloat(logHours);
+    const hrs = data.hours;
     if (!hrs || hrs <= 0) { toast.error("Enter hours"); return; }
     setLogSubmitting(true);
 
     // Upload photos to OneDrive
     let photoUrls: string[] = [];
-    if (logPhotos.length > 0) {
+    if (data.photos.length > 0) {
       try {
         const { uploadToOneDrive } = await import("@/lib/onedrive-client");
-        for (const p of logPhotos) {
+        for (const p of data.photos) {
           const ts = new Date().toISOString().split("T")[0];
           const safeName = activeTimer.title.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
           const result = await uploadToOneDrive(p.file, "Workshop/Ad-hoc Tasks", `${ts}_${safeName}_${photoUrls.length + 1}.jpg`);
@@ -140,12 +140,12 @@ export default function MobileProfilePage() {
       } catch (err) { console.warn("Photo upload failed:", err); toast.error("Photo upload failed — logging without photos"); }
     }
 
-    const updateData: any = { hours: hrs, worked_date: activeTimer.started_at.split("T")[0], logged_at: new Date().toISOString(), status: "pending" };
+    const updateData: any = { hours: hrs, worked_date: activeTimer.started_at.split("T")[0], logged_at: new Date().toISOString(), status: "pending", description: data.notes || null };
     if (photoUrls.length > 0) { updateData.photo_urls = JSON.stringify(photoUrls); }
     const { error } = await supabase.from("tbl_tasks").update(updateData).eq("task_id", activeTimer.task_id);
     if (error) { toast.error("Failed to log hours"); setLogSubmitting(false); return; }
     await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${activeTimer.title}`, detail: `${formatHours(hrs)} — timer logged${photoUrls.length > 0 ? ` (${photoUrls.length} photo${photoUrls.length > 1 ? "s" : ""})` : ""}`, severity: "info", freelancerId: myId, actionUrl: "/review/inbox" });
-    toast.success("Task logged — pending review"); setActiveTimer(null); setShowLogSheet(false); setLogHours(""); setLogPhotos([]); setLogSubmitting(false); window.location.reload();
+    toast.success("Task logged — pending review"); setActiveTimer(null); setShowLogSheet(false); setLogSubmitting(false); window.location.reload();
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/m/login"); };
@@ -169,7 +169,7 @@ export default function MobileProfilePage() {
               <Timer className="h-4 w-4 text-starlight-blue animate-pulse" />
               <div><p className="text-sm font-semibold text-navy">{activeTimer.title}</p><p className="text-xs text-starlight-blue">{elapsedSince(activeTimer.started_at)} elapsed</p></div>
             </div>
-            <button onClick={() => { const ms = Date.now() - new Date(activeTimer.started_at).getTime(); const hrs = Math.round((ms / 3600000) * 4) / 4; setLogHours(String(Math.max(0.25, hrs))); setLogPhotos([]); setShowLogSheet(true); }} className="px-4 py-2 bg-starlight-blue text-white text-xs font-semibold rounded-lg active:bg-starlight-blue/90">Log Hours</button>
+            <button onClick={() => { const ms = Date.now() - new Date(activeTimer.started_at).getTime(); const hrs = Math.round((ms / 3600000) * 4) / 4; setDefaultLogHours(Math.max(0.25, hrs)); setShowLogSheet(true); }} className="px-4 py-2 bg-starlight-blue text-white text-xs font-semibold rounded-lg active:bg-starlight-blue/90">Log Hours</button>
           </div>
         </div>
       )}
@@ -251,61 +251,16 @@ export default function MobileProfilePage() {
         </div>
       </div>)}
 
-      {showLogSheet && activeTimer && (
-        <div className="fixed inset-0 z-50 flex items-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowLogSheet(false)} />
-          <div className="relative w-full bg-surface rounded-t-2xl p-5 pb-24 space-y-3 animate-in slide-in-from-bottom duration-200 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-navy">Log: {activeTimer.title}</h3>
-                <p className="text-[11px] text-muted">{new Date(activeTimer.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — {elapsedSince(activeTimer.started_at)} ago</p>
-              </div>
-              <button onClick={() => { setShowLogSheet(false); setLogPhotos([]); }} className="text-muted p-1"><X className="h-5 w-5" /></button>
-            </div>
-
-            {/* Hours stepper */}
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-medium text-muted shrink-0">Hours</label>
-              <div className="flex items-center bg-surface-dim border border-subtle rounded-xl overflow-hidden flex-1">
-                <button onClick={() => setLogHours(String(Math.max(0.25, Math.round((parseFloat(logHours || "0") - 0.25) * 4) / 4)))} className="px-4 py-3 text-muted active:bg-surface-mid border-r border-subtle"><Minus className="h-4 w-4" /></button>
-                <div className="flex-1 text-center py-3 text-lg font-bold text-navy">{formatHours(parseFloat(logHours || "0"))}</div>
-                <button onClick={() => setLogHours(String(Math.round((parseFloat(logHours || "0") + 0.25) * 4) / 4))} className="px-4 py-3 text-muted active:bg-surface-mid border-l border-subtle"><Plus className="h-4 w-4" /></button>
-              </div>
-            </div>
-
-            {/* Photo capture */}
-            <div>
-              <label className="text-xs font-medium text-muted mb-1.5 block">Photos (optional — helps PM route to correct WO)</label>
-              <div className="flex gap-2 flex-wrap">
-                {logPhotos.map((p, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-subtle">
-                    <img src={p.preview} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => setLogPhotos(prev => prev.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">✕</button>
-                  </div>
-                ))}
-                {logPhotos.length < 4 && (
-                  <label className="w-16 h-16 flex items-center justify-center bg-starlight-green text-white rounded-full shadow-md cursor-pointer active:bg-starlight-green/80">
-                    <Camera className="h-6 w-6" />
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setLogPhotos(prev => [...prev, { file, preview: ev.target?.result as string }]);
-                      reader.readAsDataURL(file);
-                      e.target.value = "";
-                    }} />
-                  </label>
-                )}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button onClick={handleLogTimer} disabled={logSubmitting || parseFloat(logHours || "0") <= 0} className="w-full py-3.5 bg-navy text-white text-sm font-semibold rounded-xl active:bg-navy/90 disabled:opacity-40">
-              {logSubmitting ? "Logging..." : `Log ${formatHours(parseFloat(logHours || "0"))} & Submit`}
-            </button>
-          </div>
-        </div>
-      )}
+      <LogSheet
+        open={showLogSheet && !!activeTimer}
+        onClose={() => setShowLogSheet(false)}
+        onSubmit={handleLogTimer}
+        contextLabel={activeTimer?.title || "Task"}
+        contextSublabel={activeTimer ? `${new Date(activeTimer.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} — ${elapsedSince(activeTimer.started_at)} ago` : undefined}
+        defaultHours={defaultLogHours}
+        notesPlaceholder="What did you work on..."
+        submitting={logSubmitting}
+      />
     </div>
   );
 }
