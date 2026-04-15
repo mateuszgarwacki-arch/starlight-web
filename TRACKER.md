@@ -1914,3 +1914,91 @@ $$;
 - **Mobile header timer**: `MobileHeaderTimer` component in layout — queries own active/last entry, ticks every second for active timers, realtime channel refresh
 - **Task tree pattern**: Group WOs by Job → Scope for scannable navigation. Activity label as small badge, description as headline
 - **Schedule hours overlay**: Time entries grouped by date, shown as badges on calendar cells. Gap detection = booked + past + no entries → red warning dot
+
+
+---
+
+## Session 23 — 15 April 2026
+
+### Summary
+Mobile task logging UX overhaul, hours formatting system-wide, photo capture for ad-hoc tasks, crew time entry management improvements.
+
+### Mobile Task Logging (`/m/task`) ✅
+- [x] FAB hidden on `/m/task` and `/m/request` pages (no double navigation)
+- [x] FAB action items repositioned to `bottom-36` (was overlapping X close button)
+- [x] WO search picker: grouped by scope (scope header → indented WO rows with description + status)
+- [x] WO tasks can start timer: creates `tbl_wo_time_entries` row (not tbl_tasks), auto-sets WO status to In-Progress, sends notification
+- [x] 15-minute increments (was 30-minute): stepper ±0.25h, range rounding to 0.25h
+- [x] Hours stepper shows formatted text (`1h 15m`) instead of raw number input
+
+### formatHours System-Wide Rollout ✅
+- [x] New utility: `lib/format-hours.ts` — `formatHours(1.5)` → `"1h 30m"`, `formatHours(0.25)` → `"15m"`
+- [x] Applied to ALL mobile pages: task, schedule, WO detail, task tree, Me page
+- [x] Applied to ALL desktop pages: workshop, review, review inbox, crew detail, capacity, dashboard, cost breakdown, traveller
+
+### Mobile Header Timer Enhancements ✅
+- [x] Now shows ad-hoc task timers (was WO-only): checks `tbl_tasks` with `status=in_progress`
+- [x] Ad-hoc timer links to `/m/me` (WO timer links to WO detail)
+- [x] Realtime subscription covers both `tbl_wo_time_entries` and `tbl_tasks`
+- [x] Ad-hoc display: clipboard icon, "Ad-hoc" label, amber elapsed time
+
+### Me Page Log Sheet Redesign ✅
+- [x] No auto-focus on hours input (keyboard no longer hides submit button)
+- [x] Stepper (±15min) instead of raw number input
+- [x] `pb-24` bottom padding clears fixed nav bar
+- [x] Photo capture: green camera button, up to 4 photos, OneDrive upload to `Workshop/Ad-hoc Tasks/`
+- [x] Photos stored as JSON array in `tbl_tasks.photo_urls` TEXT column
+- [x] Upload failure shows visible red toast (was silent console.warn)
+- [x] Weekly/monthly hours now use formatHours
+
+### Review Inbox Photo Display ✅
+- [x] Fetches `photo_urls` from `tbl_tasks` for pending task items
+- [x] Shows clickable thumbnail grid on task cards (opens full image in new tab)
+- [x] Fallback icon on image load error
+
+### Crew Detail — By Day View Improvements ✅
+- [x] Routed tasks excluded from By Day totals (prevents double-counting with WO entry)
+- [x] Rejected tasks hidden by default (shown when "Show archived" is checked)
+- [x] Activity counter excludes archived WO entries and rejected tasks
+- [x] WO entries: edit (inline hours) + archive (with reason) buttons
+- [x] Ad-hoc tasks: edit (inline hours + title) + archive buttons
+- [x] Restore buttons on all archived/rejected entries (green "Restore" with RotateCcw icon)
+- [x] Restore works in both flat and By Day views
+
+### Review Page — Overhead Table ✅
+- [x] Archive (X) button on each overhead task row
+- [x] Refreshes data after archiving
+
+### New/Modified Files (Session 23)
+| File | Purpose |
+|------|---------|
+| `src/lib/format-hours.ts` | NEW: `formatHours()` utility — decimal hours → human-readable |
+| `src/components/floating-action-button.tsx` | Hidden on task/request pages, action items repositioned |
+| `src/components/mobile-header-timer.tsx` | Rebuilt: WO + ad-hoc timer support, links to correct page |
+| `src/app/m/task/page.tsx` | WO grouping, WO timer, 15min increments, formatHours |
+| `src/app/m/me/page.tsx` | Log sheet redesign: stepper, photos, no autofocus, formatHours |
+| `src/app/m/page.tsx` | formatHours on estimated durations |
+| `src/app/m/schedule/page.tsx` | formatHours on all hours displays |
+| `src/app/m/wo/[woId]/page.tsx` | formatHours on elapsed, estimated, entry hours, toasts |
+| `src/app/(dashboard)/workshop/page.tsx` | formatHours on stats, estimates, entries, toasts |
+| `src/app/(dashboard)/review/page.tsx` | formatHours + archive button on overhead table |
+| `src/app/(dashboard)/review/inbox/page.tsx` | formatHours + photo display for tasks |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | By Day: edit/archive/restore on all entry types, formatHours, counter fix |
+| `src/app/(dashboard)/capacity/page.tsx` | formatHours on all summary + per-job stats |
+| `src/app/(dashboard)/page.tsx` | formatHours on activity + department table |
+| `src/app/traveller/page.tsx` | formatHours on estimated hours |
+| `src/components/cost-breakdown.tsx` | formatHours on time entry summary + table |
+
+### SQL Run (Session 23)
+```sql
+ALTER TABLE tbl_tasks ADD COLUMN photo_urls TEXT;
+```
+
+### Conventions Added (Session 23)
+- **formatHours**: Always use `formatHours()` from `lib/format-hours.ts` for displaying hours. Never show raw decimals like `1.5h` or `0.25h`. Format: `1h 30m`, `15m`, `2h`
+- **15-minute increments**: All manual time entry uses 0.25h steps (was 0.5h). Stepper shows formatted text, not raw numbers
+- **WO timer from task page**: When category is "task" (WO), timer creates `tbl_wo_time_entries` row directly (not tbl_tasks). This ensures it shows in header timer and WO page
+- **Ad-hoc task photos**: Upload to OneDrive `Workshop/Ad-hoc Tasks/`, store URLs as JSON array in `tbl_tasks.photo_urls`. Review inbox fetches and displays thumbnails
+- **Routed task exclusion**: By Day view ALWAYS excludes `status=routed` tasks (hours live in WO entry). Rejected tasks hidden unless "Show archived" checked
+- **Restore pattern**: Archived WO entries → clear `archived_at/by/reason`. Rejected tasks → set `status=approved_overhead`. Both show green "Restore" button when archived entries are visible
+- **Supabase MCP**: Connected — run SQL via `Supabase:execute_sql` with project_id `qbdnoueqkmhznqzpkvos`. No more manual SQL paste
