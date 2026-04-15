@@ -1,1 +1,1 @@
-Session 23: Review inbox photo display, upload error toast  
+Session 23: Exclude routed tasks from By Day view to prevent double-counting  

@@ -1003,7 +1003,7 @@ export default function FreelancerDetailPage() {
             type DayItem = { _type: "wo"; data: TimeEntryRow } | { _type: "task"; data: PendingTask };
             const allItems: DayItem[] = [
               ...visible.map(e => ({ _type: "wo" as const, data: e })),
-              ...reviewedTasks.map(t => ({ _type: "task" as const, data: t })),
+              ...reviewedTasks.filter(t => t.status !== "routed").map(t => ({ _type: "task" as const, data: t })),
             ];
 
             // Group by date
