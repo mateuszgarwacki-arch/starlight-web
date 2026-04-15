@@ -1821,3 +1821,96 @@ Merged separate Work Orders page into scope page. Everything on one screen.
 - **Timezone-safe timestamps**: Never use `Z` suffix on timestamp strings for date-anchored entries — use `"YYYY-MM-DDT09:00:00"` (no Z) to prevent BST date shifts
 - **Task → WO routing**: `routed_to_wo_id` on `tbl_tasks` pre-selects WO in review inbox. PM can one-click confirm instead of searching
 - **npm omit=dev**: Local machine has `omit=dev` globally. Always use `--include=dev` flag for `npm install`/`npm ci` commands
+
+
+---
+
+## Session 22 — 15 April 2026
+
+### Summary
+Mobile freelancer interface improvements: navigation cleanup, header enhancements, task tree restructure, schedule enrichment, cost analysis time entries, and note editing across multiple surfaces.
+
+### Completed
+
+#### Mobile Nav Cleanup ✔
+- [x] Removed Photos tab from bottom nav (freelancers often prohibited from site photos — PM responsibility)
+- [x] Mobile nav now 4 tabs: Tasks, Schedule, Maint., Me
+- [x] `/m/photos` route still exists but not linked from nav
+
+#### Mobile Header Enhancements ✔
+- [x] Starlight logo now clickable → `/m/me` tab
+- [x] Active timer indicator in header: pulsing amber dot, white task label, amber elapsed time
+- [x] Inactive state: muted clock icon + last task label with "3h ago" time-ago
+- [x] Links to WO detail on tap
+- [x] Realtime updates via Supabase channel on `tbl_wo_time_entries`
+- [x] Color scheme: white/amber on navy for visibility (originally green, changed for contrast)
+- [x] New component: `src/components/mobile-header-timer.tsx`
+
+#### Mobile Tasks — Tree Layout ✔
+- [x] Restructured from flat card list to Job → Scope → WO tree
+- [x] Job sections: collapsible with chevron, show job number + name, task count badge when collapsed
+- [x] Scope groups: amber bar + bold uppercase name + count
+- [x] WO rows: compact with activity badge (small), description as headline, phase dot
+- [x] Active freelancers shown as individual blue pills with pulsing green dot + first name
+- [x] `rpc_active_workers` RPC (SECURITY DEFINER) used for cross-freelancer visibility
+- [x] Filters preserved: All, Mine, Done, Painting
+
+#### rpc_active_workers RPC ✔
+- [x] New SECURITY DEFINER function for cross-freelancer active worker visibility
+- [x] Returns: work_order_id, freelancer_id, freelancer_name (non-sensitive only)
+- [x] Used by mobile task list to show all active workers regardless of RLS
+
+#### Schedule Tab — Hours & Time Entries ✔
+- [x] Weekly summary strip: "This week" and "Last week" cards with hours + entry count + comparison arrow
+- [x] Monthly total in calendar header: "April 2026 · 142h logged"
+- [x] Hours overlay on calendar days: blue "6.5h" badge per day
+- [x] Gap detection: red dot on days with bookings but no hours logged (past days only)
+- [x] Day bottom sheet: shows time entries with activity + scope, job number, start→end, hours
+- [x] Editable flag notes per time entry from schedule bottom sheet
+- [x] Past days now tappable (was disabled before)
+- [x] All existing booking actions (confirm/decline/withdraw) preserved
+
+#### Me Tab — Entry Notes ✔
+- [x] Recent WO entries now show flag_note
+- [x] Inline edit: "+ Add note" or existing note with edit capability
+- [x] Save via `auditedUpdate` with cancel (X) button
+
+#### Cost Analysis — Scope Time Entries ✔
+- [x] Collapsible time entries section in scope-level cost analysis
+- [x] Shows between cost layers grid and insight cards
+- [x] Collapsed default: "▸ 🕐 12 time entries · 28.5h · £1,188.00"
+- [x] Expanded: table with Date, Who, Task (activity badge + description), Hours, Cost, Note
+- [x] Only on scope-level views (not job-level)
+- [x] Enriched with freelancer names, WO descriptions, activity labels
+
+### New/Modified Files (Session 22)
+| File | Purpose |
+|------|---------|
+| `src/components/mobile-header-timer.tsx` | NEW: Active/last timer indicator in mobile header |
+| `src/app/m/layout.tsx` | Clickable logo → /m/me, timer component, Photos tab removed |
+| `src/app/m/page.tsx` | Tree layout (Job → Scope → WO), rpc_active_workers, freelancer pills |
+| `src/app/m/schedule/page.tsx` | Hours overlay, weekly/monthly totals, time entry detail, gap detection, note editing |
+| `src/app/m/me/page.tsx` | Flag note editing on recent WO entries |
+| `src/components/cost-breakdown.tsx` | Collapsible time entries table on scope-level cost analysis |
+
+### SQL Run (Session 22)
+```sql
+-- Run in Supabase SQL Editor:
+CREATE OR REPLACE FUNCTION rpc_active_workers()
+RETURNS TABLE(work_order_id INT, freelancer_id INT, freelancer_name TEXT)
+LANGUAGE sql SECURITY DEFINER STABLE
+SET search_path = public
+AS $$
+  SELECT DISTINCT te.work_order_id, te.freelancer_id, f.freelancer_name
+  FROM tbl_wo_time_entries te
+  JOIN tbl_freelancers f ON f.freelancer_id = te.freelancer_id
+  WHERE te.system_end_timestamp IS NULL
+    AND te.archived_at IS NULL
+$$;
+```
+
+### Conventions Added (Session 22)
+- **Cross-freelancer visibility**: Use `SECURITY DEFINER` RPC functions (e.g. `rpc_active_workers`) to expose non-sensitive data across freelancer RLS boundaries. Never expose rates/costs/hours in these functions
+- **Mobile header timer**: `MobileHeaderTimer` component in layout — queries own active/last entry, ticks every second for active timers, realtime channel refresh
+- **Task tree pattern**: Group WOs by Job → Scope for scannable navigation. Activity label as small badge, description as headline
+- **Schedule hours overlay**: Time entries grouped by date, shown as badges on calendar cells. Gap detection = booked + past + no entries → red warning dot
