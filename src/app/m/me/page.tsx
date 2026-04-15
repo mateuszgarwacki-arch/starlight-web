@@ -254,7 +254,7 @@ export default function MobileProfilePage() {
       {showLogSheet && activeTimer && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowLogSheet(false)} />
-          <div className="relative w-full bg-surface rounded-t-2xl p-5 space-y-3 animate-in slide-in-from-bottom duration-200 max-h-[70vh] overflow-y-auto">
+          <div className="relative w-full bg-surface rounded-t-2xl p-5 pb-24 space-y-3 animate-in slide-in-from-bottom duration-200 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold text-navy">Log: {activeTimer.title}</h3>
@@ -284,8 +284,8 @@ export default function MobileProfilePage() {
                   </div>
                 ))}
                 {logPhotos.length < 4 && (
-                  <label className="w-16 h-16 flex items-center justify-center bg-surface-dim border-2 border-dashed border-subtle rounded-lg text-muted cursor-pointer active:bg-surface-mid">
-                    <Camera className="h-5 w-5" />
+                  <label className="w-16 h-16 flex items-center justify-center bg-starlight-green text-white rounded-full shadow-md cursor-pointer active:bg-starlight-green/80">
+                    <Camera className="h-6 w-6" />
                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
