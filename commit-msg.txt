@@ -1,1 +1,1 @@
-feat: Next Step dialog - item checkboxes with toggle, no auto-description, scrollable form
+feat: Photo capture on mobile task quick-log (not just timer stop) - up to 4 photos, OneDrive upload

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight, QrCode, X, Search } from "lucide-react";
+import { ArrowLeft, Clock, Timer, Minus, Plus, ChevronRight, QrCode, X, Search, Camera } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import { formatHours } from "@/lib/format-hours";
@@ -78,6 +78,9 @@ export default function MobileTaskPage() {
   const [timeMode, setTimeMode] = useState<"total" | "range">("total");
   const [timeFrom, setTimeFrom] = useState("09:00");
   const [timeTo, setTimeTo] = useState("17:00");
+
+  // Photos
+  const [logPhotos, setLogPhotos] = useState<{ file: File; preview: string }[]>([]);
 
   // Calculate hours from time range
   const calcRangeHours = () => {
@@ -180,6 +183,21 @@ export default function MobileTaskPage() {
     if (!title.trim()) { toast.error("What did you do?"); return; }
     if (logHours <= 0) { toast.error("Hours must be greater than 0"); return; }
     setSubmitting(true);
+
+    // Upload photos to OneDrive
+    let photoUrls: string[] = [];
+    if (logPhotos.length > 0) {
+      try {
+        const { uploadToOneDrive } = await import("@/lib/onedrive-client");
+        for (const p of logPhotos) {
+          const ts = new Date().toISOString().split("T")[0];
+          const safeName = title.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
+          const result = await uploadToOneDrive(p.file, "Workshop/Ad-hoc Tasks", `${ts}_${safeName}_${photoUrls.length + 1}.jpg`);
+          if (result?.webUrl) photoUrls.push(result.webUrl);
+        }
+      } catch (err) { console.warn("Photo upload failed:", err); toast.error("Photo upload failed — logging without photos"); }
+    }
+
     const timeNote = timeMode === "range" ? `${timeFrom}–${timeTo}` : null;
     const desc = [notes.trim(), timeNote].filter(Boolean).join(" | ") || null;
 
@@ -192,10 +210,13 @@ export default function MobileTaskPage() {
     if (category === "task" && selectedWo) {
       insertData.routed_to_wo_id = selectedWo.work_order_id;
     }
+    if (photoUrls.length > 0) {
+      insertData.photo_urls = JSON.stringify(photoUrls);
+    }
     const { error } = await supabase.from("tbl_tasks").insert(insertData);
     if (error) { toast.error("Failed to log task"); setSubmitting(false); return; }
     const catLabel = category === "task" ? `WO: ${selectedWo?.scope_name}` : CATEGORIES.find((c) => c.value === category)?.label;
-    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${formatHours(logHours)} on ${workedDate} — ${catLabel}`, severity: "info", freelancerId: myId, jobId: insertData.job_id, woId: selectedWo?.work_order_id, actionUrl: "/review/inbox" });
+    await notify({ supabase, type: "task_submitted", title: `Ad-hoc task: ${title.trim()}`, detail: `${formatHours(logHours)} on ${workedDate} — ${catLabel}${photoUrls.length > 0 ? ` (${photoUrls.length} photo${photoUrls.length > 1 ? "s" : ""})` : ""}`, severity: "info", freelancerId: myId, jobId: insertData.job_id, woId: selectedWo?.work_order_id, actionUrl: "/review/inbox" });
     toast.success("Task logged — pending review");
     router.back();
   };
@@ -394,6 +415,32 @@ export default function MobileTaskPage() {
       <div>
         <label className="text-xs font-medium text-muted mb-1.5 block">Notes (optional)</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any extra detail..." rows={2} className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30 resize-none" />
+      </div>
+
+      {/* Photos */}
+      <div>
+        <label className="text-xs font-medium text-muted mb-1.5 block">Photos (optional)</label>
+        <div className="flex gap-2 flex-wrap">
+          {logPhotos.map((p, i) => (
+            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-subtle">
+              <img src={p.preview} alt="" className="w-full h-full object-cover" />
+              <button onClick={() => setLogPhotos(prev => prev.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">✕</button>
+            </div>
+          ))}
+          {logPhotos.length < 4 && (
+            <label className="w-16 h-16 flex items-center justify-center bg-surface border-2 border-dashed border-subtle rounded-lg cursor-pointer active:bg-surface-dim text-muted">
+              <Camera className="h-5 w-5" />
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setLogPhotos(prev => [...prev, { file, preview: ev.target?.result as string }]);
+                reader.readAsDataURL(file);
+                e.target.value = "";
+              }} />
+            </label>
+          )}
+        </div>
       </div>
 
       {/* Submit */}
