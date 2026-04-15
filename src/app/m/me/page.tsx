@@ -137,7 +137,7 @@ export default function MobileProfilePage() {
           const result = await uploadToOneDrive(p.file, "Workshop/Ad-hoc Tasks", `${ts}_${safeName}_${photoUrls.length + 1}.jpg`);
           if (result?.webUrl) photoUrls.push(result.webUrl);
         }
-      } catch { console.warn("Photo upload failed, continuing without photos"); }
+      } catch (err) { console.warn("Photo upload failed:", err); toast.error("Photo upload failed — logging without photos"); }
     }
 
     const updateData: any = { hours: hrs, worked_date: activeTimer.started_at.split("T")[0], logged_at: new Date().toISOString(), status: "pending" };

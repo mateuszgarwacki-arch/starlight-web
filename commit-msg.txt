@@ -1,1 +1,1 @@
-Session 23: Log sheet - bottom padding for nav bar, green camera button  
+Session 23: Review inbox photo display, upload error toast  

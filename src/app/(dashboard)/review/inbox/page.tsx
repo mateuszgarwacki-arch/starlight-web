@@ -11,7 +11,7 @@ import { ArrowLeft, Clock, Package, Wrench, Archive, AlertTriangle, MessageSquar
 import Link from "next/link";
 import { toast } from "sonner";
 
-interface InboxItem { item_type: "task" | "request"; item_id: number; freelancer_id: number; freelancer_name: string; category: string; title: string; description: string | null; claimed_hours: number | null; worked_date: string | null; job_id: number | null; job_name: string | null; job_number: string | null; urgency: string | null; photo_url: string | null; work_order_id: number | null; status: string; created_at: string; }
+interface InboxItem { item_type: "task" | "request"; item_id: number; freelancer_id: number; freelancer_name: string; category: string; title: string; description: string | null; claimed_hours: number | null; worked_date: string | null; job_id: number | null; job_name: string | null; job_number: string | null; urgency: string | null; photo_url: string | null; photo_urls: string[] | null; work_order_id: number | null; status: string; created_at: string; }
 interface WOOption { work_order_id: number; description: string | null; scope_name: string; job_number: string; job_id: number; status: string; }
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: any }> = { job_work: { label: "Job Work", icon: Clock }, maintenance: { label: "Maintenance", icon: Wrench }, workshop_general: { label: "Workshop General", icon: Archive }, other: { label: "Other", icon: MessageSquare }, order_material: { label: "Order Material", icon: Package }, repair_equipment: { label: "Repair Equipment", icon: Wrench }, restock: { label: "Restock", icon: Archive }, safety: { label: "Safety", icon: AlertTriangle }, general: { label: "General", icon: MessageSquare } };
@@ -32,7 +32,23 @@ export default function ReviewInboxPage() {
   const [actionNote, setActionNote] = useState("");
   const [actionSubmitting, setActionSubmitting] = useState(false);
 
-  const loadInbox = useCallback(async () => { setLoading(true); const { data } = await supabase.from("qry_review_inbox").select("*"); setItems(data || []); setLoading(false); }, []);
+  const loadInbox = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("qry_review_inbox").select("*");
+    const inboxItems = (data || []) as InboxItem[];
+    // Fetch photo_urls for task items
+    const taskIds = inboxItems.filter(i => i.item_type === "task").map(i => i.item_id);
+    if (taskIds.length > 0) {
+      const { data: taskPhotos } = await supabase.from("tbl_tasks").select("task_id, photo_urls").in("task_id", taskIds);
+      const photoMap: Record<number, string[]> = {};
+      (taskPhotos || []).forEach((t: any) => {
+        if (t.photo_urls) { try { photoMap[t.task_id] = JSON.parse(t.photo_urls); } catch {} }
+      });
+      inboxItems.forEach(item => { if (item.item_type === "task" && photoMap[item.item_id]) { item.photo_urls = photoMap[item.item_id]; } });
+    }
+    setItems(inboxItems);
+    setLoading(false);
+  }, []);
   useEffect(() => { loadInbox(); }, [loadInbox]);
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], loadInbox);
 
@@ -135,6 +151,15 @@ export default function ReviewInboxPage() {
                   </div>
                 </div>
                 {item.photo_url && (<a href={item.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0"><div className="w-16 h-16 rounded-lg bg-surface-mid flex items-center justify-center border border-subtle overflow-hidden"><Image className="h-5 w-5 text-muted" /></div></a>)}
+                {item.photo_urls && item.photo_urls.length > 0 && (
+                  <div className="flex gap-1.5 shrink-0">
+                    {item.photo_urls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-16 h-16 rounded-lg border border-subtle overflow-hidden bg-surface-mid hover:ring-2 hover:ring-starlight-blue transition-all">
+                        <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="h-5 w-5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>'; }} />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-subtle">
                 {isTask ? (<>
