@@ -1,1 +1,1 @@
-Session 23: Exclude routed tasks from By Day view to prevent double-counting  
+Session 23: Archive buttons on By Day task rows and Review overhead table  

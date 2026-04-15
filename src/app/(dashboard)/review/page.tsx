@@ -4,13 +4,15 @@ import { useEffect, useState, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { formatHours } from "@/lib/format-hours";
+import { getAuditContext } from "@/lib/audit";
 import { StatusBadge, DaysRemainingBadge } from "@/components/ui/badges";
 import {
   TrendingUp, TrendingDown, Clock, AlertTriangle,
   ChevronDown, ChevronRight, DollarSign, BarChart3,
-  Flag, RefreshCw, Package, Inbox,
+  Flag, RefreshCw, Package, Inbox, X,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { CompletedWorkTab } from "@/components/completed-work-tab";
 
 interface JobCost {
@@ -363,6 +365,7 @@ export default function ReviewPage() {
                   <th className="text-right py-1.5 px-2 font-medium">Hours</th>
                   <th className="text-right py-1.5 px-2 font-medium">Rate</th>
                   <th className="text-right py-1.5 px-5 font-medium">Cost</th>
+                  <th className="py-1.5 px-2 w-8"></th>
                 </tr>
               </thead>
               <tbody>
@@ -379,6 +382,15 @@ export default function ReviewPage() {
                     <td className="py-1.5 px-2 text-right font-mono">{t.hours ? formatHours(t.hours) : "—"}</td>
                     <td className="py-1.5 px-2 text-right text-xs font-mono text-muted">{t.hourly_rate ? formatCurrency(t.hourly_rate) : "—"}</td>
                     <td className="py-1.5 px-5 text-right font-mono font-semibold text-navy">{formatCurrency(t.cost)}</td>
+                    <td className="py-1.5 px-2">
+                      <button onClick={async () => {
+                        const ctx = await getAuditContext(supabase);
+                        await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "Archived by PM" }).eq("task_id", t.task_id);
+                        toast.success("Task archived"); loadAll();
+                      }} title="Archive" className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -388,6 +400,7 @@ export default function ReviewPage() {
                   <td className="py-2 px-2 text-right text-sm font-semibold text-navy font-mono">{formatHours(overheadTasks.reduce((s: number, t: any) => s + (t.hours || 0), 0))}</td>
                   <td className="py-2 px-2"></td>
                   <td className="py-2 px-5 text-right text-sm font-semibold text-navy font-mono">{formatCurrency(overheadTotal)}</td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>

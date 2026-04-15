@@ -942,7 +942,7 @@ export default function FreelancerDetailPage() {
                           <button onClick={() => handleEditTask(t.task_id)} className="text-starlight-green"><CheckCircle2 className="h-4 w-4" /></button>
                         </div>
                       ) : (
-                        <p className="text-lg font-semibold text-navy">{t.hours != null ? `${t.hours}h` : "—"}</p>
+                        <p className="text-lg font-semibold text-navy">{t.hours != null ? formatHours(t.hours) : "—"}</p>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1081,11 +1081,22 @@ export default function FreelancerDetailPage() {
                           const taskCost = (t.hours || 0) * hourlyRate;
                           return (
                             <div key={`task-${t.task_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (t.status === "rejected" ? "opacity-40 line-through" : "")}>
-                              <span className="w-12 text-right font-mono font-semibold text-navy">{t.hours != null ? `${t.hours}h` : "—"}</span>
+                              <span className="w-16 text-right font-mono font-semibold text-navy">{t.hours != null ? formatHours(t.hours) : "—"}</span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-starlight-amber/10 text-starlight-amber">Ad-hoc</span>
                               <span className="text-muted truncate flex-1">{t.title}</span>
                               {t.job_number && <span className="text-xs text-muted font-mono shrink-0">{t.job_number}</span>}
                               {hourlyRate > 0 && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(taskCost)}</span>}
+                              {isAdmin && t.status !== "rejected" && (
+                                <button onClick={async (ev) => {
+                                  ev.stopPropagation();
+                                  const ctx = await getAuditContext(supabase);
+                                  await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "Archived by PM" }).eq("task_id", t.task_id);
+                                  setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "rejected", review_note: "Archived by PM" } : x));
+                                  toast.success("Task archived");
+                                }} title="Archive task" className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors shrink-0">
+                                  <Archive className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
                           );
                         }
