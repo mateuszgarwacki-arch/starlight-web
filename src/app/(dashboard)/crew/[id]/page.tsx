@@ -1115,24 +1115,50 @@ export default function FreelancerDetailPage() {
                         } else {
                           const t = item.data;
                           const taskCost = (t.hours || 0) * hourlyRate;
+                          const isEditingThisTask = editingTask === t.task_id;
                           return (
-                            <div key={`task-${t.task_id}`} className={"flex items-center gap-3 py-1.5 text-sm " + (t.status === "rejected" ? "opacity-40 line-through" : "")}>
-                              <span className="w-16 text-right font-mono font-semibold text-navy">{t.hours != null ? formatHours(t.hours) : "—"}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-starlight-amber/10 text-starlight-amber">Ad-hoc</span>
-                              <span className="text-muted truncate flex-1">{t.title}</span>
-                              {t.job_number && <span className="text-xs text-muted font-mono shrink-0">{t.job_number}</span>}
-                              {hourlyRate > 0 && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(taskCost)}</span>}
-                              {isAdmin && t.status !== "rejected" && (
-                                <button onClick={async (ev) => {
-                                  ev.stopPropagation();
-                                  const ctx = await getAuditContext(supabase);
-                                  await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "Archived by PM" }).eq("task_id", t.task_id);
-                                  setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "rejected", review_note: "Archived by PM" } : x));
-                                  toast.success("Task archived");
-                                }} title="Archive task" className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors shrink-0">
-                                  <Archive className="h-3.5 w-3.5" />
-                                </button>
-                              )}
+                            <div key={`task-${t.task_id}`}>
+                              <div className={"flex items-center gap-3 py-1.5 text-sm " + (t.status === "rejected" ? "opacity-40 line-through" : "")}>
+                                {isEditingThisTask ? (
+                                  <div className="w-16 flex items-center">
+                                    <input type="number" step="0.25" value={editTaskHours}
+                                      onChange={ev => setEditTaskHours(ev.target.value)}
+                                      onKeyDown={ev => { if (ev.key === "Enter") handleEditTask(t.task_id); if (ev.key === "Escape") setEditingTask(null); }}
+                                      autoFocus className="w-14 px-1 py-0.5 text-xs text-center border border-starlight-blue rounded" />
+                                  </div>
+                                ) : (
+                                  <span className="w-16 text-right font-mono font-semibold text-navy">{t.hours != null ? formatHours(t.hours) : "—"}</span>
+                                )}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-starlight-amber/10 text-starlight-amber">Ad-hoc</span>
+                                {isEditingThisTask ? (
+                                  <input type="text" value={editTaskTitle} onChange={ev => setEditTaskTitle(ev.target.value)}
+                                    onKeyDown={ev => { if (ev.key === "Enter") handleEditTask(t.task_id); if (ev.key === "Escape") setEditingTask(null); }}
+                                    className="flex-1 px-2 py-0.5 text-sm border border-starlight-blue rounded focus:outline-none min-w-0" />
+                                ) : (
+                                  <span className="text-muted truncate flex-1">{t.title}</span>
+                                )}
+                                {!isEditingThisTask && t.job_number && <span className="text-xs text-muted font-mono shrink-0">{t.job_number}</span>}
+                                {!isEditingThisTask && hourlyRate > 0 && <span className="text-xs text-muted font-mono shrink-0">{formatCurrency(taskCost)}</span>}
+                                {isAdmin && t.status !== "rejected" && !isEditingThisTask && (
+                                  <div className="flex gap-0.5 shrink-0">
+                                    <button onClick={() => { setEditingTask(t.task_id); setEditTaskHours(String(t.hours ?? "")); setEditTaskTitle(t.title || ""); }}
+                                      title="Edit" className="p-1 text-faint hover:text-starlight-blue hover:bg-navy/10 rounded transition-colors"><Pencil className="h-3 w-3" /></button>
+                                    <button onClick={async (ev) => {
+                                      ev.stopPropagation();
+                                      const ctx = await getAuditContext(supabase);
+                                      await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: "Archived by PM" }).eq("task_id", t.task_id);
+                                      setAllTasks(prev => prev.map(x => x.task_id === t.task_id ? { ...x, status: "rejected", review_note: "Archived by PM" } : x));
+                                      toast.success("Task archived");
+                                    }} title="Archive" className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded transition-colors"><Archive className="h-3 w-3" /></button>
+                                  </div>
+                                )}
+                                {isEditingThisTask && (
+                                  <div className="flex gap-1 shrink-0">
+                                    <button onClick={() => handleEditTask(t.task_id)} className="px-2 py-1 bg-starlight-blue text-white text-[10px] font-medium rounded">Save</button>
+                                    <button onClick={() => setEditingTask(null)} className="px-2 py-1 text-[10px] text-muted">Cancel</button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         }
