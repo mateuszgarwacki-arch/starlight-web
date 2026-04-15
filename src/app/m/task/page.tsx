@@ -428,8 +428,8 @@ export default function MobileTaskPage() {
             </div>
           ))}
           {logPhotos.length < 4 && (
-            <label className="w-16 h-16 flex items-center justify-center bg-surface border-2 border-dashed border-subtle rounded-lg cursor-pointer active:bg-surface-dim text-muted">
-              <Camera className="h-5 w-5" />
+            <label className="w-16 h-16 flex items-center justify-center bg-starlight-green text-white rounded-full shadow-md cursor-pointer active:bg-starlight-green/80">
+              <Camera className="h-6 w-6" />
               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;

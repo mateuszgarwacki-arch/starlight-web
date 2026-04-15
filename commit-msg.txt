@@ -1,1 +1,1 @@
-feat: Photo capture on mobile task quick-log (not just timer stop) - up to 4 photos, OneDrive upload
+fix: Green photo button on task quick-log to match Me page style
