@@ -744,7 +744,7 @@ export default function FreelancerDetailPage() {
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
             activeTab === "timeline" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-muted"
           }`}>
-          <Clock className="h-4 w-4" /> Activity ({timeEntries.length + reviewedTasks.length})
+          <Clock className="h-4 w-4" /> Activity ({timeEntries.filter(e => !e.archived_at).length + reviewedTasks.filter(t => t.status !== "rejected").length})
         </button>
         <button onClick={() => setActiveTab("bookings")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
