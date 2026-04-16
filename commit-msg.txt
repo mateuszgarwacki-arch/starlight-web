@@ -1,1 +1,1 @@
-fix: LogSheet hours pre-fill on open (useEffect reset) + stepper buttons shrink-0 to prevent cutoff
+docs: TRACKER.md session 24 notes

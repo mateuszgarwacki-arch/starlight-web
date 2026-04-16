@@ -2002,3 +2002,76 @@ ALTER TABLE tbl_tasks ADD COLUMN photo_urls TEXT;
 - **Routed task exclusion**: By Day view ALWAYS excludes `status=routed` tasks (hours live in WO entry). Rejected tasks hidden unless "Show archived" checked
 - **Restore pattern**: Archived WO entries → clear `archived_at/by/reason`. Rejected tasks → set `status=approved_overhead`. Both show green "Restore" button when archived entries are visible
 - **Supabase MCP**: Connected — run SQL via `Supabase:execute_sql` with project_id `qbdnoueqkmhznqzpkvos`. No more manual SQL paste
+
+
+---
+
+## Session 24 — 16 April 2026
+
+### Summary
+Next Step WO chaining (predecessor workflow) + unified mobile logging experience.
+
+### Next Step WO Chaining
+- [x] `predecessor_wo_id` column on `tbl_work_orders` (nullable FK, ON DELETE SET NULL)
+- [x] "↳" (CornerDownRight) button on every non-voided WO row in scope Build Plan
+- [x] Clicking opens "Add Next Step" dialog with:
+  - Context: "After: BUILD → new step"
+  - Job item checkboxes: all inherited from predecessor, individually togglable
+  - Activity picker: all activities shown (soft signals only, ★ marks typical next phases)
+  - No auto-description prefill — user types what they need
+  - Complexity + Finish inherited from scope defaults
+- [x] New WO gets `predecessor_wo_id` pointing to parent
+- [x] Visual chain indicator on WO cards: "↳ after BUILD (done/active/waiting)"
+- [x] Phase numbers set: BUILD=1, COVER=3 (were NULL)
+
+### Mobile Quick Timer (FAB)
+- [x] FAB red "+" now shows 3 options: Start Timer (green), Log Task (navy), Raise Request (amber)
+- [x] Start Timer: one-tap, creates `tbl_tasks` row with "Quick timer (HH:MM)", status=in_progress
+- [x] Checks for existing active timer — blocks with error + redirect to Me page
+- [x] Timer shows in Me page's active timer banner, logged via standard flow
+
+### Mobile Photo on Quick-Log
+- [x] `/m/task` "log completed work" section: green camera button (up to 4 photos)
+- [x] Photos uploaded to OneDrive `Workshop/Ad-hoc Tasks/`, stored as `photo_urls` JSON array
+- [x] Photo count included in review notification
+
+### Unified LogSheet Component ✔
+- [x] NEW: `src/components/log-sheet.tsx` — shared bottom sheet for ALL mobile logging
+- [x] Always shows: hours stepper (±0.25, editable centre), notes field, photos (green camera, up to 4), submit button
+- [x] Conditional: date picker (shown for quick-log, hidden for timer stops)
+- [x] Context bar: read-only label + sublabel (WO name + job number, or task title)
+- [x] State resets on open via useEffect (fixes defaultHours not applying)
+- [x] Stepper buttons `shrink-0` (fixes '+' cutoff on mobile)
+- [x] Wired into all 3 flows:
+  - `/m/wo/[woId]` — WO timer stop (gained: stepper, photos, consistent layout)
+  - `/m/me` — Ad-hoc timer stop (gained: notes field, consistent layout)
+  - `/m/task` — Quick log (now: pick context at top → "Log Hours" button → LogSheet opens)
+
+### New/Modified Files (Session 24)
+| File | Purpose |
+|------|---------|
+| `src/components/log-sheet.tsx` | NEW: Unified logging bottom sheet component |
+| `src/components/create-wo-dialog.tsx` | Rewritten: predecessorWO prop, item checkboxes, no auto-description |
+| `src/components/work-orders-panel.tsx` | Next Step button, predecessor indicator, CreateWODialog import |
+| `src/components/floating-action-button.tsx` | Rewritten: 3 options, quick timer with Supabase insert |
+| `src/app/m/task/page.tsx` | Rewritten: uses LogSheet, removed inline time/date/notes/photos |
+| `src/app/m/me/page.tsx` | Uses LogSheet, gained notes field |
+| `src/app/m/wo/[woId]/page.tsx` | Uses LogSheet, gained stepper + photos |
+
+### SQL Run (Session 24)
+```sql
+ALTER TABLE tbl_work_orders ADD COLUMN predecessor_wo_id BIGINT 
+  REFERENCES tbl_work_orders(work_order_id) ON DELETE SET NULL;
+UPDATE tbl_master_lookups SET phase_number = 1 WHERE lookup_id = 57; -- BUILD
+UPDATE tbl_master_lookups SET phase_number = 3 WHERE lookup_id = 58; -- COVER
+```
+
+### Database Tables (still 42, no new tables)
+### Views (still 38, no new views)
+
+### Conventions Added (Session 24)
+- **Unified LogSheet**: All mobile hour logging flows use `<LogSheet>` component. Never build inline logging UI again
+- **LogSheet state reset**: `useEffect` on `open` + `defaultHours` ensures fresh state each time sheet opens
+- **Stepper buttons**: Always `shrink-0` on ±buttons in flex containers to prevent mobile cutoff
+- **Predecessor WO chain**: `predecessor_wo_id` on `tbl_work_orders` for Next Step feature. Visual indicator shows chain status. Soft signals only — never filter/block activities
+- **FAB Quick Timer**: Creates `tbl_tasks` with `status: "in_progress"`, `started_at: now`, title includes time. Checks for existing active timer before creating
