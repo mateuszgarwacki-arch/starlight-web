@@ -1,5 +1,4 @@
-Session 25c: Learnings context + embed auth fixes
+Session 25d: Embed reliability + scope context label
 
-- qry_learnings_enriched: context_label now includes quote line + WO activity label + material/stock/supplier/freelancer when attached (previously showed only Job number for non-scope attachments)
-- WO label resolved via join to tbl_master_lookups.lookup_value (activity_verb is FK, not text)
-- LearningCapture: fire-and-forget /api/learnings/embed now includes Bearer token so it actually runs
+- LearningCapture: await embed call before closing sheet (3s race timeout) so fire-and-forget doesn't get cancelled on unmount
+- qry_learnings_enriched: context_label now prefixes "Scope:", "Mat:", "Stock:", "Supplier:", "Freelancer:" so each entity type is distinguishable at a glance; scope name truncated at 60 chars to keep labels readable

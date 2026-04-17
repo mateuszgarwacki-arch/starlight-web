@@ -82,15 +82,24 @@ export function LearningCapture({ open, onClose, onSaved, context }: LearningCap
         return;
       }
       toast.success("Learning captured");
-      // Fire-and-forget embedding — include session token so the API route can authenticate
-      supabase.auth.getSession().then(({ data }) => {
-        const token = data.session?.access_token;
-        if (!token) return;
-        fetch("/api/learnings/embed", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => {});
-      });
+      // Trigger embedding BEFORE closing the sheet so the request isn't
+      // cancelled by the unmount. Keep it short with a race-timeout so
+      // a slow Voyage call never blocks the UI for more than 3s.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        try {
+          await Promise.race([
+            fetch("/api/learnings/embed", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+        } catch {
+          // non-fatal — embedding will be retried next capture
+        }
+      }
       onSaved?.();
       onClose();
     } catch (e) {
