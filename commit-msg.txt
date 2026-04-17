@@ -1,8 +1,5 @@
-Session 25b: Swap learnings embeddings from OpenAI to Voyage AI
+Session 25c: Learnings context + embed auth fixes
 
-- tbl_learnings.embedding: VECTOR(1536) -> VECTOR(1024)
-- rpc_learnings_similar signature updated to 1024-dim
-- qry_learnings_enriched view recreated (was dependent on column)
-- /api/learnings/embed now calls Voyage voyage-3-lite instead of OpenAI
-- Env var: OPENAI_API_KEY -> VOYAGE_API_KEY
-- Rationale: Anthropic-recommended provider, one-vendor simplicity for future Claude agent layer, free tier covers realistic volume
+- qry_learnings_enriched: context_label now includes quote line + WO activity label + material/stock/supplier/freelancer when attached (previously showed only Job number for non-scope attachments)
+- WO label resolved via join to tbl_master_lookups.lookup_value (activity_verb is FK, not text)
+- LearningCapture: fire-and-forget /api/learnings/embed now includes Bearer token so it actually runs

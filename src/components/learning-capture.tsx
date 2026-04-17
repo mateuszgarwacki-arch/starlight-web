@@ -82,7 +82,15 @@ export function LearningCapture({ open, onClose, onSaved, context }: LearningCap
         return;
       }
       toast.success("Learning captured");
-      fetch("/api/learnings/embed", { method: "POST" }).catch(() => {});
+      // Fire-and-forget embedding — include session token so the API route can authenticate
+      supabase.auth.getSession().then(({ data }) => {
+        const token = data.session?.access_token;
+        if (!token) return;
+        fetch("/api/learnings/embed", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      });
       onSaved?.();
       onClose();
     } catch (e) {
