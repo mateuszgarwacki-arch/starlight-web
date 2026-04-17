@@ -131,13 +131,20 @@ export default function SettingsPage() {
   };
 
   // Revert audit entry
-  const handleRevert = async (auditId: number) => {
-    if (!confirm("Revert this change? The old value will be restored.")) return;
+  const handleRevert = async (auditId: number, actionType: string) => {
+    const msg = actionType === "archive"
+      ? "Restore this archived record? It will be included in cost calculations again."
+      : "Revert this change? The old value will be restored.";
+    if (!confirm(msg)) return;
     const { getAuditContext, revertAuditEntry } = await import("@/lib/audit");
     const ctx = await getAuditContext(supabase);
     const result = await revertAuditEntry(ctx, auditId);
-    if (result.success) { toast.success("Change reverted"); loadAudit(); }
-    else { toast.error(result.error || "Revert failed"); }
+    if (result.success) {
+      toast.success(actionType === "archive" ? "Record restored" : "Change reverted");
+      loadAudit();
+    } else {
+      toast.error(result.error || "Revert failed");
+    }
   };
 
   // Role badge colors
@@ -423,8 +430,8 @@ export default function SettingsPage() {
                       <td className="px-3 py-2 text-xs font-medium text-navy">{e.user_name || "System"}</td>
                       <td className="px-3 py-2 text-xs text-muted font-mono">{e.table_name.replace("tbl_", "")}</td>
                       <td className="px-3 py-2 text-xs text-muted">
-                        {e.field_name === "_record" ? (
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${e.action_type === "insert" ? "bg-starlight-green/15 text-starlight-green" : e.action_type === "delete" ? "bg-starlight-red/15 text-starlight-red" : "bg-starlight-amber/15 text-starlight-amber"}`}>
+                        {e.field_name === "_record" || e.field_name === "_archive" || e.field_name === "_unarchive" ? (
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${e.action_type === "insert" ? "bg-starlight-green/15 text-starlight-green" : e.action_type === "delete" ? "bg-starlight-red/15 text-starlight-red" : e.action_type === "archive" ? "bg-starlight-red/15 text-starlight-red" : e.action_type === "revert" ? "bg-starlight-blue/15 text-starlight-blue" : "bg-starlight-amber/15 text-starlight-amber"}`}>
                             {e.action_type}
                           </span>
                         ) : e.field_name}
@@ -432,10 +439,10 @@ export default function SettingsPage() {
                       <td className="px-3 py-2 text-xs text-muted max-w-[120px] truncate" title={e.old_value || ""}>{displayOld}</td>
                       <td className="px-3 py-2 text-xs text-foreground max-w-[120px] truncate" title={e.new_value || ""}>{displayNew}</td>
                       <td className="px-3 py-2">
-                        {e.action_type === "update" && !isReverted && (
-                          <button onClick={() => handleRevert(e.audit_id)}
+                        {(e.action_type === "update" || e.action_type === "archive") && !isReverted && (
+                          <button onClick={() => handleRevert(e.audit_id, e.action_type)}
                             className="text-xs text-starlight-blue hover:text-navy font-medium transition-colors">
-                            Revert
+                            {e.action_type === "archive" ? "Restore" : "Revert"}
                           </button>
                         )}
                         {isReverted && <span className="text-xs text-faint">Reverted</span>}

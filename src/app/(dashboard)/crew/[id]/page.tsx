@@ -7,7 +7,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { formatHours } from "@/lib/format-hours";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
-import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { getAuditContext, auditedUpdate, auditedInsert, auditedArchive } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
 import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -349,19 +349,14 @@ export default function FreelancerDetailPage() {
     const ctx = await getAuditContext(supabase);
     const entry = timeEntries.find(e => e.entry_id === entryId);
 
-    await supabase.from("tbl_wo_time_entries").update({
-      archived_at: new Date().toISOString(),
-      archived_by: ctx.userId,
-      archive_reason: archiveReason.trim(),
-    }).eq("entry_id", entryId);
-
-    // Log it
-    await supabase.from("tbl_audit_log").insert({
-      user_id: ctx.userId, user_name: ctx.userName, user_role: ctx.userRole,
-      table_name: "tbl_wo_time_entries", record_id: entryId,
-      field_name: "_archive", old_value: JSON.stringify(entry), new_value: JSON.stringify({ reason: archiveReason.trim() }),
-      job_id: entry?.job_id, action_type: "archive",
-    });
+    const result = await auditedArchive(
+      ctx,
+      "tbl_wo_time_entries",
+      entryId,
+      archiveReason.trim(),
+      entry?.job_id ?? null,
+    );
+    if (!result.success) { toast.error(result.error || "Archive failed"); return; }
 
     setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? { ...e, archived_at: new Date().toISOString(), archive_reason: archiveReason.trim() } : e));
     setArchivingEntry(null);

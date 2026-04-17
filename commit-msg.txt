@@ -1,5 +1,18 @@
-Session 25 wrap-up: cleanup + docs
+feat(audit): extend revert to cover archive entries
 
-- /api/learnings/embed: removed diagnostic endpoint (?diag=1), cleaned route to production-ready form
-- TRACKER.md: full Session 25 entry appended
-- starlight_database_schema_session25.md: new schema doc reflecting 44 tables, 39 views, 8 RPCs, pgvector extension
+- Add auditedArchive() helper in lib/audit.ts — single source of truth
+  for soft-delete. Writes one audit row with action_type=archive and a
+  full snapshot in old_value (replaces the raw update + manual audit
+  insert pattern previously used only for time entries).
+- Extend revertAuditEntry() to handle action_type=archive. On revert,
+  nulls archived_at/archived_by/archive_reason so the record comes
+  back into active data and cost calculations.
+- Refactor handleArchive() on /crew/[id] page to use auditedArchive()
+  instead of raw update + manual audit insert.
+- Settings → Audit Log UI: show "Restore" button on archive rows
+  (was hidden), add _archive/_unarchive badge treatment, pass
+  action_type to handleRevert for context-appropriate confirm
+  message ("Restore this archived record?" vs "Revert this change?").
+
+Closes gap where admins could archive a time entry but had no way to
+un-archive it short of a manual SQL update.

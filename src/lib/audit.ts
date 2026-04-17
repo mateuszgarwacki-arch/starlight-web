@@ -200,7 +200,64 @@ export async function auditedDelete(
 }
 
 /**
- * Revert a single audit entry — restores old value and marks entry as reverted
+ * Audited archive — soft-deletes a record by setting archived_at/by/reason.
+ * Logs a single audit row with action_type="archive" and a full snapshot in old_value.
+ * This is the single source of truth for archive operations — do not write raw
+ * archive updates + audit inserts anywhere else.
+ */
+export async function auditedArchive(
+  ctx: AuditContext,
+  tableName: string,
+  recordId: number,
+  reason: string,
+  jobId?: number | null,
+): Promise<{ success: boolean; error?: string }> {
+  const pkCol = AUDITED_TABLES[tableName];
+  if (!pkCol) return { success: false, error: "Table not audited" };
+  if (!reason.trim()) return { success: false, error: "Reason required" };
+
+  // 1. Snapshot current record
+  const { data: current } = await ctx.supabase
+    .from(tableName)
+    .select("*")
+    .eq(pkCol, recordId)
+    .single();
+
+  if (!current) return { success: false, error: "Record not found" };
+  if (current.archived_at) return { success: false, error: "Already archived" };
+
+  // 2. Apply the archive flag
+  const { error: updateErr } = await ctx.supabase
+    .from(tableName)
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: ctx.userId,
+      archive_reason: reason,
+    })
+    .eq(pkCol, recordId);
+
+  if (updateErr) return { success: false, error: updateErr.message };
+
+  // 3. Log as a single archive audit row with full snapshot
+  await ctx.supabase.from("tbl_audit_log").insert({
+    user_id: ctx.userId,
+    user_name: ctx.userName,
+    user_role: ctx.userRole,
+    table_name: tableName,
+    record_id: recordId,
+    field_name: "_archive",
+    old_value: JSON.stringify(current),
+    new_value: JSON.stringify({ reason }),
+    job_id: jobId ?? current.job_id ?? null,
+    action_type: "archive",
+  });
+
+  return { success: true };
+}
+
+/**
+ * Revert a single audit entry — restores old value and marks entry as reverted.
+ * Supports action_type="update" (restore field) and action_type="archive" (un-archive).
  * Returns { success, error? }
  */
 export async function revertAuditEntry(
@@ -216,36 +273,43 @@ export async function revertAuditEntry(
 
   if (!entry) return { success: false, error: "Audit entry not found" };
   if (entry.reverted_at) return { success: false, error: "Already reverted" };
-  if (entry.action_type !== "update") return { success: false, error: "Can only revert field updates" };
 
   const pkCol = AUDITED_TABLES[entry.table_name];
   if (!pkCol) return { success: false, error: "Table not revertable" };
 
-  // 2. Parse the old value
-  const oldVal = entry.old_value != null ? JSON.parse(entry.old_value) : null;
+  // 2. Apply the revert based on action_type
+  if (entry.action_type === "update") {
+    const oldVal = entry.old_value != null ? JSON.parse(entry.old_value) : null;
+    const { error: updateErr } = await ctx.supabase
+      .from(entry.table_name)
+      .update({ [entry.field_name]: oldVal })
+      .eq(pkCol, entry.record_id);
+    if (updateErr) return { success: false, error: updateErr.message };
+  } else if (entry.action_type === "archive") {
+    // Un-archive: null out archive fields. Record comes back into active data.
+    const { error: updateErr } = await ctx.supabase
+      .from(entry.table_name)
+      .update({ archived_at: null, archived_by: null, archive_reason: null })
+      .eq(pkCol, entry.record_id);
+    if (updateErr) return { success: false, error: updateErr.message };
+  } else {
+    return { success: false, error: "Can only revert field updates or archives" };
+  }
 
-  // 3. Apply the revert (this itself gets audited via the trigger)
-  const { error: updateErr } = await ctx.supabase
-    .from(entry.table_name)
-    .update({ [entry.field_name]: oldVal })
-    .eq(pkCol, entry.record_id);
-
-  if (updateErr) return { success: false, error: updateErr.message };
-
-  // 4. Mark the original entry as reverted
+  // 3. Mark the original entry as reverted
   await ctx.supabase
     .from("tbl_audit_log")
     .update({ reverted_at: new Date().toISOString(), reverted_by: ctx.userId })
     .eq("audit_id", auditId);
 
-  // 5. Log the revert itself
+  // 4. Log the revert itself
   await ctx.supabase.from("tbl_audit_log").insert({
     user_id: ctx.userId,
     user_name: ctx.userName,
     user_role: ctx.userRole,
     table_name: entry.table_name,
     record_id: entry.record_id,
-    field_name: entry.field_name,
+    field_name: entry.action_type === "archive" ? "_unarchive" : entry.field_name,
     old_value: entry.new_value,
     new_value: entry.old_value,
     job_id: entry.job_id,
