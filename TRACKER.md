@@ -2075,3 +2075,168 @@ UPDATE tbl_master_lookups SET phase_number = 3 WHERE lookup_id = 58; -- COVER
 - **Stepper buttons**: Always `shrink-0` on ±buttons in flex containers to prevent mobile cutoff
 - **Predecessor WO chain**: `predecessor_wo_id` on `tbl_work_orders` for Next Step feature. Visual indicator shows chain status. Soft signals only — never filter/block activities
 - **FAB Quick Timer**: Creates `tbl_tasks` with `status: "in_progress"`, `started_at: now`, title includes time. Checks for existing active timer before creating
+
+
+---
+
+## Session 25 — 17 April 2026
+
+### Summary
+Institutional knowledge capture system ("The Starlight System"). Ten-category taxonomy for capturing deviations and lessons, attached to any entity in the schema. Semantic embeddings via Voyage AI set the foundation for future agent-assisted quoting and estimation.
+
+### Strategic context
+Previous discussion (same session, pre-implementation): identified that PMs/bosses engage at start and end of projects only, and forcing mid-project engagement won't work. Real prize is data quality good enough to support an AI agent — quoting, estimating, risk flagging. Most valuable missing signal: structured *why* data (not just what happened, but what made it go sideways). This is the "knowledge foundation" for later agent capabilities.
+
+### What landed
+
+#### tbl_learnings — The knowledge table ✅
+- New table `tbl_learnings` with 10-category enum (`learning_category`):
+  - `estimate_miss`, `scope_change`, `execution_issue`, `material_supply_issue`, `client_behaviour`, `design_issue`, `process_issue`, `communication_gap`, `judgement_call`, `positive_learning`
+- Each category has 1 structured sub-field (enum value, expandable later) — kept minimal per "ship first" principle
+- 10 nullable FK entity refs: `job_id`, `quote_line_id`, `scope_item_id`, `work_order_id`, `bom_id`, `time_entry_id`, `material_id`, `stock_item_id`, `freelancer_id`, `supplier_id`
+- CHECK constraint requires at least one entity FK
+- Impact fields: `severity INT 1-5`, `cost_impact_gbp NUMERIC`, `hours_impact NUMERIC`, `actionable BOOLEAN`
+- Text fields: `headline TEXT` (3-200 chars, required), `detail TEXT` (optional war story)
+- Resolution: `resolved_at`, `resolved_by`, `resolution_notes`
+- Meta: `created_by UUID REFERENCES auth.users`, `created_at`, `updated_at`
+- 17 indexes: category, created_at DESC, partial on actionable (where not resolved), severity, one per FK, plus ivfflat on embedding
+- RLS: admin/manager select/insert/update, admin-only delete. Freelancers blocked (will open to PMs later)
+- `tbl_learning_links` junction for m:m cross-entity links (when one learning spans several entities of same type)
+- Audit insert tracking `auditedInsert` wired in via LearningCapture (not via tbl_audit_log — avoid meta-recursion)
+
+#### Semantic embeddings — Voyage AI ✅
+- `embedding VECTOR(512)` column (`pgvector` extension enabled earlier, rebuilt for voyage-3-lite's 512 dimensions)
+- `embedding_status TEXT` enum: `pending`, `ready`, `failed`, `disabled`
+- Trigger `tbl_learnings_mark_embedding_pending` auto-invalidates embedding when text changes
+- `/api/learnings/embed` endpoint:
+  - Processes up to 20 pending rows per call
+  - Calls Voyage `voyage-3-lite` (cosine, document input_type for indexing)
+  - Writes embeddings back with `embedding_status='ready'`
+  - Fails gracefully if `VOYAGE_API_KEY` missing → flips to `disabled`
+- Fire-and-forget trigger from capture UI using `fetch({ keepalive: true })` — survives component unmount
+- ivfflat index `idx_learnings_embedding_vec` with `vector_cosine_ops`, 100 lists
+- `rpc_learnings_similar(query_embedding VECTOR(512), limit, category?)` — returns N most similar learnings by cosine similarity
+
+#### qry_learnings_enriched view ✅
+- View joins tbl_learnings with all entity tables + tbl_master_lookups for WO activity labels
+- `context_label` built via CONCAT_WS from whichever entities are attached:
+  - `Job 13725 · Line 64` (quote line only)
+  - `Job 13725 · Scope: Pergola canopy · WO BUILD` (full chain)
+  - `Job 13725 · Scope: Plinth · Mat: 18mm MDF` (material attached)
+  - Prefixes: `Scope:`, `Mat:`, `Stock:`, `Supplier:`, `Freelancer:` — distinguishable at a glance
+- `security_invoker = true` (matches Session 11 convention)
+- Returns `LearningEnriched` interface for frontend display
+
+#### Capture UI ✅
+- `src/components/learning-capture.tsx` — universal bottom-sheet modal (dark theme tokens: `bg-surface-mid`, `border-surface-hi`, etc.)
+- 10 category pills with colour-coded chips (rose/amber/red/orange/fuchsia/violet/slate/yellow/blue/emerald)
+- Each category opens its sub-field as a pill row on selection
+- Severity 1-5 buttons (emerald for positive_learning, amber/red/blue gradient otherwise)
+- Cost + Hours inputs (optional)
+- Headline required (3-200 chars with live counter), detail optional (textarea)
+- Actionable checkbox with explanation
+- `src/components/learning-trigger.tsx` — small book icon button for inline placement (table rows)
+- `src/components/learnings-section.tsx` — attached-list display for entity detail pages (collapsible, expand-per-row, inline resolve/reopen/delete)
+- `src/components/learnings-tab.tsx` — review page tab with summary cards, category filter chips, search, status toggle, deep-link to scope/job
+
+#### Wired into pages ✅
+- **Review page**: new "Learnings" tab between Estimate Accuracy and Completed. Full dashboard with summary cards + filters
+- **Job detail page**: `<LearningsSection>` after PM Queries panel (collapsed by default); small book-icon `<LearningTrigger>` on every quote line row
+- **Scope detail page**: `<LearningsSection>` after Cost Analysis (collapsed by default)
+- **WO rows in work-orders-panel**: book-icon trigger in action row (alongside printer, delete, next-step)
+
+#### Database state at end of session
+- 43 tables (was 42) — added `tbl_learnings`
+- 39 views — added `qry_learnings_enriched`
+- 8 RPC functions — added `rpc_learnings_similar`
+- Extensions: added `pgvector` (and `pg_net` enabled for future use)
+
+### Voyage AI integration detail
+
+**Model choice:** `voyage-3-lite`
+- 512 dimensions (not 1024 — initial assumption was wrong, corrected via diagnostic endpoint)
+- Free tier: 200M tokens/month (enough for millions of learnings of typical length)
+- Anthropic-recommended embedding provider — keeps vendor surface aligned with eventual Claude agent
+
+**Auth:** `VOYAGE_API_KEY` env var on Vercel (not checked into git). Capture sheet's fire-and-forget fetch uses Supabase session token to authenticate against the embed route, which then calls Voyage with the service-owned key.
+
+**Rationale (rejected OpenAI):** One-vendor simplicity for upcoming agent layer (all Claude/Anthropic ecosystem). Voyage has stronger retrieval benchmarks anyway.
+
+### Bug log from this session (for future reference)
+
+**Dim mismatch — the real blocker for ~90 mins of debugging:**
+- Initially set column to VECTOR(1024) assuming voyage-3-lite returned 1024 dims
+- voyage-3-lite actually returns 512 dims
+- Writes silently failed (Postgres rejected vector length mismatch during update)
+- Status stayed `pending` (not `failed` or `disabled`) because the failure was in the write-back, not in the API call
+- Diagnostic endpoint (`?diag=1`) revealed truth: `voyage_status: 200, dims_returned: 512`
+- Fix: drop+recreate column as VECTOR(512), rebuild view (it depended on `l.*`), rebuild RPC signature
+
+**Client-side fire-and-forget unreliability:**
+- Initial capture used `fetch().then()` without await — fetch was cancelled on component unmount
+- Added `keepalive: true` flag which tells browser to finish the request even if page/component unmounts
+- This is the correct pattern for "submit something in the background that shouldn't block UI"
+
+**`toast.message()` may not exist in sonner version** — be careful using it. Safer to use `toast()` or `toast.info()` for neutral messages.
+
+### Files added
+| File | Purpose |
+|------|---------|
+| `src/lib/learnings.ts` | Taxonomy, types, CATEGORY_MAP, helpers (severityDots, severityColour, contextToInsertFields) |
+| `src/components/learning-capture.tsx` | Universal capture bottom-sheet modal |
+| `src/components/learning-trigger.tsx` | Small icon-button wrapper for inline placement |
+| `src/components/learnings-section.tsx` | Attached-list display for entity pages |
+| `src/components/learnings-tab.tsx` | Review page tab with filters + dashboard |
+| `src/app/api/learnings/embed/route.ts` | Embedding endpoint (Voyage AI voyage-3-lite) |
+
+### Files modified
+| File | Change |
+|------|--------|
+| `src/app/(dashboard)/review/page.tsx` | Added Learnings tab (import, TabKey extension, URL validation, tab button, tab content) |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | LearningsSection after PmQueriesJobPanel; LearningTrigger per quote line row |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | LearningsSection after CostBreakdown |
+| `src/components/work-orders-panel.tsx` | LearningTrigger in WO action row |
+
+### SQL applied (Supabase MCP)
+- `session_25_learnings_system` — main table + links + enum + indexes + RLS + triggers
+- `session_25_learnings_view_and_rpc` — qry_learnings_enriched + rpc_learnings_similar
+- `session_25_learnings_embedding_voyage_1024_v2` — column dim migration (1536→1024, later corrected to 512)
+- `session_25c_learnings_view_context_fix` — context_label includes quote line, WO activity label via lookup join
+- `session_25c_learnings_view_separator_fix` — separator character (· not `\u00b7`)
+- `session_25d_learnings_context_scope_prefix` — "Scope:", "Mat:", "Stock:" etc. prefixes in context label
+- `fix_embedding_dims_512_voyage_lite` — real fix: VECTOR(1024)→VECTOR(512), rebuilt view + RPC
+- `enable_pg_net_for_webhooks` — enabled pg_net extension (reserved for future webhook pattern)
+
+### Conventions added
+- **Universal entity attachment pattern**: nullable FK columns for each possible parent (not polymorphic `entity_type + entity_id`). One column per entity type, CHECK constraint requires ≥1 set. Integrity enforced by FK, clean joins, no indirection
+- **`tbl_learnings` as the single knowledge surface**: all institutional knowledge attaches here. Don't add "notes" columns to other tables for deviations — use learnings
+- **10-category taxonomy (v1)**: locked via PG enum. Expansion requires enum ALTER + UI pill + sub-field additions. Resist per-category duplicates — use sub-field for nuance
+- **Embedding dimensions match model**: always verify `dims_returned` from the provider before setting `VECTOR(n)` column size. `voyage-3-lite` = 512, `voyage-3` = 1024, `voyage-3-large` = up to 2048
+- **Voyage input_type**: `"document"` when indexing (the corpus), `"query"` when searching. Use `rpc_learnings_similar` with query-type embedding for searches
+- **keepalive fetch for fire-and-forget**: `fetch(url, { keepalive: true })` for background requests that must survive component unmount. Without it, React's unmount cancels in-flight requests
+- **Context label hierarchy**: Job → Line → Scope → WO → Material/Stock/Supplier/Freelancer. Each prefixed with its type for scannability. Truncate long scope names at 60 chars
+- **Semantic similarity via pgvector cosine distance**: `embedding <=> query_vec` gives distance (smaller = more similar). `1 - (embedding <=> query_vec)` gives similarity score (1.0 = identical, 0.0 = orthogonal)
+- **Capture UX — dark theme first**: learning-capture and learnings-section use dark theme tokens (bg-surface-mid, text-foreground, border-surface-hi). LearningsTab uses light theme to match other review tabs (text-navy, card)
+
+### Next session start point
+
+**State at end of session 25:**
+- 6 learnings captured across 1 test job (Grosvenor)
+- All embedded successfully (512 dims, Voyage AI)
+- Semantic similarity retrieval verified working — sensible clustering of related learnings
+- `VOYAGE_API_KEY` set in Vercel production env
+- RLS locked to admin/manager (Mateusz) for pilot phase
+
+**Immediate next steps (when returning):**
+1. **Get Mateusz's backlog in** — many existing lessons, capture rough versions now, rough headlines are fine
+2. **Build "similar past learnings" panel** — when viewing a scope item, show 3 most similar past learnings via `rpc_learnings_similar`. This is where PMs start seeing value
+3. **Retrospective workflow** — at job completion, prompt to review + augment learnings gathered during the build. Not building from scratch, augmenting
+4. **Agent connection** — once ~50+ learnings exist, wire MCP so Claude can retrieve from `rpc_learnings_similar` during quoting/estimating conversations
+
+**Outstanding tidy:**
+- Diagnostic endpoint `?diag=1` removed from route.ts (cleaned up in Session 25 wrap-up)
+- Consider RLS change when inviting PMs — currently blocked. Probably: PMs can see/edit learnings on jobs they're on (add policy scoped by job)
+
+### Deliverable quality reflection
+This was a fraught session with several debugging loops (dim mismatch, fetch cancellation, cached JS, device switching between mobile and desktop). Final system works end-to-end but the path wasn't clean. Honest grade: B+ on the code, D on the debugging approach. Should have added diagnostic output earlier and run end-to-end verification before declaring victory.
+

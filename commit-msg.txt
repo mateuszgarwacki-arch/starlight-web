@@ -1,5 +1,5 @@
-Session 25f: Embed diagnostic endpoint + keepalive fetch
+Session 25 wrap-up: cleanup + docs
 
-- GET /api/learnings/embed?diag=1 — unauth-required diagnostic that calls Voyage directly and reports what happens (key present? Voyage 200? dimensions?)
-- LearningCapture: fire-and-forget fetch now uses keepalive:true so the request survives component unmount (this is the real fix for embeds never running)
-- Error messages in POST route now include which step failed
+- /api/learnings/embed: removed diagnostic endpoint (?diag=1), cleaned route to production-ready form
+- TRACKER.md: full Session 25 entry appended
+- starlight_database_schema_session25.md: new schema doc reflecting 44 tables, 39 views, 8 RPCs, pgvector extension
