@@ -83,22 +83,33 @@ export function LearningCapture({ open, onClose, onSaved, context }: LearningCap
       }
       toast.success("Learning captured");
       // Trigger embedding BEFORE closing the sheet so the request isn't
-      // cancelled by the unmount. Keep it short with a race-timeout so
-      // a slow Voyage call never blocks the UI for more than 3s.
+      // cancelled by the unmount. Surface errors via toast so we can diagnose.
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (token) {
         try {
-          await Promise.race([
-            fetch("/api/learnings/embed", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
-            }),
-            new Promise((resolve) => setTimeout(resolve, 3000)),
-          ]);
-        } catch {
-          // non-fatal — embedding will be retried next capture
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const r = await fetch("/api/learnings/embed", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          const body = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            toast.error(`Embed failed (${r.status}): ${JSON.stringify(body).slice(0, 120)}`);
+          } else if (body.processed) {
+            toast.success(`Embedded ${body.processed} learning${body.processed > 1 ? "s" : ""}`);
+          } else if (body.disabled) {
+            toast.message(`Embeddings disabled: ${body.note || ""}`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "unknown";
+          toast.error(`Embed call error: ${msg}`);
         }
+      } else {
+        toast.message("No session token — embed skipped");
       }
       onSaved?.();
       onClose();

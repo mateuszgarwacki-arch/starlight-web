@@ -1,4 +1,5 @@
-Session 25d: Embed reliability + scope context label
+Session 25e: Embed visible toast diagnostics
 
-- LearningCapture: await embed call before closing sheet (3s race timeout) so fire-and-forget doesn't get cancelled on unmount
-- qry_learnings_enriched: context_label now prefixes "Scope:", "Mat:", "Stock:", "Supplier:", "Freelancer:" so each entity type is distinguishable at a glance; scope name truncated at 60 chars to keep labels readable
+- LearningCapture: embed call now surfaces result/error via toast so we can see exactly what's happening (success count, HTTP status, Voyage error, or abort)
+- AbortController with 5s timeout to prevent indefinite hang
+- Purely diagnostic — will be simplified once root cause is confirmed
