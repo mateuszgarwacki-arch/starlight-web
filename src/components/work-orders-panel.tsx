@@ -20,6 +20,7 @@ import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
+import { LearningTrigger } from "@/components/learning-trigger";
 
 // ============================================================
 // Types
@@ -702,6 +703,16 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                       <StatusBadge status={wo.status} />
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                      <LearningTrigger
+                        context={{
+                          work_order_id: wo.work_order_id,
+                          scope_item_id: scopeId,
+                          job_id: jobId,
+                          contextLabel: `WO — ${wo.activity_label || "Work Order"}`,
+                          contextSublabel: wo.description || undefined,
+                        }}
+                        title="Capture learning for this WO"
+                      />
                       <PrintTravellerButton wo={{ ...wo, activity_label: wo.activity_label || "No Activity" }} workOrders={sortedWOs.map(w => ({ ...w, activity_label: w.activity_label || "No Activity" }))} scope={scope!} scopeId={scopeId} jobId={jobId} onPrinted={() => loadAll()} />
                       {wo.status === "Not-Started" && <button onClick={() => updateWOStatus(wo.work_order_id, "Ready")} className="p-1.5 rounded-lg text-starlight-green hover:bg-starlight-green/10 transition-colors" title="Release as Ready"><ShieldCheck className="h-4 w-4" /></button>}
                       {(wo.status === "Not-Started" || wo.status === "Ready") && <button onClick={() => { if (confirm("Delete this work order?")) deleteWO(wo.work_order_id); }} className="p-1.5 rounded-lg text-faint hover:text-starlight-red hover:bg-starlight-red/10 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>}

@@ -1,1 +1,8 @@
-docs: TRACKER.md session 24 notes
+Session 25: Learnings knowledge capture system
+
+- tbl_learnings + tbl_learning_links + pgvector embeddings (live in prod DB)
+- 10-category taxonomy with per-category sub-fields
+- Capture bottom sheet + LearningsSection + LearningTrigger + LearningsTab
+- Wired into review page (Learnings tab), job detail, scope detail, WO rows, quote lines
+- /api/learnings/embed endpoint (OpenAI text-embedding-3-small, auto-disables if no key)
+- rpc_learnings_similar RPC + qry_learnings_enriched view ready for agent retrieval

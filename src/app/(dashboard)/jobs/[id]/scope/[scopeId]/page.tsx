@@ -12,6 +12,7 @@ import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
+import { LearningsSection } from "@/components/learnings-section";
 import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -375,6 +376,19 @@ export default function ScopeDetailPage() {
 
       {/* Cost analysis */}
       <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} refreshKey={costRefreshKey} />
+
+      {/* Learnings attached to this scope item */}
+      <LearningsSection
+        filterField="scope_item_id"
+        filterValue={scope.scope_item_id}
+        context={{
+          scope_item_id: scope.scope_item_id,
+          job_id: jobId,
+          contextLabel: `Scope — ${scope.item_name || "Unnamed"}`,
+          contextSublabel: scope.description || undefined,
+        }}
+        defaultCollapsed
+      />
 
       {/* Main content: inventory + prompt (left) | build plan (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">

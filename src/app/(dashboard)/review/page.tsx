@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { CompletedWorkTab } from "@/components/completed-work-tab";
+import { LearningsTab } from "@/components/learnings-tab";
 
 interface JobCost {
   job_id: number;
@@ -87,7 +88,7 @@ interface MatDetail {
   match_status: string;
 }
 
-type TabKey = "costs" | "time" | "flags" | "accuracy" | "materials" | "completed";
+type TabKey = "costs" | "time" | "flags" | "accuracy" | "materials" | "completed" | "learnings";
 
 export default function ReviewPage() {
   const supabase = createClient();
@@ -96,7 +97,7 @@ export default function ReviewPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get("tab") as TabKey;
-    if (urlTab && ["costs", "time", "flags", "accuracy", "materials", "completed"].includes(urlTab)) setTab(urlTab);
+    if (urlTab && ["costs", "time", "flags", "accuracy", "materials", "completed", "learnings"].includes(urlTab)) setTab(urlTab);
   }, []);
 
   const [jobCosts, setJobCosts] = useState<JobCost[]>([]);
@@ -416,6 +417,7 @@ export default function ReviewPage() {
           { key: "time" as TabKey, label: "Time Entries", count: timeEntries.length },
           { key: "flags" as TabKey, label: "Flags", count: flags.length },
           { key: "accuracy" as TabKey, label: "Estimate Accuracy", count: accuracy.length },
+          { key: "learnings" as TabKey, label: "Learnings", count: -1 },
           { key: "completed" as TabKey, label: "Completed", count: -1 },
         ]).map(t => (
           <button
@@ -787,6 +789,9 @@ export default function ReviewPage() {
           )}
         </div>
       )}
+
+      {/* TAB: Learnings */}
+      {tab === "learnings" && <LearningsTab />}
 
       {/* TAB: Completed Work */}
       {tab === "completed" && <CompletedWorkTab />}

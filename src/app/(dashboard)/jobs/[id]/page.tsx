@@ -20,6 +20,8 @@ import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog"
 import { PmQueriesJobPanel } from "@/components/pm-queries-job-panel";
 import { JobInvoicesPanel } from "@/components/job-invoices-panel";
 import { JobOrdersPanel } from "@/components/job-orders-panel";
+import { LearningsSection } from "@/components/learnings-section";
+import { LearningTrigger } from "@/components/learning-trigger";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -831,15 +833,26 @@ export default function JobDetailPage() {
 
         {/* Delete */}
         <td className="px-2 py-2.5">
-          {!hasScope && (
-            <button
-              onClick={() => handleDeleteLine(line)}
-              title="Delete line"
-              className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-0.5">
+            <LearningTrigger
+              context={{
+                quote_line_id: line.quote_line_id,
+                job_id: jobId,
+                contextLabel: `Quote line ${line.line_number || ""}`.trim(),
+                contextSublabel: (line.line_text || "").slice(0, 80),
+              }}
+              title="Capture learning for this quote line"
+            />
+            {!hasScope && (
+              <button
+                onClick={() => handleDeleteLine(line)}
+                title="Delete line"
+                className="p-1 text-faint hover:text-starlight-red hover:bg-starlight-red/10 rounded-md transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </td>
       </tr>
       {expandedPmEst === line.quote_line_id && (
@@ -997,6 +1010,20 @@ export default function JobDetailPage() {
 
       {/* PM Queries aggregation */}
       <PmQueriesJobPanel jobId={jobId} jobName={job?.job_name || ""} />
+
+      {/* Learnings attached to this job */}
+      {job && (
+        <LearningsSection
+          filterField="job_id"
+          filterValue={jobId}
+          context={{
+            job_id: jobId,
+            contextLabel: `Job ${job.job_number || jobId} — ${job.job_name || ""}`.trim(),
+            contextSublabel: job.client_name || undefined,
+          }}
+          defaultCollapsed
+        />
+      )}
 
       {/* Job Invoices & Orders — side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
