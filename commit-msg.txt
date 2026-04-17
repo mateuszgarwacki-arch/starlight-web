@@ -1,8 +1,8 @@
-Session 25: Learnings knowledge capture system
+Session 25b: Swap learnings embeddings from OpenAI to Voyage AI
 
-- tbl_learnings + tbl_learning_links + pgvector embeddings (live in prod DB)
-- 10-category taxonomy with per-category sub-fields
-- Capture bottom sheet + LearningsSection + LearningTrigger + LearningsTab
-- Wired into review page (Learnings tab), job detail, scope detail, WO rows, quote lines
-- /api/learnings/embed endpoint (OpenAI text-embedding-3-small, auto-disables if no key)
-- rpc_learnings_similar RPC + qry_learnings_enriched view ready for agent retrieval
+- tbl_learnings.embedding: VECTOR(1536) -> VECTOR(1024)
+- rpc_learnings_similar signature updated to 1024-dim
+- qry_learnings_enriched view recreated (was dependent on column)
+- /api/learnings/embed now calls Voyage voyage-3-lite instead of OpenAI
+- Env var: OPENAI_API_KEY -> VOYAGE_API_KEY
+- Rationale: Anthropic-recommended provider, one-vendor simplicity for future Claude agent layer, free tier covers realistic volume
