@@ -1,5 +1,5 @@
-Session 25e: Embed visible toast diagnostics
+Session 25f: Embed diagnostic endpoint + keepalive fetch
 
-- LearningCapture: embed call now surfaces result/error via toast so we can see exactly what's happening (success count, HTTP status, Voyage error, or abort)
-- AbortController with 5s timeout to prevent indefinite hang
-- Purely diagnostic — will be simplified once root cause is confirmed
+- GET /api/learnings/embed?diag=1 — unauth-required diagnostic that calls Voyage directly and reports what happens (key present? Voyage 200? dimensions?)
+- LearningCapture: fire-and-forget fetch now uses keepalive:true so the request survives component unmount (this is the real fix for embeds never running)
+- Error messages in POST route now include which step failed

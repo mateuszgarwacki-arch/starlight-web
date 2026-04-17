@@ -82,35 +82,17 @@ export function LearningCapture({ open, onClose, onSaved, context }: LearningCap
         return;
       }
       toast.success("Learning captured");
-      // Trigger embedding BEFORE closing the sheet so the request isn't
-      // cancelled by the unmount. Surface errors via toast so we can diagnose.
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (token) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const r = await fetch("/api/learnings/embed", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          const body = await r.json().catch(() => ({}));
-          if (!r.ok) {
-            toast.error(`Embed failed (${r.status}): ${JSON.stringify(body).slice(0, 120)}`);
-          } else if (body.processed) {
-            toast.success(`Embedded ${body.processed} learning${body.processed > 1 ? "s" : ""}`);
-          } else if (body.disabled) {
-            toast.message(`Embeddings disabled: ${body.note || ""}`);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "unknown";
-          toast.error(`Embed call error: ${msg}`);
-        }
-      } else {
-        toast.message("No session token — embed skipped");
-      }
+      // Fire-and-forget embed trigger. Not awaited — we don't want to block
+      // the UI. Results show up in background via embedding_status updates.
+      supabase.auth.getSession().then(({ data }) => {
+        const token = data.session?.access_token;
+        if (!token) return;
+        fetch("/api/learnings/embed", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          keepalive: true,  // survives page unload
+        }).catch(() => {});
+      });
       onSaved?.();
       onClose();
     } catch (e) {
