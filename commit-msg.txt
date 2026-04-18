@@ -1,33 +1,43 @@
-feat(mobile): Lead filter on tasks tab for planned-lead WOs
+feat(assignees): multi-person peer assignment on WOs + "On" filter
 
-Adds a distinct "Lead (N)" filter pill to the mobile Tasks screen
-alongside the existing All/Mine/Done/Painting pills.
+Replaces the single-value planned_lead_id dropdown with a multi-
+assignee chip picker. Peer model: all assignees are equal, no
+hierarchy. Mobile "Lead" filter renamed to "On" and now matches
+any WO where the user is an assignee (not just first/lead).
 
-Rationale: previously the only way to see WOs you'd been assigned
-as planned_lead_id was to have already started a timer or clocked
-time against them. This is fine for freelancers but doesn't match
-the mental model of a PM or foreman who plans work ahead.
+Schema:
+- tbl_wo_assignees (work_order_id, freelancer_id, assigned_at,
+  assigned_by) with UNIQUE(wo, freelancer). RLS: all authed users
+  can SELECT (needed for mobile filter); admin/manager/PM/foreman
+  can INSERT/DELETE.
+- Sync trigger trg_sync_planned_lead_from_assignees: on any insert
+  or delete, updates tbl_work_orders.planned_lead_id to the first
+  assignee (by assigned_at, tiebreak wo_assignee_id) or NULL if
+  none. This keeps existing workshop/capacity/traveller pages
+  working unchanged — they still read planned_lead_id.
+- Backfill: seeded tbl_wo_assignees from existing planned_lead_id
+  values (4 rows migrated, verified).
 
-"Mine" keeps its existing meaning (hands-on: open timer OR logged
-time) to avoid bloating it with not-yet-started WOs.
-"Lead" is a new, separate concept showing WOs where the current
-user is the planned lead, regardless of timer state.
+Desktop (work-orders-panel.tsx):
+- Added assigneesByWO state + assigneePickerWO state.
+- Phase-2 loader fetches from tbl_wo_assignees in parallel.
+- Replaced updatePlannedLead with addAssignee/removeAssignee.
+  Optimistic updates mirror the sync-trigger result so lead_name
+  on the WO card stays correct after add/remove.
+- Replaced single <select> with chip UI:
+  * Each assignee = pill with X to remove
+  * "+ Add" button → dropdown of remaining freelancers
+  * "Unassigned" placeholder when empty
 
-The Lead pill:
-- Only appears when the user actually has >=1 assigned WO, so
-  freelancers who never get set as lead never see it.
-- Uses the starlight-blue accent (not navy) to visually distinguish
-  intent/planning from action.
-- UserCheck icon + count so it reads as "what I'm expected to run".
+Mobile (app/m/page.tsx):
+- Fetches tbl_wo_assignees in parallel with other WO data.
+- TaskCard.planned_lead_id → assignee_ids: number[]
+- "Lead" pill → "On" pill.
+- Filter: t.assignee_ids.includes(myId)
+- Dropped planned_lead_id from the two tbl_work_orders SELECTs.
 
-Implementation:
-- Added planned_lead_id to both tbl_work_orders selects
-  (active Ready/In-Progress + Complete WOs from active jobs).
-- Added planned_lead_id to TaskCard interface.
-- Populated planned_lead_id when building TaskCards.
-- Extended filter type to include "assigned".
-- Added assignedTasks = activeTasks.filter(t => t.planned_lead_id === myId).
-- Added pill button (conditional on assignedTasks.length > 0).
-
-No schema changes, no RPC changes — planned_lead_id already existed
-and was already being populated via the desktop WO assignment UI.
+Not touched (deliberately): workshop page, capacity page, traveller
+PDF. All three continue to read planned_lead_id; the trigger keeps
+that column in sync with "first assignee" so there's no behaviour
+change for them. Deprecation of planned_lead_id can happen in a
+later pass once it's confirmed nothing else depends on it.

@@ -134,6 +134,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     const [jobItems, setJobItems] = useState<JobItemRow[]>([]);
     const [junctions, setJunctions] = useState<{ job_item_id: number; work_order_id: number }[]>([]);
     const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+    // Assignees: work_order_id → array of freelancer_ids (peer-model: all equal)
+    const [assigneesByWO, setAssigneesByWO] = useState<Record<number, number[]>>({});
+    // Track which WO has its assignee picker open
+    const [assigneePickerWO, setAssigneePickerWO] = useState<number | null>(null);
 
     // All BOM rows across all WOs (for consolidated view)
     const [allBomRows, setAllBomRows] = useState<(BomRow & { wo_label?: string; wo_color_idx?: number })[]>([]);
@@ -205,16 +209,24 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       let actData: any[] = [];
 
       if (woIds.length > 0) {
-        const [juncRes, scopeBomRes, woBomRes, actRes] = await Promise.all([
+        const [juncRes, scopeBomRes, woBomRes, actRes, assigneesRes] = await Promise.all([
           supabase.from("tbl_jobitem_workorder").select("job_item_id, work_order_id").in("work_order_id", woIds),
           supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id"),
           supabase.from("tbl_wo_bom").select("*").in("work_order_id", woIds).order("bom_id"),
           supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
+          supabase.from("tbl_wo_assignees").select("work_order_id, freelancer_id").in("work_order_id", woIds),
         ]);
         juncData = juncRes.data || [];
         scopeBomData = (scopeBomRes.data || []) as BomRow[];
         woBomData = (woBomRes.data || []) as BomRow[];
         actData = actRes.data || [];
+        // Build assignees map
+        const assMap: Record<number, number[]> = {};
+        (assigneesRes.data || []).forEach((a: any) => {
+          if (!assMap[a.work_order_id]) assMap[a.work_order_id] = [];
+          assMap[a.work_order_id].push(a.freelancer_id);
+        });
+        setAssigneesByWO(assMap);
       } else {
         // No WOs — just get scope-level BOM
         const { data } = await supabase.from("tbl_wo_bom").select("*").eq("scope_item_id", scopeId).is("work_order_id", null).order("bom_id");
@@ -373,15 +385,38 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       else { setWorkOrders(prev => prev.map(w => w.work_order_id === woId ? { ...w, status: "Voided", void_reason: reason, updated_at: result.data?.updated_at } : w)); }
       setVoidDialog(null); setVoidReason("");
     };
-    const updatePlannedLead = async (woId: number, freelancerId: number | null) => {
-      const wo = workOrders.find(w => w.work_order_id === woId);
-      const ctx = await getAuditContext(supabase);
-      const result = await auditedUpdate(ctx, "tbl_work_orders", woId, { planned_lead_id: freelancerId }, jobId, (wo as any)?.updated_at ?? null);
-      if (result.conflict) { toast.warning("WO modified — reloading"); await loadAll(); }
-      else {
-        const name = freelancerId ? freelancers.find(f => f.freelancer_id === freelancerId)?.freelancer_name || null : null;
-        setWorkOrders(prev => prev.map(w => w.work_order_id === woId ? { ...w, planned_lead_id: freelancerId, lead_name: name, updated_at: result.data?.updated_at } : w));
+    const addAssignee = async (woId: number, freelancerId: number) => {
+      const current = assigneesByWO[woId] || [];
+      if (current.includes(freelancerId)) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("tbl_wo_assignees").insert({
+        work_order_id: woId,
+        freelancer_id: freelancerId,
+        assigned_by: user?.id || null,
+      });
+      if (error) { toast.error("Assign failed: " + error.message); return; }
+      setAssigneesByWO(prev => ({ ...prev, [woId]: [...current, freelancerId] }));
+      // Reflect sync-trigger result in local WO state so "lead_name" stays correct
+      if (current.length === 0) {
+        const name = freelancers.find(f => f.freelancer_id === freelancerId)?.freelancer_name || null;
+        setWorkOrders(prev => prev.map(w => w.work_order_id === woId ? { ...w, planned_lead_id: freelancerId, lead_name: name } : w));
       }
+      const name = freelancers.find(f => f.freelancer_id === freelancerId)?.freelancer_name || "";
+      toast.success(`${name} assigned`);
+    };
+    const removeAssignee = async (woId: number, freelancerId: number) => {
+      const { error } = await supabase
+        .from("tbl_wo_assignees")
+        .delete()
+        .eq("work_order_id", woId)
+        .eq("freelancer_id", freelancerId);
+      if (error) { toast.error("Remove failed: " + error.message); return; }
+      const next = (assigneesByWO[woId] || []).filter(id => id !== freelancerId);
+      setAssigneesByWO(prev => ({ ...prev, [woId]: next }));
+      // Reflect sync-trigger result: planned_lead_id becomes the new "first" assignee (or null)
+      const newLead = next[0] ?? null;
+      const name = newLead ? freelancers.find(f => f.freelancer_id === newLead)?.freelancer_name || null : null;
+      setWorkOrders(prev => prev.map(w => w.work_order_id === woId ? { ...w, planned_lead_id: newLead, lead_name: name } : w));
     };
     const updateEstimatedHrs = async (woId: number, hrs: string) => {
       const val = hrs ? parseFloat(hrs) : null;
@@ -741,11 +776,35 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                             <input type="number" step="0.5" defaultValue={wo.estimated_duration_hrs ?? ""} onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_hrs`)} onBlur={e => { presenceSetEditing(null); updateEstimatedHrs(wo.work_order_id, e.target.value); }} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Planned Lead</label>
-                            <select value={wo.planned_lead_id || ""} onChange={e => updatePlannedLead(wo.work_order_id, e.target.value ? Number(e.target.value) : null)} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
-                              <option value="">Unassigned</option>
-                              {freelancers.map(f => <option key={f.freelancer_id} value={f.freelancer_id}>{f.freelancer_name}</option>)}
-                            </select>
+                            <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Assigned to</label>
+                            <div className="flex flex-wrap gap-1 min-h-[30px] p-1 border border-subtle rounded bg-surface">
+                              {(assigneesByWO[wo.work_order_id] || []).length === 0 && assigneePickerWO !== wo.work_order_id && (
+                                <span className="text-xs text-faint italic px-1 py-0.5">Unassigned</span>
+                              )}
+                              {(assigneesByWO[wo.work_order_id] || []).map(fid => {
+                                const f = freelancers.find(fr => fr.freelancer_id === fid);
+                                return (
+                                  <span key={fid} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-starlight-blue/10 text-starlight-blue rounded">
+                                    {f?.freelancer_name || `#${fid}`}
+                                    <button type="button" onClick={() => removeAssignee(wo.work_order_id, fid)} className="hover:text-starlight-red" title="Remove">
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                              {assigneePickerWO === wo.work_order_id ? (
+                                <select autoFocus value="" onChange={e => { if (e.target.value) { addAssignee(wo.work_order_id, Number(e.target.value)); setAssigneePickerWO(null); } }} onBlur={() => setAssigneePickerWO(null)} className="text-xs px-1 py-0.5 border border-subtle rounded bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue">
+                                  <option value="">Pick person...</option>
+                                  {freelancers.filter(f => !(assigneesByWO[wo.work_order_id] || []).includes(f.freelancer_id)).map(f => (
+                                    <option key={f.freelancer_id} value={f.freelancer_id}>{f.freelancer_name}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button type="button" onClick={() => setAssigneePickerWO(wo.work_order_id)} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted hover:text-starlight-blue hover:bg-starlight-blue/5 rounded transition-colors" title="Add person">
+                                  <Plus className="h-3 w-3" /> Add
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div>
                             <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Complexity</label>

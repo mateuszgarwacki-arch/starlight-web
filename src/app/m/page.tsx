@@ -21,7 +21,7 @@ interface TaskCard {
   workers: { freelancer_id: number; name: string; open: boolean }[];
   myOpenEntry: number | null;
   paint_notes: string | null;
-  planned_lead_id: number | null;
+  assignee_ids: number[];
 }
 
 interface ScopeGroup {
@@ -69,7 +69,7 @@ export default function MobileTaskList() {
     // Load Ready + In-Progress WOs
     const { data: activeWos } = await supabase
       .from("tbl_work_orders")
-      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes, planned_lead_id")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
       .in("status", ["Ready", "In-Progress"]);
     // Load Complete WOs from all active jobs (for Done filter + painting)
     const { data: activeJobs } = await supabase
@@ -81,7 +81,7 @@ export default function MobileTaskList() {
     if (activeJobIds.length > 0) {
       const { data } = await supabase
         .from("tbl_work_orders")
-        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes, planned_lead_id")
+        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
         .eq("status", "Complete")
         .in("job_id", activeJobIds);
       completeWos = data || [];
@@ -94,12 +94,13 @@ export default function MobileTaskList() {
     const scopeIds = [...new Set(wos.map(w => w.scope_item_id).filter(Boolean))];
     const jobIds = [...new Set(wos.map(w => w.job_id).filter(Boolean))];
 
-    const [actRes, scopeRes, jobRes, timeRes, activeWorkersRes] = await Promise.all([
+    const [actRes, scopeRes, jobRes, timeRes, activeWorkersRes, assigneesRes] = await Promise.all([
       supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
       supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds),
       supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_end_timestamp").in("work_order_id", woIds).is("archived_at", null),
       supabase.rpc("rpc_active_workers"),
+      supabase.from("tbl_wo_assignees").select("work_order_id, freelancer_id").in("work_order_id", woIds),
     ]);
 
     const allActIds = [
@@ -119,6 +120,13 @@ export default function MobileTaskList() {
     ((activeWorkersRes.data || []) as any[]).forEach((aw: any) => {
       if (!activeWorkersByWO[aw.work_order_id]) activeWorkersByWO[aw.work_order_id] = [];
       activeWorkersByWO[aw.work_order_id].push({ freelancer_id: aw.freelancer_id, name: aw.freelancer_name });
+    });
+
+    // Build assignees map from tbl_wo_assignees (peer-model: all equal)
+    const assigneesByWO: Record<number, number[]> = {};
+    ((assigneesRes.data || []) as any[]).forEach((a: any) => {
+      if (!assigneesByWO[a.work_order_id]) assigneesByWO[a.work_order_id] = [];
+      assigneesByWO[a.work_order_id].push(a.freelancer_id);
     });
 
     const actByWO: Record<number, any[]> = {};
@@ -171,7 +179,7 @@ export default function MobileTaskList() {
         workers,
         myOpenEntry: myOpen ? myOpen.entry_id : null,
         paint_notes: wo.paint_notes || null,
-        planned_lead_id: wo.planned_lead_id ?? null,
+        assignee_ids: assigneesByWO[wo.work_order_id] || [],
       };
     });
 
@@ -187,11 +195,11 @@ export default function MobileTaskList() {
   const doneTasks = tasks.filter(t => t.status === "Complete");
   const paintingCount = tasks.filter(t => t.paint_notes).length;
   const paintingTasks = tasks.filter(t => t.paint_notes);
-  const assignedTasks = activeTasks.filter(t => t.planned_lead_id === myId);
+  const onTasks = activeTasks.filter(t => t.assignee_ids.includes(myId));
   const filtered = filter === "mine"
     ? activeTasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
     : filter === "assigned"
-    ? assignedTasks
+    ? onTasks
     : filter === "painting"
     ? paintingTasks
     : filter === "done"
@@ -249,13 +257,13 @@ export default function MobileTaskList() {
           >
             Mine
           </button>
-          {assignedTasks.length > 0 && (
+          {onTasks.length > 0 && (
             <button
               onClick={() => setFilter(filter === "assigned" ? "all" : "assigned")}
               className={"px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 " + (filter === "assigned" ? "bg-starlight-blue text-white" : "text-starlight-blue")}
-              title="Work Orders you're set as planned lead on"
+              title="Work Orders you're assigned to"
             >
-              <UserCheck className="h-3 w-3" /> Lead ({assignedTasks.length})
+              <UserCheck className="h-3 w-3" /> On ({onTasks.length})
             </button>
           )}
           {doneTasks.length > 0 && (
