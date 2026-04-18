@@ -1,31 +1,32 @@
-feat(load-list): per-job load list with pack/load tracking
+feat(load-list): truck grouping + bulk assign + per-truck print
 
-Adds /reports/load-list/[jobId] — a zone-grouped load list
-unifying job items (bespoke builds + stock hire) with loose
-scope-level BOM materials. Excludes WO-level BOM (shop
-consumables) and BOM rows already paired with a job item
-(prevents double-counting).
+Minimal multi-truck support for the load list. Supplements — does
+not replace — the existing load documentation system.
 
-Data layer (landed in previous session, verified in DB):
-- tbl_load_events: (job_id, source_table, source_id) unique key,
-  tracks pending → packed → loaded with who/when stamps. RLS
-  restricts to admin/manager/PM/foreman.
-- rpc_load_list(p_job_id): unions job items + loose scope BOM,
-  LEFT JOINs tbl_load_events for current state, groups by zone.
+Schema:
+- tbl_load_groups: per-job named containers ("Truck 1 — Main",
+  "Client collection", etc.) with optional driver + departure time.
+  Admin/manager/PM create/edit/delete; foreman read-only.
+- tbl_load_events.load_group_id: nullable FK to tbl_load_groups
+  (NULL = unassigned). On group delete, items fall back to NULL
+  via ON DELETE SET NULL.
+- rpc_load_list now returns { job, groups, items } — items include
+  load_group_id so the UI can render Zone → Truck → Items.
 
-UI features:
-- Per-item stepper: click icon to advance pending → packed → loaded.
-  Each transition stamps packed_by/loaded_by + timestamp via UPSERT.
-- Zone-level "Mark all loaded" for fast turnaround.
-- Reset button returns an item to pending (clears stamps).
-- Summary bar: total / pending / packed / loaded counts.
-- Collapsible zones.
-- Print view: clean A4 with left-side checkboxes, crossed-out loaded
-  items, signature block for packed-by / loaded-by at the bottom.
-
-Also exposes item_source, stock_item_id, source_item_id in
-qry_jobitems_withcoverage (fixed earlier) — load list page
-shows "From stock" / "Bespoke build" badges correctly.
-
-Added Truck-icon "Load List" button to job header toolbar on
-jobs/[id] page, next to PresenceAvatars.
+UI (rewrite of /reports/load-list/[jobId]):
+- Truck manager strip: add/delete trucks, per-truck print button,
+  shows name/driver/departure/progress (loaded/total).
+- Bulk selection via row checkboxes. Floating "N selected" action
+  bar (sticky top) with buttons to assign to any truck or unassign.
+  Bulk upsert to tbl_load_events preserves existing status/stamps.
+- On-screen grouping: Zone → Truck → Items (Unassigned bucket
+  appears first within each zone if populated). This gives PMs
+  the cross-job-zone overview requested.
+- Print modes:
+  * "Print everything" (header): all trucks + unassigned, one per page
+  * "Print all trucks" (when groups exist): same as above, explicit
+  * Per-truck print icon: single truck only
+  Each printed page: truck header (name/driver/departure), then
+  zones within as subsections, then signature block (Packed by /
+  Loaded by). break-before-page between trucks, break-inside-avoid
+  on zone blocks and signature.
