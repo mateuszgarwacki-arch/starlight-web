@@ -1,18 +1,31 @@
-feat(audit): extend revert to cover archive entries
+feat(load-list): per-job load list with pack/load tracking
 
-- Add auditedArchive() helper in lib/audit.ts — single source of truth
-  for soft-delete. Writes one audit row with action_type=archive and a
-  full snapshot in old_value (replaces the raw update + manual audit
-  insert pattern previously used only for time entries).
-- Extend revertAuditEntry() to handle action_type=archive. On revert,
-  nulls archived_at/archived_by/archive_reason so the record comes
-  back into active data and cost calculations.
-- Refactor handleArchive() on /crew/[id] page to use auditedArchive()
-  instead of raw update + manual audit insert.
-- Settings → Audit Log UI: show "Restore" button on archive rows
-  (was hidden), add _archive/_unarchive badge treatment, pass
-  action_type to handleRevert for context-appropriate confirm
-  message ("Restore this archived record?" vs "Revert this change?").
+Adds /reports/load-list/[jobId] — a zone-grouped load list
+unifying job items (bespoke builds + stock hire) with loose
+scope-level BOM materials. Excludes WO-level BOM (shop
+consumables) and BOM rows already paired with a job item
+(prevents double-counting).
 
-Closes gap where admins could archive a time entry but had no way to
-un-archive it short of a manual SQL update.
+Data layer (landed in previous session, verified in DB):
+- tbl_load_events: (job_id, source_table, source_id) unique key,
+  tracks pending → packed → loaded with who/when stamps. RLS
+  restricts to admin/manager/PM/foreman.
+- rpc_load_list(p_job_id): unions job items + loose scope BOM,
+  LEFT JOINs tbl_load_events for current state, groups by zone.
+
+UI features:
+- Per-item stepper: click icon to advance pending → packed → loaded.
+  Each transition stamps packed_by/loaded_by + timestamp via UPSERT.
+- Zone-level "Mark all loaded" for fast turnaround.
+- Reset button returns an item to pending (clears stamps).
+- Summary bar: total / pending / packed / loaded counts.
+- Collapsible zones.
+- Print view: clean A4 with left-side checkboxes, crossed-out loaded
+  items, signature block for packed-by / loaded-by at the bottom.
+
+Also exposes item_source, stock_item_id, source_item_id in
+qry_jobitems_withcoverage (fixed earlier) — load list page
+shows "From stock" / "Bespoke build" badges correctly.
+
+Added Truck-icon "Load List" button to job header toolbar on
+jobs/[id] page, next to PresenceAvatars.

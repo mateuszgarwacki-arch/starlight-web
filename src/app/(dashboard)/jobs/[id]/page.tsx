@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -897,7 +897,17 @@ export default function JobDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           All Jobs
         </Link>
-        <PresenceAvatars others={presenceOthers} />
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/reports/load-list/${jobId}`}
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-starlight-blue/10 text-starlight-blue hover:bg-starlight-blue/20 rounded-lg transition-colors"
+            title="Load list — items to pack for this job"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            Load List
+          </Link>
+          <PresenceAvatars others={presenceOthers} />
+        </div>
       </div>
 
       {/* Job header — editable */}
