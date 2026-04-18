@@ -1,32 +1,33 @@
-feat(load-list): truck grouping + bulk assign + per-truck print
+feat(mobile): Lead filter on tasks tab for planned-lead WOs
 
-Minimal multi-truck support for the load list. Supplements — does
-not replace — the existing load documentation system.
+Adds a distinct "Lead (N)" filter pill to the mobile Tasks screen
+alongside the existing All/Mine/Done/Painting pills.
 
-Schema:
-- tbl_load_groups: per-job named containers ("Truck 1 — Main",
-  "Client collection", etc.) with optional driver + departure time.
-  Admin/manager/PM create/edit/delete; foreman read-only.
-- tbl_load_events.load_group_id: nullable FK to tbl_load_groups
-  (NULL = unassigned). On group delete, items fall back to NULL
-  via ON DELETE SET NULL.
-- rpc_load_list now returns { job, groups, items } — items include
-  load_group_id so the UI can render Zone → Truck → Items.
+Rationale: previously the only way to see WOs you'd been assigned
+as planned_lead_id was to have already started a timer or clocked
+time against them. This is fine for freelancers but doesn't match
+the mental model of a PM or foreman who plans work ahead.
 
-UI (rewrite of /reports/load-list/[jobId]):
-- Truck manager strip: add/delete trucks, per-truck print button,
-  shows name/driver/departure/progress (loaded/total).
-- Bulk selection via row checkboxes. Floating "N selected" action
-  bar (sticky top) with buttons to assign to any truck or unassign.
-  Bulk upsert to tbl_load_events preserves existing status/stamps.
-- On-screen grouping: Zone → Truck → Items (Unassigned bucket
-  appears first within each zone if populated). This gives PMs
-  the cross-job-zone overview requested.
-- Print modes:
-  * "Print everything" (header): all trucks + unassigned, one per page
-  * "Print all trucks" (when groups exist): same as above, explicit
-  * Per-truck print icon: single truck only
-  Each printed page: truck header (name/driver/departure), then
-  zones within as subsections, then signature block (Packed by /
-  Loaded by). break-before-page between trucks, break-inside-avoid
-  on zone blocks and signature.
+"Mine" keeps its existing meaning (hands-on: open timer OR logged
+time) to avoid bloating it with not-yet-started WOs.
+"Lead" is a new, separate concept showing WOs where the current
+user is the planned lead, regardless of timer state.
+
+The Lead pill:
+- Only appears when the user actually has >=1 assigned WO, so
+  freelancers who never get set as lead never see it.
+- Uses the starlight-blue accent (not navy) to visually distinguish
+  intent/planning from action.
+- UserCheck icon + count so it reads as "what I'm expected to run".
+
+Implementation:
+- Added planned_lead_id to both tbl_work_orders selects
+  (active Ready/In-Progress + Complete WOs from active jobs).
+- Added planned_lead_id to TaskCard interface.
+- Populated planned_lead_id when building TaskCards.
+- Extended filter type to include "assigned".
+- Added assignedTasks = activeTasks.filter(t => t.planned_lead_id === myId).
+- Added pill button (conditional on assignedTasks.length > 0).
+
+No schema changes, no RPC changes — planned_lead_id already existed
+and was already being populated via the desktop WO assignment UI.

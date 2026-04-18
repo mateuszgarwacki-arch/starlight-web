@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
 import { useRouter } from "next/navigation";
-import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight } from "lucide-react";
+import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight, UserCheck } from "lucide-react";
 
 interface TaskCard {
   work_order_id: number;
@@ -21,6 +21,7 @@ interface TaskCard {
   workers: { freelancer_id: number; name: string; open: boolean }[];
   myOpenEntry: number | null;
   paint_notes: string | null;
+  planned_lead_id: number | null;
 }
 
 interface ScopeGroup {
@@ -42,7 +43,7 @@ export default function MobileTaskList() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"mine" | "all" | "painting" | "done">("all");
+  const [filter, setFilter] = useState<"mine" | "all" | "assigned" | "painting" | "done">("all");
   const [myId, setMyId] = useState<number>(0);
   const [myName, setMyName] = useState("");
   const [collapsedJobs, setCollapsedJobs] = useState<Set<number>>(new Set());
@@ -68,7 +69,7 @@ export default function MobileTaskList() {
     // Load Ready + In-Progress WOs
     const { data: activeWos } = await supabase
       .from("tbl_work_orders")
-      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes, planned_lead_id")
       .in("status", ["Ready", "In-Progress"]);
     // Load Complete WOs from all active jobs (for Done filter + painting)
     const { data: activeJobs } = await supabase
@@ -80,7 +81,7 @@ export default function MobileTaskList() {
     if (activeJobIds.length > 0) {
       const { data } = await supabase
         .from("tbl_work_orders")
-        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes, planned_lead_id")
         .eq("status", "Complete")
         .in("job_id", activeJobIds);
       completeWos = data || [];
@@ -170,6 +171,7 @@ export default function MobileTaskList() {
         workers,
         myOpenEntry: myOpen ? myOpen.entry_id : null,
         paint_notes: wo.paint_notes || null,
+        planned_lead_id: wo.planned_lead_id ?? null,
       };
     });
 
@@ -185,8 +187,11 @@ export default function MobileTaskList() {
   const doneTasks = tasks.filter(t => t.status === "Complete");
   const paintingCount = tasks.filter(t => t.paint_notes).length;
   const paintingTasks = tasks.filter(t => t.paint_notes);
+  const assignedTasks = activeTasks.filter(t => t.planned_lead_id === myId);
   const filtered = filter === "mine"
     ? activeTasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
+    : filter === "assigned"
+    ? assignedTasks
     : filter === "painting"
     ? paintingTasks
     : filter === "done"
@@ -244,6 +249,15 @@ export default function MobileTaskList() {
           >
             Mine
           </button>
+          {assignedTasks.length > 0 && (
+            <button
+              onClick={() => setFilter(filter === "assigned" ? "all" : "assigned")}
+              className={"px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 " + (filter === "assigned" ? "bg-starlight-blue text-white" : "text-starlight-blue")}
+              title="Work Orders you're set as planned lead on"
+            >
+              <UserCheck className="h-3 w-3" /> Lead ({assignedTasks.length})
+            </button>
+          )}
           {doneTasks.length > 0 && (
             <button
               onClick={() => setFilter(filter === "done" ? "all" : "done")}
