@@ -2409,3 +2409,67 @@ Workshop page, capacity page and traveller PDF generator still read `planned_lea
 ### Deliverable quality reflection
 Efficient session for the amount shipped. The Project Pack build was messy in the middle — I flailed on strategy (live DB connection? anon key? embed data?) before committing to "query via MCP, stage as JSON, build in Python". Lesson: when stuck between three approaches, pick the one that completes in one session even if it's the least elegant. Reusability comes from *having shipped v1*, not from a prettier abstraction. Cost me probably 20 minutes of wheel-spinning.
 
+
+
+
+### Session 27 (19 Apr 2026) — Promote-to-Stock: from flag to action
+
+1 commit, 4 files changed. Fixed a dead-letter feature: the "→ STOCK" toggle wrote `notes = 'PROMOTE_TO_STOCK'` as an intent flag, but no trigger or hook ever acted on it, so bespoke items flagged for promotion stayed bespoke forever.
+
+**Why the change:** Mateusz flagged 9 items on Grosvenor (job 8) for promotion. He needed to allocate those items — specifically the Grosvenor Straight Bars — to another job scheduled *before* Grosvenor's event date. With a "wait until WOs complete" model, cross-allocation is impossible. Revised model: click → stock exists now.
+
+**Schema:**
+- `ALTER TABLE tbl_stock_items ADD COLUMN source_job_item_id INTEGER REFERENCES tbl_job_items(item_id) ON DELETE SET NULL`
+- Partial index `idx_stock_items_source_job_item WHERE source_job_item_id IS NOT NULL`
+
+**New helper (`src/lib/promote-to-stock.ts`):**
+- `promoteJobItemToStock(supabase, item)` — creates OR merges into existing stock row
+- Dedup: finds other `item_source='promoted'` job items on the same job with the exact same description; if found, bumps that stock row's `stock_quantity` instead of creating a second row
+- New row: `product_code = PROMO-{item_id}`, `stock_quantity = item.quantity`, `active=true`, `source_job_item_id = item.item_id`, `hire_cost_day/week = null` (PM prices on stock page)
+- Updates job item: `stock_item_id`, `stock_reference`, `item_source='promoted'`
+- Clears legacy `notes='PROMOTE_TO_STOCK'` flag only if still present (never wipes real user notes)
+
+**Call sites rewired:**
+- Scope page left-column "→ STOCK" button (`src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx`) — calls helper, toasts created/merged result, then `woRef.current?.refresh()`
+- `work-orders-panel.tsx` `addBespokeItem` — if "Also add to stock catalogue" checkbox ticked, calls helper immediately after insert. Checkbox label changed from "Add to stock catalogue when complete" (old lie) to "Also add to stock catalogue" (accurate)
+- `job-items-table.tsx` not updated — dead code, not imported anywhere. Flagged for deletion in a future cleanup
+
+**Backfill (job 8 Grosvenor — the 9 flagged items):**
+- 9 job items with `notes='PROMOTE_TO_STOCK'` → 7 deduplicated stock rows (stock_ids 3460–3466)
+- Grosvenor Straight Bar 6ft: items 29 + 33 + 34 merged into one stock row qty 16 (`PROMO-G-29`)
+- Trellis panel 3.6m × 4 (`PROMO-G-28`), Skybond Mirror Fascia × 6 (`PROMO-G-30`), X Handrail × 2 (`PROMO-G-38`), Back bar back × 6 (`PROMO-G-103`), Back bar shelves × 30 (`PROMO-G-102`), Back bar sides × 12 (`PROMO-G-101`)
+- All 9 job items now carry `stock_item_id`, `stock_reference`, `item_source='promoted'`, and `notes` cleared
+
+**What's deferred:**
+- Stock availability / build-state badge ("In build: 2/5 WOs complete" vs "Built and available") — a view over `tbl_stock_items` joined to its source job item's WOs. Useful when other PMs pick promoted stock that isn't physically on the shelf yet. Low urgency while Mateusz is the only PM promoting.
+- `job-items-table.tsx` deletion — dead code but safe to leave; deletion is cosmetic cleanup.
+
+### New/Modified Files (Session 27)
+| File | Purpose |
+|------|---------|
+| `src/lib/promote-to-stock.ts` | NEW — shared helper for immediate promote with dedup |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Left-column "→ STOCK" button calls helper |
+| `src/components/work-orders-panel.tsx` | `addBespokeItem` calls helper on checkbox tick; checkbox relabelled |
+| `TRACKER.md` | This entry |
+
+### SQL Run (Session 27)
+```sql
+ALTER TABLE tbl_stock_items
+  ADD COLUMN IF NOT EXISTS source_job_item_id INTEGER
+  REFERENCES tbl_job_items(item_id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_stock_items_source_job_item
+  ON tbl_stock_items(source_job_item_id)
+  WHERE source_job_item_id IS NOT NULL;
+
+-- Backfill: DO-block loop groups job_items by description,
+-- inserts one stock row per group, links all job_items to it, clears the flag.
+-- 9 job items → 7 stock rows (PROMO-G-28..103).
+```
+
+### Conventions Added (Session 27)
+- **Promote-to-stock is immediate, not deferred**: clicking "→ STOCK" creates a `tbl_stock_items` row synchronously and links the job item back. No completion gate, no flag-and-wait. The `item_source='promoted'` value is the signal, not a notes-field string
+- **Dedup on promote**: within a single job, items sharing an exact-match description promote into ONE stock row (quantity sums). Prevents three "Grosvenor Straight Bar, 6ft" stock rows for what's conceptually one product. Fuzzy matching is deliberately NOT applied — exact-match is the right bar for auto-merge
+- **`tbl_stock_items.source_job_item_id`**: traceability FK on promoted stock, pointing to the job item that first caused the stock row to exist. `ON DELETE SET NULL` — deleting the source job item doesn't destroy the stock row (it may now have physical inventory; PM can deactivate manually). For catalogue-seeded stock this field is null
+- **Never wipe `notes` wholesale on promote**: the helper only clears `notes` when it exactly equals the legacy `PROMOTE_TO_STOCK` flag. Real user notes on job items are preserved
+- **Product code pattern for promoted stock**: `PROMO-{item_id}`. `tbl_stock_items.product_code` has no unique constraint (per S16 learning), so collisions aren't a risk — but using the item_id makes the code traceable to the originating item by eye
