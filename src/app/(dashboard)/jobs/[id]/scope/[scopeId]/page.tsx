@@ -17,6 +17,7 @@ import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { promoteJobItemToStock } from "@/lib/promote-to-stock";
 import { recordJobVisit } from "@/lib/job-history";
 import { usePresence } from "@/lib/use-presence";
 import { PresenceAvatars } from "@/components/presence-avatars";
@@ -448,9 +449,26 @@ export default function ScopeDetailPage() {
                           className="flex-1 px-1.5 py-0.5 text-[10px] text-muted border-0 border-b border-transparent hover:border-subtle focus:border-starlight-blue focus:outline-none bg-transparent placeholder:text-faint" />
                         {!isStock && (
                           <button
-                            onClick={() => woRef.current?.updateJobItem(item.item_id, "notes", isPromote ? null : "PROMOTE_TO_STOCK")}
-                            className={"text-[8px] font-semibold px-1.5 py-0.5 rounded shrink-0 transition-colors " + (isPromote ? "bg-starlight-green/15 text-starlight-green hover:bg-starlight-green/25" : "bg-surface-mid text-faint hover:text-muted hover:bg-surface-hi")}
-                            title={isPromote ? "Remove from stock promotion" : "Promote to stock catalogue after build"}
+                            onClick={async () => {
+                              const res = await promoteJobItemToStock(supabase, {
+                                item_id: item.item_id,
+                                job_id: jobId,
+                                description: item.description,
+                                quantity: item.quantity,
+                              });
+                              if (res.ok) {
+                                toast.success(
+                                  res.action === "merged"
+                                    ? `Added to stock: ${res.description} (now ${res.newQuantity})`
+                                    : `Promoted to stock: ${res.description} × ${res.newQuantity}`
+                                );
+                                woRef.current?.refresh();
+                              } else {
+                                toast.error("Promote failed: " + res.error);
+                              }
+                            }}
+                            className="text-[8px] font-semibold px-1.5 py-0.5 rounded shrink-0 transition-colors bg-surface-mid text-faint hover:text-starlight-green hover:bg-starlight-green/10"
+                            title="Promote to stock catalogue — creates a stock row you can allocate to other jobs"
                           >
                             → STOCK
                           </button>

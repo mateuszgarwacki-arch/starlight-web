@@ -2240,3 +2240,172 @@ Previous discussion (same session, pre-implementation): identified that PMs/boss
 ### Deliverable quality reflection
 This was a fraught session with several debugging loops (dim mismatch, fetch cancellation, cached JS, device switching between mobile and desktop). Final system works end-to-end but the path wasn't clean. Honest grade: B+ on the code, D on the debugging approach. Should have added diagnostic output earlier and run end-to-end verification before declaring victory.
 
+
+
+## Session 26 — 18 April 2026
+
+### Summary
+Five features shipped, all serving the "production reality" layer — places where PMs and foremen need shared ground truth: (1) audit-log revert extended to archive actions so soft-deletes can be undone; (2) load list system — zone-grouped packing checklist unifying job items and loose BOM materials, with per-truck grouping for multi-vehicle departures; (3) multi-assignee WO model — replacing single `planned_lead_id` with a proper peer model (`tbl_wo_assignees`) behind a sync trigger that keeps workshop/capacity/traveller compatible; (4) mobile "On" filter — freelancers see only work they're assigned to; (5) Project Pack xlsx — standalone handoff document for external PMs on Grosvenor wedding, with quote lines as the spine and empty templates matching their existing pack structure.
+
+### Strategic context
+We've had the data model for a while; we haven't had the export surface. This session filled that gap in two directions: internally (load list, peer assignees, mobile filter — making the existing data useful during the build) and externally (Project Pack — making our data useful to people outside the system). The peer-assignee change is structurally the biggest — it replaces a scalar field with a relation without breaking any downstream consumer, via trigger. That pattern will recur.
+
+### What landed
+
+#### Audit log — Revert for archived entries ✅
+- New `auditedArchive(ctx, tableName, recordId, reason, jobId)` helper in `src/lib/audit.ts` — single source of truth for soft-delete with audit trail
+- Writes audit row with `action_type="archive"`, record snapshot in `old_value`, reason in `new_value`
+- Extended `revertAuditEntry()` to handle `action_type="archive"` — nulls `archived_at`/`archived_by`/`archive_reason` when restored
+- Refactored `handleArchive` in `src/app/(dashboard)/crew/[id]/page.tsx` to use the new helper
+- Settings → Audit Log UI shows "Restore" button on archive rows with `_archive`/`_unarchive` badge treatment
+- Fixed `qry_jobitems_withcoverage` view — rebuilt with `security_invoker=true`, exposed `item_source`, `stock_item_id`, `source_item_id` so Stock/Bespoke badges render correctly
+
+
+
+#### Load list system ✅
+- New page `/reports/load-list/[jobId]` — zone-grouped load list unifying job items + loose scope-level BOM materials
+- Excludes WO-level BOM and BOM paired with job items (avoids double-count — those items are already represented via their job item)
+- `tbl_load_events(job_id, source_table, source_id)` with UNIQUE — tracks `pending → packed → loaded` state per item
+- RLS: admin/manager/PM/foreman can insert/update/delete; all authenticated can read
+- `rpc_load_list(p_job_id)` unions job_items + loose scope BOM, groups by zone
+- UI: per-item stepper (pending → packed → loaded), zone "Mark all loaded", status pills, reset button, summary bar, collapsible zones
+- Print view: checkbox layout, loaded items crossed out, signature block at bottom
+- "Load List" button on job header
+- Tested on Grosvenor: 73 items across the active zones
+
+#### Load list — Truck grouping (supplement) ✅
+- `tbl_load_groups` per-job named containers: name, description, driver, departure_at, sort_order
+- RLS: PMs create/edit/delete; foreman read-only
+- `tbl_load_events.load_group_id` nullable FK (ON DELETE SET NULL) — a load event can belong to a truck or be unassigned
+- `rpc_load_list` extended to return `{ job, groups, items }` for unified hydration in one round trip
+- UI: truck strip at top; bulk selection with sticky action bar; grouping hierarchy Zone → Truck → Items; per-truck print mode
+- Designed as a supplement to zone grouping, not a replacement — zones remain the default packing lens
+
+
+
+#### Multi-assignee peer model (WO) ✅
+
+**Schema:**
+- `tbl_wo_assignees(wo_assignee_id, work_order_id, freelancer_id, assigned_at, assigned_by)` with UNIQUE(wo, freelancer)
+- RLS: all authenticated SELECT; admin/manager/PM/foreman INSERT/DELETE
+- Sync trigger `trg_sync_planned_lead_from_assignees` — on insert/delete updates `tbl_work_orders.planned_lead_id` to first assignee (ordered by `assigned_at`, tiebreak `wo_assignee_id`) or NULL
+- Backfill migration: moved existing `planned_lead_id` values into `tbl_wo_assignees` (4 rows)
+
+**Why the trigger matters:**
+Workshop page, capacity page and traveller PDF generator still read `planned_lead_id` — not touched this session. Trigger keeps that field accurate as the "primary assignee" so nothing downstream breaks while we expand the relationship to peer-based. Migrate consumers one at a time instead of flag-day rewrite.
+
+**Desktop WO picker (`src/components/work-orders-panel.tsx`):**
+- Single `<select>` replaced with chip UI: each assignee shown as removable chip + "+ Add" opens picker
+- `addAssignee` / `removeAssignee` handlers replace previous `updatePlannedLead`
+- Optimistic UI updates mirror the trigger's behaviour
+
+**Mobile (`src/app/m/page.tsx`):**
+- Fetches `tbl_wo_assignees` alongside WOs in parallel (one extra query)
+- `TaskCard.planned_lead_id` → `assignee_ids: number[]`
+- Old "Lead" pill → new "On (N)" pill in starlight-blue with UserCheck icon, shows peer count on the WO
+- Filter logic: `t.assignee_ids.includes(myId)` replaces the single-lead check
+
+**Audit gap (accepted):** `tbl_wo_assignees` not added to `AUDITED_TABLES` — the sync trigger audits `planned_lead_id` transitions on `tbl_work_orders`, which covers the primary use case. Expand if peer-level attribution becomes important.
+
+#### Mobile "On" filter ✅
+- Mobile tasks tab filter extended with "On" — shows only WOs where the current freelancer appears in `tbl_wo_assignees`
+- Works alongside existing Done / All filters
+- Uses the new `assignee_ids` array from the WO fetch (no extra query)
+
+
+
+#### Project Pack xlsx — Standalone handoff for external PMs ✅
+- **Context**: Fait Accompli PMs for Grosvenor wedding (job 13725) don't use the Starlight system. They need structured data from our side, delivered in a spreadsheet they can work in. One-off for now; becomes a button on the job page later
+- **Output**: 11-sheet xlsx (`Starlight_ProjectPack_13725_Grosvenor_YYYY-MM-DD.xlsx`)
+  - **Overview** — job header, sheet index, quick numbers (quote value, est cost, actual cost, line counts)
+  - **Quote Lines** — all 89 lines: Line# / Category / Zone / Description / Qty / Unit £ / Line £ / Est Cost / Actual £ / Margin £ / Margin % / Status / PM Note, totals row at bottom
+  - **Scope & Build** — grouped Zone → Scope → Job Items, each scope showing quote line ref, status, complexity, finish, est cost, description, with job items listed underneath (source, qty, finish, stock ref, notes)
+  - **Materials** — 51 aggregated BOM rows grouped by category (Timber £952, Sheet £4,415, Fabric £371, Paint & Finish £132, Uncategorised £196), with quote line refs + scope usage cross-refs
+  - **Suppliers / Crew Schedule / Production Schedule / Vehicles & Loads / Graphics / Hires / Onsite Management** — empty templates matching the existing pack structure Fait Accompli already use
+- **Banners**: amber "Generated from Starlight Production System — data columns overwritten on re-export, use Notes column for notes" on auto-filled sheets; blue on blank templates
+- **Design decisions** (see roadmap doc):
+  - Quote lines as the spine — every exported row references stable `quote_line_id` (shown in row-level metadata)
+  - Nothing locked — PMs can edit freely; re-export overwrites data columns but preserves their Notes column work
+  - No cell formulas — survives copy-paste, avoids circular references when they split/merge rows
+  - Empty templates match existing pack column structure so adoption is zero-friction
+- **Build path**: Python + openpyxl generator (lives as `scripts/build_project_pack.py` in repo; ran via MCP for this one-off). Data pulled via Supabase MCP and staged as JSON files locally. To re-generate: rerun queries, replace JSON, rerun script
+- **Verified on Grosvenor**: 89 quote lines summing £377,340 ✓; 16 scopes; 67 job items; 51 aggregated materials summing £6,066
+
+
+
+### Files added
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/reports/load-list/[jobId]/page.tsx` | Load list page — zone grouping, truck strip, stepper per item, print mode |
+| `src/app/api/load-events/route.ts` | Load event state transitions (create/update) |
+| `src/app/api/load-groups/route.ts` | Load group (truck) CRUD |
+| `src/components/load-event-stepper.tsx` | Per-item pending/packed/loaded stepper |
+| `src/components/truck-strip.tsx` | Horizontal strip of trucks with item counts |
+| `scripts/build_project_pack.py` | Standalone xlsx generator for Project Pack (dev-side tool) |
+| `STARLIGHT_PROJECT_PACK_ROADMAP.md` | Planning doc for the Project Pack format evolution |
+
+### Files modified
+| File | Change |
+|------|---------|
+| `src/lib/audit.ts` | New `auditedArchive()` helper; `revertAuditEntry` handles archive actions |
+| `src/app/(dashboard)/settings/audit/page.tsx` | Restore button on archive rows, badge treatment |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | Uses `auditedArchive()` instead of raw soft-delete |
+| `src/components/work-orders-panel.tsx` | Chip UI replaces single-select for assignees; `addAssignee`/`removeAssignee` handlers |
+| `src/app/m/page.tsx` | Fetches `tbl_wo_assignees`; `assignee_ids[]` on TaskCard; "On (N)" pill; "On" filter |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | "Load List" button on job header |
+
+### SQL applied (Supabase MCP)
+- `session_26_audited_archive_support` — `auditedArchive` action_type support in audit revert
+- `session_26_qry_jobitems_withcoverage_fix` — rebuilt view with security_invoker=true, exposed source fields
+- `session_26_load_events_table` — `tbl_load_events` + RLS + uniqueness constraint
+- `session_26_rpc_load_list` — RPC unifying job_items + loose scope BOM for a job
+- `session_26_load_groups_table` — `tbl_load_groups` for truck grouping + RLS
+- `session_26_rpc_load_list_with_groups` — RPC extended to return groups alongside items
+- `session_26_wo_assignees_table` — `tbl_wo_assignees` + UNIQUE + RLS
+- `session_26_sync_planned_lead_trigger` — keeps `tbl_work_orders.planned_lead_id` in sync with assignees
+- `session_26_backfill_wo_assignees` — migrated existing `planned_lead_id` values to junction table
+
+
+### Conventions added
+- **Soft-delete goes through `auditedArchive()`**: never call `.update({ archived_at })` directly on audited tables. The helper writes the audit row AND updates the record in a single flow, making revert possible. Raw soft-delete = no trail = no undo
+- **Peer relationships get their own table; primary is derived**: when a relationship goes from 1:1 to 1:N or M:N, introduce a junction table and keep the old scalar column in sync via trigger rather than breaking every downstream consumer. `tbl_wo_assignees` → syncs `planned_lead_id`. Lets us migrate consumers (workshop page, capacity, traveller) one at a time instead of a flag-day rewrite. The trigger is the bridge, not a long-term solution — eventually consumers read the junction table directly
+- **Load lists exclude WO-level BOM**: job items already represent what's being loaded. WO-level BOM is workshop consumables (glue, screws, offcuts). Only *loose* scope-level BOM (things like carpet rolls, fabric bolts that aren't wrapped in a job item) joins the load list. Otherwise the PM loads four sheets of MDF to site because they appeared in the BOM of every job item built from them
+- **Handoff artefacts are separate products**: an export to external stakeholders isn't a feature of the system — it's a derived document. Snapshot data, structure for *their* mental model (not ours), leave columns editable, make re-export safe. Don't try to turn their spreadsheet into a live connection to our DB — that's a different (harder) problem and they didn't ask for it
+- **Quote lines as the spine for external docs**: every exported row references a stable `quote_line_id` so anything the external team builds (notes, status, commentary) can be re-associated after a re-export. No UUID spaghetti, no "which row was this again". This is why we show the line# on every sheet, even where it's slightly awkward
+- **Re-export safety via column lanes**: in a handoff xlsx, data columns (from our system) and editable columns (their notes) live in separate, well-marked ranges. Banner at the top of each auto-filled sheet states which columns get overwritten on re-export. Lets us regenerate without destroying their work
+
+
+### Next session start point
+
+**State at end of session 26:**
+- Load list + truck grouping live, tested on Grosvenor
+- `tbl_wo_assignees` peer model live; sync trigger keeping `planned_lead_id` accurate
+- Mobile "On" filter shipping with the new assignee model
+- Audit revert now handles archives (crew restored test passed)
+- Project Pack v1 xlsx delivered for Grosvenor — standalone, one-off generation
+
+**Deferred / accepted from this session:**
+- `tbl_wo_assignees` not in `AUDITED_TABLES` — trigger audits primary-lead changes, peer-level attribution can wait
+- Project Pack lives as `scripts/build_project_pack.py` not a web button — promote to job-page button in a future session once format stabilises with real Fait Accompli feedback
+- Stock catalogue names not joined into Project Pack's Scope & Build sheet — shows `sref: "1744"` without the "8x4 Steel Deck" label. Low priority; add on next iteration
+- Zone ordering on Scope & Build sheet is alphabetical — likely wants to switch to event-flow order (Entrance → Foyer → Corridor → Great Room) after first review
+- Workshop page, capacity page, traveller PDF still read `planned_lead_id` directly. Sync trigger keeps them working. Migrate to reading `tbl_wo_assignees` when touching those pages next
+
+**Open from Session 25 (still pending):**
+- Learnings backlog capture (Mateusz to add existing known lessons)
+- "Similar past learnings" panel on scope items
+- Retrospective workflow at job completion
+- Agent MCP connection once ~50+ learnings exist
+
+**Open from earlier sessions (long-running):**
+- Drop `tbl_freelancers.pin` column (verify no code still references it)
+- Supabase Pro upgrade
+- GitHub repo transfer personal → company account
+- Quote import from real source (currently manual)
+
+**Excel templating roadmap:**
+- See new doc `STARLIGHT_PROJECT_PACK_ROADMAP.md` at repo root — captures current v1 structure, design rationale, and ideas to explore once the format is validated in real use
+
+### Deliverable quality reflection
+Efficient session for the amount shipped. The Project Pack build was messy in the middle — I flailed on strategy (live DB connection? anon key? embed data?) before committing to "query via MCP, stage as JSON, build in Python". Lesson: when stuck between three approaches, pick the one that completes in one session even if it's the least elegant. Reusability comes from *having shipped v1*, not from a prettier abstraction. Cost me probably 20 minutes of wheel-spinning.
+

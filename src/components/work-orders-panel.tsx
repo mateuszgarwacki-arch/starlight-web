@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
+import { promoteJobItemToStock } from "@/lib/promote-to-stock";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { CreateWODialog } from "@/components/create-wo-dialog";
@@ -500,13 +501,34 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     };
     const addBespokeItem = async () => {
       if (!bespokeForm.description.trim()) return;
-      await supabase.from("tbl_job_items").insert({
-        job_id: jobId, scope_item_id: scopeId, description: bespokeForm.description.trim(), item_source: "bespoke", item_type: "Bespoke",
-        quantity: parseInt(bespokeForm.quantity) || 1, finish_required: bespokeForm.finish_required.trim() || null,
-        notes: bespokeForm.promote_to_stock ? "PROMOTE_TO_STOCK" : null, source_item_id: bespokeForm.source_item_id || null,
+      const desc = bespokeForm.description.trim();
+      const qty = parseInt(bespokeForm.quantity) || 1;
+      const finish = bespokeForm.finish_required.trim() || null;
+      const { data: inserted, error } = await supabase.from("tbl_job_items").insert({
+        job_id: jobId, scope_item_id: scopeId, description: desc, item_source: "bespoke", item_type: "Bespoke",
+        quantity: qty, finish_required: finish,
+        source_item_id: bespokeForm.source_item_id || null,
         kit_list_exported: "false", temp_selected: "false", created_at: new Date().toISOString(),
-      });
-      toast.success("Bespoke item added");
+      }).select("item_id").single();
+      if (error) { toast.error("Add failed: " + error.message); return; }
+
+      if (bespokeForm.promote_to_stock && inserted?.item_id) {
+        const res = await promoteJobItemToStock(supabase, {
+          item_id: inserted.item_id, job_id: jobId, description: desc, quantity: qty,
+        });
+        if (res.ok) {
+          toast.success(
+            res.action === "merged"
+              ? `Bespoke added & stock updated (${res.description} now ${res.newQuantity})`
+              : `Bespoke added & promoted to stock (${res.description})`
+          );
+        } else {
+          toast.warning("Item added but promote failed: " + res.error);
+        }
+      } else {
+        toast.success("Bespoke item added");
+      }
+
       setBespokeForm({ description: "", quantity: "1", finish_required: "", promote_to_stock: false, source_item_id: null, _showCopy: false });
       setShowBespokeDialog(false); loadAll();
     };
@@ -1029,7 +1051,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                   <div><label className="block text-xs font-medium text-muted mb-1">Quantity</label><input type="number" value={bespokeForm.quantity} min={1} onChange={e => setBespokeForm({ ...bespokeForm, quantity: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
                   <div><label className="block text-xs font-medium text-muted mb-1">Finish</label><input type="text" value={bespokeForm.finish_required} onChange={e => setBespokeForm({ ...bespokeForm, finish_required: e.target.value })} placeholder="Paint colour..." className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
                 </div>
-                <label className="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1"><input type="checkbox" checked={bespokeForm.promote_to_stock} onChange={e => setBespokeForm({ ...bespokeForm, promote_to_stock: e.target.checked })} className="rounded border-subtle text-starlight-green focus:ring-starlight-green" />Add to stock catalogue when complete</label>
+                <label className="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1"><input type="checkbox" checked={bespokeForm.promote_to_stock} onChange={e => setBespokeForm({ ...bespokeForm, promote_to_stock: e.target.checked })} className="rounded border-subtle text-starlight-green focus:ring-starlight-green" />Also add to stock catalogue</label>
               </div>
               <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3"><button onClick={() => setShowBespokeDialog(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button><button onClick={addBespokeItem} disabled={!bespokeForm.description.trim()} className="px-4 py-2 bg-starlight-blue text-white text-sm font-medium rounded-lg hover:bg-navy disabled:opacity-50">Add Item</button></div>
             </div>
