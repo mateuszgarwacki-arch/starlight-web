@@ -1,5 +1,29 @@
 # Starlight Web App — Development Tracker
 
+## 🧹 Cleanup Backlog
+
+Running list of known debt, deferred work, and small follow-ups. Reviewed at the start of every session. Items are added whenever a session ships something with a known deferral or a correctness bug that we chose not to fix in-flight. Order roughly reflects priority — top items are the ones to do next. Check items off as they ship; move completed ones to the relevant session entry.
+
+### Correctness (do first)
+- [ ] **Admin scope page BOM cost — Length-on-Metre + WO-attached join** *(S28d)* — `/jobs/[id]/scope/[scopeId]/page.tsx` (68 KB). Same two bugs the PM RPC just fixed. Admin computes BOM totals directly off `tbl_wo_bom` without (a) the dual-path scope-or-WO join — any BOM row attached via `work_order_id` with null `scope_item_id` is silently dropped (polyline on Grosvenor is the known case); (b) the unit→base multiplier for Length-on-Metre — timber like 3x2 Rounded Edge shows £6.60 instead of £31.68. Ops are currently looking at wrong cost numbers on the admin view.
+
+### Small/mechanical (easy wins)
+- [ ] **Delete dead file** `src/components/job-items-table.tsx` *(S27)* — not imported anywhere since scope page was unified; kept around as a safety net during the redesign. Safe to delete.
+- [ ] **Next.js 16 middleware rename** *(S28)* — `middleware.ts` → `proxy.ts`. Emits a deprecation warning on every build. Straight file rename; update `src/middleware.ts` export convention if needed.
+
+### Features deferred
+- [ ] **CAD file upload** on admin WO docs panel *(S28)* — `doc_type = 'cad_model'` already exists in the DB and renders correctly on PM view. Still need: add `.skp .dwg .3dm .step .iges .stp .igs` to accepted extensions, route to OneDrive subfolder `Workshop/{jobNumber}/cad/`, set doc_type on upload. Low risk, pure additive on the upload form.
+- [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
+- [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
+
+### Testing gaps
+- [ ] **Multi-scope rendering on PM view** *(S28)* — code path is implemented but no quote line in production has 2+ scopes yet. First time a line is split, validate the scope-tier rendering (blue left border, per-scope WO groups, scope notes thread).
+
+### Stock/catalogue polish
+- [ ] **Stock build-state badge for promoted stock** *(S27)* — when a PM picks a promoted stock item, show whether it's physically available ("Built and available") vs still in build ("In build: 2/5 WOs complete"). View over `tbl_stock_items` joined to its `source_job_item_id` → scope → WOs. Low urgency while you're the only PM promoting, but important before handing stock picking to other PMs.
+
+---
+
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.

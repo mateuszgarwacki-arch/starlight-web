@@ -1,17 +1,21 @@
-fix(s28d): PM RPC — WO-attached BOM + Length-on-Metre cost conversion
+chore(s28d): cleanup backlog in TRACKER + refreshed schema doc
 
-- rpc_pm_job_overview v5:
-    * bom_raw CTE now reaches quote_line via scope OR work_order
-      (was scope-only, silently dropped WO-attached BOM rows)
-    * New unit-to-base multiplier for timber/linear-trim rows where
-      BOM row unit='Length' but material base unit is 'Metre':
-      multiply by (standard_length / 1000). Fixes 3x2 Rounded Edge
-      reading £6.60 instead of the correct £31.68 (4 × 4.8m × £1.65).
-- TRACKER.md: Session 28d writeup; flags that admin scope page has
-  the same Length-on-Metre bug and should be patched next session.
-- No frontend changes, no deploy needed — RPC applied to prod DB
-  via Supabase migration; changes are live on next page load.
+- TRACKER.md: new top-of-file "Cleanup Backlog" section —
+  persistent running list of known debt and deferred work,
+  reviewed at the start of every session. Seeded with 8 items
+  across correctness (admin BOM cost fix), mechanical cleanup
+  (dead file, middleware rename), deferred features (CAD upload,
+  PM-note dashboard widget, image thumbnail proxy), testing gaps
+  (multi-scope rendering), and stock catalogue polish.
 
-Regression: total materials_total + job_items_total across Grosvenor's
-89 lines ties to raw aggregation of BOM rows to the 1p, confirming no
-double-counting from the dual-path join.
+- starlight_database_schema_session28d.md: new schema doc
+  replacing the session25 version. Captures diff since S25:
+    * 3 new tables (tbl_load_events, tbl_load_groups, tbl_wo_assignees)
+    * 2 new RPCs (rpc_load_list, rpc_pm_job_overview)
+    * learning_category enum gains pm_note + materials_note (12 values)
+    * tbl_wo_documents.doc_type CHECK adds cad_model
+    * tbl_stock_items.source_job_item_id FK + partial index (S27)
+    * Convention notes: dual-path BOM join, Length-on-Metre
+      multiplier, PM notes upsert, category-filtered threads
+  Verified against live DB: 47 tables, 39 views, 10 RPCs.
+  Old session25 doc retained for history.
