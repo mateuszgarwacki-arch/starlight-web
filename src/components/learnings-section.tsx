@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase-browser";
 import {
   LearningEnriched,
   LearningEntityContext,
+  LearningCategory,
   CATEGORY_MAP,
   severityDots,
   severityColour,
@@ -20,6 +21,10 @@ interface LearningsSectionProps {
     | "bom_id" | "time_entry_id" | "material_id" | "stock_item_id"
     | "freelancer_id" | "supplier_id";
   filterValue: number;
+  /** If provided, only learnings in these categories are included in the thread. */
+  filterCategories?: LearningCategory[];
+  /** If provided, learnings in these categories are EXCLUDED from the thread. */
+  excludeCategories?: LearningCategory[];
   title?: string;
   defaultCollapsed?: boolean;
   canEdit?: boolean;
@@ -27,6 +32,8 @@ interface LearningsSectionProps {
 
 export function LearningsSection({
   context, filterField, filterValue,
+  filterCategories,
+  excludeCategories,
   title = "Learnings", defaultCollapsed = false, canEdit = true,
 }: LearningsSectionProps) {
   const supabase = createClient();
@@ -38,15 +45,20 @@ export function LearningsSection({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let q = supabase
       .from("qry_learnings_enriched")
       .select("*")
-      .eq(filterField, filterValue)
-      .order("created_at", { ascending: false });
+      .eq(filterField, filterValue);
+    if (filterCategories && filterCategories.length > 0) q = q.in("category", filterCategories);
+    if (excludeCategories && excludeCategories.length > 0) {
+      // PostgREST: use not.in via the in operator negation
+      q = q.not("category", "in", `(${excludeCategories.join(",")})`);
+    }
+    const { data, error } = await q.order("created_at", { ascending: false });
     if (error) { toast.error(`Load learnings: ${error.message}`); setRows([]); }
     else { setRows((data ?? []) as LearningEnriched[]); }
     setLoading(false);
-  }, [filterField, filterValue, supabase]);
+  }, [filterField, filterValue, supabase, filterCategories, excludeCategories]);
 
   useEffect(() => { load(); }, [load]);
 

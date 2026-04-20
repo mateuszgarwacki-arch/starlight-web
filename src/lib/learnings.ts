@@ -12,7 +12,9 @@ export type LearningCategory =
   | "process_issue"
   | "communication_gap"
   | "judgement_call"
-  | "positive_learning";
+  | "positive_learning"
+  | "pm_note"
+  | "materials_note";
 
 export type LearningEntityType =
   | "job"
@@ -179,6 +181,24 @@ export const LEARNING_CATEGORIES: CategoryDef[] = [
     ],
     colour: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
     bias: "positive",
+  },
+  {
+    id: "pm_note",
+    label: "PM note",
+    description: "A quick tip or explanation for anyone working on this line — not an issue.",
+    subFieldLabel: "Type",
+    subOptions: [],
+    colour: "bg-starlight-blue/20 text-starlight-blue border-starlight-blue/40",
+    bias: "neutral",
+  },
+  {
+    id: "materials_note",
+    label: "Materials note",
+    description: "Note affecting material procurement, handling, stock, or substitution for this line.",
+    subFieldLabel: "Type",
+    subOptions: [],
+    colour: "bg-teal-500/20 text-teal-300 border-teal-500/40",
+    bias: "neutral",
   },
 ];
 

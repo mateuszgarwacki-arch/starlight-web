@@ -1,5 +1,25 @@
-chore(s28): TRACKER entry + remove build.log from repo
+feat(s28b): PM view iteration — sort, richer row, PM notes, docs, cost analysis
 
-- TRACKER.md: full Session 28 writeup of the PM 100m-view,
-  unified learnings-as-notes, cad_model doc_type, and conventions
-- .gitignore: add build.log (accidentally committed in 36dcb16)
+- Natural line-number sort fix in rpc_pm_job_overview (cast varchar line_number
+  to integer via regex). Sort_key exposed in payload for client-side re-sort.
+- User-selectable sort: line number / value desc / value asc / department / zone.
+  Sub-group headers only rendered when sorting by line number.
+- Quote line row now shows Quoted, Workshop estimate and Live Spent inline,
+  with a compact inline PM note bar under the line text.
+- Job header adds 3-cell totals strip (Quoted / Workshop est / Live spent).
+- PM note is a new learning category `pm_note` (severity=1, actionable=false).
+  New PmNoteInline component upserts one pm_note learning per quote_line_id:
+  edit in place if exists, insert if not, delete on empty save.
+- New `materials_note` category + filterCategories / excludeCategories props
+  on LearningsSection so PM notes + materials notes don't double-up in other
+  threads. Materials section now has ONE notes thread at its top; removed
+  per-row material notes.
+- Cost analysis inside quote line expansion: per-WO table with est/actual
+  hours, variance, and labour cost; totals row.
+- WO blocks are now individually expandable. Expanded WO shows its time
+  entries table (who, date, hours, rate, cost) and its documents grouped
+  by doc_type with larger thumbnail cards (Drawings / Cut lists / 3D models
+  / CAD files / Reference).
+- rpc_pm_job_overview v3 adds: sort_key, pm_note_inline_id,
+  pm_note_inline_text, pm_note_inline_updated_at, total_actual_labour,
+  per-WO time_entries array.
