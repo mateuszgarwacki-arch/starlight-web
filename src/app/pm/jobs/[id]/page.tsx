@@ -66,7 +66,9 @@ type WORef = {
 
 type BomGroup = {
   group_key: string; line_count: number;
-  total_quantity: number; unit: string | null; total_cost: number;
+  total_quantity: number; unit: string | null;
+  standard_length_m: number | null;
+  total_cost: number;
   any_from_stock: boolean; any_needs_ordering: boolean;
   wo_ids: number[] | null; suppliers: string[] | null;
 };
@@ -393,13 +395,25 @@ function WoBlock({ wo, docs, jobId }: { wo: WORef; docs: DocRef[]; jobId: number
 function MaterialRow({ g }: { g: BomGroup }) {
   const [showWhere, setShowWhere] = useState(false);
   const suppliers = (g.suppliers ?? []).filter(Boolean);
+  const qty = Number(g.total_quantity);
+  const stdLen = g.standard_length_m;
+  const hasLengthConversion = g.unit === "Length" && stdLen && stdLen > 0;
+  const effectiveMetres = hasLengthConversion ? qty * (stdLen as number) : null;
   return (
     <div className="border border-subtle rounded px-3 py-2 bg-surface text-xs space-y-1">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-medium text-navy">{g.group_key}</span>
         <span className="text-muted">
-          {Number(g.total_quantity).toLocaleString("en-GB", { maximumFractionDigits: 2 })}
+          {qty.toLocaleString("en-GB", { maximumFractionDigits: 2 })}
           {g.unit ? ` ${g.unit}` : ""}
+          {hasLengthConversion && (
+            <span className="text-faint ml-1">
+              (× {(stdLen as number).toLocaleString("en-GB", { maximumFractionDigits: 2 })}m
+              {effectiveMetres != null &&
+                ` = ${effectiveMetres.toLocaleString("en-GB", { maximumFractionDigits: 2 })}m`}
+              )
+            </span>
+          )}
         </span>
         <span className="ml-auto font-semibold text-navy">{formatCurrency(g.total_cost)}</span>
       </div>

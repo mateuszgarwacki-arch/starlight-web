@@ -1,16 +1,25 @@
-feat(s28c): merge WO cost columns into row, split Job items from Materials
+fix(s28d): PM view — missing WO-anchored BOM rows + timber Length/Metre cost bug
 
-- WO row header now carries Est hrs, Actual hrs, Variance (coloured),
-  Labour cost as distinct columns on md+ screens. CostAnalysisTable
-  component deleted — it was repeating the same data below the WOs.
-- Narrow-screen fallback keeps the compact "Actual/Est · cost" pill.
-- rpc_pm_job_overview v4 splits BOM rows by `job_item_id IS NOT NULL`:
-    * job_items_groups / job_items_total — scope-level items
-      (modular bars, hire kit — zero material cost per row)
-    * materials_groups / materials_total — raw supply with real costs
-- PM view now renders two subsections under a "Procurement" umbrella
-  with a single materials_note thread at the top. Job items uses the
-  Boxes icon, Materials keeps Package. Each section shows its count
-  and total, with italic one-liner clarifying the distinction.
-- Totals strip "Live spent" now uses materials_total (renamed from
-  bom_total); Labour + Materials, excludes zero-cost job item rows.
+Two correctness bugs surfaced by Ballroom Reception (scope 17):
+
+1) BOM rows anchored only to a work_order (scope_item_id IS NULL) were
+   silently dropped by the RPC. Polyline IFR (£243) was invisible on the
+   PM view, so "Spent" under-reported materially. Fixed: bom_raw and
+   docs_per_line now anchor to scope via COALESCE(b.scope_item_id,
+   wo.scope_item_id) so WO-only BOM/doc rows surface through the WO.
+
+2) Length-unit BOM rows used a per-metre unit_cost without converting,
+   so a 3x2 Rounded Edge charged as "4 × £1.65 = £6.60" instead of
+   "4 lengths × 4.8m × £1.65 = £31.68". Fixed via length_factor in
+   bom_raw: when bom.unit='Length' AND material.unit='Metre' AND
+   material.standard_length>0, multiply qty by standard_length_m.
+   Applies to 19 timber rows DB-wide. Correct costs now flow into
+   materials_total and the "Live spent" job strip.
+
+Frontend:
+- BomGroup type gains standard_length_m
+- MaterialRow shows "4 Length (× 4.8m = 19.2m)" when conversion applies,
+  so the £ number visibly ties to the original quantity
+
+Admin-side materials display has the same bug but is NOT changed here
+(different queries, out of PM-view scope). Queued as follow-up.
