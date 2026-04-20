@@ -57,6 +57,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/m", request.url));
   }
 
+  // Landing on "/" → honour preferred_view (PM pilot).
+  // Anyone can still navigate to the other view via the header switcher.
+  if (pathname === "/") {
+    const pref = (user.app_metadata as any)?.preferred_view;
+    if (pref === "pm") {
+      return NextResponse.redirect(new URL("/pm/jobs", request.url));
+    }
+  }
+
   return response;
 }
 
