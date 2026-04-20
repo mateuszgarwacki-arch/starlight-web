@@ -1,6 +1,16 @@
-chore(s28b): TRACKER entry + remove build.log
+feat(s28c): merge WO cost columns into row, split Job items from Materials
 
-- TRACKER.md: Session 28b writeup covering natural-sort fix,
-  user-selectable sort, richer row, PM notes (new category),
-  per-WO cost analysis, WO-level expand with time entries
-  + doc thumbnails grouped by type, materials single-thread notes
+- WO row header now carries Est hrs, Actual hrs, Variance (coloured),
+  Labour cost as distinct columns on md+ screens. CostAnalysisTable
+  component deleted — it was repeating the same data below the WOs.
+- Narrow-screen fallback keeps the compact "Actual/Est · cost" pill.
+- rpc_pm_job_overview v4 splits BOM rows by `job_item_id IS NOT NULL`:
+    * job_items_groups / job_items_total — scope-level items
+      (modular bars, hire kit — zero material cost per row)
+    * materials_groups / materials_total — raw supply with real costs
+- PM view now renders two subsections under a "Procurement" umbrella
+  with a single materials_note thread at the top. Job items uses the
+  Boxes icon, Materials keeps Package. Each section shows its count
+  and total, with italic one-liner clarifying the distinction.
+- Totals strip "Live spent" now uses materials_total (renamed from
+  bom_total); Labour + Materials, excludes zero-cost job item rows.

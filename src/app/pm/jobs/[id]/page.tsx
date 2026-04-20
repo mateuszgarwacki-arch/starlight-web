@@ -22,6 +22,7 @@ import {
   CircleAlert,
   CheckCircle2,
   Box,
+  Boxes,
   Image as ImageIcon,
   FileCode2,
   Paperclip,
@@ -87,7 +88,8 @@ type QuoteLine = {
   scope_count: number; scopes: ScopeRef[] | null;
   wo_count: number; work_orders: WORef[] | null;
   total_actual_labour: number;
-  bom_groups: BomGroup[] | null; bom_total: number;
+  materials_groups: BomGroup[] | null; materials_total: number;
+  job_items_groups: BomGroup[] | null; job_items_total: number;
   estimated_labour_cost: number; estimated_material_cost: number;
   documents: DocRef[] | null;
   learning_count: number; learning_open: number;
@@ -235,12 +237,14 @@ function WoBlock({ wo, docs, jobId }: { wo: WORef; docs: DocRef[]; jobId: number
   const [expanded, setExpanded] = useState(false);
   const est = Number(wo.estimated_duration_hrs ?? 0);
   const act = Number(wo.actual_hours ?? 0);
-  const over = est > 0 && act > est;
+  const variance = act - est;
+  const over = variance > 0.01;
+  const under = variance < -0.01;
   const timeEntries = wo.time_entries ?? [];
 
   return (
     <div className="border border-subtle rounded bg-surface">
-      {/* Header — clickable to expand */}
+      {/* Header — clickable to expand. All key cost metrics live here. */}
       <button
         onClick={() => setExpanded((v) => !v)}
         className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-surface-mid/50"
@@ -248,25 +252,55 @@ function WoBlock({ wo, docs, jobId }: { wo: WORef; docs: DocRef[]; jobId: number
         <div className="shrink-0 text-muted">
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </div>
-        <span className="font-mono text-[10px] text-faint">WO#{wo.work_order_id}</span>
-        <span className="font-medium text-navy text-sm truncate">{wo.activity_label}</span>
+        <span className="font-mono text-[10px] text-faint shrink-0">WO#{wo.work_order_id}</span>
+        <span className="font-medium text-navy text-sm truncate flex-1 min-w-0">{wo.activity_label}</span>
         <WoStatusPill status={wo.status} />
         {wo.predecessor_wo_id && (
-          <span className="text-[10px] text-muted">↳ after WO#{wo.predecessor_wo_id}</span>
+          <span className="text-[10px] text-muted shrink-0">↳ WO#{wo.predecessor_wo_id}</span>
         )}
-        <div className="ml-auto flex items-center gap-3 text-[11px]">
+        {/* Cost strip — Est / Actual / Variance / Labour / Docs */}
+        <div className="shrink-0 hidden md:flex items-center gap-4 text-[11px]">
+          <div className="text-right min-w-[44px]">
+            <div className="text-[9px] uppercase tracking-wide text-faint">Est</div>
+            <div className="text-muted">{est > 0 ? formatHours(est) : "—"}</div>
+          </div>
+          <div className="text-right min-w-[44px]">
+            <div className="text-[9px] uppercase tracking-wide text-faint">Actual</div>
+            <div className={cn("text-navy", over && "text-starlight-red font-medium")}>
+              {act > 0 ? formatHours(act) : "—"}
+            </div>
+          </div>
+          <div className="text-right min-w-[44px]">
+            <div className="text-[9px] uppercase tracking-wide text-faint">Var</div>
+            <div className={cn(
+              over && "text-starlight-red font-medium",
+              under && "text-starlight-green",
+              !over && !under && "text-faint"
+            )}>
+              {est === 0 ? "—" : (variance > 0 ? "+" : "") + formatHours(variance)}
+            </div>
+          </div>
+          <div className="text-right min-w-[56px]">
+            <div className="text-[9px] uppercase tracking-wide text-faint">Labour</div>
+            <div className="text-muted">
+              {Number(wo.actual_labour_cost) > 0 ? formatCurrency(wo.actual_labour_cost) : "—"}
+            </div>
+          </div>
+        </div>
+        {/* Narrow screens: compact fallback */}
+        <div className="md:hidden flex items-center gap-2 text-[11px]">
           <span className={cn("text-muted", over && "text-starlight-red font-medium")}>
             {formatHours(act)} / {formatHours(est)}
           </span>
           {Number(wo.actual_labour_cost) > 0 && (
             <span className="text-muted">{formatCurrency(wo.actual_labour_cost)}</span>
           )}
-          {docs.length > 0 && (
-            <span className="inline-flex items-center gap-0.5 text-faint">
-              <Paperclip className="h-3 w-3" /> {docs.length}
-            </span>
-          )}
         </div>
+        {docs.length > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-faint text-[11px] shrink-0">
+            <Paperclip className="h-3 w-3" /> {docs.length}
+          </span>
+        )}
       </button>
 
       {/* Expanded body */}
@@ -402,67 +436,6 @@ function MaterialRow({ g }: { g: BomGroup }) {
   );
 }
 
-/* ---------- Cost analysis table (per-WO breakdown inside expansion) ---------- */
-
-function CostAnalysisTable({ ql }: { ql: QuoteLine }) {
-  const wos = ql.work_orders ?? [];
-  if (wos.length === 0) return null;
-  const totalEst = wos.reduce((s, w) => s + Number(w.estimated_duration_hrs || 0), 0);
-  const totalAct = wos.reduce((s, w) => s + Number(w.actual_hours || 0), 0);
-  const totalCost = wos.reduce((s, w) => s + Number(w.actual_labour_cost || 0), 0);
-
-  return (
-    <div className="border border-subtle rounded overflow-hidden">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-surface-mid text-muted">
-            <th className="text-left px-3 py-1.5 font-medium">Work order</th>
-            <th className="text-left px-2 py-1.5 font-medium">Status</th>
-            <th className="text-right px-2 py-1.5 font-medium">Est hrs</th>
-            <th className="text-right px-2 py-1.5 font-medium">Actual hrs</th>
-            <th className="text-right px-2 py-1.5 font-medium">Variance</th>
-            <th className="text-right px-3 py-1.5 font-medium">Labour cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {wos.map((w) => {
-            const est = Number(w.estimated_duration_hrs || 0);
-            const act = Number(w.actual_hours || 0);
-            const variance = act - est;
-            return (
-              <tr key={w.work_order_id} className="border-t border-subtle">
-                <td className="px-3 py-1.5 text-navy">
-                  <span className="font-mono text-[10px] text-faint mr-1.5">WO#{w.work_order_id}</span>
-                  {w.activity_label}
-                </td>
-                <td className="px-2 py-1.5"><WoStatusPill status={w.status} /></td>
-                <td className="px-2 py-1.5 text-right text-muted">{formatHours(est)}</td>
-                <td className="px-2 py-1.5 text-right text-navy">{formatHours(act)}</td>
-                <td className={cn(
-                  "px-2 py-1.5 text-right",
-                  variance > 0 ? "text-starlight-red" : variance < 0 ? "text-starlight-green" : "text-faint"
-                )}>
-                  {est === 0 ? "—" : (variance > 0 ? "+" : "") + formatHours(variance)}
-                </td>
-                <td className="px-3 py-1.5 text-right text-navy">
-                  {Number(w.actual_labour_cost) > 0 ? formatCurrency(w.actual_labour_cost) : "—"}
-                </td>
-              </tr>
-            );
-          })}
-          <tr className="border-t border-subtle bg-surface-mid/30 font-medium">
-            <td className="px-3 py-1.5 text-muted" colSpan={2}>Total ({wos.length} WO{wos.length > 1 ? "s" : ""})</td>
-            <td className="px-2 py-1.5 text-right text-muted">{formatHours(totalEst)}</td>
-            <td className="px-2 py-1.5 text-right text-navy">{formatHours(totalAct)}</td>
-            <td></td>
-            <td className="px-3 py-1.5 text-right text-navy">{formatCurrency(totalCost)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /* ---------- Quote line row (the centrepiece) ---------- */
 
 function QuoteLineRow({ ql, jobId, onPmNoteSaved }: {
@@ -496,7 +469,10 @@ function QuoteLineRow({ ql, jobId, onPmNoteSaved }: {
 
   const quoted = Number(ql.line_value ?? 0);
   const workshopEst = Number(ql.estimated_labour_cost || 0) + Number(ql.estimated_material_cost || 0);
-  const spent = Number(ql.total_actual_labour || 0) + Number(ql.bom_total || 0);
+  const committedMaterials = Number(ql.materials_total || 0);
+  const spent = Number(ql.total_actual_labour || 0) + committedMaterials;
+  const jobItemsGroups = ql.job_items_groups ?? [];
+  const materialsGroups = ql.materials_groups ?? [];
 
   return (
     <div className="card overflow-hidden">
@@ -561,16 +537,6 @@ function QuoteLineRow({ ql, jobId, onPmNoteSaved }: {
       {/* Expanded body */}
       {expanded && (
         <div className="px-4 pb-4 pt-3 border-t border-subtle bg-base/30 space-y-5">
-          {/* Cost analysis — per-WO table */}
-          {hasScopes && (ql.work_orders ?? []).length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted uppercase tracking-wide">
-                Cost analysis
-              </div>
-              <CostAnalysisTable ql={ql} />
-            </section>
-          )}
-
           {/* Orphan case */}
           {isOrphan && (
             <div className="text-xs text-muted italic">
@@ -633,35 +599,57 @@ function QuoteLineRow({ ql, jobId, onPmNoteSaved }: {
             );
           })}
 
-          {/* Materials — one notes thread for the whole section (no per-row notes) */}
-          {hasScopes && (ql.bom_groups ?? []).length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted uppercase tracking-wide">
-                <Package className="h-3.5 w-3.5" /> Materials
-                <span className="text-faint">
-                  ({(ql.bom_groups ?? []).length} items · {formatCurrency(ql.bom_total)})
-                </span>
-              </div>
-              <div className="space-y-3">
-                <LearningsSection
-                  context={{
-                    quote_line_id: ql.quote_line_id,
-                    job_id: jobId,
-                    contextLabel: `Materials — Line ${ql.line_number}`,
-                    contextSublabel: ql.line_text.slice(0, 80),
-                  }}
-                  filterField="quote_line_id"
-                  filterValue={ql.quote_line_id}
-                  filterCategories={["materials_note"]}
-                  title="Materials notes"
-                  defaultCollapsed
-                />
-                <div className="space-y-1.5">
-                  {(ql.bom_groups ?? []).map((g) => (
-                    <MaterialRow key={g.group_key} g={g} />
-                  ))}
+          {/* Procurement: single notes thread for Job items + Materials, then the two sub-sections */}
+          {hasScopes && (jobItemsGroups.length > 0 || materialsGroups.length > 0) && (
+            <section className="space-y-3">
+              <LearningsSection
+                context={{
+                  quote_line_id: ql.quote_line_id,
+                  job_id: jobId,
+                  contextLabel: `Materials — Line ${ql.line_number}`,
+                  contextSublabel: ql.line_text.slice(0, 80),
+                }}
+                filterField="quote_line_id"
+                filterValue={ql.quote_line_id}
+                filterCategories={["materials_note"]}
+                title="Procurement notes"
+                defaultCollapsed
+              />
+
+              {jobItemsGroups.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted uppercase tracking-wide">
+                    <Boxes className="h-3.5 w-3.5" /> Job items
+                    <span className="text-faint">
+                      ({jobItemsGroups.length} item{jobItemsGroups.length > 1 ? "s" : ""}
+                      {Number(ql.job_items_total) > 0 ? ` · ${formatCurrency(ql.job_items_total)}` : ""})
+                    </span>
+                    <span className="text-[10px] text-faint italic ml-1">scope-level stock / modular kit</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {jobItemsGroups.map((g) => (
+                      <MaterialRow key={`ji-${g.group_key}`} g={g} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {materialsGroups.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-xs font-medium text-muted uppercase tracking-wide">
+                    <Package className="h-3.5 w-3.5" /> Materials
+                    <span className="text-faint">
+                      ({materialsGroups.length} item{materialsGroups.length > 1 ? "s" : ""} · {formatCurrency(ql.materials_total)})
+                    </span>
+                    <span className="text-[10px] text-faint italic ml-1">raw supply to build with</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {materialsGroups.map((g) => (
+                      <MaterialRow key={`mat-${g.group_key}`} g={g} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -786,7 +774,10 @@ export default function PmJobPage() {
 
   const job = payload.job;
   const totalQuoted = payload.quote_lines.reduce((s, ql) => s + Number(ql.line_value || 0), 0);
-  const totalSpent  = payload.quote_lines.reduce((s, ql) => s + Number(ql.total_actual_labour || 0) + Number(ql.bom_total || 0), 0);
+  const totalSpent  = payload.quote_lines.reduce(
+    (s, ql) => s + Number(ql.total_actual_labour || 0) + Number(ql.materials_total || 0),
+    0
+  );
   const totalWorkshopEst = payload.quote_lines.reduce(
     (s, ql) => s + Number(ql.estimated_labour_cost || 0) + Number(ql.estimated_material_cost || 0),
     0
