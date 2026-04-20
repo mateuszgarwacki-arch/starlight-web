@@ -1,23 +1,5 @@
-feat(s28): PM 100m-view under /pm/*
+chore(s28): TRACKER entry + remove build.log from repo
 
-- New routes: /pm/jobs (list) and /pm/jobs/[id] (overview)
-- Header ViewSwitcher component flips between admin and PM views;
-  preference persisted to app_metadata.preferred_view via new
-  /api/auth/preferred-view route, honoured by middleware on landing
-- PM sidebar (Jobs-only) + PM layout mirroring admin structure
-- rpc_pm_job_overview(p_job_id): single-call payload with job,
-  quote lines, scopes, WOs, BOM grouped by material, cost rollup,
-  docs, and per-line learning counts
-- Quote-line-first rendering with inline expansion:
-    * 1-scope lines hide the scope layer
-    * multi-scope lines show scope sub-headings above WOs
-    * orphan (no-scope) lines grey-badged "Not planned yet"
-- Notes at every level are unified into tbl_learnings
-  (LearningsSection reused at job, quote_line, scope, WO, bom)
-- Material rollup groups BOM rows by description with
-  "used in N WOs" sub-expand, stock/ordering flags, suppliers
-- Cost strip: quoted | PM est | workshop est | committed | actual labour
-- Filters by zone and department; grouped by line_sub_group
-- CAD files: new cad_model doc_type (download-only), rendered
-  with a distinct icon and Download button on WO blocks
-- Admin layout now carries the ViewSwitcher in a sticky header
+- TRACKER.md: full Session 28 writeup of the PM 100m-view,
+  unified learnings-as-notes, cad_model doc_type, and conventions
+- .gitignore: add build.log (accidentally committed in 36dcb16)

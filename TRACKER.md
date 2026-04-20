@@ -2473,3 +2473,108 @@ CREATE INDEX IF NOT EXISTS idx_stock_items_source_job_item
 - **`tbl_stock_items.source_job_item_id`**: traceability FK on promoted stock, pointing to the job item that first caused the stock row to exist. `ON DELETE SET NULL` — deleting the source job item doesn't destroy the stock row (it may now have physical inventory; PM can deactivate manually). For catalogue-seeded stock this field is null
 - **Never wipe `notes` wholesale on promote**: the helper only clears `notes` when it exactly equals the legacy `PROMOTE_TO_STOCK` flag. Real user notes on job items are preserved
 - **Product code pattern for promoted stock**: `PROMO-{item_id}`. `tbl_stock_items.product_code` has no unique constraint (per S16 learning), so collisions aren't a risk — but using the item_id makes the code traceable to the originating item by eye
+
+
+---
+
+## Session 28 — PM 100m view (`/pm/*`) and unified learnings as notes
+**Date**: 20 April 2026
+**Deploy**: 1 commit, 10 files changed. Built a read-mostly PM view at `/pm/jobs` and `/pm/jobs/[id]` alongside the existing admin view, with a header switcher that lets any authenticated user flip between the two.
+
+**Why the change:** Pilot for handing a PM an overview without handing over the full admin system. The admin view is deep, operational, and editable everywhere. The PM view is shallow by design: one level (jobs list), then a single per-job page where the quote line is the row and everything underneath — scope, WOs, materials, costs, notes — expands inline. "100m view" not because it's sparse, but because the entry altitude is always the quote line, never a scope or a WO.
+
+**What a PM actually sees:**
+- A jobs grid with event date, days-to-event badge, line count and quote total
+- Per job: every quote line, grouped by `line_sub_group`, filterable by zone and department
+- Expanding a quote line shows the cost strip (Quoted | PM est | Workshop est | Committed | Actual labour), the WOs, the materials rolled up by description (with "used in N WOs" sub-expand, stock/ordering flags, suppliers), and Notes at every level — line, scope, WO, material
+- Multi-scope quote lines get a Scope tier inside the expansion; single-scope lines hide it; orphan lines (no scope yet) show a grey "Not planned yet" badge and a notes-only expansion
+- Documents attached to WOs surface as inline download chips — including the new `cad_model` doc_type (SketchUp / AutoCAD source files) with a distinctive 3D icon
+
+**The view switcher:**
+- Small Admin / PM pill in the header, shown to every authenticated user
+- Click = POST to `/api/auth/preferred-view` which updates the caller's `app_metadata.preferred_view` via the service-role key, then navigates to `/` or `/pm/jobs`
+- Middleware: on a visit to `/`, if `preferred_view === 'pm'`, redirect to `/pm/jobs`. Neither view is access-locked — the switcher is always present and always works, independent of role
+
+**Notes = learnings (the unifying call of the session):**
+- Discovered `tbl_learnings` already had `quote_line_id` and `bom_id` FKs and `qry_learnings_enriched` already exposed them. No schema change needed to treat PM notes as learnings
+- Every note-capture point in the 100m view is `<LearningsSection>` with an appropriate `filterField`: `job_id`, `quote_line_id`, `scope_item_id`, `work_order_id`, `bom_id`
+- Writing a "note" creates a learning tied to that anchor. Six months from now the learning search surfaces those notes alongside retros. One knowledge base, not two
+- Intentional non-goal: the threaded-conversation UX. Each note is a full learning with category + severity + optional cost/hours impact. Lighter "just leave a comment" UX can be added as a LearningCapture preset later without a schema change
+
+**RPC `rpc_pm_job_overview(p_job_id INTEGER) RETURNS JSON` (SECURITY INVOKER STABLE):**
+Single call returns everything the 100m page needs:
+```
+{ job, quote_lines: [{
+    quote_line_id, line_number, line_sub_group, line_text, quantity,
+    unit_price, line_value, category, event_zone, pm_note, pm_est_*,
+    scope_count, scopes:[{scope_item_id, item_name, status, complexity,
+                          finish, event_zone, description}],
+    wo_count, work_orders:[{work_order_id, scope_item_id, activity_label,
+                            description, status, estimated_duration_hrs,
+                            actual_hours, actual_labour_cost, lead_name,
+                            paint_notes, predecessor_wo_id, wo_sequence}],
+    bom_groups:[{group_key (description), first_bom_id, line_count,
+                 total_quantity, unit, total_cost, any_from_stock,
+                 any_needs_ordering, wo_ids[], suppliers[]}],
+    bom_total, estimated_labour_cost, estimated_material_cost,
+    documents:[{doc_id, work_order_id, doc_type, file_name,
+                onedrive_path, file_size, uploaded_at}],
+    learning_count, learning_open }]}
+```
+- BOM aggregation dedups by `item_description` within each quote line. `any_from_stock` / `any_needs_ordering` are OR across rows; `first_bom_id` anchors the notes section for that material group
+- WO actual hours and labour cost come from `tbl_wo_time_entries` with `archived_at IS NULL` filter (S22 convention)
+- Uses `qry_scope_estimated_cost` columns `estimated_labour` and `estimated_materials` (bare names, no `_cost` suffix — caught in v1 migration attempt)
+- Smoke-tested on Grosvenor (job 8): 89 lines, 73 orphan, 0 multi-scope — confirms orphan/1-scope branches
+
+**Schema change:**
+- `tbl_wo_documents.doc_type` CHECK constraint extended to include `cad_model`. Existing values untouched: `cut_list | drawing | reference | model | cad_model`. `model` continues to mean GLB/GLTF inline viewer files; `cad_model` is download-only for SketchUp / AutoCAD / 3DM / STEP / IGES source files
+- Constraint comment: `model = GLB/GLTF (inline 3D viewer). cad_model = SketchUp/AutoCAD/3D source files (download-only).`
+
+**What's deferred:**
+- **CAD file upload** in the admin WO docs panel. The `cad_model` doc_type exists, and the PM view renders download chips with a distinct 3D icon when docs have that type. But the admin-side upload flow (adding `.skp .dwg .3dm .step .iges` to accepted extensions, routing to `Workshop/{jobNumber}/cad/` OneDrive subfolder) is not wired — upload whatever's there today via the existing doc types, and the first CAD file will probably land via a raw OneDrive put
+- **Multi-scope rendering** is implemented but untested on real data (no multi-scope quote lines exist in the system yet). Will validate the first time a quote line is broken into 2+ scopes
+- **PM-facing dashboard at `/pm`** — for now the PM route namespace redirects into `/pm/jobs` via the sidebar default. Home tile can come later with upcoming events, open-flag counts, what's late
+
+### New/Modified Files (Session 28)
+| File | Purpose |
+|------|---------|
+| `src/app/api/auth/preferred-view/route.ts` | NEW — writes `app_metadata.preferred_view` via service role, validates caller's session |
+| `src/components/view-switcher.tsx` | NEW — header pill, Admin ⇄ PM, navigates to landing page |
+| `src/components/pm-sidebar.tsx` | NEW — simplified sidebar (Jobs only + PM badge + signout) |
+| `src/app/pm/layout.tsx` | NEW — mirrors admin layout; sticky header with ViewSwitcher |
+| `src/app/pm/jobs/page.tsx` | NEW — cards grid, search, event date + days-to-event, line count |
+| `src/app/pm/jobs/[id]/page.tsx` | NEW — the 100m view; QuoteLineRow, WoBlock, MaterialRow, CostStrip helper components |
+| `src/app/(dashboard)/layout.tsx` | Added sticky top header carrying ViewSwitcher (was header-less) |
+| `src/middleware.ts` | On landing at `/`, honour `app_metadata.preferred_view === 'pm'` → redirect to `/pm/jobs` |
+| `TRACKER.md` | This entry |
+
+### SQL Run (Session 28)
+```sql
+-- Add cad_model to doc_type CHECK
+ALTER TABLE tbl_wo_documents DROP CONSTRAINT tbl_wo_documents_doc_type_check;
+ALTER TABLE tbl_wo_documents
+  ADD CONSTRAINT tbl_wo_documents_doc_type_check
+  CHECK (doc_type::text = ANY (ARRAY[
+    'cut_list','drawing','reference','model','cad_model'
+  ]::text[]));
+
+-- rpc_pm_job_overview — see migration file for the full CTE chain
+CREATE OR REPLACE FUNCTION rpc_pm_job_overview(p_job_id INTEGER)
+  RETURNS JSON LANGUAGE sql SECURITY INVOKER STABLE AS $$ … $$;
+GRANT EXECUTE ON FUNCTION rpc_pm_job_overview(INTEGER) TO authenticated;
+```
+
+### Conventions Added (Session 28)
+- **View-layer routing is separate from permissions.** `/pm/*` and `/` are two different presentations over the same data, not two privilege tiers. The switcher is the only control; no role-gating blocks either view. Freelancer role still hard-routes to `/m/*` as before
+- **Preferred view lives in `app_metadata`, not `user_metadata`.** `user_metadata` is user-editable from the client; `app_metadata` requires service role. Using `app_metadata` means the setting survives a malicious client edit and middleware can trust it. Service-role endpoint `/api/auth/preferred-view` is the only write path
+- **Notes at every level are learnings.** Do not create parallel comment tables. `<LearningsSection>` accepts any of 10 `filterField` values; reusing it anywhere needing a "leave a note here" UX is the default. The `contextLabel: string` field on `LearningEntityContext` is required — build it from the visible headline of the thing being noted (quote line text, scope name, WO activity, material description)
+- **Quote-line-first rendering is the PM lens.** Scope is an internal decomposition the PM doesn't need unless it diverges from the quote (2+ scopes on one line). Rendering rule: `scope_count === 1` → flat WO list, no scope shown; `scope_count >= 2` → scope sub-sections; `scope_count === 0` → grey "Not planned yet" with notes-only expansion. No "Plan this" affordance — PM view is read-only pilot
+- **Material rollup groups by description, not by `material_id` or `stock_item_id`.** Many BOM rows have no material or stock FK but do have hand-typed descriptions. Grouping by description catches more cases. `first_bom_id` is used as the notes anchor (one learning thread per material group rather than per BOM row)
+- **RPC payload shape: single call, full tree.** 100m view uses one `rpc_pm_job_overview` call. No lazy loading of expansion data. At 149 lines (Summer Solstice scale) the JSON is still well under a few hundred KB and network + render complete in ~1–2s. If that becomes painful, graduate to lazy expansion per-line rather than switching to multiple queries per line
+- **`build.log` is untracked.** Added to `.gitignore`. Session 28 accidentally committed the build output log; removed in the cleanup follow-up
+
+### On the horizon
+- CAD file upload in admin WO docs panel (accepted extensions + OneDrive `/cad/` subfolder)
+- Admin-side rendering of the notes-as-learnings thread on WO / scope / quote-line pages (reuse same component, minimal lift)
+- PM home dashboard at `/pm` with upcoming events, flag counts, what's late
+- Traveller PDF with QR code (still parked pending WO workflow stabilisation)
