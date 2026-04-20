@@ -2578,3 +2578,98 @@ GRANT EXECUTE ON FUNCTION rpc_pm_job_overview(INTEGER) TO authenticated;
 - Admin-side rendering of the notes-as-learnings thread on WO / scope / quote-line pages (reuse same component, minimal lift)
 - PM home dashboard at `/pm` with upcoming events, flag counts, what's late
 - Traveller PDF with QR code (still parked pending WO workflow stabilisation)
+
+
+---
+
+## Session 28b — PM view iteration (sort, richer row, PM notes, cost analysis, doc thumbnails)
+**Date**: 20 April 2026
+**Deploy**: 1 commit, 5 files changed. First-pass review of the PM 100m view surfaced six follow-ups. All shipped in one iteration.
+
+### What the review flagged
+1. **Line numbers sorted as text** — "1, 10, 11, 2, 20" instead of "1, 2, 3". Plus no user-facing sort control.
+2. **Collapsed row too thin** — only showed Quoted; no Workshop estimate, no Live Spent. And no visible note.
+3. **Notes ≠ learnings** — a "PM note" is an explanation or tip, not a structured learning. Wanted it inline per line, severity-less, visible on the row itself, and flagged up on the admin dashboard. Under the hood still a learning (unified knowledge layer), but with its own category and minimal capture UX.
+4. **Cost analysis too shallow** — 5-cell strip wasn't enough; wanted per-WO breakdown with time entries.
+5. **Materials notes per-row was wrong** — one notes thread for the whole Materials section, not one per material line.
+6. **WO documents as tiny chips was wrong** — wanted thumbnails per WO, larger, grouped by doc_type (Drawing / Cut list / 3D model).
+
+### What shipped
+
+**Natural line sort, user-selectable.** RPC v3 extracts leading integer from `line_number` via `NULLIF(regexp_replace(line_number,'[^0-9].*$',''),'')::INT`, exposes as `sort_key`. Frontend ORDER BY uses it by default; client-side re-sort via dropdown (line number / value ↓ / value ↑ / department / zone). Sub-group headers only render when sorted by line number — any other sort would fragment them nonsensically.
+
+**Richer row.** Collapsed row now shows Quoted on top, Workshop estimate + Live Spent below it, right-aligned. Live Spent = `total_actual_labour + bom_total` (actual labour from time entries + committed materials BOM). Under the line text, a compact dashed-border PM note bar shows either the current note or `+ Add PM note`. Clicking the bar inline-expands to a textarea with ⌘↵ to save, Esc to cancel. Empty save deletes the note.
+
+**PM note as a real concept.**
+- Two new values on `learning_category` enum: `pm_note` and `materials_note`
+- `LEARNING_CATEGORIES` lib entry for each, both `bias: "neutral"`, no `subOptions`, distinct colour (`pm_note` = starlight-blue, `materials_note` = teal)
+- New component `src/components/pm-note-inline.tsx` — upserts one `pm_note` learning per `quote_line_id`. Find existing → update headline; no existing → insert with `actionable=false`, `severity=1`. Empty text deletes. Compact (in-row) and edit (textarea) modes.
+- RPC returns the latest `pm_note` per line as `pm_note_inline_id` / `pm_note_inline_text` / `pm_note_inline_updated_at` via `DISTINCT ON (quote_line_id) … ORDER BY quote_line_id, updated_at DESC`
+- `LearningsSection` extended with `filterCategories` and `excludeCategories` props so other threads (WO notes, scope notes, "Other learnings on this line") silently skip `pm_note` + `materials_note` and don't double-render
+
+**Detailed cost analysis.** Inside quote line expansion, above the WOs, a compact per-WO table: WO ID, activity, status, est hrs, actual hrs, **variance (coloured green/red)**, labour cost. Totals row at the bottom. Variance in hours is signed and formatted via `formatHours`.
+
+**WO individual expand with time entries + thumbnails.** Each `WoBlock` is now a clickable row (was always-open). Click to expand:
+- Description + lead + paint_notes
+- **Time entries table** — who, date, hours, applied rate, cost, with totals. From the RPC payload (`time_entries` array per WO, archived filtered out).
+- **Document gallery** — new `DocumentGallery` component. Groups docs by `doc_type` with typed headers: Drawings / Cut lists / 3D models / CAD files / Reference. Each doc is a 176px-wide card with icon header, file name, extension, size, download action. Image extensions show an image icon (thumbnail proxy is a follow-up; OneDrive direct URLs aren't `<img>`-safe)
+- WO-level learnings thread (excluding `pm_note` + `materials_note`)
+
+**Materials section has one notes thread.** Top of the section is `<LearningsSection filterCategories={["materials_note"]} filterField="quote_line_id">`, so adding a note from here creates a `materials_note` learning anchored to the quote line. Per-row notes on materials are gone. `MaterialRow` still shows `from_stock` / `needs_ordering` flags, supplier, "Used in N WOs" expand.
+
+**Job-level totals strip.** Above the filter row, three cards: Quoted / Workshop estimate / Live spent — summed across all lines. Same inputs as the per-line row, aggregated.
+
+**Job header counts.** Adds `· N PM notes` if any line has a `pm_note_inline_text`, `· N not planned` if any are orphan.
+
+### RPC v3 additions (vs v2)
+```
+sort_key              INT   -- leading integer of line_number, 999999 fallback
+pm_note_inline_id     UUID  -- latest pm_note learning for this line, if any
+pm_note_inline_text   TEXT  -- its headline
+pm_note_inline_updated_at  TIMESTAMPTZ
+total_actual_labour   NUMERIC -- sum of wo actual_labour_cost on this line
+
+work_orders[].time_entries[{
+  entry_id, freelancer_name, work_date, actual_hours,
+  applied_hourly_rate, entry_cost, flag_note
+}]
+```
+ORDER BY in the top-level JSON_AGG became `ql.sort_key, ql.line_number`.
+
+### New/Modified Files (Session 28b)
+| File | Purpose |
+|------|---------|
+| `src/components/pm-note-inline.tsx` | NEW — inline PM-note editor, upsert one learning per quote line |
+| `src/lib/learnings.ts` | Added `pm_note` + `materials_note` to `LearningCategory` union and `LEARNING_CATEGORIES` |
+| `src/components/learnings-section.tsx` | Added `filterCategories` and `excludeCategories` props |
+| `src/app/pm/jobs/[id]/page.tsx` | Full rewrite: natural sort, sort dropdown, richer row with 3 cost cells + PM note bar, job totals strip, per-WO cost table, `WoBlock` individual expand with time entries table + `DocumentGallery`, single materials notes thread, orphan-aware body |
+| `TRACKER.md` | This entry |
+
+### SQL Run (Session 28b)
+```sql
+-- Add the two new learning categories
+ALTER TYPE learning_category ADD VALUE IF NOT EXISTS 'pm_note';
+ALTER TYPE learning_category ADD VALUE IF NOT EXISTS 'materials_note';
+
+-- Rewrite rpc_pm_job_overview (see full CTE chain in migration)
+-- Key changes:
+--   * Adds `sort_key` on the `lines` CTE via regex
+--   * New `pm_notes` CTE: DISTINCT ON (quote_line_id) ordered by updated_at DESC
+--   * New `time_entries` sub-SELECT on each `wo_rich` row
+--   * `wos_per_line` now also aggregates `total_actual_labour`
+--   * Top-level JSON_AGG ORDER BY ql.sort_key, ql.line_number
+```
+
+### Conventions Added (Session 28b)
+- **PM notes are upserted, not threaded.** One `pm_note` learning per `quote_line_id`; the `PmNoteInline` component finds-then-updates, or inserts if none exists. Keeps the "note is a statement, not a conversation" mental model. The audit log still captures every change if you need history. Empty text deletes the learning.
+- **Category-filtered threads.** When multiple note types can anchor to the same entity, filter the `LearningsSection` thread with `filterCategories` (positive list) or `excludeCategories` (negative list). Example: materials section uses `filterCategories={["materials_note"]}`; WO / scope / other threads use `excludeCategories={["pm_note", "materials_note"]}` so PM and materials notes don't bleed across.
+- **Varchar line-number sort.** `tbl_quote_lines.line_number` is varchar and may contain "1", "1a", "10", "Sub-15". Natural sort key: `NULLIF(regexp_replace(line_number, '[^0-9].*$', ''), '')::INT` with 999999 fallback for non-numeric. Exposed as `sort_key` in the RPC so the frontend can re-sort client-side without another query.
+- **Row = 3 numbers, body = 5 layers.** Quoted / Workshop est / Live spent on the collapsed row is the at-a-glance summary; full waterfall (PM est, scope-level estimate, committed, actual, variance) is only meaningful once expanded. Don't try to fit everything into the row.
+- **Sort vs group.** When sorting by anything other than `line_number`, sub-group (Infrastructure / Reception / Temple / …) headers disappear. A sub-group is a property of the original quote layout; any other sort dimension would produce nonsense like "Marquees" repeating for every department.
+- **Document thumbnails group by `doc_type`.** The PM doesn't think "documents on this WO" — they think "give me the drawing, give me the cutlist, give me the CAD file." Group by type with typed section headers, not by upload date.
+
+### On the horizon (carried from Session 28)
+- **Admin dashboard PM-note flag** — user asked for PM notes to show up on the admin home. Straightforward: `SELECT ql.line_number, ql.line_text, l.headline, p.job_name FROM tbl_learnings l JOIN tbl_quote_lines ql ON ql.quote_line_id = l.quote_line_id JOIN tbl_production_plan p ON p.job_id = ql.job_id WHERE l.category = 'pm_note' ORDER BY l.updated_at DESC LIMIT 10`. Render as a card on `/`.
+- **Real image thumbnails** — OneDrive direct paths can't be used as `<img src>`; needs a proxy endpoint (or signed-URL generation via Graph API). For now docs show icon placeholders sized like thumbnails.
+- **CAD file upload** in the admin WO docs panel — accept `.skp .dwg .3dm .step .iges`, route to `Workshop/{jobNumber}/cad/`
+- **Multi-scope rendering** still untested on real data — no quote line has 2+ scopes yet in production
