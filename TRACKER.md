@@ -2673,3 +2673,57 @@ ALTER TYPE learning_category ADD VALUE IF NOT EXISTS 'materials_note';
 - **Real image thumbnails** — OneDrive direct paths can't be used as `<img src>`; needs a proxy endpoint (or signed-URL generation via Graph API). For now docs show icon placeholders sized like thumbnails.
 - **CAD file upload** in the admin WO docs panel — accept `.skp .dwg .3dm .step .iges`, route to `Workshop/{jobNumber}/cad/`
 - **Multi-scope rendering** still untested on real data — no quote line has 2+ scopes yet in production
+
+
+---
+
+## Session 28d — PM RPC fixes: WO-attached BOM + Length-unit cost conversion
+**Date**: 20 April 2026
+**Deploy**: RPC-only (applied via Supabase migration). No frontend commit required — live on next page load.
+
+### What was wrong
+Looking at scope 17 on Grosvenor (pleated polyline wall), two separate bugs surfaced:
+
+1. **Polyline material missing from PM view.** Admin scope page showed 4 materials including "Polyline IFR 60&quot;/150cm Dark Green 54 Metre £243.00"; PM view showed only 1 material (the 3x2 timber) and Spent £201.60 instead of £438+. Root cause: `rpc_pm_job_overview` joined BOM to quote line via `scope_item_id` only. The polyline row had `scope_item_id=NULL, work_order_id=23` — the BOM was attached to the WO directly, not the scope. Any BOM row added from the WO panel rather than the scope panel was being silently dropped.
+
+2. **3x2 Rounded Edge priced at £6.60 instead of £31.68.** Both admin and PM showed `£1.65 × 4 = £6.60`. But `tbl_materials.unit = "Metre"` and `standard_length = 4800 mm`, so £1.65 is the per-**metre** price, and "4 Length" is 4 × 4.8m = 19.2m of timber. Correct cost: £31.68. The BOM row's `unit_cost = 1.65` was inherited from the material's per-metre `current_unit_cost`, but the BOM row's `unit = 'Length'` — unit mismatch was not being reconciled.
+
+### Fix (both in rpc_pm_job_overview v5)
+
+**Dual-path BOM join.** The `bom_raw` CTE now reaches quote line via either scope or work order:
+```sql
+LEFT JOIN tbl_scope_items si_direct ON si_direct.scope_item_id = b.scope_item_id
+LEFT JOIN tbl_work_orders wo ON wo.work_order_id = b.work_order_id
+LEFT JOIN tbl_scope_items si_via_wo ON si_via_wo.scope_item_id = wo.scope_item_id
+-- quote_line_id = COALESCE(si_direct.quote_line_id, si_via_wo.quote_line_id)
+```
+And filtered with `WHERE quote_line_id IS NOT NULL` in `bom_grouped` — BOM rows that reach nothing (orphans) stay excluded. A BOM row that appears in both paths (scope and WO agreeing) resolves to one quote line via the coalesce; no risk of double-counting because each BOM row is one source row in the CTE.
+
+**Unit→base multiplier.** Applied only when BOM row's `unit = 'Length'` AND material's `unit IN ('Metre', 'Meter', 'M')` AND `standard_length > 0`:
+```sql
+CASE
+  WHEN LOWER(b.unit) = 'length'
+   AND LOWER(m.unit) IN ('metre','meter','m')
+   AND m.standard_length > 0
+  THEN m.standard_length / 1000.0
+  ELSE 1.0
+END
+```
+Multiplier is applied inside `SUM(qty × unit_cost × multiplier)` in `bom_grouped`. Deliberately narrow: doesn't touch floor-covering (where a different convention of `unit='Metre'` + `standard_width_mm` applies), doesn't touch sheets, doesn't touch anything where unit_cost was already stored in the BOM's unit. Only the "per-metre price stored, lengths counted" case is reconciled.
+
+### Regression check
+Sum of `materials_total + job_items_total` across all 89 lines of Grosvenor = £9,709.09, matched exactly to raw aggregation of the same BOM rows with the same multiplier in a separate query. No duplication from the dual-path join, no over-counting.
+
+### New/Modified (Session 28d)
+| Object | Change |
+|--------|--------|
+| `rpc_pm_job_overview` | v5 — dual-path BOM join (scope OR WO), unit→base multiplier for Length-on-Metre materials |
+| `TRACKER.md` | This entry |
+
+### Conventions added (Session 28d)
+- **BOM reaches quote line via two paths**, not one. Scope-attached (`b.scope_item_id` set) and WO-attached (`b.work_order_id` set, `b.scope_item_id` null) are both valid. Any query that aggregates BOM up to quote/job level must handle both — use `COALESCE(si_direct.quote_line_id, si_via_wo.quote_line_id)` with `LEFT JOIN tbl_work_orders` in the middle. This applies to future reports, dashboards, and exports.
+- **BOM unit ≠ material unit means conversion, not display.** When `tbl_wo_bom.unit = 'Length'` and `tbl_materials.unit = 'Metre'`, the BOM's `unit_cost` is still per-metre (inherited from material's price), so cost = `qty × unit_cost × (standard_length/1000)`. The earlier convention "BOM total = qty × unit_cost always" (from S16) was too blunt — it accidentally under-prices any timber/linear-trim row stored with unit='Length'.
+- **The exception is targeted, not general.** Only Length-on-Metre is reconciled. Floor covering (Metre-on-Metre with width conversion) and Sheet (matched units) stay on the plain `qty × unit_cost` path.
+
+### Admin view has the same Bug 2
+The admin scope page (`/jobs/[id]/scope/[scopeId]`) also renders 3x2 Rounded Edge at £6.60. It doesn't use `rpc_pm_job_overview` — it computes BOM totals directly from tbl_wo_bom. Same multiplier logic needs applying on the admin side. Not fixed in this session because the user flagged the PM view specifically; worth doing in the next session as a small, self-contained follow-up so admin cost analysis and procurement totals pick up the correction.
