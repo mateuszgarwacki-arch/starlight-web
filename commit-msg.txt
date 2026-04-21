@@ -1,27 +1,8 @@
-S30 Phase 2: Job-level and scope-level document panels
+S31 tracker: Phase 2 job + scope doc mounts entry, backlog items
 
-- WODocumentsPanel gains a job-level query branch: when neither WO nor
-  scope is passed, loads docs anchored directly at the job (scope_item_id
-  and work_order_id both null)
-- cut_list section hidden at non-WO mounts (the extractor is tightly
-  coupled to a single WO's BOM)
-- Mounted on /jobs/[id] as a new "Job Documents" card after the
-  invoices/orders block — site plans, master CAD, job-wide references
-- Mounted on /jobs/[id]/scope/[scopeId] as "Scope Documents" card after
-  the learnings section — scope CAD concept/breakdown, scope drawings
-
-No inheritance: each anchor level shows only its own docs. Mobile
-freelancer view, traveller PDF, and WO panel are unaffected (they
-filter by work_order_id).
-
-PM 100m view's rpc_pm_job_overview already surfaces scope-anchored
-docs under their parent quote line (via tbl_scope_items join) — so
-scope-level uploads will appear in PM view automatically. Job-level
-docs stay off the PM view by design; they're browsed via the admin
-Job Documents card, and Phase 3's /library/cad will handle cross-job
-discovery.
-
-Known gaps (deferred to cleanup backlog):
-- Job-level filename collisions: no activity/scope prefix, same filename
-  twice overwrites (OneDrive conflictBehavior=replace)
-- WODocumentsPanel still uses raw supabase.insert() not auditedInsert
+Phase 2 shipped in previous commit (bcb7c92) — this is pure docs:
+- Session 31 entry in Build Progress Log with full design notes,
+  visibility matrix, stress tests, conventions
+- Three new items added to Features deferred in the Cleanup Backlog:
+  Phase 3 cross-job library, job-level filename collisions,
+  WODocumentsPanel audit gap

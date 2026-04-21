@@ -12,6 +12,9 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 - [ ] **Next.js 16 middleware rename** *(S28)* — `middleware.ts` → `proxy.ts`. Emits a deprecation warning on every build. Straight file rename; update `src/middleware.ts` export convention if needed.
 
 ### Features deferred
+- [ ] **Phase 3 — `/library/cad` cross-job search** *(S31)* — flat list of every CAD file across every job with filters on scope category, client, date, free text. Single query joining `tbl_wo_documents` (filtered to `cad_concept` + `cad_breakdown`) → `tbl_scope_items` → `tbl_production_plan` → `tbl_scope_item_categories`. Builds on Phase 1 + Phase 2 schema and component. This is the real discovery payoff for the CAD feature — finding kiosks/desks from past jobs.
+- [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
+- [ ] **`WODocumentsPanel` raw inserts → `auditedInsert`** *(S31)* — pre-existing gap, not introduced by Phase 2. Uploads don't appear in the audit log. Straight swap to `auditedInsert(ctx, "tbl_wo_documents", { ... }, jobId)`.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
 - [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
 
@@ -2943,3 +2946,68 @@ COMMENT ON COLUMN tbl_wo_documents.doc_type IS
 - **CAD files are PM/lead only**: always filter out `cad_concept` + `cad_breakdown` from any freelancer-facing docs query. No permission system needed — query-level filter is the enforcement
 - **OneDrive CAD folder convention**: `Workshop/{jobNumber} - {jobName}/CAD-Concept/` or `.../CAD-Breakdown/`. Separate folders so OneDrive browsing stays organised and filename collisions are impossible
 - **DOC_TYPE_CONFIG `helpText` field**: optional italic helper line under section header. Used for CAD types ("requires CAD software"); available for any future doc_type that needs a usage hint
+
+
+### Session 31 (21 Apr 2026) — CAD File Uploads Phase 2: Job + Scope Mounts
+1 commit, 3 files changed, 63 insertions. Phase 2 of the CAD library feature. Brings the same document panel to job-level and scope-level, so PM can anchor site plans at the job, and scope-specific CAD concept/breakdown at the scope.
+
+**Design principle (unchanged from Phase 1):**
+Strict level-scoping, no inheritance. Freelancers never see CAD files anywhere. Mobile, traveller PDF, and WO panel were all unaffected by this work — they filter by `work_order_id` and only see WO-anchored docs.
+
+**`WODocumentsPanel` (`src/components/wo-documents-panel.tsx`) — generalised:**
+- `loadDocs` gets a third query branch for job-level mounts: when neither `workOrderId` nor `scopeItemId` is passed, loads `WHERE job_id = :jobId AND scope_item_id IS NULL AND work_order_id IS NULL`. Existing WO and scope branches untouched.
+- `cut_list` section is hidden when there's no `workOrderId` — `CutListExtractor` is tightly coupled to a single WO's BOM and would break on scope/job mounts. Filter applied at the `Object.entries(DOC_TYPE_CONFIG)` render loop.
+- Insert logic and OneDrive folder routing already supported all three anchor levels (they write all three FKs from props and pick folder by doc_type), so no changes needed there.
+
+**Job page (`src/app/(dashboard)/jobs/[id]/page.tsx`):**
+- New "Job Documents" card mounted after the Invoices/Orders stacked block, before the Quote Lines / Scope / WO tabs.
+- Header text explains the scope: "Site plans, master CAD models, and reference material for the job as a whole. Scope- and WO-specific files live on their own pages."
+- Component receives only `jobId`, `jobNumber`, `jobName` — no scope or activity context, so filenames upload with no prefix.
+
+**Scope page (`src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx`):**
+- New "Scope Documents" card mounted after the LearningsSection, before the main inventory + WO panel grid.
+- Header text: "CAD concept & breakdown, drawings and references for this scope item. WO-specific files live on the WO itself."
+- Component receives `jobId`, `scopeItemId`, `scopeName`, `jobNumber`, `jobName` — filenames get the scope name prefix.
+
+**OneDrive folder routing (per-doc-type, same at all three anchor levels):**
+- `CAD — Concept` → `Workshop/{jobNumber} - {jobName}/CAD-Concept/`
+- `CAD — Breakdown` → `Workshop/{jobNumber} - {jobName}/CAD-Breakdown/`
+- Filenames: job-level has no prefix, scope-level has `{scope}-` prefix, WO-level has `{activity}-{scope}-` prefix
+
+**What's visible where now:**
+| Surface | Job-level docs | Scope-level docs | WO-level docs |
+|---|---|---|---|
+| Admin job page (new card) | ✓ | — | — |
+| Admin scope page (new card) | — | ✓ | — |
+| Admin WO panel | — | — | ✓ |
+| PM 100m view | — | ✓ (via scope→quote_line join in `rpc_pm_job_overview`) | ✓ |
+| Mobile freelancer view | — | — | ✓ (CAD types filtered client-side) |
+| Traveller PDF | — | — | ✓ (drawing/reference/cut_list only) |
+
+**Design decision: job-level docs do NOT surface on PM 100m view.** The RPC organises by quote line, and job-level docs aren't tied to any quote line. Job-level browsing happens on the admin Job Documents card; cross-job discovery is Phase 3's problem (`/library/cad`).
+
+**Stress-tested:**
+- Freelancer mobile view: no changes, still only loads WO-anchored docs, still filters CAD types client-side — confirmed clean
+- Traveller PDF: still hard-coded to `work_order_id` + type whitelist — unaffected
+- Existing WO-level uploads: unchanged render and query path — unaffected
+- cut_list at scope/job level: section hidden, so no broken CutListExtractor
+
+### New/Modified Files (Session 31)
+| File | Purpose |
+|------|---------|
+| `src/components/wo-documents-panel.tsx` | Added job-level query branch; hide cut_list when no workOrderId |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | Mounted as "Job Documents" card after Invoices/Orders block |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Mounted as "Scope Documents" card after LearningsSection |
+
+### SQL Run (Session 31)
+None. Pure frontend mount; schema from S30 already supports the new anchor levels.
+
+### What's deferred (Phase 3 + cleanup)
+- **Phase 3 — `/library/cad` cross-job search.** Flat list of every CAD file across every job with filters on scope category, client, date, free text. Single query with LEFT JOINs from `tbl_wo_documents` (filtered on CAD doc_types) → `tbl_scope_items` → `tbl_production_plan` → `tbl_scope_item_categories`. This is the discovery win — finding "that kiosk SketchUp from 14 months ago."
+- **Job-level filename collisions** *(S31)* — two uploads of `model.skp` to the same job's CAD-Concept folder will overwrite (OneDrive `conflictBehavior: "replace"`). Mitigation ideas: append short timestamp suffix when no scope/activity prefix is present; or show a "file exists, replace?" warning before upload. Low priority — PM can enforce version discipline in filenames (`Kiosk_v1.skp`, `Kiosk_v2_final.skp`) for now.
+- **`WODocumentsPanel` uses raw `supabase.insert()`** *(S31)* — pre-existing gap; not introduced by this work. When wired through `auditedInsert` via `/lib/audit.ts`, uploads appear in Settings → Audit Log with `action_type: "insert"`. Part of general audit-coverage cleanup.
+
+### Conventions Added (Session 31)
+- **Three-anchor-level document panel convention.** `WODocumentsPanel` supports mounting at job, scope, or WO level. Branch priority: WO > scope > job. Render and insert logic are the same; OneDrive folder routing is driven by `doc_type`, filename prefix by available context.
+- **No inheritance across anchor levels.** Each surface shows only docs anchored at its own level. PM view surfaces scope-level docs via the RPC's scope→quote_line join; job-level stays admin-only.
+- **Render filter pattern.** When some doc types don't belong at a given mount (e.g. `cut_list` needs a workOrderId), filter `Object.entries(DOC_TYPE_CONFIG)` at render time rather than conditionally adding to the `grouped` object.
