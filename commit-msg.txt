@@ -1,8 +1,25 @@
-S31 tracker: Phase 2 job + scope doc mounts entry, backlog items
+S30 Phase 3: Cross-job CAD library at /library/cad
 
-Phase 2 shipped in previous commit (bcb7c92) — this is pure docs:
-- Session 31 entry in Build Progress Log with full design notes,
-  visibility matrix, stress tests, conventions
-- Three new items added to Features deferred in the Cleanup Backlog:
-  Phase 3 cross-job library, job-level filename collisions,
-  WODocumentsPanel audit gap
+The real discovery payoff — flat searchable archive of every
+SketchUp/AutoCAD/STEP file uploaded anywhere in the system.
+
+- New page /library/cad with compact table
+- Filters: free-text search (filename + scope + job + client),
+  scope category, client, concept/breakdown toggle, date presets
+  (all / year / 3m / month)
+- Sortable columns: filename, job, event date, uploaded date
+- Row links click through to job and scope pages for context
+- Download button opens OneDrive direct URL in new tab
+- Empty states: distinct messages for "nothing uploaded yet" vs
+  "no matches for current filters"
+- Sidebar: new CAD Library entry near Stock, uses Library icon
+- Data path: single Supabase REST query with nested selects joining
+  tbl_production_plan, tbl_scope_items, tbl_scope_item_categories
+  — no new RPC or view required. Client-side filter + sort after
+  load. Will revisit if volume ever exceeds a few hundred files.
+
+Deliberately excluded from v1:
+- "Uploaded by" column (needs auth.users join, deferred)
+- Image thumbnails (CAD files have no previews)
+- Version/supersede tracking
+- Granular date range picker (presets cover real use)
