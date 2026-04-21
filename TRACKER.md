@@ -3011,3 +3011,81 @@ None. Pure frontend mount; schema from S30 already supports the new anchor level
 - **Three-anchor-level document panel convention.** `WODocumentsPanel` supports mounting at job, scope, or WO level. Branch priority: WO > scope > job. Render and insert logic are the same; OneDrive folder routing is driven by `doc_type`, filename prefix by available context.
 - **No inheritance across anchor levels.** Each surface shows only docs anchored at its own level. PM view surfaces scope-level docs via the RPC's scope→quote_line join; job-level stays admin-only.
 - **Render filter pattern.** When some doc types don't belong at a given mount (e.g. `cut_list` needs a workOrderId), filter `Object.entries(DOC_TYPE_CONFIG)` at render time rather than conditionally adding to the `grouped` object.
+
+
+### Session 32 (21 Apr 2026) — CAD Library Phase 3: Cross-Job Search Page
+1 commit, 3 files changed, 495 insertions. Final phase of the CAD feature — the real discovery payoff. Searchable archive of every CAD file uploaded anywhere in the system (job, scope, or WO level) so PM/lead can find precedents from past jobs.
+
+**The use case this solves:**
+"We're quoting a new kiosk. We've built three kiosks before — pull up the SketchUp for the Grosvenor one." Previously buried in OneDrive folder trees, now one search away.
+
+**Page (`/library/cad`):**
+- Compact table: Type (concept/breakdown chip) · Filename · Job · Scope & Category · Event date · Uploaded · Size · Download
+- Row click-throughs: job link and scope link open in the same tab via Next.js `<Link>`
+- Download button opens fresh OneDrive direct URL in new tab (uses existing `getOneDriveUrl` helper)
+- Empty states: distinct messages for "nothing uploaded system-wide" vs "no filter matches"
+- Shows anchor level (Job-level / Scope-level / WO-level) as a subtle subtitle under filename
+
+**Filters (client-side after load):**
+- **Free-text search** across filename, job name, job number, scope name, client name, category name
+- **Scope category dropdown** populated from actual data (only categories with CAD files appear)
+- **Client dropdown** also derived from data
+- **Type toggle pills** — All / Concept / Breakdown
+- **Date preset pills** — All time / Last year / Last 3m / Last month. Filters on upload date. Deliberately no granular date-range picker (real usage is always "recent-ish" or "all time")
+- **Clear filters** button appears when any filter is active, showing filter count
+
+**Sort (client-side):**
+- Sortable column headers: Filename, Job, Event date, Uploaded. Click to toggle asc/desc
+- Default sort: `uploaded_at DESC` (newest first — what you usually want)
+- String columns default to ascending on first click; date columns to descending. Smaller cognitive load than always starting ascending
+
+**Sidebar (`src/components/sidebar.tsx`):**
+- New entry: "CAD Library" between Stock and Orders. Uses lucide `Library` icon. Follows existing nav item shape exactly; no badge, no count
+
+**Data path — single Supabase REST query, no RPC or view:**
+```ts
+supabase.from("tbl_wo_documents")
+  .select(`
+    doc_id, doc_type, file_name, onedrive_path, file_size, uploaded_at,
+    job_id, scope_item_id, work_order_id,
+    job:tbl_production_plan!inner(job_id, job_number, job_name, client_name, event_date),
+    scope:tbl_scope_items(scope_item_id, item_name,
+      category:tbl_scope_item_categories(category_id, category_name)
+    )
+  `)
+  .in("doc_type", ["cad_concept", "cad_breakdown"])
+  .order("uploaded_at", { ascending: false });
+```
+Inner join on production_plan (every CAD must have a job). Left join on scope & category (job-anchored CAD has neither). Zero new schema, zero new views. Current volume is tiny (handful of files); RPC/view promotion deferred until volume justifies.
+
+**Stress tests:**
+- **Page empty (no CAD anywhere)**: helpful empty state tells user where to upload. Not a crash
+- **Filter empty (has CAD but filters exclude all)**: distinct empty state with clear-filters button
+- **Job deleted but CAD survives**: `!inner` join means CAD with no job row won't appear (safer than displaying orphans)
+- **Scope deleted but CAD at scope level**: left join returns null scope; row renders with "Scope-level" anchor label but no scope name — still downloadable
+- **Freelancer access**: middleware (S7) restricts `/m/*` enforcement, but `/library/cad` is under `(dashboard)` so freelancers couldn't reach it anyway. PM/admin role-gating via existing RLS on `tbl_wo_documents`
+- **Large file download**: existing `getOneDriveUrl` returns a signed URL good for the OneDrive session; large .skp files (50-200MB) download fine
+
+### New/Modified Files (Session 32)
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/library/cad/page.tsx` | NEW — full library page with filters, sort, table, empty states |
+| `src/components/sidebar.tsx` | Added "CAD Library" nav item with Library icon |
+
+### SQL Run (Session 32)
+None. Uses existing schema from S30 (`doc_type = 'cad_concept' | 'cad_breakdown'`) and existing joins.
+
+### What the CAD feature looks like now (S30 + S31 + S32 complete)
+- **Upload points**: WO docs panel, Job Documents card, Scope Documents card — all three anchor levels supported
+- **Distinction**: Concept (design-side) vs Breakdown (workshop interpretation)
+- **PM view**: scope-anchored CAD appears under its quote line in `/pm/jobs/{id}` via existing RPC join
+- **Mobile / traveller**: CAD files filtered out at query level; freelancers never see them
+- **Discovery**: `/library/cad` flat searchable archive across all jobs, all time
+- **OneDrive folders**: `Workshop/{jobNumber} - {jobName}/CAD-Concept/` and `.../CAD-Breakdown/`
+- **Chunked upload**: large `.skp`/`.dwg` files stream direct to OneDrive, bypassing Vercel 4.5MB cap
+
+### Conventions Added (Session 32)
+- **Client-side filter + sort for list pages under a few hundred rows.** Load once, filter in `useMemo`. Good for CAD library, Materials, Stock. RPC/view promotion only when volume actually justifies.
+- **Empty state distinction**: always show distinct messages for "the dataset is empty" vs "filters exclude everything." Two different problems, two different fixes. Pattern already used on invoices, now applied here.
+- **Sortable header component**: `<SortableHeader label sortKey currentKey currentDir onToggle />` pattern for column-header sorting. Reusable if we add it to other list pages.
+- **Date preset pills over date-range pickers**: for "recent-ish" filtering, 4 pills (All / Year / 3m / Month) have 100× less friction than two date inputs and cover 95% of real use.

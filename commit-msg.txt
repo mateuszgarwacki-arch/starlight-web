@@ -1,25 +1,10 @@
-S30 Phase 3: Cross-job CAD library at /library/cad
+S32 tracker: CAD Library Phase 3 entry
 
-The real discovery payoff — flat searchable archive of every
-SketchUp/AutoCAD/STEP file uploaded anywhere in the system.
-
-- New page /library/cad with compact table
-- Filters: free-text search (filename + scope + job + client),
-  scope category, client, concept/breakdown toggle, date presets
-  (all / year / 3m / month)
-- Sortable columns: filename, job, event date, uploaded date
-- Row links click through to job and scope pages for context
-- Download button opens OneDrive direct URL in new tab
-- Empty states: distinct messages for "nothing uploaded yet" vs
-  "no matches for current filters"
-- Sidebar: new CAD Library entry near Stock, uses Library icon
-- Data path: single Supabase REST query with nested selects joining
-  tbl_production_plan, tbl_scope_items, tbl_scope_item_categories
-  — no new RPC or view required. Client-side filter + sort after
-  load. Will revisit if volume ever exceeds a few hundred files.
-
-Deliberately excluded from v1:
-- "Uploaded by" column (needs auth.users join, deferred)
-- Image thumbnails (CAD files have no previews)
-- Version/supersede tracking
-- Granular date range picker (presets cover real use)
+Phase 3 shipped in previous commit (aa23ad5) — this is pure docs:
+- Session 32 entry in Build Progress Log
+- Full design notes: page layout, filters, sort, data path,
+  stress tests, and conventions added (client-side filter+sort
+  pattern, empty-state distinction, sortable header component,
+  date preset pills vs range pickers)
+- Concluding "what the CAD feature looks like now" matrix
+  across all three phases (S30 + S31 + S32)
