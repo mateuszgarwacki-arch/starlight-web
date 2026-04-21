@@ -1,19 +1,20 @@
-S33 backlog cleanup: close S28d, drop orphan view, delete dead file
+S33: Next.js 16 middleware -> proxy rename
 
-Verified two-fix backlog item was actually shipped earlier than the
-tracker suggested — qry_bom_enriched already applies Length-on-Metre
-multiplier (via unit_to_base_multiplier CASE) and resolves dual-path
-anchor via effective_scope_item_id = COALESCE(b.scope_item_id, wo.scope_item_id).
-Real-data check on Grosvenor (job 13725):
-  - 3x2 Rounded Edge: reconciled_line_cost = 31.68 (not 6.60, multiplier 4.8x)
-  - Polyline: bom_scope_id NULL, effective_scope_item_id = 17 via WO
+Rename src/middleware.ts -> src/proxy.ts and
+export async function middleware() -> export async function proxy().
 
-Also dropped qry_wo_cost_material — orphan view with the old naive
-formula (qty * unit_cost, no multiplier). No SQL dependents, no frontend
-references. Dropping prevents reintroduction of buggy numbers.
+Closes the deprecation warning that was emitted on every build since
+the Next.js 16.1 upgrade. Behaviour identical — session check via
+Supabase SSR, freelancer-to-/m redirect, PM preferred_view redirect.
+Runtime implicitly changes from Edge (old middleware default) to
+Node.js (proxy mandates nodejs), which is fine here — createServerClient
+from @supabase/ssr is runtime-agnostic and nothing in the auth path
+is Edge-specific.
 
-Deleted src/components/job-items-table.tsx — unused since scope page
-redesign in S27. Build clean, 41 routes unchanged.
+Verified via npx next build — no deprecation warning, all 41 routes
+still mount, Proxy (Middleware) reported in build summary as expected.
 
-TRACKER.md: removed closed items from cleanup backlog top section,
-removed dead file from Key Files table.
+Smoke test before accepting the deploy:
+  1. Log out, hit any admin route -> redirects to /login
+  2. Log in as freelancer, try /jobs -> redirects to /m
+  3. Log in as admin, hit / with preferred_view=pm -> redirects to /pm/jobs

@@ -6,7 +6,7 @@ const PUBLIC_ROUTES = ["/login", "/m/login"];
 // API routes handle their own auth — don't interfere
 const API_PREFIX = "/api/";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public routes
