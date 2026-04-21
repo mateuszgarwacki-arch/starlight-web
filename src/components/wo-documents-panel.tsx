@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, getOneDriveUrl, jobFolder } from "@/lib/onedrive-client";
+import { getAuditContext, auditedInsert, auditedDelete } from "@/lib/audit";
 import { CutListExtractor } from "@/components/cutlist-extractor";
 import { ModelViewer } from "@/components/model-viewer";
 import {
@@ -101,7 +102,8 @@ export function WODocumentsPanel({
         const result = await uploadToOneDrive(file, folder, fileName);
         const { data: { user } } = await supabase.auth.getUser();
         const freelancerId = user?.user_metadata?.freelancer_id || null;
-        await supabase.from("tbl_wo_documents").insert({
+        const ctx = await getAuditContext(supabase);
+        await auditedInsert(ctx, "tbl_wo_documents", {
           work_order_id: workOrderId || null,
           scope_item_id: scopeItemId || null,
           job_id: jobId,
@@ -113,7 +115,7 @@ export function WODocumentsPanel({
           sort_order: docs.filter(d => d.doc_type === docType).length,
           uploaded_by: freelancerId,
           extraction_status: docType === "cut_list" ? "pending" : null,
-        });
+        }, jobId);
       } catch (err: any) {
         alert(`Upload failed for ${file.name}: ${err.message}`);
       }
@@ -125,7 +127,8 @@ export function WODocumentsPanel({
 
   const deleteDoc = async (docId: number) => {
     if (!confirm("Remove this file?")) return;
-    await supabase.from("tbl_wo_documents").delete().eq("doc_id", docId);
+    const ctx = await getAuditContext(supabase);
+    await auditedDelete(ctx, "tbl_wo_documents", docId, jobId);
     setDocs(prev => prev.filter(d => d.doc_id !== docId));
   };
 
