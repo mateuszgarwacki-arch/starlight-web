@@ -42,7 +42,11 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       .eq("work_order_id", workOrderId)
       .order("doc_type")
       .order("sort_order");
-    setDocs(data || []);
+    // CAD sources are PM/lead reference only — never surface on floor mobile.
+    const filtered = (data || []).filter(
+      d => d.doc_type !== "cad_concept" && d.doc_type !== "cad_breakdown"
+    );
+    setDocs(filtered);
     setLoading(false);
   }, [workOrderId]);
 

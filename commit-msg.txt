@@ -1,6 +1,17 @@
-S29 docs: TRACKER entry + schema snapshot
+S30 Phase 1: CAD file uploads on WO (concept + breakdown)
 
-- TRACKER.md: full Session 29 entry for invoice routing + Invoiced cost layer
-- starlight_database_schema_session29.md: new snapshot (47 tables, 41 views)
-  - tbl_invoice_allocations updated to scope XOR WO
-  - qry_invoice_wo_costs and qry_invoice_job_rollup added to Views list
+- DB: cad_model split into cad_concept + cad_breakdown in tbl_wo_documents.doc_type CHECK
+- Admin WO docs panel: two new upload sections for CAD concept and breakdown
+  - Accepted: .skp .skb .dwg .dxf .3dm .step .stp .iges .igs .f3d .sldprt .sldasm .prt .asm
+  - OneDrive folders: CAD-Concept / CAD-Breakdown under the job
+  - "Requires CAD software" hint rendered under each section header
+  - Files render as download-only list rows (no preview)
+- PM 100m view: DocumentGallery groups updated to concept + breakdown with distinct colours
+- Mobile WO docs: CAD types filtered out client-side (freelancer floor view stays clean)
+- Traveller PDF: no change needed; already hard-codes which types print (drawing/reference/cut_list)
+
+Uses existing chunked OneDrive upload path — any SketchUp file >3.5MB routes through
+/api/onedrive/upload-session bypassing the Vercel 4.5MB body cap.
+
+Phase 2 (next session): job-level and scope-level CAD upload sections.
+Phase 3: /library/cad cross-job search page.

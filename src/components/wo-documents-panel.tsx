@@ -7,7 +7,7 @@ import { CutListExtractor } from "@/components/cutlist-extractor";
 import { ModelViewer } from "@/components/model-viewer";
 import {
   FileText, Image, Box, Upload, Trash2, Download,
-  ChevronDown, ChevronRight, Eye, Plus, Loader2,
+  ChevronDown, ChevronRight, Eye, Plus, Loader2, FileCode2,
 } from "lucide-react";
 
 interface WODoc {
@@ -38,11 +38,13 @@ interface DocsPanelProps {
   onBomChanged?: () => Promise<void> | void;
 }
 
-const DOC_TYPE_CONFIG: Record<string, { label: string; icon: typeof FileText; color: string; accept: string; folder: string }> = {
+const DOC_TYPE_CONFIG: Record<string, { label: string; icon: typeof FileText; color: string; accept: string; folder: string; helpText?: string }> = {
   drawing: { label: "Drawings", icon: Image, color: "text-starlight-blue", accept: "image/*,.pdf", folder: "Drawings" },
   reference: { label: "References", icon: Image, color: "text-starlight-amber", accept: "image/*,.pdf", folder: "References" },
   cut_list: { label: "Cut Lists", icon: FileText, color: "text-starlight-green", accept: ".csv,.pdf,.xlsx", folder: "Cut-Lists" },
   model: { label: "3D Models", icon: Box, color: "text-starlight-red", accept: ".glb,.gltf", folder: "Models" },
+  cad_concept: { label: "CAD — Concept", icon: FileCode2, color: "text-starlight-blue", accept: ".skp,.skb,.dwg,.dxf,.3dm,.step,.stp,.iges,.igs,.f3d,.sldprt,.sldasm,.prt,.asm", folder: "CAD-Concept", helpText: "Design-side source · requires CAD software" },
+  cad_breakdown: { label: "CAD — Breakdown", icon: FileCode2, color: "text-starlight-amber", accept: ".skp,.skb,.dwg,.dxf,.3dm,.step,.stp,.iges,.igs,.f3d,.sldprt,.sldasm,.prt,.asm", folder: "CAD-Breakdown", helpText: "Workshop breakdown · requires CAD software" },
 };
 
 function sanitiseName(name: string, maxLen = 80): string {
@@ -174,6 +176,8 @@ export function WODocumentsPanel({
     reference: docs.filter(d => d.doc_type === "reference"),
     cut_list: docs.filter(d => d.doc_type === "cut_list"),
     model: docs.filter(d => d.doc_type === "model"),
+    cad_concept: docs.filter(d => d.doc_type === "cad_concept"),
+    cad_breakdown: docs.filter(d => d.doc_type === "cad_breakdown"),
   };
   const totalCount = docs.length;
 
@@ -212,6 +216,9 @@ export function WODocumentsPanel({
                           </>
                         )}
                       </div>
+                      {config.helpText && (
+                        <p className="text-[10px] text-faint italic pl-5 -mt-1 mb-1.5">{config.helpText}</p>
+                      )}
 
                       {typeDocs.length === 0 ? (
                         <p className="text-[10px] text-faint pl-5">No {config.label.toLowerCase()} added</p>

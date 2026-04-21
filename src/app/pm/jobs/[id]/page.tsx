@@ -149,11 +149,12 @@ function CostCell({ label, value, hint, emphasis }: { label: string; value: numb
 /* ---------- Document gallery (thumbnails grouped by type) ---------- */
 
 const DOC_TYPE_LABELS: Record<string, { label: string; icon: typeof FileText; colour: string }> = {
-  drawing:   { label: "Drawings",     icon: FileText,  colour: "text-sky-600" },
-  cut_list:  { label: "Cut lists",    icon: FileCode2, colour: "text-indigo-600" },
-  reference: { label: "Reference",    icon: Paperclip, colour: "text-muted" },
-  model:     { label: "3D models",    icon: Box,       colour: "text-emerald-600" },
-  cad_model: { label: "CAD files",    icon: Box,       colour: "text-starlight-blue" },
+  drawing:       { label: "Drawings",        icon: FileText,  colour: "text-sky-600" },
+  cut_list:      { label: "Cut lists",       icon: FileCode2, colour: "text-indigo-600" },
+  reference:     { label: "Reference",       icon: Paperclip, colour: "text-muted" },
+  model:         { label: "3D models",       icon: Box,       colour: "text-emerald-600" },
+  cad_concept:   { label: "CAD — Concept",   icon: FileCode2, colour: "text-starlight-blue" },
+  cad_breakdown: { label: "CAD — Breakdown", icon: FileCode2, colour: "text-starlight-amber" },
 };
 
 function prettyBytes(n: number | null): string {
@@ -200,7 +201,7 @@ function DocCard({ doc }: { doc: DocRef }) {
 function DocumentGallery({ docs }: { docs: DocRef[] }) {
   if (docs.length === 0) return null;
   // Group by doc_type, preserving a sensible order
-  const order: string[] = ["drawing", "cut_list", "model", "cad_model", "reference"];
+  const order: string[] = ["drawing", "cut_list", "model", "cad_concept", "cad_breakdown", "reference"];
   const byType = new Map<string, DocRef[]>();
   docs.forEach((d) => {
     if (!byType.has(d.doc_type)) byType.set(d.doc_type, []);
