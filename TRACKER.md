@@ -2751,3 +2751,125 @@ Sum of `materials_total + job_items_total` across all 89 lines of Grosvenor = £
 
 ### Admin view has the same Bug 2
 The admin scope page (`/jobs/[id]/scope/[scopeId]`) also renders 3x2 Rounded Edge at £6.60. It doesn't use `rpc_pm_job_overview` — it computes BOM totals directly from tbl_wo_bom. Same multiplier logic needs applying on the admin side. Not fixed in this session because the user flagged the PM view specifically; worth doing in the next session as a small, self-contained follow-up so admin cost analysis and procurement totals pick up the correction.
+
+
+---
+
+## Session 29 — Invoice routing (scope / WO / job) + cash-spent "Invoiced" cost layer
+**Date**: 21 April 2026
+**Deploy**: Live on workshop-five-gamma.vercel.app. Two commits:
+- `98d04ce` — core feature
+- `a42dd5e` — UX follow-up (full-width panel + description cap)
+
+**Naming note**: migrations/commits are prefixed `S25-` due to stale memory at session start. No action needed — they're applied and running. TRACKER numbering (this entry = S29) is the chronological truth.
+
+### What problem this solved
+Supplier invoices were being attached to jobs but not flowing anywhere else. No scope-level or WO-level cost visibility from the invoice side; the cost waterfall's "Actual material" only ever read from `tbl_wo_bom`. If you invoiced £146 from 1st Choice Metals to a job and never reconciled it against BOM, the job's cost analysis pretended that spend didn't exist. Mateusz wanted: (a) invoices to affect job financials, (b) the option to route each invoice line to a scope / WO / keep at job, (c) a workflow where invoices are added at job level and then routed down from the job page.
+
+### Design decision — parallel, not overwrite
+Considered two models:
+- **A (chosen)**: invoice-allocated cost runs as a parallel "Invoiced" layer alongside BOM. BOM stays as the plan ("Committed"), invoices become the cash-spent actual ("Invoiced"). Variance visible per line. Survives the stress test — shipping charges and un-BOM'd purchases route cleanly without corrupting BOM's meaning.
+- **B (rejected)**: invoice allocation overwrites BOM's `actual_unit_cost`. Single "Spent" number. Loses variance visibility, and has no place to put lines that don't match a BOM row (shipping, consumables, off-piste buys).
+
+Also locked in: **unallocated job-level invoice spend stays at the job header** (amber banner) rather than being auto-proportioned across scopes. Mateusz's call; the right one. Fake precision is worse than honest "unknown bucket."
+
+### Schema
+Single table altered, no new tables. `tbl_invoice_allocations`:
+```sql
+ALTER TABLE tbl_invoice_allocations
+  ALTER COLUMN scope_item_id DROP NOT NULL;
+ALTER TABLE tbl_invoice_allocations
+  ADD COLUMN work_order_id INTEGER REFERENCES tbl_work_orders(work_order_id) ON DELETE CASCADE;
+ALTER TABLE tbl_invoice_allocations
+  ADD CONSTRAINT chk_alloc_exactly_one_target
+  CHECK (
+    (scope_item_id IS NOT NULL AND work_order_id IS NULL)
+    OR
+    (scope_item_id IS NULL AND work_order_id IS NOT NULL)
+  );
+CREATE INDEX idx_invoice_allocations_work_order
+  ON tbl_invoice_allocations(work_order_id)
+  WHERE work_order_id IS NOT NULL;
+```
+`tbl_invoice_lines.work_order_id` column existed from a previous design iteration — still unused, left in place (harmless; routing happens via allocations, not by editing the line).
+
+### Views
+- **DROPPED + REBUILT** `qry_invoice_scope_costs` — was scope-direct only; now aggregates direct scope allocations + WO-routed allocations (via parent scope). Returns `direct_scope_amount`, `via_wo_amount`, `invoiced_amount` (sum), `line_count`. Scope IDs with zero allocations filtered out.
+- **NEW** `qry_invoice_wo_costs` — WO-level rollup. Used by future WO detail panels.
+- **NEW** `qry_invoice_job_rollup` — job-level. Returns `invoiced_net_total` (sum of `tbl_invoice_lines.line_total` ex-VAT), `allocated_total` (sum of allocations), `unallocated_total` (GREATEST of difference and 0), `invoice_count`, `line_count`.
+- **REBUILT** `qry_cost_waterfall` — adds `invoiced_amount` column sourced from `qry_invoice_scope_costs`.
+- **REBUILT** `qry_job_cost_summary` — adds `invoiced_net_total`, `invoiced_allocated`, `invoiced_unallocated`, `invoice_count` sourced from `qry_invoice_job_rollup`.
+
+All views `security_invoker = true`. Net view count: **41** (was 39; added 2, rebuilt 3, dropped 0).
+
+### Net-vs-gross decision
+`invoiced_net_total` uses `SUM(tbl_invoice_lines.line_total)`, not `SUM(tbl_invoices.total_value)`. Reason: totals include VAT, line totals don't. BOM costs are net. Comparing like-for-like is the whole point. Verified on 1st Choice Metals invoice #2026177783 on job 13766: `80.25 + 23.96 + 17.95 = 122.16` vs `total_value = 146.59` — the £24.43 gap is 20% VAT.
+
+### Frontend
+New shared module `src/lib/invoice-routing.ts`:
+- `routeLineToTarget(lineId, lineTotal, target)` — clears any existing allocations then writes one at 100%. Target = `{ type: "scope|wo|job", ...ids }`. "job" = no row.
+- `addPartialAllocation(...)` — for split mode. Inserts a new allocation, preserves existing.
+- `deleteAllocation(allocationId)`.
+- `splitProRataAcrossSiblings(lineId, lineTotal, siblingAllocations)` — the shipping shortcut. Groups sibling lines' allocations by target, weights by allocated_amount, distributes the line pro-rata. Last row takes the rounding remainder so sum is exactly 100%.
+- `looksLikeShipping(description)` — regex for `shipping|carriage|delivery|freight|postage|haulage|courier`. Drives the Truck-icon shortcut button.
+- `summarizeRouting(allocs, scopeNames, woLabels)` — routing state → label + badge class.
+
+New shared component `src/components/invoice-line-router.tsx`:
+- Single-select dropdown with grouped options: `📋 Keep at Job` (default), `— Scopes —`, `— Work Orders —`, `— Advanced —` (Split / Shipping pro-rata).
+- Collapsed state = one-click routing of the whole line to a target.
+- Split editor opens on demand for the rare percentage-split case; supports both scope and WO targets.
+- Truck-icon button appears next to dropdown when line looks like shipping AND at least one sibling line on the invoice is routed.
+- Props: `line`, `allocations`, `scopeItems`, `workOrders`, `siblingAllocations`, `onChanged`, `compact`.
+
+Rewritten `src/components/job-invoices-panel.tsx`:
+- Header shows invoice count · total, plus amber `AlertTriangle · £X unallocated` pill when `qry_invoice_job_rollup.unallocated_total > 0.01`.
+- Per-line row = `# / Description / Total / Route to`. Route cell contains the shared `InvoiceLineRouter`.
+- Loads scopes + WOs (enriched with activity_verb lookup → activity_label) for this job once; shared across all expanded invoices.
+- `onAllocationChange` refetches allocations + job rollup → banner updates live.
+
+Refactored `src/app/(dashboard)/invoices/page.tsx` to drop the scope-only allocation UI and use the same `InvoiceLineRouter`. Removed: `saveAllocation`, `deleteAllocation`, `allocate100`, `allocatingLineId` state, the trailing `<tr colSpan={8}>` rows for badges + inline panel. Added: `workOrders` state + WO load + activity-label enrichment in `toggleExpandInvoice`, `reloadAllocationsForExpanded` callback.
+
+Rebuilt `src/components/cost-breakdown.tsx`:
+- New state `invoicedMats` (scope or job scope) + `invoicedUnallocated` (job only).
+- Fetch: added `qry_invoice_scope_costs` (by scope or by job) and `qry_invoice_job_rollup` (job level only) to the parallel load.
+- Per-quote-line invoiced: `invoicedByLine[ql_id] = Σ invoiced_amount of scopes mapped to that quote line`. Attached to each `QuoteLine` as `invoicedAmount`.
+- New **Invoiced** layer row in the grid — purple theme (`text-purple-700` / `bg-purple-500` dot) to distinguish from teal "Spent". Row shows: actLabour (grey-mounted with `=` marker to signal it's the same labour as Spent) / invoicedMats / invoicedTotal / margin-against-quoted. Below materials, if `|invoicedMats − actMatsPlanned| > £0.50`, a small line shows `+£X vs BOM` in red (overspend) or `−£X vs BOM` in green.
+- Header chip: `Invoiced £X [+£Y unalloc]` — surfaced only when `hasInvoiced`.
+- Per-line workshop table: new `Invoiced` column between `Spent` and `Committed`. Purple text when > 0, em-dash when 0.
+- Scope waterfall sub-rows: same `Invoiced` cell added. Empty-state colSpan bumped from 8 → 9.
+
+UX fix (commit a42dd5e):
+- `src/app/(dashboard)/jobs/[id]/page.tsx` — `<JobInvoicesPanel>` + `<JobOrdersPanel>` moved from 2-col grid to `space-y-4` stacked. Invoice rows were wrapping descriptions into narrow vertical strips in the constrained 2-col layout.
+- `job-invoices-panel.tsx` — description cell capped at `max-w-[420px]` with `break-words` so extreme 200-char AI-extracted descriptions don't hog the row.
+
+### Files touched
+| File | Change |
+|------|--------|
+| `src/lib/invoice-routing.ts` | NEW — routing helpers |
+| `src/components/invoice-line-router.tsx` | NEW — shared routing UI |
+| `src/components/job-invoices-panel.tsx` | REWRITTEN — unallocated banner, new router, WO loading |
+| `src/components/cost-breakdown.tsx` | EDITED — Invoiced layer, column, header chip |
+| `src/app/(dashboard)/invoices/page.tsx` | EDITED — drop scope-only UI, use shared router |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | EDITED — stack panels, drop 2-col grid |
+
+### Conventions added (Session 29)
+- **BOM = Committed (plan). Invoices = Invoiced (cash). Never sum them.** Variance between the two is the signal. Display side-by-side, never collapse into one "Spent" number — you'd lose the procurement variance story and have nowhere to put un-BOM'd spend (shipping, consumables, off-piste).
+- **"Keep at job" = no allocation row.** Don't model it as an explicit "route to job" row. Default state is no row; routing is an affirmative act. Simpler schema, simpler CHECK constraint, obvious semantics.
+- **Unallocated spend stays at job level.** Never auto-proportioned across scopes. Surface it as an amber pill on the job invoices panel and as a suffix on the cost-breakdown header (`+£X unalloc`). The scope-margin numbers stay honest; the job banner tells you there's more cash out the door than the scopes know about.
+- **Use `line_total` (net) not `total_value` (gross) for cost views.** Supplier invoices include VAT in `total_value`; lines are stored ex-VAT. BOM costs are net. Compare like-for-like.
+- **Pro-rata shipping split weights by siblings' allocated amount, not line total.** Line totals would ignore how sibling lines are themselves split. The weighting matches wherever the material spend actually went.
+- **CHECK constraints for XOR columns work cleanly.** `(A IS NOT NULL AND B IS NULL) OR (A IS NULL AND B IS NOT NULL)` is explicit and rejects both-null / both-set states at the database level. Saves a pile of application-code guards.
+- **Long AI-extracted descriptions need a max-width cap.** Without one, `<table>` gives the description cell unbounded width, squashing other columns down to vertical strips. `max-w-[420px] break-words` is fine for supplier descriptions that regularly hit 200+ chars.
+
+### On the horizon (next session)
+- **Admin scope page Length-on-Metre multiplier** — still outstanding from S28d. Admin scope view reads BOM directly, not through `rpc_pm_job_overview`, so the 3x2 timber is still priced at £6.60 instead of £31.68 on the admin side. Same multiplier logic needs applying. Small, self-contained.
+- **Invoice extraction prompt cleanup** — the AI-extracted descriptions are brutal: `"Aluminium Aluminium Box Section Rectangular Tube / Box Section 38mm x 19mm x 1.6mm Aluminium Box (1.1/2" x 3/4" x 16swg) Select Length:: 3000mm"` is one line. Category name gets prepended to product name, redundant words repeat, there's a `Select Length::` UI artefact. A prompt tweak to output something like `"Alu box 38×19×1.6mm · 3m length"` would make the invoices panel (and cost views) far more readable.
+- **BOM-line reconciliation (Phase 2 of the invoice model)** — when routing an invoice line to a scope/WO that has matching BOM rows, offer "does this cover BOM rows [A, B, C]?" and auto-write `actual_unit_cost` on those BOM rows. Closes the variance loop between BOM and Invoices properly. Not urgent; works fine at scope/WO aggregate level for now.
+- **Admin dashboard PM-note flag** — carried from S28 horizon list. Still unmoved.
+- **Real image thumbnails** — carried.
+- **CAD file upload in admin WO docs panel** — carried.
+- **Multi-scope rendering** still untested on real data.
+- **GitHub repo transfer** to company account — low urgency, carried.
+
+### Admin view has the same bug on invoicing
+Just noting for completeness: the admin scope-detail page doesn't render invoice spend at all currently. Cost breakdown includes it (it reads from `qry_cost_waterfall` which now joins invoice data), but the scope-level BOM table doesn't show "which invoice paid for this BOM row." Tagging for a future session if/when invoice↔BOM reconciliation becomes a priority.

@@ -1,5 +1,6 @@
-S25-fix: Invoices panel full-width on job page
+S29 docs: TRACKER entry + schema snapshot
 
-- Stack JobInvoicesPanel + JobOrdersPanel instead of 2-col grid — descriptions were
-  wrapping into a narrow vertical strip
-- Cap invoice line description at max-w-[420px] with break-words
+- TRACKER.md: full Session 29 entry for invoice routing + Invoiced cost layer
+- starlight_database_schema_session29.md: new snapshot (47 tables, 41 views)
+  - tbl_invoice_allocations updated to scope XOR WO
+  - qry_invoice_wo_costs and qry_invoice_job_rollup added to Views list
