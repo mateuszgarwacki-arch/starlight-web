@@ -1,20 +1,9 @@
-S33: WODocumentsPanel -> auditedInsert + auditedDelete
+S33 tracker: WODocumentsPanel audit conversion session entry
 
-Closes the Phase 2 audit gap on tbl_wo_documents. Uploads and deletions
-now appear in Settings -> Audit Log.
-
-- Added tbl_wo_documents: "doc_id" to AUDITED_TABLES registry in
-  src/lib/audit.ts so auditedInsert/Delete actually write to the log
-  (both functions check AUDITED_TABLES[tableName] before logging)
-- Converted handleUpload's insert to auditedInsert with ctx + jobId
-- Converted deleteDoc's delete to auditedDelete with ctx + jobId
-- Left the drag-reorder sort_order update as raw supabase.update().
-  Reordering is cosmetic and would generate one audit row per doc per
-  drag, which is noise rather than signal.
-
-Value: uploads already captured uploaded_by + uploaded_at on the row
-itself, so auditedInsert adds an explicit "insert" log entry (visible
-alongside scope/WO creation). auditedDelete is the more valuable change
-- previously a deleted doc left zero trace in the system. Now the
-deletion is logged with a full snapshot in old_value so a PM can see
-what was removed and by whom.
+Docs-only commit to close out the WODocumentsPanel audit work:
+- Removed the closed item from Features deferred backlog
+- Appended "Session 33 continued" entry with detail on:
+  - Why AUDITED_TABLES registration is a prerequisite (not automatic)
+  - Why the drag-reorder sort_order stays raw (cosmetic)
+  - Why the delete audit is more valuable than the insert audit
+- Added three conventions around audit coverage decisions

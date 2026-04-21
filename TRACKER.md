@@ -12,7 +12,6 @@ _No open items. See S33 session entry for cleanup history._
 
 ### Features deferred
 - [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
-- [ ] **`WODocumentsPanel` raw inserts → `auditedInsert`** *(S31)* — pre-existing gap, not introduced by Phase 2. Uploads don't appear in the audit log. Straight swap to `auditedInsert(ctx, "tbl_wo_documents", { ... }, jobId)`.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
 - [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
 
@@ -3145,3 +3144,34 @@ All three redirect paths are the whole security perimeter. If the rename is wron
 - **Verify correctness backlog items against live data before assuming they're still open.** Memory/tracker notes drift; the fix may have shipped in a later session without being checked off. A single Supabase query against a known casualty row is the cheapest way to distinguish "stale backlog entry" from "still-broken bug."
 - **Next.js 16 auth file is `src/proxy.ts` with `export async function proxy()`** — not `middleware.ts` with `middleware()`. Runtime is Node.js (not Edge), not configurable. Everything else stays identical: `config.matcher`, `NextRequest`/`NextResponse`, Supabase SSR client setup.
 - **Security-critical renames deploy alone.** Never chain another change on top of an untested auth-layer deploy — rollback needs to be a single `git revert`, not unwinding a stack of commits.
+
+
+### Session 33 continued — WODocumentsPanel audit + tbl_wo_documents registered
+5th commit. Closes the Phase 2 audit gap on document uploads and deletions.
+
+**Problem:** `WODocumentsPanel` was using raw `supabase.from("tbl_wo_documents").insert()` and `.delete()`, so uploads and deletions were invisible to Settings → Audit Log. Pre-existing since the component was first built; never introduced by a specific refactor.
+
+**Fix:**
+1. Added `tbl_wo_documents: "doc_id"` to `AUDITED_TABLES` in `src/lib/audit.ts`. This is a prerequisite — `auditedInsert` and `auditedDelete` both gate their log-write on `AUDITED_TABLES[tableName]`, so without the registry entry they silently skip the audit write even when called.
+2. `handleUpload`: `supabase.from().insert()` → `auditedInsert(ctx, "tbl_wo_documents", {...}, jobId)`. `ctx` fetched once per upload via `getAuditContext(supabase)`. `jobId` passed explicitly so the audit row carries the correct job anchor.
+3. `deleteDoc`: `supabase.from().delete().eq()` → `auditedDelete(ctx, "tbl_wo_documents", docId, jobId)`. `auditedDelete` captures a full snapshot of the row as `old_value` before deleting, so the audit log preserves what was removed.
+
+**Deliberately left raw:** the drag-reorder `sort_order` update. It would generate one audit row per document per drag, which is noise rather than signal — reorders are cosmetic. Raw `supabase.from().update()` is correct here.
+
+**Value framing:**
+- Uploads already stored `uploaded_by` and `uploaded_at` on the row itself, so `auditedInsert` adds an explicit `"insert"` log entry alongside scope/WO creation but doesn't surface net-new information.
+- `auditedDelete` is the more valuable change. Previously a deleted document left zero trace. Now the deletion is logged with the full pre-delete snapshot, so a PM can see exactly what was removed and by whom.
+
+### New/Modified Files (Session 33 cont.)
+| File | Change |
+|------|--------|
+| `src/lib/audit.ts` | Added `tbl_wo_documents: "doc_id"` to `AUDITED_TABLES` |
+| `src/components/wo-documents-panel.tsx` | Imported `getAuditContext`, `auditedInsert`, `auditedDelete`; converted the upload insert and the doc delete |
+
+### SQL Run (Session 33 cont.)
+None.
+
+### Conventions Added (Session 33 cont.)
+- **Registering a table in `AUDITED_TABLES` is a prerequisite, not a side effect.** `auditedInsert`/`auditedDelete` gate log writes on the registry; calling them with an unregistered table name silently no-ops the audit branch. When adding audit coverage to a new table, always: (1) add the entry with its PK column to `AUDITED_TABLES`, (2) convert the raw calls, (3) verify by inspecting `tbl_audit_log` after a test action.
+- **Audit inserts vs audit deletes — different value per table.** For tables where the row itself carries `uploaded_by`/`created_by`/`updated_at`, the insert audit log entry is redundant with the row. The delete audit log entry is where the real value lives — once the row is gone, the audit log is the only trace. For `tbl_wo_documents` specifically, `auditedDelete` was the critical half of this change.
+- **Cosmetic updates (sort_order, UI preferences) stay raw.** Auditing drag-drop reorders generates one row per doc per drag — high-volume, low-signal. Same principle applies to any future UI-driven field that doesn't affect financial or operational state.
