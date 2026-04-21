@@ -12,7 +12,6 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 - [ ] **Next.js 16 middleware rename** *(S28)* — `middleware.ts` → `proxy.ts`. Emits a deprecation warning on every build. Straight file rename; update `src/middleware.ts` export convention if needed.
 
 ### Features deferred
-- [ ] **CAD file upload** on admin WO docs panel *(S28)* — `doc_type = 'cad_model'` already exists in the DB and renders correctly on PM view. Still need: add `.skp .dwg .3dm .step .iges .stp .igs` to accepted extensions, route to OneDrive subfolder `Workshop/{jobNumber}/cad/`, set doc_type on upload. Low risk, pure additive on the upload form.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
 - [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
 
@@ -2873,3 +2872,74 @@ UX fix (commit a42dd5e):
 
 ### Admin view has the same bug on invoicing
 Just noting for completeness: the admin scope-detail page doesn't render invoice spend at all currently. Cost breakdown includes it (it reads from `qry_cost_waterfall` which now joins invoice data), but the scope-level BOM table doesn't show "which invoice paid for this BOM row." Tagging for a future session if/when invoice↔BOM reconciliation becomes a priority.
+
+
+### Session 30 (21 Apr 2026) — CAD File Uploads on WO (Concept + Breakdown) — Phase 1
+1 commit, 4 files changed. Phase 1 of a three-phase CAD library feature. Enables PM and workshop lead to upload SketchUp / AutoCAD source files against work orders, split cleanly between design-side "concept" and workshop "breakdown" of the same model — so PM can review PM-vs-workshop interpretations side-by-side on the scope view.
+
+**Design principle:**
+Scoped strictly at anchor level (no inheritance). Freelancers never see CAD files — these are PM/lead reference only. The real payoff is cross-job discoverability, which Phase 3 will unlock.
+
+**Schema (`tbl_wo_documents.doc_type`):**
+- Removed unused `cad_model` (added S28, zero rows in production)
+- Added `cad_concept` and `cad_breakdown` to the CHECK constraint
+- Column comment documents the full taxonomy: `model` = GLB/GLTF inline viewer; `cad_concept` = design-side source; `cad_breakdown` = workshop breakdown. Both cad_* values are download-only, PM/lead reference.
+
+**Admin WO docs panel (`src/components/wo-documents-panel.tsx`):**
+- Two new sections: **CAD — Concept** (blue) and **CAD — Breakdown** (amber), both with `FileCode2` icon
+- Accepted extensions: `.skp .skb .dwg .dxf .3dm .step .stp .iges .igs .f3d .sldprt .sldasm .prt .asm`
+- OneDrive folder routing: `Workshop/{jobNumber} - {jobName}/CAD-Concept/` and `.../CAD-Breakdown/`
+- Italic helper text rendered under each section header: "Design-side source · requires CAD software" / "Workshop breakdown · requires CAD software"
+- Files render as download-only list rows (no preview button, no 3D viewer)
+- `DOC_TYPE_CONFIG` gets optional `helpText` field (backward-compatible — other types ignore it)
+
+**PM 100m view (`src/app/pm/jobs/[id]/page.tsx`):**
+- `DOC_TYPE_LABELS` updated: `cad_concept` (starlight-blue), `cad_breakdown` (starlight-amber) — distinct colours so PM can tell them apart at a glance
+- Render order array updated: drawing → cut_list → model → cad_concept → cad_breakdown → reference
+- No RPC change needed — payload already carries arbitrary doc_type values; gallery groups by type string
+
+**Mobile freelancer view (`src/components/mobile-wo-docs.tsx`):**
+- CAD types filtered client-side from the docs query so the floor interface never shows them
+- Matches the "dead simple for freelancers" principle — zero clutter, zero confusion
+
+**Traveller PDF:** no code change. Traveller hard-codes which doc types print (drawing / reference / cut_list only), so CAD files are naturally excluded from the printed workshop pack.
+
+**OneDrive upload path:** uses existing chunked upload (`/api/onedrive/upload-session`). Any SketchUp file over 3.5 MB streams browser → OneDrive direct, bypassing the Vercel 4.5 MB function body cap. Large `.skp` / `.dwg` files just work.
+
+**Stress-tested:**
+- Freelancer accidentally opens CAD chip on mobile → can't happen, filtered at query level
+- File > 80 MB → chunked upload handles it (already proven for other doc types)
+- Two files same name, both CAD → separate folders (`CAD-Concept` vs `CAD-Breakdown`), no collision
+- Scope cancelled mid-build → docs survive; no cascade on WO archive (pre-existing behaviour)
+
+### SQL Run (Session 30)
+```sql
+ALTER TABLE tbl_wo_documents DROP CONSTRAINT tbl_wo_documents_doc_type_check;
+ALTER TABLE tbl_wo_documents
+  ADD CONSTRAINT tbl_wo_documents_doc_type_check
+  CHECK (doc_type::text = ANY (ARRAY[
+    'cut_list','drawing','reference','model','cad_concept','cad_breakdown'
+  ]::text[]));
+COMMENT ON COLUMN tbl_wo_documents.doc_type IS
+  'cut_list/drawing/reference = standard docs. model = GLB/GLTF for inline 3D viewer. '
+  'cad_concept = design-side SketchUp/AutoCAD/STEP source (download-only). '
+  'cad_breakdown = workshop breakdown of the design model (download-only). '
+  'cad_* values are PM/lead reference, not for floor consumption.';
+```
+
+### New/Modified Files (Session 30)
+| File | Purpose |
+|------|---------|
+| `src/components/wo-documents-panel.tsx` | Two new CAD sections (Concept/Breakdown), `helpText` in DOC_TYPE_CONFIG |
+| `src/app/pm/jobs/[id]/page.tsx` | `DOC_TYPE_LABELS` + render order updated for concept/breakdown |
+| `src/components/mobile-wo-docs.tsx` | Client-side filter excludes `cad_concept` + `cad_breakdown` |
+
+### What's deferred (Phase 2 + Phase 3)
+- **Phase 2** — Job-level and scope-level CAD upload sections. Same `WODocumentsPanel` component mounted on `/jobs/[id]` and `/jobs/[id]/scope/[scopeId]` pages with appropriate anchor IDs (`jobId` or `scopeItemId`). No inheritance — anchors stay scoped to their level. PM uploads site plans and master models at job level; scope-specific concept/breakdown models at scope level. Expected: pure additive mount, no new schema.
+- **Phase 3** — `/library/cad` cross-job search page. Flat list of every CAD file across every job with filters on scope category, client, date, free text on filename + scope item name + job name. Built as a single query with LEFT JOINs from `tbl_wo_documents` (filtered on CAD doc_types) → `tbl_scope_items` → `tbl_production_plan` → `tbl_scope_item_categories`. This is the discovery payoff — finding "that kiosk SketchUp from 14 months ago."
+
+### Conventions Added (Session 30)
+- **CAD file taxonomy**: `cad_concept` = design-side source (PM-uploaded); `cad_breakdown` = workshop interpretation of the concept (workshop-uploaded). Same file can exist in both flavours to support side-by-side PM review
+- **CAD files are PM/lead only**: always filter out `cad_concept` + `cad_breakdown` from any freelancer-facing docs query. No permission system needed — query-level filter is the enforcement
+- **OneDrive CAD folder convention**: `Workshop/{jobNumber} - {jobName}/CAD-Concept/` or `.../CAD-Breakdown/`. Separate folders so OneDrive browsing stays organised and filename collisions are impossible
+- **DOC_TYPE_CONFIG `helpText` field**: optional italic helper line under section header. Used for CAD types ("requires CAD software"); available for any future doc_type that needs a usage hint
