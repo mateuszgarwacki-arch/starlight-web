@@ -114,10 +114,26 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
 
     let actLabour = 0, actMatsPlanned = 0, actMatsReconciled = 0;
     let scopeEntries: ScopeTimeEntry[] = [];
+
+    // BOM costs — query qry_bom_enriched. This view applies the Length-on-Metre
+    // multiplier and resolves both anchor paths via effective_scope_item_id
+    // (scope-direct rows AND WO-attached rows whose WO's scope matches).
+    // Filter excludes voided WO rows; scope-direct rows (work_order_id IS NULL)
+    // always pass through. Runs regardless of woIds.length — a scope may have
+    // scope-direct BOM but no WOs yet.
+    const bomBase = supabase.from("qry_bom_enriched").select("planned_line_cost, reconciled_line_cost");
+    const bomQuery = scopeItemId
+      ? bomBase.eq("effective_scope_item_id", scopeItemId)
+      : bomBase.eq("job_id", jobId!);
+    const bomRes = await bomQuery.or("work_order_id.is.null,wo_status.neq.Voided");
+    for (const b of (bomRes.data || []) as any[]) {
+      actMatsPlanned += Number(b.planned_line_cost) || 0;
+      actMatsReconciled += Number(b.reconciled_line_cost) || 0;
+    }
+
     if (woIds.length > 0) {
-      const [timeRes, bomRes, detailTimeRes] = await Promise.all([
+      const [timeRes, detailTimeRes] = await Promise.all([
         supabase.from("tbl_wo_time_entries").select("entry_cost").in("work_order_id", woIds).is("archived_at", null),
-        supabase.from("tbl_wo_bom").select("quantity, unit_cost, actual_unit_cost").in("work_order_id", woIds),
         scopeItemId
           ? supabase.from("tbl_wo_time_entries")
               .select("entry_id, work_order_id, freelancer_id, actual_hours, entry_cost, system_start_timestamp, flag_note")
@@ -125,11 +141,6 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
           : { data: [] },
       ]);
       actLabour = (timeRes.data || []).reduce((s: number, r: any) => s + (r.entry_cost || 0), 0);
-      for (const b of bomRes.data || []) {
-        const qty = b.quantity || 0;
-        actMatsPlanned += qty * (b.unit_cost || 0);
-        actMatsReconciled += qty * (b.actual_unit_cost || b.unit_cost || 0);
-      }
 
       // Enrich time entries with freelancer names and WO context for scope-level view
       if (scopeItemId && detailTimeRes.data && detailTimeRes.data.length > 0) {

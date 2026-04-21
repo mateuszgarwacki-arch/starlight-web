@@ -602,12 +602,29 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
     const stdLengthMap: Record<number, number> = {};
     (materials || []).forEach(m => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
-    const bomRowTotal = (row: BomRow) => ((row.actual_unit_cost ?? row.unit_cost ?? 0) * (row.quantity || 0));
+
+    // Length-on-Metre multiplier: when a BOM row has unit='Length' but the underlying material
+    // is priced per metre with a known standard_length (mm), cost expands by standard_length/1000.
+    // Timber example: 3x2 Rounded Edge, 4 lengths @ £1.65 = £6.60 nominal → £31.68 with 4.8m std length.
+    const bomRowCost = (row: { unit?: string | null; unit_cost?: number | null; actual_unit_cost?: number | null; quantity?: number | null; material_id?: number | null }): number => {
+      const qty = row.quantity || 0;
+      const price = row.actual_unit_cost ?? row.unit_cost ?? 0;
+      const mat = row.material_id ? materials.find(m => m.material_id === row.material_id) : null;
+      const bomUnit = (row.unit || "").toLowerCase();
+      const matUnit = (mat?.unit || "").toLowerCase();
+      const stdLen = mat?.standard_length;
+      const multiplier = (bomUnit === "length" && ["metre", "meter", "m"].includes(matUnit) && stdLen && stdLen > 0)
+        ? stdLen / 1000
+        : 1;
+      return qty * price * multiplier;
+    };
+
+    const bomRowTotal = (row: BomRow) => bomRowCost(row);
     const bomTotal = (rows: BomRow[]) => rows.reduce((sum, r) => sum + bomRowTotal(r), 0);
 
-    // Consolidated material totals
-    const consolidatedTotal = allBomRows.reduce((sum, r) => sum + ((r.actual_unit_cost ?? r.unit_cost ?? 0) * (r.quantity || 0)), 0)
-      + scopeBomRows.reduce((sum, r) => sum + (r.unit_cost * r.quantity), 0);
+    // Consolidated material totals — uses the same multiplier-aware helper for every row
+    const consolidatedTotal = allBomRows.reduce((sum, r) => sum + bomRowCost(r), 0)
+      + scopeBomRows.reduce((sum, r) => sum + bomRowCost(r), 0);
 
     // ============================================================
     // Render
@@ -953,7 +970,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                     {allBomRows.map(row => {
                       const ci = row.wo_color_idx ?? 0;
                       const c = WO_COLORS[ci];
-                      const total = (row.actual_unit_cost ?? row.unit_cost ?? 0) * (row.quantity || 0);
+                      const total = bomRowCost(row);
                       return (
                         <tr key={row.bom_id} className="border-b border-subtle last:border-0">
                           <td className="py-1.5 pr-3 text-sm text-navy">{row.item_description}</td>
@@ -971,7 +988,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         <td className="py-1.5 px-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-mid text-muted">Scope</span></td>
                         <td className="py-1.5 px-2"><input type="number" step="0.5" defaultValue={row.quantity} onBlur={async e => { const v = parseFloat(e.target.value) || 0; if (v === row.quantity) return; await supabase.from("tbl_wo_bom").update({ quantity: v }).eq("bom_id", row.bom_id); setScopeBomRows(prev => prev.map(r => r.bom_id === row.bom_id ? { ...r, quantity: v } : r)); bumpCost(); }} className="w-14 px-1.5 py-0.5 text-sm text-right font-mono border border-transparent hover:border-subtle focus:border-starlight-blue rounded bg-transparent focus:bg-surface focus:outline-none" /></td>
                         <td className="py-1.5 px-2 text-xs text-muted">{row.unit}</td>
-                        <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{formatCurrency(row.quantity * row.unit_cost)}</td>
+                        <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{formatCurrency(bomRowCost(row))}</td>
                         <td className="py-1.5"><button onClick={() => deleteScopeBomRow(row.bom_id)} className="p-1 text-faint hover:text-starlight-red transition-colors"><Trash2 className="h-3 w-3" /></button></td>
                       </tr>
                     ))}

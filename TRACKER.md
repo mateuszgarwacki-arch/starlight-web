@@ -5,10 +5,9 @@
 Running list of known debt, deferred work, and small follow-ups. Reviewed at the start of every session. Items are added whenever a session ships something with a known deferral or a correctness bug that we chose not to fix in-flight. Order roughly reflects priority — top items are the ones to do next. Check items off as they ship; move completed ones to the relevant session entry.
 
 ### Correctness (do first)
-- [ ] **Admin scope page BOM cost — Length-on-Metre + WO-attached join** *(S28d)* — `/jobs/[id]/scope/[scopeId]/page.tsx` (68 KB). Same two bugs the PM RPC just fixed. Admin computes BOM totals directly off `tbl_wo_bom` without (a) the dual-path scope-or-WO join — any BOM row attached via `work_order_id` with null `scope_item_id` is silently dropped (polyline on Grosvenor is the known case); (b) the unit→base multiplier for Length-on-Metre — timber like 3x2 Rounded Edge shows £6.60 instead of £31.68. Ops are currently looking at wrong cost numbers on the admin view.
+_No open correctness items. S28d closed out in S33 — see session entry below._
 
 ### Small/mechanical (easy wins)
-- [ ] **Delete dead file** `src/components/job-items-table.tsx` *(S27)* — not imported anywhere since scope page was unified; kept around as a safety net during the redesign. Safe to delete.
 - [ ] **Next.js 16 middleware rename** *(S28)* — `middleware.ts` → `proxy.ts`. Emits a deprecation warning on every build. Straight file rename; update `src/middleware.ts` export convention if needed.
 
 ### Features deferred
@@ -239,7 +238,6 @@ Full index coverage across all tables. Key indexes: partial indexes on archived_
 | `src/components/create-scope-dialog.tsx` | Modal for scope creation (full quote line text) |
 | `src/components/contractor-picker.tsx` | Inline supplier assignment (reads tbl_suppliers) |
 | `src/components/prompt-panel.tsx` | Category-driven component suggestions |
-| `src/components/job-items-table.tsx` | Job items: stock picker + bespoke dialogs, promote to stock |
 | `src/components/create-wo-dialog.tsx` | Multi-activity WO creation dialog |
 | `src/components/booking-calendar.tsx` | Week grid booking calendar |
 | `src/components/wo-documents-panel.tsx` | WO file management: drawings, references, cut lists, models |
