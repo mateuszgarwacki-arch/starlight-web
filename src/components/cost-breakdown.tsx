@@ -21,6 +21,7 @@ interface QuoteLine {
   actLabour: number;
   actMaterial: number;
   actTotal: number;
+  invoicedAmount: number;
   scopeCount: number;
 }
 
@@ -36,6 +37,7 @@ interface WaterfallRow {
   actual_labour_cost: number | null;
   actual_material_cost: number | null;
   actual_total: number | null;
+  invoiced_amount: number | null;
   selected_option: string | null;
 }
 
@@ -76,6 +78,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     pmEstTotal: 0, pmEstLabour: 0, pmEstMaterials: 0,
     estLabour: 0, estMaterials: 0,
     actLabour: 0, actMatsPlanned: 0, actMatsReconciled: 0,
+    invoicedMats: 0, invoicedUnallocated: 0,
     targetMarginPct: 40, woCount: 0, completedWOs: 0,
   });
 
@@ -87,12 +90,18 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     const val = scopeItemId || jobId;
     if (!val) return;
 
-    const [settRes, estRes, woRes, rateRes, dayHrsRes] = await Promise.all([
+    const [settRes, estRes, woRes, rateRes, dayHrsRes, invScopeRes, invJobRes] = await Promise.all([
       supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "default_target_margin_pct").single(),
       supabase.from("qry_wo_estimated_cost").select("*").eq(col, val),
       supabase.from("tbl_work_orders").select("work_order_id, status").eq(col, val).not("status", "eq", "Voided"),
       supabase.from("tbl_rate_card").select("rate_per_hour").eq("complexity", 1).single(),
       supabase.from("tbl_business_settings").select("setting_value").eq("setting_key", "standard_day_hours").single(),
+      scopeItemId
+        ? supabase.from("qry_invoice_scope_costs").select("scope_item_id, invoiced_amount").eq("scope_item_id", scopeItemId)
+        : supabase.from("qry_invoice_scope_costs").select("scope_item_id, invoiced_amount").eq("job_id", val as number),
+      jobId && !scopeItemId
+        ? supabase.from("qry_invoice_job_rollup").select("invoiced_net_total, allocated_total, unallocated_total").eq("job_id", val as number).maybeSingle()
+        : { data: null },
     ]);
 
     const targetPct = parseFloat(settRes.data?.setting_value || "40");
@@ -186,6 +195,17 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
         estByLine[lineId].material += e.estimated_material_cost || 0;
       }
 
+      // Map invoiced amounts per scope → per line
+      const invoicedByScope: Record<number, number> = {};
+      (invScopeRes.data || []).forEach((r: any) => {
+        invoicedByScope[r.scope_item_id] = Number(r.invoiced_amount) || 0;
+      });
+      const invoicedByLine: Record<number, number> = {};
+      Object.entries(scopeToLine).forEach(([scopeId, lineId]) => {
+        const amt = invoicedByScope[Number(scopeId)] || 0;
+        if (amt > 0) invoicedByLine[lineId] = (invoicedByLine[lineId] || 0) + amt;
+      });
+
       // Count scopes per line
       const scopeCountByLine: Record<number, number> = {};
       (scopeRes.data || []).forEach((s: any) => {
@@ -211,6 +231,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
           estTotal: (est?.labour || 0) + (est?.material || 0),
           actLabour: margin?.actual_labour || 0, actMaterial: margin?.actual_material || 0,
           actTotal: margin?.actual_total || 0,
+          invoicedAmount: invoicedByLine[ql.quote_line_id] || 0,
           scopeCount: scopeCountByLine[ql.quote_line_id] || 0,
         });
       }
@@ -224,11 +245,26 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     const pmEstTotal = pmWsLines.reduce((s, l) => s + l.pmEstCost, 0);
 
     setQuoteLines(lineData);
+    // Invoiced totals
+    let invoicedMats = 0;
+    let invoicedUnallocated = 0;
+    if (scopeItemId) {
+      invoicedMats = (invScopeRes.data || [])
+        .filter((r: any) => r.scope_item_id === scopeItemId)
+        .reduce((s: number, r: any) => s + (Number(r.invoiced_amount) || 0), 0);
+    } else if (jobId) {
+      // At job level: use rollup (includes allocated to scope/WO AND unallocated)
+      const rollup: any = invJobRes.data;
+      invoicedMats = Number(rollup?.allocated_total) || 0;
+      invoicedUnallocated = Number(rollup?.unallocated_total) || 0;
+    }
+
     setD({
       quotedTotal, quotedWorkshop,
       pmEstTotal, pmEstLabour, pmEstMaterials,
       estLabour, estMaterials,
       actLabour, actMatsPlanned: actMatsPlanned, actMatsReconciled,
+      invoicedMats, invoicedUnallocated,
       targetMarginPct: targetPct, woCount: wos.length,
       completedWOs: wos.filter((w: any) => w.status === "Complete").length,
     });
@@ -250,6 +286,9 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
   const committedTotal = d.actLabour + d.actMatsPlanned;
   const reconciledTotal = d.actLabour + d.actMatsReconciled;
   const hasReconciled = d.actMatsReconciled !== d.actMatsPlanned;
+  const invoicedTotal = d.actLabour + d.invoicedMats;
+  const hasInvoiced = d.invoicedMats > 0 || d.invoicedUnallocated > 0;
+  const invoicedVariance = d.invoicedMats - d.actMatsPlanned;
   const q = d.quotedWorkshop;
   const showBothQuoted = d.quotedTotal > 0 && d.quotedTotal !== d.quotedWorkshop;
 
@@ -295,6 +334,14 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
           {d.pmEstTotal > 0 && <span className="text-muted">PM Est. <span className="font-semibold text-starlight-amber">{fmt(d.pmEstTotal)}</span></span>}
           {estTotal > 0 && <span className="text-muted">Est. <span className="font-semibold text-foreground">{fmt(estTotal)}</span></span>}
           {committedTotal > 0 && <span className="text-muted">Spent <span className="font-semibold text-foreground">{fmt(committedTotal)}</span></span>}
+          {hasInvoiced && (
+            <span className="text-muted">
+              Invoiced <span className="font-semibold text-purple-700">{fmt(d.invoicedMats)}</span>
+              {d.invoicedUnallocated > 0 && (
+                <span className="text-[10px] text-starlight-amber ml-1">+{fmt(d.invoicedUnallocated)} unalloc</span>
+              )}
+            </span>
+          )}
           {q > 0 && (estTotal > 0 || committedTotal > 0) && (
             <span className={`font-semibold ${mc(bestMarginPct)}`}>{bestMarginPct.toFixed(1)}% margin</span>
           )}
@@ -357,6 +404,34 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
               <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(committedTotal)}</div>
               <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(liveMarginPct)}`}>
                 {q > 0 ? `${liveMarginPct.toFixed(1)}%` : "—"}
+              </div>
+            </>)}
+
+            {/* Invoiced — parallel actuals using cash-spent material */}
+            {hasInvoiced && (<>
+              <div className="py-2 border-t border-subtle font-medium text-purple-700 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>Invoiced
+                {d.invoicedUnallocated > 0 && (
+                  <span className="text-[9px] bg-starlight-amber/10 text-starlight-amber px-1 py-0.5 rounded font-normal ml-0.5">
+                    +{fmt(d.invoicedUnallocated)} unalloc
+                  </span>
+                )}
+              </div>
+              <div className="py-2 border-t border-subtle text-right text-muted">
+                {d.actLabour > 0 ? fmt(d.actLabour) : "—"}
+                {d.actLabour > 0 && <span className="text-[9px] text-faint ml-0.5">=</span>}
+              </div>
+              <div className="py-2 border-t border-subtle text-right text-foreground">
+                {fmt(d.invoicedMats)}
+                {d.actMatsPlanned > 0 && Math.abs(invoicedVariance) > 0.5 && (
+                  <span className={`block text-[10px] font-normal ${invoicedVariance > 0 ? "text-starlight-red" : "text-starlight-green"}`}>
+                    {invoicedVariance > 0 ? "+" : ""}{fmt(invoicedVariance)} vs BOM
+                  </span>
+                )}
+              </div>
+              <div className="py-2 border-t border-subtle text-right font-semibold text-foreground">{fmt(invoicedTotal)}</div>
+              <div className={`py-2 border-t border-subtle text-right font-semibold ${mc(q > 0 ? ((q - invoicedTotal) / q) * 100 : 0)}`}>
+                {q > 0 ? `${(((q - invoicedTotal) / q) * 100).toFixed(1)}%` : "—"}
               </div>
             </>)}
 
@@ -454,6 +529,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                       <th className="px-3 py-2 font-medium text-center w-14">Scopes</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Quoted</th>
                       <th className="px-3 py-2 font-medium text-right w-24">Spent</th>
+                      <th className="px-3 py-2 font-medium text-right w-24 text-purple-700">Invoiced</th>
                       <th className="px-3 py-2 font-medium text-right w-24">Committed</th>
                       <th className="px-3 py-2 font-medium text-right w-20">Margin</th>
                       <th className="px-3 py-2 font-medium text-right w-14">%</th>
@@ -498,6 +574,11 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                             ) : <span className="text-faint">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono">
+                            {l.invoicedAmount > 0 ? (
+                              <span className="text-purple-700">{fmt(l.invoicedAmount)}</span>
+                            ) : <span className="text-faint">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">
                             {committed > 0 ? (
                               <span className={committed === spent ? "text-navy font-medium" : "text-navy"}>
                                 {fmt(committed)}
@@ -518,6 +599,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                           const wEst = w.ws_est_total || w.pm_est_cost || 0;
                           const wCommitted = Math.max(wSpent, wEst);
                           const wQuoted = w.quoted_value || 0;
+                          const wInvoiced = w.invoiced_amount || 0;
                           const wMarginPct = wQuoted > 0 && wCommitted > 0 ? ((wQuoted - wCommitted) / wQuoted) * 100 : null;
                           return (
                             <tr key={w.scope_item_id} className="bg-surface-dim/70 border-t border-subtle/50">
@@ -535,6 +617,11 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                               </td>
                               <td className="px-3 py-1.5 text-right font-mono text-[11px] text-navy">
                                 {wSpent > 0 ? fmt(wSpent) : "—"}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono text-[11px]">
+                                {wInvoiced > 0 ? (
+                                  <span className="text-purple-700">{fmt(wInvoiced)}</span>
+                                ) : <span className="text-faint">—</span>}
                               </td>
                               <td className="px-3 py-1.5 text-right font-mono text-[11px]">
                                 {wCommitted > 0 ? (
@@ -556,7 +643,7 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
                         })}
                         {isLineExpanded && wfRows.length === 0 && (
                           <tr className="bg-surface-dim/70">
-                            <td colSpan={8} className="px-3 py-2 text-[11px] text-muted pl-6">
+                            <td colSpan={9} className="px-3 py-2 text-[11px] text-muted pl-6">
                               No scope item cost data for this line
                             </td>
                           </tr>

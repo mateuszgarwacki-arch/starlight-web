@@ -8,17 +8,16 @@ import { getAuthHeaders } from "@/lib/auth-headers";
 import {
   FileText, Upload, Search, Check, X, Plus, RefreshCw,
   AlertTriangle, Zap, Package, Pencil, Eye, ChevronDown, ChevronRight,
-  Split, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { InvoiceLineRouter, ScopeOption, WOOption } from "@/components/invoice-line-router";
+import { InvoiceAllocation } from "@/lib/invoice-routing";
 
 interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_data: string | null; file_type: string | null; }
 interface InvoiceLine { line_id?: number; invoice_id?: number; line_number: number; raw_description: string; quantity: number | null; unit: string | null; unit_cost: number | null; line_total: number | null; material_id: number | null; material_name?: string; match_confidence: string | null; match_status: string; work_order_id: number | null; job_id: number | null; alias_saved: boolean; notes: string | null; }
 interface MaterialOption { material_id: number; material_name: string; unit?: string; current_unit_cost?: number; }
 interface SupplierOption { supplier_id: number; supplier_name: string; }
 interface Alias { alias_id: number; material_id: number; alias_text: string; supplier: string | null; }
-interface ScopeOption { scope_item_id: number; item_name: string | null; }
-interface Allocation { allocation_id?: number; invoice_line_id: number; scope_item_id: number; percentage: number; allocated_amount: number; scope_name?: string; }
 type Mode = "list" | "process" | "edit";
 
 export default function InvoicesPage() {
@@ -49,9 +48,9 @@ export default function InvoicesPage() {
   const [newSupplierName, setNewSupplierName] = useState("");
   const [expandedInvId, setExpandedInvId] = useState<number | null>(null);
   const [previewLines, setPreviewLines] = useState<any[]>([]);
-  const [allocatingLineId, setAllocatingLineId] = useState<number | null>(null);
   const [scopeItems, setScopeItems] = useState<ScopeOption[]>([]);
-  const [allocations, setAllocations] = useState<Record<number, Allocation[]>>({});
+  const [workOrders, setWorkOrders] = useState<WOOption[]>([]);
+  const [allocations, setAllocations] = useState<Record<number, InvoiceAllocation[]>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -71,29 +70,43 @@ export default function InvoicesPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const toggleExpandInvoice = async (invId: number) => {
-    if (expandedInvId === invId) { setExpandedInvId(null); setPreviewLines([]); setAllocatingLineId(null); return; }
-    setExpandedInvId(invId); setAllocatingLineId(null);
+    if (expandedInvId === invId) { setExpandedInvId(null); setPreviewLines([]); return; }
+    setExpandedInvId(invId);
     const inv = invoices.find(i => i.invoice_id === invId);
     // Load lines
     const { data } = await supabase.from("tbl_invoice_lines").select("*").eq("invoice_id", invId).order("line_number");
     const enriched = (data || []).map((l: any) => { const mat = materials.find((m) => m.material_id === l.material_id); return { ...l, material_name: mat?.material_name }; });
     setPreviewLines(enriched);
-    // Load scope items for this invoice's job + allocations in parallel
-    let loadedScopes: ScopeOption[] = [];
+    // Load scopes + WOs for this invoice's job, in parallel
     if (inv?.job_id) {
-      const { data: scopes } = await supabase.from("tbl_scope_items").select("scope_item_id, item_name").eq("job_id", inv.job_id).order("scope_item_id");
-      loadedScopes = scopes || [];
-      setScopeItems(loadedScopes);
-    } else { setScopeItems([]); }
+      const [scopeRes, woRes] = await Promise.all([
+        supabase.from("tbl_scope_items").select("scope_item_id, item_name").eq("job_id", inv.job_id).order("scope_item_id"),
+        supabase.from("tbl_work_orders").select("work_order_id, scope_item_id, description, activity_verb").eq("job_id", inv.job_id).neq("status", "Voided").order("work_order_id"),
+      ]);
+      setScopeItems(scopeRes.data || []);
+      // Enrich WOs with activity label
+      const woRows = woRes.data || [];
+      const actIds = [...new Set(woRows.map((w: any) => w.activity_verb).filter(Boolean))] as number[];
+      const actMap: Record<number, string> = {};
+      if (actIds.length > 0) {
+        const { data: acts } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", actIds);
+        (acts || []).forEach((a: any) => (actMap[a.lookup_id] = a.lookup_value));
+      }
+      setWorkOrders(woRows.map((w: any) => ({
+        work_order_id: w.work_order_id,
+        scope_item_id: w.scope_item_id,
+        activity_label: w.activity_verb ? actMap[w.activity_verb] || null : null,
+        description: w.description,
+      })));
+    } else { setScopeItems([]); setWorkOrders([]); }
     // Load existing allocations for all lines in this invoice
     const lineIds = (data || []).map((l: any) => l.line_id).filter(Boolean);
     if (lineIds.length > 0) {
       const { data: allocs } = await supabase.from("tbl_invoice_allocations").select("*").in("invoice_line_id", lineIds);
-      const byLine: Record<number, Allocation[]> = {};
+      const byLine: Record<number, InvoiceAllocation[]> = {};
       (allocs || []).forEach((a: any) => {
         if (!byLine[a.invoice_line_id]) byLine[a.invoice_line_id] = [];
-        const scope = loadedScopes.find(s => s.scope_item_id === a.scope_item_id);
-        byLine[a.invoice_line_id].push({ ...a, scope_name: scope?.item_name || `Scope #${a.scope_item_id}` });
+        byLine[a.invoice_line_id].push(a);
       });
       setAllocations(byLine);
     } else { setAllocations({}); }
@@ -205,47 +218,18 @@ export default function InvoicesPage() {
   };
 
   // ============================================================
-  // Allocation handlers
+  // Allocation reload (called by InvoiceLineRouter after any change)
   // ============================================================
-  const saveAllocation = async (lineId: number, scopeItemId: number, percentage: number) => {
-    const line = previewLines.find((l: any) => l.line_id === lineId);
-    if (!line || !scopeItemId || percentage <= 0) return;
-    const allocatedAmount = Math.round((line.line_total || 0) * percentage / 100 * 100) / 100;
-    // Check total percentage won't exceed 100
-    const existing = allocations[lineId] || [];
-    const otherPct = existing.filter(a => a.scope_item_id !== scopeItemId).reduce((s, a) => s + a.percentage, 0);
-    if (otherPct + percentage > 100) { toast.error(`Total allocation would be ${otherPct + percentage}% — max is 100%`); return; }
-    // Upsert
-    const existingAlloc = existing.find(a => a.scope_item_id === scopeItemId);
-    if (existingAlloc?.allocation_id) {
-      await supabase.from("tbl_invoice_allocations").update({ percentage, allocated_amount: allocatedAmount }).eq("allocation_id", existingAlloc.allocation_id);
-    } else {
-      await supabase.from("tbl_invoice_allocations").insert({ invoice_line_id: lineId, scope_item_id: scopeItemId, percentage, allocated_amount: allocatedAmount });
-    }
-    // Reload allocations for this line
-    const { data: updated } = await supabase.from("tbl_invoice_allocations").select("*").eq("invoice_line_id", lineId);
-    const enriched = (updated || []).map((a: any) => {
-      const scope = scopeItems.find(s => s.scope_item_id === a.scope_item_id);
-      return { ...a, scope_name: scope?.item_name || `Scope #${a.scope_item_id}` };
+  const reloadAllocationsForExpanded = async () => {
+    const lineIds = previewLines.map((l: any) => l.line_id).filter(Boolean);
+    if (lineIds.length === 0) { setAllocations({}); return; }
+    const { data: allocs } = await supabase.from("tbl_invoice_allocations").select("*").in("invoice_line_id", lineIds);
+    const byLine: Record<number, InvoiceAllocation[]> = {};
+    (allocs || []).forEach((a: any) => {
+      if (!byLine[a.invoice_line_id]) byLine[a.invoice_line_id] = [];
+      byLine[a.invoice_line_id].push(a);
     });
-    setAllocations(prev => ({ ...prev, [lineId]: enriched }));
-    toast.success("Allocation saved");
-  };
-
-  const deleteAllocation = async (allocId: number, lineId: number) => {
-    await supabase.from("tbl_invoice_allocations").delete().eq("allocation_id", allocId);
-    const { data: updated } = await supabase.from("tbl_invoice_allocations").select("*").eq("invoice_line_id", lineId);
-    const enriched = (updated || []).map((a: any) => {
-      const scope = scopeItems.find(s => s.scope_item_id === a.scope_item_id);
-      return { ...a, scope_name: scope?.item_name || `Scope #${a.scope_item_id}` };
-    });
-    setAllocations(prev => ({ ...prev, [lineId]: enriched }));
-    toast.success("Allocation removed");
-  };
-
-  const allocate100 = async (lineId: number, scopeItemId: number) => {
-    await saveAllocation(lineId, scopeItemId, 100);
-    setAllocatingLineId(null);
+    setAllocations(byLine);
   };
 
   const filteredMaterials = materialSearch ? materials.filter((m) => (m.material_name || "").toLowerCase().includes(materialSearch.toLowerCase())) : materials.slice(0, 15);
@@ -311,101 +295,36 @@ export default function InvoicesPage() {
                         <th className="py-1 font-medium">Unit</th>
                         <th className="py-1 font-medium text-right">Cost</th>
                         <th className="py-1 font-medium text-right">Total</th>
-                        <th className="py-1 font-medium w-20">Allocate</th>
+                        <th className="py-1 font-medium w-60">Route to</th>
                       </tr></thead>
                       <tbody>{previewLines.map((l: any) => {
                         const lineAllocs = allocations[l.line_id] || [];
-                        const totalPct = lineAllocs.reduce((s: number, a: Allocation) => s + a.percentage, 0);
-                        const isAllocating = allocatingLineId === l.line_id;
-                        return (<>
-                          <tr key={l.line_id || l.line_number} className="border-t border-subtle">
+                        const allSiblingAllocs: InvoiceAllocation[] = Object.values(allocations).flat();
+                        return (
+                          <tr key={l.line_id || l.line_number} className="border-t border-subtle align-top">
                             <td className="py-1.5 text-muted font-mono">{l.line_number}</td>
-                            <td className="py-1.5 text-muted max-w-[300px]">{l.raw_description}</td>
+                            <td className="py-1.5 text-muted max-w-[260px]">{l.raw_description}</td>
                             <td className="py-1.5">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-faint">—</span>}</td>
                             <td className="py-1.5 text-right font-mono text-muted">{l.quantity || "—"}</td>
                             <td className="py-1.5 text-muted">{l.unit || "—"}</td>
                             <td className="py-1.5 text-right font-mono text-muted">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
                             <td className="py-1.5 text-right font-mono text-navy font-medium">{l.line_total ? formatCurrency(l.line_total) : "—"}</td>
-                            <td className="py-1.5">
-                              {l.line_id && scopeItems.length > 0 ? (
-                                <div className="flex items-center gap-1">
-                                  {totalPct > 0 && (
-                                    <span className={"text-[9px] font-mono px-1.5 py-0.5 rounded " + (totalPct === 100 ? "bg-starlight-green/10 text-starlight-green" : "bg-starlight-blue/10 text-starlight-blue")}>
-                                      {totalPct}%
-                                    </span>
-                                  )}
-                                  <button onClick={() => setAllocatingLineId(isAllocating ? null : l.line_id)}
-                                    className={"p-1 rounded transition-colors " + (isAllocating ? "text-starlight-blue bg-navy/10" : "text-muted hover:text-starlight-blue hover:bg-surface-mid")}
-                                    title="Allocate to scope items">
-                                    <Split className="h-3 w-3" />
-                                  </button>
-                                </div>
+                            <td className="py-1.5 pl-2">
+                              {l.line_id && (scopeItems.length > 0 || workOrders.length > 0) ? (
+                                <InvoiceLineRouter
+                                  line={{ line_id: l.line_id, raw_description: l.raw_description, line_total: l.line_total }}
+                                  allocations={lineAllocs}
+                                  scopeItems={scopeItems}
+                                  workOrders={workOrders}
+                                  siblingAllocations={allSiblingAllocs}
+                                  onChanged={reloadAllocationsForExpanded}
+                                />
                               ) : (
-                                <span className="text-faint text-[9px]">{!l.line_id ? "" : "No job"}</span>
+                                <span className="text-faint text-[9px]">{!l.line_id ? "" : "No job linked"}</span>
                               )}
                             </td>
                           </tr>
-                          {/* Allocation rows */}
-                          {lineAllocs.length > 0 && !isAllocating && (
-                            <tr key={`${l.line_id}-allocs`}><td colSpan={8} className="py-0 px-8">
-                              <div className="flex flex-wrap gap-1.5 py-1">
-                                {lineAllocs.map((a: Allocation) => (
-                                  <span key={a.allocation_id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-starlight-blue/5 text-[9px] text-starlight-blue">
-                                    {a.scope_name} · {a.percentage}% · {formatCurrency(a.allocated_amount)}
-                                  </span>
-                                ))}
-                              </div>
-                            </td></tr>
-                          )}
-                          {/* Inline allocation panel */}
-                          {isAllocating && (
-                            <tr key={`${l.line_id}-alloc-panel`}><td colSpan={8} className="py-0">
-                              <div className="bg-navy/10/50 border-y border-starlight-blue/20 px-4 py-2.5">
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="text-[10px] font-semibold text-navy">Allocate {formatCurrency(l.line_total || 0)} to scope items</p>
-                                  <div className="flex items-center gap-2">
-                                    {totalPct > 0 && <span className="text-[9px] font-mono text-muted">{totalPct}% allocated · {formatCurrency((l.line_total || 0) * (100 - totalPct) / 100)} remaining</span>}
-                                    <button onClick={() => setAllocatingLineId(null)} className="text-muted hover:text-muted"><X className="h-3.5 w-3.5" /></button>
-                                  </div>
-                                </div>
-                                {/* Existing allocations */}
-                                {lineAllocs.map((a: Allocation) => (
-                                  <div key={a.allocation_id} className="flex items-center gap-2 mb-1.5 bg-surface rounded-lg px-3 py-1.5 border border-subtle">
-                                    <span className="text-xs text-navy font-medium flex-1">{a.scope_name}</span>
-                                    <span className="text-xs font-mono text-muted">{a.percentage}%</span>
-                                    <span className="text-xs font-mono text-navy">{formatCurrency(a.allocated_amount)}</span>
-                                    <button onClick={() => a.allocation_id && deleteAllocation(a.allocation_id, l.line_id)} className="p-0.5 text-faint hover:text-starlight-red"><Trash2 className="h-3 w-3" /></button>
-                                  </div>
-                                ))}
-                                {/* Add new allocation row */}
-                                {totalPct < 100 && (
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    <select id={`alloc-scope-${l.line_id}`} className="flex-1 px-2 py-1.5 border border-subtle rounded text-xs bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue">
-                                      <option value="">Select scope item...</option>
-                                      {scopeItems.filter(s => !lineAllocs.some(a => a.scope_item_id === s.scope_item_id)).map(s => (
-                                        <option key={s.scope_item_id} value={s.scope_item_id}>{s.item_name || `Scope #${s.scope_item_id}`}</option>
-                                      ))}
-                                    </select>
-                                    <input id={`alloc-pct-${l.line_id}`} type="number" min="1" max={100 - totalPct} defaultValue={100 - totalPct}
-                                      className="w-16 px-2 py-1.5 border border-subtle rounded text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-                                    <span className="text-[9px] text-muted">%</span>
-                                    <button onClick={() => {
-                                      const scopeEl = document.getElementById(`alloc-scope-${l.line_id}`) as HTMLSelectElement;
-                                      const pctEl = document.getElementById(`alloc-pct-${l.line_id}`) as HTMLInputElement;
-                                      if (scopeEl?.value && pctEl?.value) saveAllocation(l.line_id, Number(scopeEl.value), Number(pctEl.value));
-                                    }} className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs font-medium rounded hover:bg-navy transition-colors">Add</button>
-                                    {lineAllocs.length === 0 && scopeItems.length === 1 && (
-                                      <button onClick={() => allocate100(l.line_id, scopeItems[0].scope_item_id)}
-                                        className="px-2 py-1.5 text-[10px] text-starlight-blue hover:bg-navy/10 rounded transition-colors" title="Allocate 100% to the only scope item">
-                                        100% → {(scopeItems[0].item_name || "").substring(0, 20)}
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </td></tr>
-                          )}
-                        </>);
+                        );
                       })}</tbody>
                     </table>
                   )}

@@ -1,21 +1,10 @@
-chore(s28d): cleanup backlog in TRACKER + refreshed schema doc
+S25: Invoice routing to scope/WO/job + cash-spent "Invoiced" cost layer
 
-- TRACKER.md: new top-of-file "Cleanup Backlog" section —
-  persistent running list of known debt and deferred work,
-  reviewed at the start of every session. Seeded with 8 items
-  across correctness (admin BOM cost fix), mechanical cleanup
-  (dead file, middleware rename), deferred features (CAD upload,
-  PM-note dashboard widget, image thumbnail proxy), testing gaps
-  (multi-scope rendering), and stock catalogue polish.
-
-- starlight_database_schema_session28d.md: new schema doc
-  replacing the session25 version. Captures diff since S25:
-    * 3 new tables (tbl_load_events, tbl_load_groups, tbl_wo_assignees)
-    * 2 new RPCs (rpc_load_list, rpc_pm_job_overview)
-    * learning_category enum gains pm_note + materials_note (12 values)
-    * tbl_wo_documents.doc_type CHECK adds cad_model
-    * tbl_stock_items.source_job_item_id FK + partial index (S27)
-    * Convention notes: dual-path BOM join, Length-on-Metre
-      multiplier, PM notes upsert, category-filtered threads
-  Verified against live DB: 47 tables, 39 views, 10 RPCs.
-  Old session25 doc retained for history.
+- Allocations now support scope XOR WO routing (CHECK-enforced); "keep at job" = no row
+- New views: qry_invoice_scope_costs, qry_invoice_wo_costs, qry_invoice_job_rollup
+- qry_cost_waterfall + qry_job_cost_summary now expose invoiced totals
+- Shared InvoiceLineRouter component: single-select dropdown (Scope/WO/Job/Split),
+  pro-rata shipping shortcut that distributes a line across sibling allocations
+- JobInvoicesPanel shows amber "unallocated" banner in header
+- Cost analysis: new Invoiced layer row (vs BOM variance), Invoiced column per line
+- Refactored invoices page to use the new shared router
