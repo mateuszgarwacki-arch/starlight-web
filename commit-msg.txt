@@ -1,10 +1,5 @@
-S25: Invoice routing to scope/WO/job + cash-spent "Invoiced" cost layer
+S25-fix: Invoices panel full-width on job page
 
-- Allocations now support scope XOR WO routing (CHECK-enforced); "keep at job" = no row
-- New views: qry_invoice_scope_costs, qry_invoice_wo_costs, qry_invoice_job_rollup
-- qry_cost_waterfall + qry_job_cost_summary now expose invoiced totals
-- Shared InvoiceLineRouter component: single-select dropdown (Scope/WO/Job/Split),
-  pro-rata shipping shortcut that distributes a line across sibling allocations
-- JobInvoicesPanel shows amber "unallocated" banner in header
-- Cost analysis: new Invoiced layer row (vs BOM variance), Invoiced column per line
-- Refactored invoices page to use the new shared router
+- Stack JobInvoicesPanel + JobOrdersPanel instead of 2-col grid — descriptions were
+  wrapping into a narrow vertical strip
+- Cap invoice line description at max-w-[420px] with break-words

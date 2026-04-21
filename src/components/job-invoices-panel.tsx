@@ -214,8 +214,8 @@ export function JobInvoicesPanel({ jobId }: JobInvoicesPanelProps) {
                             return (
                               <tr key={l.line_id} className="border-t border-subtle align-top">
                                 <td className="py-1.5 text-muted font-mono">{l.line_number}</td>
-                                <td className="py-1.5 text-muted pr-2">
-                                  <div>{l.raw_description}</div>
+                                <td className="py-1.5 text-muted pr-2 max-w-[420px]">
+                                  <div className="break-words">{l.raw_description}</div>
                                   {l.material_id && materials[l.material_id] && (
                                     <div className="text-[10px] text-starlight-green mt-0.5">
                                       {materials[l.material_id]}

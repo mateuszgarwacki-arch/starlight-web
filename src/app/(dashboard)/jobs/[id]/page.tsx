@@ -1035,8 +1035,8 @@ export default function JobDetailPage() {
         />
       )}
 
-      {/* Job Invoices & Orders — side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Job Invoices & Orders — full-width stacked for readable row content */}
+      <div className="space-y-4">
         <JobInvoicesPanel jobId={jobId} />
         <JobOrdersPanel jobId={jobId} />
       </div>
