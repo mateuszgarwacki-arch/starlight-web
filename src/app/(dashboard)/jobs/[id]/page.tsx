@@ -20,6 +20,7 @@ import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog"
 import { PmQueriesJobPanel } from "@/components/pm-queries-job-panel";
 import { JobInvoicesPanel } from "@/components/job-invoices-panel";
 import { JobOrdersPanel } from "@/components/job-orders-panel";
+import { WODocumentsPanel } from "@/components/wo-documents-panel";
 import { LearningsSection } from "@/components/learnings-section";
 import { LearningTrigger } from "@/components/learning-trigger";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
@@ -1039,6 +1040,19 @@ export default function JobDetailPage() {
       <div className="space-y-4">
         <JobInvoicesPanel jobId={jobId} />
         <JobOrdersPanel jobId={jobId} />
+      </div>
+
+      {/* Job-level documents — site plans, master CAD models, job-wide reference material */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-3">
+          <h2 className="text-sm font-semibold text-navy">Job Documents</h2>
+          <p className="text-xs text-muted mt-0.5">Site plans, master CAD models, and reference material for the job as a whole. Scope- and WO-specific files live on their own pages.</p>
+        </div>
+        <WODocumentsPanel
+          jobId={jobId}
+          jobNumber={job.job_number || ""}
+          jobName={job.job_name || ""}
+        />
       </div>
 
       {/* Main tabs: Quote Lines / Scope Items */}

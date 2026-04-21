@@ -74,11 +74,14 @@ export function WODocumentsPanel({
       query = query.eq("work_order_id", workOrderId);
     } else if (scopeItemId) {
       query = query.eq("scope_item_id", scopeItemId).is("work_order_id", null);
+    } else {
+      // Job-level mount: only docs anchored directly at the job, not at a scope or WO underneath it
+      query = query.eq("job_id", jobId).is("scope_item_id", null).is("work_order_id", null);
     }
     const { data } = await query.order("doc_type").order("sort_order");
     setDocs(data || []);
     setLoading(false);
-  }, [workOrderId, scopeItemId]);
+  }, [workOrderId, scopeItemId, jobId]);
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
 
@@ -195,7 +198,9 @@ export function WODocumentsPanel({
               <p className="text-xs text-muted animate-pulse py-2">Loading files...</p>
             ) : (
               <>
-                {Object.entries(DOC_TYPE_CONFIG).map(([type, config]) => {
+                {Object.entries(DOC_TYPE_CONFIG)
+                  .filter(([type]) => workOrderId || type !== "cut_list")
+                  .map(([type, config]) => {
                   const typeDocs = grouped[type as keyof typeof grouped] || [];
                   const Icon = config.icon;
                   const isUploading = uploading === type;

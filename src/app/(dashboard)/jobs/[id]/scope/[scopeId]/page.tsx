@@ -13,6 +13,7 @@ import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
 import { LearningsSection } from "@/components/learnings-section";
+import { WODocumentsPanel } from "@/components/wo-documents-panel";
 import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -390,6 +391,21 @@ export default function ScopeDetailPage() {
         }}
         defaultCollapsed
       />
+
+      {/* Scope-level documents — CAD concept/breakdown, scope-wide drawings, reference material */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-3">
+          <h2 className="text-sm font-semibold text-navy">Scope Documents</h2>
+          <p className="text-xs text-muted mt-0.5">CAD concept &amp; breakdown, drawings and references for this scope item. WO-specific files live on the WO itself.</p>
+        </div>
+        <WODocumentsPanel
+          jobId={jobId}
+          scopeItemId={scope.scope_item_id}
+          scopeName={scope.item_name || ""}
+          jobNumber={scope.job_number || ""}
+          jobName={scope.job_name || ""}
+        />
+      </div>
 
       {/* Main content: inventory + prompt (left) | build plan (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
