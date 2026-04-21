@@ -1,20 +1,12 @@
-S33: Next.js 16 middleware -> proxy rename
+S33 tracker: backlog cleanup + proxy rename session entry
 
-Rename src/middleware.ts -> src/proxy.ts and
-export async function middleware() -> export async function proxy().
+Documents-only commit for session 33 history:
+- Removed closed items from cleanup backlog top section
+  (middleware rename done, Phase 3 CAD library done from S32,
+  S28d BOM bug verified fixed, dead file deleted)
+- Updated Key Files table: middleware.ts -> proxy.ts
+- Added full Session 33 entry with S28d verification evidence,
+  smoke test plan for proxy rename, conventions added
 
-Closes the deprecation warning that was emitted on every build since
-the Next.js 16.1 upgrade. Behaviour identical — session check via
-Supabase SSR, freelancer-to-/m redirect, PM preferred_view redirect.
-Runtime implicitly changes from Edge (old middleware default) to
-Node.js (proxy mandates nodejs), which is fine here — createServerClient
-from @supabase/ssr is runtime-agnostic and nothing in the auth path
-is Edge-specific.
-
-Verified via npx next build — no deprecation warning, all 41 routes
-still mount, Proxy (Middleware) reported in build summary as expected.
-
-Smoke test before accepting the deploy:
-  1. Log out, hit any admin route -> redirects to /login
-  2. Log in as freelancer, try /jobs -> redirects to /m
-  3. Log in as admin, hit / with preferred_view=pm -> redirects to /pm/jobs
+No code changes. Everything in this commit has already shipped
+via earlier commits e0de151 (cleanup) and a8210eb (proxy rename).

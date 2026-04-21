@@ -8,10 +8,9 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 _No open correctness items. S28d closed out in S33 — see session entry below._
 
 ### Small/mechanical (easy wins)
-- [ ] **Next.js 16 middleware rename** *(S28)* — `middleware.ts` → `proxy.ts`. Emits a deprecation warning on every build. Straight file rename; update `src/middleware.ts` export convention if needed.
+_No open items. See S33 session entry for cleanup history._
 
 ### Features deferred
-- [ ] **Phase 3 — `/library/cad` cross-job search** *(S31)* — flat list of every CAD file across every job with filters on scope category, client, date, free text. Single query joining `tbl_wo_documents` (filtered to `cad_concept` + `cad_breakdown`) → `tbl_scope_items` → `tbl_production_plan` → `tbl_scope_item_categories`. Builds on Phase 1 + Phase 2 schema and component. This is the real discovery payoff for the CAD feature — finding kiosks/desks from past jobs.
 - [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
 - [ ] **`WODocumentsPanel` raw inserts → `auditedInsert`** *(S31)* — pre-existing gap, not introduced by Phase 2. Uploads don't appear in the audit log. Straight swap to `auditedInsert(ctx, "tbl_wo_documents", { ... }, jobId)`.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
@@ -273,7 +272,7 @@ Full index coverage across all tables. Key indexes: partial indexes on archived_
 | `src/lib/auth-headers.ts` | Helper: get Supabase session auth headers for internal API calls |
 | `src/lib/calendar-token.ts` | HMAC-SHA256 token generation/validation for calendar downloads |
 | `src/lib/use-realtime.ts` | Hook: useRealtimeRefresh — subscribe to table changes with debounce |
-| `src/middleware.ts` | Auth middleware: session validation, role-based routing, login redirects |
+| `src/proxy.ts` | Auth proxy (Next.js 16+ convention, renamed from middleware.ts in S33): session validation, role-based routing, login redirects |
 | `src/lib/audit.ts` | Audit engine: auditedUpdate/Insert/Delete, revertAuditEntry, getAuditContext |
 | `src/lib/use-presence.ts` | Hook: usePresence — Supabase Realtime Presence for who's viewing what |
 | `src/components/presence-avatars.tsx` | PresenceAvatars (coloured initials) + FieldPresenceIndicator (edit ring) |
@@ -3087,3 +3086,62 @@ None. Uses existing schema from S30 (`doc_type = 'cad_concept' | 'cad_breakdown'
 - **Empty state distinction**: always show distinct messages for "the dataset is empty" vs "filters exclude everything." Two different problems, two different fixes. Pattern already used on invoices, now applied here.
 - **Sortable header component**: `<SortableHeader label sortKey currentKey currentDir onToggle />` pattern for column-header sorting. Reusable if we add it to other list pages.
 - **Date preset pills over date-range pickers**: for "recent-ish" filtering, 4 pills (All / Year / 3m / Month) have 100× less friction than two date inputs and cover 95% of real use.
+
+
+### Session 33 (21 Apr 2026) — Backlog Cleanup: S28d Verification, Dead Code, Proxy Rename
+3 commits. Focused on clearing backlog items that had been sitting for weeks. Two were already-fixed-but-not-closed, one was a mechanical deprecation.
+
+**1. S28d BOM cost bug — verified fixed, closed out.** Backlog said "admin surfaces compute BOM totals directly off tbl_wo_bom without Length-on-Metre multiplier or dual-path join." Memory said this was the top correctness issue. Reality check via Supabase MCP showed both fixes already live:
+  - View `qry_bom_enriched` (didn't know about it) computes `unit_to_base_multiplier` via CASE on `(bom.unit='length' AND material.unit IN ('metre','meter','m') AND standard_length > 0)`, returns it as `standard_length/1000`. Applied to both `planned_line_cost` and `reconciled_line_cost`.
+  - Same view computes `effective_scope_item_id = COALESCE(b.scope_item_id, wo.scope_item_id)` — the dual-path fallback.
+  - Every downstream cost view (qry_wo_cost_summary, qry_scopeitem_cost_summary, qry_scope_estimated_cost via qry_wo_estimated_cost, qry_job_cost_summary, qry_material_reconciliation) routes through `qry_bom_enriched.reconciled_line_cost`.
+  - `<CostBreakdown>` queries `qry_bom_enriched` filtered by `effective_scope_item_id`, sums `reconciled_line_cost`, filters out voided WOs via `.or("work_order_id.is.null,wo_status.neq.Voided")`.
+  - Frontend `work-orders-panel.tsx` `bomRowCost` helper applies the multiplier on every render, both the WO BOM table and the consolidated "All Materials" card.
+
+**Verification on live Grosvenor job (13725):**
+  - 3x2 Rounded Edge (bom_id 148): `reconciled_line_cost = £31.68` (not £6.60), `unit_to_base_multiplier = 4.8`. Casualty fixed.
+  - Polyline IFR 60" (bom_id 70): `bom_scope_id = NULL`, `work_order_id = 23`, `effective_scope_item_id = 17` resolved via WO's scope. Dual-path working.
+  - Two other 3x2 rows (bom_ids 100, 117) attached only via work_order_id with null direct scope — both resolved correctly with £193.54 and £129.02.
+
+The memory note was stale — this was fixed earlier without being checked off. Closed the item, moved on. Lesson: verify correctness backlog items against live data before assuming they're still open.
+
+**2. Dropped orphan view `qry_wo_cost_material`.** Spotted during the S28d investigation. Legacy rollup of `tbl_wo_bom` that summed `quantity × COALESCE(actual_unit_cost, unit_cost, 0)` with no multiplier — if anyone queried it, they'd get the old broken numbers. Verified no SQL dependents (via `pg_depend` + `pg_rewrite` join) and no frontend references (only in tracker/schema docs listings). Dropped via migration `drop_orphaned_qry_wo_cost_material`. Prevents future reintroduction of the buggy formula.
+
+**3. Deleted dead file `src/components/job-items-table.tsx`.** Unused since scope page redesign in S27. Verified nothing imports it (`JobItemsTable` only appears inside the file itself). Simple delete. Build clean, 41 routes unchanged. Removed from Key Files table in TRACKER.
+
+**4. Next.js 16 middleware → proxy rename.** Closes the deprecation warning that emitted on every build since the Next.js 16.1 upgrade. Approach:
+  - Renamed `src/middleware.ts` → `src/proxy.ts`
+  - Renamed `export async function middleware(request: NextRequest)` → `export async function proxy(request: NextRequest)`
+  - Everything else stays: `config.matcher`, `createServerClient` setup, session check, freelancer-to-/m redirect, PM preferred_view redirect
+
+Background research before touching this: Next.js 16 docs confirm that proxy mandates Node.js runtime (not Edge), not configurable. Safe here because `createServerClient` from `@supabase/ssr` is runtime-agnostic and nothing in our auth path is Edge-specific. The codemod `npx @next/codemod@canary middleware-to-proxy` was available but did the change manually since the file is only 76 lines — tighter control over a security-critical surface.
+
+Build output after rename:
+  - No deprecation warning (was emitted on every previous build)
+  - Build summary shows `ƒ Proxy (Middleware)` — Next.js labels the serverless function the same way
+  - All 41 routes mount
+
+Smoke test plan (handed over to Mateusz before trusting the deploy):
+  1. Log out, hit `/jobs` or `/` — should redirect to `/login`
+  2. Log in as a freelancer account, try `/jobs` — should force-redirect to `/m`
+  3. Log in as admin with `preferred_view = "pm"` in `app_metadata`, hit `/` — should redirect to `/pm/jobs`
+  4. Log in as admin without `preferred_view`, hit `/` — should stay on `/`
+
+All three redirect paths are the whole security perimeter. If the rename is wrong, the proxy silently becomes a no-op and every route becomes public. Verify explicitly before trusting the deploy.
+
+### New/Modified Files (Session 33)
+| File | Change |
+|------|--------|
+| `src/middleware.ts` → `src/proxy.ts` | Renamed per Next.js 16 convention; function `middleware()` → `proxy()` |
+| `src/components/job-items-table.tsx` | Deleted — unused since S27 |
+| `src/components/cost-breakdown.tsx` | Synced to git (BOM fix was already on disk from an earlier session but uncommitted) |
+| `src/components/work-orders-panel.tsx` | Synced to git (ditto) |
+| `TRACKER.md` | Backlog cleanup: removed closed items, added S33 session entry |
+
+### SQL Run (Session 33)
+- `DROP VIEW IF EXISTS qry_wo_cost_material;` — orphan with naive BOM formula, no dependents
+
+### Conventions Added (Session 33)
+- **Verify correctness backlog items against live data before assuming they're still open.** Memory/tracker notes drift; the fix may have shipped in a later session without being checked off. A single Supabase query against a known casualty row is the cheapest way to distinguish "stale backlog entry" from "still-broken bug."
+- **Next.js 16 auth file is `src/proxy.ts` with `export async function proxy()`** — not `middleware.ts` with `middleware()`. Runtime is Node.js (not Edge), not configurable. Everything else stays identical: `config.matcher`, `NextRequest`/`NextResponse`, Supabase SSR client setup.
+- **Security-critical renames deploy alone.** Never chain another change on top of an untested auth-layer deploy — rollback needs to be a single `git revert`, not unwinding a stack of commits.
