@@ -3266,3 +3266,72 @@ CREATE INDEX idx_wo_steps_wo_seq ON tbl_wo_steps(work_order_id, seq);
 - [ ] After 2 weeks of use: check how many WOs have steps authored vs. not. If <30%, feature isn't landing — revisit empty state messaging or friction points before adding features.
 - [ ] Consider: step-level photo attachment? Step-level completion check-off? Both deferred until adoption proven.
 - [ ] Schema doc refresh: create `starlight_database_schema_session35.md` from session33 base + S34 (no changes) + S35 (new table, new index, new RLS).
+
+
+---
+
+## Session 36 — 22 April 2026
+
+### Summary
+Knowledge base restructure + mobile task list findability pass. Consolidated 8 project docs into 5 live .md files + 2 archived, corrected stale facts (auth model, `proxy.ts`, table counts, `app_metadata.role`). Shipped 5 UX fixes to `/m` task list: sticky search, scope-as-label, no-truncation, persistent collapse, dropped redundant Live pill.
+
+### Knowledge base restructure ✅
+Old docs (replaced):
+- `starlight_project_summary_v2__1_.md` (S9, 26 sessions stale — claimed 31 tables, middleware.ts, PIN auth)
+- `Starlight_Deployment_Guide_v2.docx` (28 tables claim)
+- `Starlight_Security_Policy_v1.docx` (PIN auth, middleware.ts)
+- `Starlight_Web_Architecture_Security_Addendum.docx` (layer on v1)
+- `Starlight_Web_Architecture_v1.docx` (pre-build blueprint)
+- `starlight_consolidated_v3.docx` (Feb '26 Access design)
+
+New structure:
+- `00_README.md` — index + read order + update triggers
+- `01_overview.md` — principles, zones, Golden Path, current stats
+- `02_architecture.md` — stack, auth, three-layer security, routes, integrations
+- `03_database_schema.md` — verified schema (was `starlight_database_schema_session35.md`)
+- `04_security_policy.md` — SP-001..SP-017 updated (phone+password, proxy.ts, admin role, AUDITED_TABLES)
+- `05_conventions.md` — deploy, SQL, audit, notifications, frontend patterns
+- `_archive/access_design_feb2026.md` + `_archive/web_blueprint_march2026.md` — historical, clearly marked
+
+All stale facts corrected throughout: PIN → phone+password; `middleware.ts` → `src/proxy.ts`; added `admin` role above PM; table counts 21/28/31 → 48/41/10; `user_metadata.role` → `app_metadata.role`; consolidated RLS policy pattern documented; AUDITED_TABLES registry pattern included.
+
+### Mobile task list — findability pass ✅
+
+**Diagnosis**: freelancers struggling to find specific WOs from verbal instructions. Code audit of `src/app/m/page.tsx` found:
+- Activity label truncated at 12 chars + description had `truncate` class — violates own "no text truncation anywhere" convention
+- Scope headers looking like buttons (amber bar, uppercase bold, tinted bg) were being mis-tapped
+- No search anywhere — purely hierarchical navigation
+- Collapse state lived in `useState` Set — lost on navigation
+- Redundant status signals (Live pill + worker pills + action icon all saying "someone's on this")
+
+**Shipped (5 changes):**
+
+1. **Sticky search bar** — debounced 150ms, client-side filter across description / scope_name / job_name / job_number / activity_label. Auto-expands all jobs while search is active (`effectiveCollapsed = search ? new Set() : collapsedJobs`). Match count "N of M" in sticky header when filtering. Dedicated empty state when search returns zero. `inputMode="search"`, `autoCorrect="off"`, `autoCapitalize="none"`.
+
+2. **Scope header demoted from button to label** — drop amber bar, drop `bg-surface-dim/50`, drop `uppercase tracking-wide font-bold`. Now: flat row, `Tag` icon + muted text + faint count. Reads unmistakably as "this labels the group below" rather than "tap me".
+
+3. **No truncation** — removed `activity_label.length > 12 ? slice(0, 12) + "…"` guard; removed `truncate` class on description, replaced with `break-words`. Long activity labels keep `whitespace-nowrap` so "CUT + COVER" stays on one line; description wraps onto 2 lines if needed.
+
+4. **Persist collapsed jobs** — `localStorage` keyed `m-tasks-collapsed-{freelancer_id}`. Loaded inline in `loadTasks` (same pass as `setMyId`) to avoid flicker between "all expanded" and restored state. Saved via `useEffect` on change.
+
+5. **Dropped the "Live" pill** on In-Progress WOs — worker pills already show the same info with more specificity (names). "Built" pill on Complete WOs kept (unique info).
+
+### Files changed (Session 36)
+| File | Change |
+|------|--------|
+| `src/app/m/page.tsx` | +37 lines: search state + debounce, localStorage load/save, search-aware effective collapse, searched filter, JSX: sticky search bar, scope header redesign, truncation removal, Live pill removal, empty-state for zero matches |
+| `00_README.md` → `05_conventions.md` + `_archive/*` | New knowledge base structure (committed in earlier pass this session) |
+
+### Conventions Added (Session 36)
+- **Findability > hierarchy on freelancer surfaces.** Any list the workshop floor browses needs a search field above the hierarchy, not instead of it. Even a 50-item list benefits hugely from one text input filter across the obvious fields.
+- **Affordance discipline for group headers.** Group labels (scope, section) should look flat — no tinted bg, no bold, no coloured accent bar, no uppercase. Colored accent bars + uppercase = button language. If a group isn't interactive, don't give it button styling. When you eventually make it interactive (e.g. collapsible scopes), re-introduce a chevron to signal that.
+- **Persist freelancer UI preferences in localStorage keyed by `freelancer_id`.** Collapse state, filter state, sort order — anything "how do I like to see this". One freelancer per phone in practice, but keying by ID is zero cost and correct.
+- **Debounce search at 150ms.** Input state updates instantly (responsive feel); filter state lags 150ms (avoids expensive recomputation on every keystroke). For lists <200 items filtering is cheap enough that debounce is about consistency rather than performance — still worth doing.
+- **When search is active, auto-expand all collapsed groups.** Preserves user's normal collapse preferences (saved state untouched) but guarantees matches are visible. Clearing search restores the preferred view.
+- **Don't stack redundant status signals on a compact row.** If two signals mean the same thing (e.g. "Live" pill + active-worker pills), keep the more specific one. Each element on a mobile row costs horizontal space and cognitive load.
+
+### Deferred (Tier 2 candidates for next pass)
+- **"Now" priority band above the tree** — WOs with any active worker, shown as a top strip. Useful but wanted to ship search first and watch what freelancers actually do with it.
+- **Filter rename** — "Mine" (open timer OR currently working) and "On" (assigned via `tbl_wo_assignees`) are semantically different but named confusingly. Candidate rename: Mine → "Working", On → "Assigned". Hold pending observation.
+- **Graceful degradation on generic scope names** — if scope name matches "General" / "Misc" / < 5 chars, fall back to showing first line of scope description as secondary header. Depends on how common bad scope names actually are in practice.
+- **WO-creation soft warning** — warn on save if description < 15 chars or only generic words. Cultural fix to the root-cause content problem ("better descriptions"). Not a list-page fix.

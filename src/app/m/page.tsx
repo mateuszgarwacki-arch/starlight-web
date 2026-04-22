@@ -22,6 +22,7 @@ interface TaskCard {
   myOpenEntry: number | null;
   paint_notes: string | null;
   assignee_ids: number[];
+  my_last_entry_id: number | null;
 }
 
 interface ScopeGroup {
@@ -43,7 +44,7 @@ export default function MobileTaskList() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"mine" | "all" | "assigned" | "painting" | "done">("all");
+  const [filter, setFilter] = useState<"recent" | "all" | "assigned" | "painting" | "done">("all");
   const [myId, setMyId] = useState<number>(0);
   const [myName, setMyName] = useState("");
   const [collapsedJobs, setCollapsedJobs] = useState<Set<number>>(new Set());
@@ -191,6 +192,10 @@ export default function MobileTaskList() {
       const entries = timeByWO[wo.work_order_id] || [];
       const workers = (activeWorkersByWO[wo.work_order_id] || []).map(w => ({ ...w, open: true }));
       const myOpen = entries.find((e: any) => e.freelancer_id === fId && !e.system_end_timestamp);
+      const myEntries = entries.filter((e: any) => e.freelancer_id === fId);
+      const myLastEntryId = myEntries.length > 0
+        ? Math.max(...myEntries.map((e: any) => e.entry_id))
+        : null;
       const job = jobMap[wo.job_id] || { name: "—", number: "—" };
 
       return {
@@ -209,6 +214,7 @@ export default function MobileTaskList() {
         myOpenEntry: myOpen ? myOpen.entry_id : null,
         paint_notes: wo.paint_notes || null,
         assignee_ids: assigneesByWO[wo.work_order_id] || [],
+        my_last_entry_id: myLastEntryId,
       };
     });
 
@@ -225,8 +231,9 @@ export default function MobileTaskList() {
   const paintingCount = tasks.filter(t => t.paint_notes).length;
   const paintingTasks = tasks.filter(t => t.paint_notes);
   const onTasks = activeTasks.filter(t => t.assignee_ids.includes(myId));
-  const filtered = filter === "mine"
-    ? activeTasks.filter(t => t.myOpenEntry || t.workers.some(w => w.freelancer_id === myId))
+  const recentTasks = tasks.filter(t => t.my_last_entry_id !== null);
+  const filtered = filter === "recent"
+    ? recentTasks.slice().sort((a, b) => (b.my_last_entry_id || 0) - (a.my_last_entry_id || 0))
     : filter === "assigned"
     ? onTasks
     : filter === "painting"
@@ -297,12 +304,15 @@ export default function MobileTaskList() {
           >
             All ({activeTasks.length})
           </button>
-          <button
-            onClick={() => setFilter("mine")}
-            className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "mine" ? "bg-navy text-white" : "text-muted")}
-          >
-            Mine
-          </button>
+          {recentTasks.length > 0 && (
+            <button
+              onClick={() => setFilter(filter === "recent" ? "all" : "recent")}
+              className={"px-3 py-1.5 text-xs font-medium transition-colors " + (filter === "recent" ? "bg-navy text-white" : "text-muted")}
+              title="Work Orders you've worked on, newest first"
+            >
+              Recent ({recentTasks.length})
+            </button>
+          )}
           {onTasks.length > 0 && (
             <button
               onClick={() => setFilter(filter === "assigned" ? "all" : "assigned")}
@@ -442,7 +452,7 @@ export default function MobileTaskList() {
                             {/* Status indicators — Live pill removed, worker pills carry that signal */}
                             <div className="shrink-0 flex items-center gap-1">
                               {task.status === "Complete" && (
-                                <span className="text-[9px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium">Built</span>
+                                <span className="text-[9px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium">Completed</span>
                               )}
                               {task.myOpenEntry ? (
                                 <CheckCircle2 className="h-4 w-4 text-starlight-green" />

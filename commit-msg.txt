@@ -1,11 +1,12 @@
-S36 mobile tasks: search, scope-as-label, no truncation, persist collapse, drop Live pill
+S36b mobile tasks: Mine -> Recent filter rebuilt
 
-- Sticky search bar at top of /m page, debounced 150ms
-- Filters across description, scope name, job name, job number, activity label
-- Auto-expands all jobs when search is active so matches are visible
-- Scope headers redesigned as flat labels (Tag icon, muted, no bg, no uppercase)
-  to stop freelancers mis-tapping them as buttons
-- Removed truncation on activity label (was sliced at 12 chars) and description
-  (was truncate class) - per no-truncation convention
-- Collapsed job state now persists in localStorage per freelancer
-- Dropped "Live" status pill on In-Progress WOs - worker pills already signal it
+- "Mine" was effectively dead — it showed only WOs with an open timer
+  (same info as the mobile header widget), so freelancers lost sight of
+  what they'd been working on as soon as they stopped their timer.
+- Renamed filter to "Recent (N)"; hides when count is zero.
+- New logic: any WO where freelancer has a non-archived time entry,
+  including Complete WOs.
+- Sorted by most-recent entry_id first so "where did I leave off"
+  surfaces at the top.
+- Added my_last_entry_id field on TaskCard; count in button.
+- Renamed Complete status badge "Built" -> "Completed" on /m task row.
