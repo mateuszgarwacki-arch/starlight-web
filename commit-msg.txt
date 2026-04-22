@@ -1,9 +1,26 @@
-S33 tracker: WODocumentsPanel audit conversion session entry
+S33 brain files: schema doc + tracker sync
 
-Docs-only commit to close out the WODocumentsPanel audit work:
-- Removed the closed item from Features deferred backlog
-- Appended "Session 33 continued" entry with detail on:
-  - Why AUDITED_TABLES registration is a prerequisite (not automatic)
-  - Why the drag-reorder sort_order stays raw (cosmetic)
-  - Why the delete audit is more valuable than the insert audit
-- Added three conventions around audit coverage decisions
+Docs-only commit to sync the persistent-brain files with live state
+before closing session 33.
+
+New file:
+- starlight_database_schema_session33.md — captures delta from S29
+  (doc_type split cad_model -> cad_concept+cad_breakdown in S30,
+  qry_wo_cost_material dropped in S33, qry_bom_enriched documented
+  as BOM cost source of truth with inline definition + Grosvenor
+  verification evidence). Full conventions section reinforcing the
+  S30-S33 learnings.
+
+TRACKER.md updates:
+- Project Overview counts refreshed 42/38/6/115 -> 47/41/10/200+
+- Auth description: middleware.ts -> src/proxy.ts
+- Freelancer auth: phone+PIN -> phone+password (PIN dropped S10b)
+- Replaced 40-line stale "Database Schema (verified 26 Mar 2026)"
+  block with pointer to versioned schema doc + three critical
+  convention callouts (qry_bom_enriched source of truth, doc_type
+  values, AUDITED_TABLES registry including new tbl_wo_documents)
+
+Brain files pattern now established: when finishing a session,
+(1) create/update starlight_database_schema_session{N}.md,
+(2) update TRACKER.md with session log entry + backlog + counts,
+(3) commit as a single tracker-only commit.
