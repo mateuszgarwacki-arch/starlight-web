@@ -8,6 +8,7 @@ import { uploadToOneDrive, jobFolder, woPhotoName, getOneDriveUrl } from "@/lib/
 import { ArrowLeft, Play, UserPlus, Clock, CheckCircle2, Camera, AlertTriangle, Users, Paintbrush, ImageIcon } from "lucide-react";
 import { MobileWODocs } from "@/components/mobile-wo-docs";
 import { LogSheet, type LogSheetData } from "@/components/log-sheet";
+import { WOStepsPanel } from "@/components/wo-steps-panel";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -407,6 +408,10 @@ export default function MobileWODetail() {
         </div>
 
         {wo.description && <p className="text-sm text-muted mt-3 leading-relaxed">{wo.description}</p>}
+
+        <div className="mt-3">
+          <WOStepsPanel workOrderId={wo.work_order_id} jobId={wo.job_id} readOnly />
+        </div>
 
         {wo.paint_notes && (
           <div className="mt-3 bg-starlight-amber/10 border border-starlight-amber/20 rounded-lg px-3 py-2.5">

@@ -88,6 +88,13 @@ interface ScopeJobItem {
   notes: string | null;
 }
 
+interface WOStep {
+  step_id: number;
+  seq: number;
+  step_text: string;
+  is_critical: boolean;
+}
+
 interface WOData {
   wo: TravellerWO;
   bom: BOM[];
@@ -95,6 +102,7 @@ interface WOData {
   linkedItems: LinkedItem[];
   imageUrls: Record<number, string>;
   pdfPageUrls: Record<number, string[]>;
+  steps: WOStep[];
 }
 
 /* ================================================================
@@ -217,7 +225,7 @@ export default function TravellerPage() {
     // 5. Load BOM, docs, linked items, image URLs for each
     const dataMap: Record<number, WOData> = {};
     for (const wo of toPrint) {
-      const [bomRes, docsRes, jxnRes] = await Promise.all([
+      const [bomRes, docsRes, jxnRes, stepsRes] = await Promise.all([
         supabase.from("tbl_wo_bom")
           .select("bom_id, item_description, quantity, unit, needs_ordering, material_id")
           .eq("work_order_id", wo.work_order_id).order("bom_id"),
@@ -226,6 +234,9 @@ export default function TravellerPage() {
           .eq("work_order_id", wo.work_order_id).order("sort_order"),
         supabase.from("tbl_jobitem_workorder")
           .select("job_item_id").eq("work_order_id", wo.work_order_id),
+        supabase.from("tbl_wo_steps")
+          .select("step_id, seq, step_text, is_critical")
+          .eq("work_order_id", wo.work_order_id).order("seq"),
       ]);
 
       let linkedItems: LinkedItem[] = [];
@@ -281,6 +292,7 @@ export default function TravellerPage() {
 
       dataMap[wo.work_order_id] = {
         wo, bom: enrichedBom, docs, linkedItems, imageUrls, pdfPageUrls,
+        steps: (stepsRes.data || []) as WOStep[],
       };
     }
 
@@ -494,7 +506,7 @@ export default function TravellerPage() {
     pageNum++;
     pages.push(
       <Page key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} />
+        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} steps={data.steps} />
       </Page>
     );
 
@@ -641,10 +653,11 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
    Task Brief (page 1 content)
    ================================================================ */
 
-function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount }: {
+function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount, steps }: {
   wo: TravellerWO; woIdx: number; totalWOs: number; bom: BOM[]; linkedItems: LinkedItem[];
   scope: Scope; siblingWOs: TravellerWO[]; daysRemaining: number | null;
   drawingCount: number; referenceCount: number; cutListCount: number;
+  steps: WOStep[];
 }) {
   return (
     <div className="space-y-3 text-[13px]">
@@ -676,6 +689,34 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
         <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Task description</p>
         <p className="text-[13px] text-foreground bg-surface-dim px-3 py-2 rounded leading-snug break-words whitespace-pre-wrap">{wo.description || "No description provided"}</p>
       </div>
+
+      {/* Steps — ordered instructions, critical highlighted in amber */}
+      {steps.length > 0 && (
+        <>
+          <hr className="border-subtle" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Steps</p>
+            <ol className="space-y-1">
+              {steps.map((s) => (
+                <li
+                  key={s.step_id}
+                  className={
+                    "flex gap-2 px-2.5 py-1.5 rounded text-[12px] leading-snug " +
+                    (s.is_critical
+                      ? "bg-starlight-amber/10 border border-starlight-amber/20"
+                      : "bg-surface-dim")
+                  }
+                >
+                  <span className={"font-bold shrink-0 " + (s.is_critical ? "text-starlight-amber" : "text-muted")}>
+                    {s.is_critical && "⚠ "}{s.seq}.
+                  </span>
+                  <span className="flex-1 whitespace-pre-wrap break-words text-foreground">{s.step_text}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </>
+      )}
 
       <hr className="border-subtle" />
 

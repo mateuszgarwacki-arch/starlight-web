@@ -34,6 +34,7 @@ const AUDITED_TABLES: Record<string, string> = {
   tbl_freelancers: "freelancer_id",
   tbl_scope_options: "option_id",
   tbl_wo_documents: "doc_id",
+  tbl_wo_steps: "step_id",
 };
 
 // Fields to skip auditing (noisy, system-managed)

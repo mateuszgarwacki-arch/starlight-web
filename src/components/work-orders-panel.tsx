@@ -22,6 +22,7 @@ import { usePresence } from "@/lib/use-presence";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 import { LearningTrigger } from "@/components/learning-trigger";
+import { WOStepsPanel } from "@/components/wo-steps-panel";
 
 // ============================================================
 // Types
@@ -808,6 +809,9 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         <div className="mb-3">
                           <label className="block text-[10px] font-medium text-muted uppercase tracking-wider mb-1">Description</label>
                           <textarea defaultValue={wo.description || ""} onFocus={() => presenceSetEditing(`wo_${wo.work_order_id}_desc`)} onBlur={e => { presenceSetEditing(null); updateWODescription(wo.work_order_id, e.target.value); }} className="w-full px-2 py-1.5 border border-subtle rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-y min-h-[60px]" placeholder="What needs doing..." rows={2} />
+                        </div>
+                        <div className="mb-3">
+                          <WOStepsPanel workOrderId={wo.work_order_id} jobId={jobId} />
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                           <div>
