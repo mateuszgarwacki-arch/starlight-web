@@ -48,6 +48,11 @@ export function statusClass(status: string | null): string {
     case "Complete": return "badge-complete";
     case "On-Hold": return "badge-on-hold";
     case "Voided": return "badge-voided";
+    // Scope-item statuses (mapped onto the WO palette)
+    case "Active": return "badge-in-progress";
+    case "Provisional": return "badge-on-hold";
+    case "Workshop Completed": return "badge-complete";
+    case "Cancelled-Cost-Retained": return "badge-voided";
     default: return "badge-not-started";
   }
 }

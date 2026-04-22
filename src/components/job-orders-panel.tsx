@@ -23,13 +23,13 @@ interface BomOrder {
   scope_name: string | null;
 }
 
-interface JobOrdersPanelProps { jobId: number; }
+interface JobOrdersPanelProps { jobId: number; defaultCollapsed?: boolean; }
 
-export function JobOrdersPanel({ jobId }: JobOrdersPanelProps) {
+export function JobOrdersPanel({ jobId, defaultCollapsed = true }: JobOrdersPanelProps) {
   const supabase = createClient();
   const [items, setItems] = useState<BomOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const load = useCallback(async () => {
     // Get all BOM items for this job that need ordering OR have been ordered

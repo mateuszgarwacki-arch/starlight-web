@@ -3,13 +3,13 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, statusClass } from "@/lib/utils";
 import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck } from "lucide-react";
+import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -129,7 +129,23 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
   const [woData, setWoData] = useState<any[]>([]);
-  const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>("todo");
+  const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(() => {
+    // Persist last-used filter per job (session-scoped — dies on tab close)
+    if (typeof window === "undefined") return "todo";
+    try {
+      const saved = sessionStorage.getItem(`job-filter-${jobId}`);
+      if (saved === "null") return null;
+      const valid = new Set(["todo", "workshop", "provisional", "subcontracted", "done", "zone"]);
+      if (saved && valid.has(saved)) return saved as FilterKey | "zone";
+    } catch { /* storage unavailable */ }
+    return "todo";
+  });
+  const [activeTool, setActiveTool] = useState<null | "queries" | "orders" | "invoices" | "documents" | "learnings">(null);
+  const [headerCounts, setHeaderCounts] = useState<{
+    pm_queries_open: number; learnings_total: number; learnings_open: number;
+    invoices_count: number; invoices_total: number; invoices_unallocated: number;
+    orders_outstanding: number; documents_count: number;
+  } | null>(null);
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
 
@@ -155,8 +171,14 @@ export default function JobDetailPage() {
   } | null>(null);
 
   const loadData = useCallback(async () => {
-    // Single RPC replaces 10+ individual queries
-    const { data: d, error } = await supabase.rpc("rpc_job_detail_data", { p_job_id: jobId });
+    // Main detail data + lightweight header counts run in parallel
+    const [mainRes, countsRes] = await Promise.all([
+      supabase.rpc("rpc_job_detail_data", { p_job_id: jobId }),
+      supabase.rpc("rpc_job_header_counts", { p_job_id: jobId }),
+    ]);
+    if (countsRes.data) setHeaderCounts(countsRes.data as any);
+    const d = mainRes.data;
+    const error = mainRes.error;
     if (error || !d) { console.error("Job detail RPC failed:", error); setLoading(false); return; }
 
     // Calculate default day rate from rate card
@@ -245,6 +267,24 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (job) recordJobVisit({ jobId: job.job_id, jobNumber: job.job_number || "", jobName: job.job_name || "", path: `/jobs/${job.job_id}` });
   }, [job?.job_id]);
+
+  // Persist filter choice on change (session-scoped, per job)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(`job-filter-${jobId}`, activeFilter === null ? "null" : activeFilter);
+    } catch { /* storage unavailable */ }
+  }, [activeFilter, jobId]);
+
+  // Short label for scope status pill on quote-line rows
+  // Maps internal DB values to concise workshop-friendly labels
+  function displayScopeStatus(status: string | null): string {
+    switch (status) {
+      case "Workshop Completed": return "Built";
+      case "Cancelled-Cost-Retained": return "Cancelled";
+      default: return status || "—";
+    }
+  }
 
   // ================================================================
   // DONE = manual tick only (interpretation_complete field)
@@ -751,7 +791,7 @@ export default function JobDetailPage() {
           )}
         </td>
 
-        {/* Scope — create or link */}
+        {/* Scope — create, or coloured status pill linking to scope page */}
         <td className="px-3 py-2.5 text-center">
           {config.canCreateScope && !hasScope && (
             <button
@@ -762,15 +802,21 @@ export default function JobDetailPage() {
               <Plus className="h-5 w-5" />
             </button>
           )}
-          {hasScope && (
-            <a
-              href={`/jobs/${jobId}/scope/${scopes.find(s => s.quote_line_id === line.quote_line_id)?.scope_item_id}`}
-              title="Open scope item"
-              className="inline-flex items-center text-starlight-green hover:text-starlight-green/80 transition-colors"
-            >
-              <FileText className="h-5 w-5" />
-            </a>
-          )}
+          {hasScope && (() => {
+            const s = scopes.find(x => x.quote_line_id === line.quote_line_id && x.status !== "Cancelled-Cost-Retained");
+            if (!s) return null;
+            return (
+              <a
+                href={`/jobs/${jobId}/scope/${s.scope_item_id}`}
+                title={`Open scope — ${s.status || "—"}`}
+                className="inline-flex items-center transition-opacity hover:opacity-80"
+              >
+                <span className={"inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap " + statusClass(s.status)}>
+                  {displayScopeStatus(s.status)}
+                </span>
+              </a>
+            );
+          })()}
         </td>
 
         {/* PM Est — Level 1 inline + expand chevron */}
@@ -1016,44 +1062,137 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* Job Cost Analysis */}
+      {/* Job Cost Analysis (stays full-width, always visible) */}
       <CostBreakdown jobId={jobId} quotedValue={totalValue || undefined} />
 
-      {/* PM Queries aggregation */}
-      <PmQueriesJobPanel jobId={jobId} jobName={job?.job_name || ""} />
+      {/* Compact tool row — one button per section, click to expand below.
+          Replaces the stacked panel tower that used to push quote lines down. */}
+      {(() => {
+        const c = headerCounts;
+        const tools: {
+          key: NonNullable<typeof activeTool>;
+          icon: any;
+          label: string;
+          badge: string | null;
+          warning: boolean;
+        }[] = [
+          {
+            key: "queries",
+            icon: MessageCircleQuestion,
+            label: "PM Queries",
+            badge: c && c.pm_queries_open > 0 ? String(c.pm_queries_open) : null,
+            warning: !!(c && c.pm_queries_open > 0),
+          },
+          {
+            key: "orders",
+            icon: ShoppingCart,
+            label: "Orders",
+            badge: c && c.orders_outstanding > 0 ? `${c.orders_outstanding} out` : null,
+            warning: !!(c && c.orders_outstanding > 0),
+          },
+          {
+            key: "invoices",
+            icon: FileText,
+            label: "Invoices",
+            badge: c && c.invoices_unallocated > 0
+              ? `£${Number(c.invoices_unallocated).toLocaleString("en-GB", { maximumFractionDigits: 0 })} unalloc`
+              : (c && c.invoices_count > 0 ? String(c.invoices_count) : null),
+            warning: !!(c && c.invoices_unallocated > 0),
+          },
+          {
+            key: "documents",
+            icon: FolderOpen,
+            label: "Documents",
+            badge: c && c.documents_count > 0 ? String(c.documents_count) : null,
+            warning: false,
+          },
+          {
+            key: "learnings",
+            icon: BookOpen,
+            label: "Learnings",
+            badge: c && c.learnings_open > 0 ? `${c.learnings_open} open` : (c && c.learnings_total > 0 ? String(c.learnings_total) : null),
+            warning: !!(c && c.learnings_open > 0),
+          },
+        ];
 
-      {/* Learnings attached to this job */}
-      {job && (
-        <LearningsSection
-          filterField="job_id"
-          filterValue={jobId}
-          context={{
-            job_id: jobId,
-            contextLabel: `Job ${job.job_number || jobId} — ${job.job_name || ""}`.trim(),
-            contextSublabel: job.client_name || undefined,
-          }}
-          defaultCollapsed
-        />
-      )}
+        return (
+          <div className="card overflow-hidden">
+            {/* Button row */}
+            <div className="flex flex-wrap border-b border-subtle">
+              {tools.map((t, i) => {
+                const active = activeTool === t.key;
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTool(active ? null : t.key)}
+                    className={
+                      "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors flex-1 min-w-[160px] " +
+                      (i > 0 ? "border-l border-subtle " : "") +
+                      (active
+                        ? "bg-navy/5 text-navy"
+                        : "text-muted hover:bg-surface-dim hover:text-navy")
+                    }
+                  >
+                    <Icon className={"h-4 w-4 shrink-0 " + (active ? "text-starlight-red" : "")} />
+                    <span className="truncate">{t.label}</span>
+                    {t.badge && (
+                      <span
+                        className={
+                          "ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap " +
+                          (t.warning
+                            ? "bg-starlight-amber/15 text-starlight-amber"
+                            : "bg-surface-mid text-muted")
+                        }
+                      >
+                        {t.badge}
+                      </span>
+                    )}
+                    {!t.badge && t.warning && (
+                      <AlertCircle className="h-3.5 w-3.5 text-starlight-amber ml-auto shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-      {/* Job Invoices & Orders — full-width stacked for readable row content */}
-      <div className="space-y-4">
-        <JobInvoicesPanel jobId={jobId} />
-        <JobOrdersPanel jobId={jobId} />
-      </div>
-
-      {/* Job-level documents — site plans, master CAD models, job-wide reference material */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-3">
-          <h2 className="text-sm font-semibold text-navy">Job Documents</h2>
-          <p className="text-xs text-muted mt-0.5">Site plans, master CAD models, and reference material for the job as a whole. Scope- and WO-specific files live on their own pages.</p>
-        </div>
-        <WODocumentsPanel
-          jobId={jobId}
-          jobNumber={job.job_number || ""}
-          jobName={job.job_name || ""}
-        />
-      </div>
+            {/* Expanded panel for the active tool */}
+            {activeTool === "queries" && (
+              <PmQueriesJobPanel jobId={jobId} jobName={job?.job_name || ""} defaultExpanded />
+            )}
+            {activeTool === "orders" && (
+              <JobOrdersPanel jobId={jobId} defaultCollapsed={false} />
+            )}
+            {activeTool === "invoices" && (
+              <JobInvoicesPanel jobId={jobId} defaultCollapsed={false} />
+            )}
+            {activeTool === "documents" && job && (
+              <div className="p-4">
+                <p className="text-xs text-muted mb-3">
+                  Site plans, master CAD models, and reference material for the job as a whole. Scope- and WO-specific files live on their own pages.
+                </p>
+                <WODocumentsPanel
+                  jobId={jobId}
+                  jobNumber={job.job_number || ""}
+                  jobName={job.job_name || ""}
+                />
+              </div>
+            )}
+            {activeTool === "learnings" && job && (
+              <LearningsSection
+                filterField="job_id"
+                filterValue={jobId}
+                context={{
+                  job_id: jobId,
+                  contextLabel: `Job ${job.job_number || jobId} — ${job.job_name || ""}`.trim(),
+                  contextSublabel: job.client_name || undefined,
+                }}
+                defaultCollapsed={false}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Main tabs: Quote Lines / Scope Items */}
       <div className="flex gap-1 border-b border-subtle">

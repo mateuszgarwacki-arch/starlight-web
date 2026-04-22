@@ -3335,3 +3335,28 @@ All stale facts corrected throughout: PIN → phone+password; `middleware.ts` �
 - **Filter rename** — "Mine" (open timer OR currently working) and "On" (assigned via `tbl_wo_assignees`) are semantically different but named confusingly. Candidate rename: Mine → "Working", On → "Assigned". Hold pending observation.
 - **Graceful degradation on generic scope names** — if scope name matches "General" / "Misc" / < 5 chars, fall back to showing first line of scope description as secondary header. Depends on how common bad scope names actually are in practice.
 - **WO-creation soft warning** — warn on save if description < 15 chars or only generic words. Cultural fix to the root-cause content problem ("better descriptions"). Not a list-page fix.
+
+
+### Addendum: Mine → Recent filter (same day)
+
+**Context:** After shipping S36 findability pass, identified that the "Mine" filter on `/m` was effectively dead. Both its conditions reduced to "WO where my timer is currently running" — same info the mobile header widget already shows. Freelancers stopping their timer (e.g. for lunch) lost visibility of what they'd been building.
+
+**Shipped:**
+
+- **Rename "Mine" → "Recent (N)".** Hidden when count is 0.
+- **New filter logic:** any WO where freelancer has a non-archived time entry (`my_last_entry_id !== null`). Pulls from `tasks` not `activeTasks` so Complete WOs are included.
+- **New sort:** `recentTasks.sort((a, b) => (b.my_last_entry_id || 0) - (a.my_last_entry_id || 0))` — newest entry on top. Sort order propagates through Job→Scope grouping naturally, so the job/scope with the most recent activity surfaces first.
+- **New field on TaskCard:** `my_last_entry_id: number | null`. Populated in `loadTasks` from existing `timeByWO` data (filtered by `freelancer_id === fId`, `Math.max` of entry IDs). No extra query — reuses data that was already being fetched.
+- **Badge relabel:** Complete status was showing "Built" pill — renamed to "Completed" on `/m/page.tsx` row only. "Built" terminology retained elsewhere in the codebase (desktop workshop page, completed-work-tab, etc.) — if freelancer-side "Completed" wording proves confusing against the rest of the system, we revisit; otherwise leave inconsistency (mobile vs desktop) as it is, since mobile is freelancer-only and desktop is workshop/PM.
+- **Toggle behaviour:** tapping Recent while already active returns to All — matches the Done/Painting/On pill convention. (Original "Mine" didn't toggle, which made it feel sticky.)
+
+**Files changed:**
+| File | Change |
+|---|---|
+| `src/app/m/page.tsx` | +7 lines net: TaskCard field, myLastEntryId compute, recentTasks derivation + sort, button relabel, "Completed" badge text |
+
+**Conventions reinforced:**
+- **Reuse loaded data when adding filters.** `timeByWO` was already hydrated; computing `my_last_entry_id` is a one-line filter, no extra round-trip.
+- **Toggle-back behaviour is the standard pill pattern.** Non-default filters should toggle on/off rather than require tapping a separate "All" to exit.
+- **Use `entry_id` as a recency proxy when a timestamp isn't handy.** `tbl_wo_time_entries.entry_id` is a monotonic sequence — max entry_id per (freelancer, WO) is a correct "most recent" indicator for sort.
+- **Badge wording can diverge between freelancer and PM surfaces.** "Built" reads as craft-specific (the thing was physically built); "Completed" reads as status-generic. Freelancer surface favours clarity over domain flavour; desktop stays with craft language.

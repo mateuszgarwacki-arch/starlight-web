@@ -25,9 +25,9 @@ interface JobRollup {
   invoice_count: number;
 }
 
-interface JobInvoicesPanelProps { jobId: number; }
+interface JobInvoicesPanelProps { jobId: number; defaultCollapsed?: boolean; }
 
-export function JobInvoicesPanel({ jobId }: JobInvoicesPanelProps) {
+export function JobInvoicesPanel({ jobId, defaultCollapsed = true }: JobInvoicesPanelProps) {
   const supabase = createClient();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [rollup, setRollup] = useState<JobRollup | null>(null);
@@ -38,7 +38,7 @@ export function JobInvoicesPanel({ jobId }: JobInvoicesPanelProps) {
   const [workOrders, setWorkOrders] = useState<WOOption[]>([]);
   const [materials, setMaterials] = useState<Record<number, string>>({});
   const [allocations, setAllocations] = useState<Record<number, InvoiceAllocation[]>>({});
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const loadInvoices = useCallback(async () => {
     const [invRes, scopeRes, woRes, rollupRes] = await Promise.all([

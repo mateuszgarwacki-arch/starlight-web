@@ -19,12 +19,13 @@ interface PmQueryRow {
 interface PmQueriesJobPanelProps {
   jobId: number;
   jobName?: string;
+  defaultExpanded?: boolean;
 }
 
-export function PmQueriesJobPanel({ jobId, jobName }: PmQueriesJobPanelProps) {
+export function PmQueriesJobPanel({ jobId, jobName, defaultExpanded = false }: PmQueriesJobPanelProps) {
   const supabase = createClient();
   const [queries, setQueries] = useState<PmQueryRow[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [answeringId, setAnsweringId] = useState<number | null>(null);
   const [answerText, setAnswerText] = useState("");
 

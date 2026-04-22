@@ -1,12 +1,19 @@
-S36b mobile tasks: Mine -> Recent filter rebuilt
+S36c job page: filter persistence, scope pill, toolbar row
 
-- "Mine" was effectively dead — it showed only WOs with an open timer
-  (same info as the mobile header widget), so freelancers lost sight of
-  what they'd been working on as soon as they stopped their timer.
-- Renamed filter to "Recent (N)"; hides when count is zero.
-- New logic: any WO where freelancer has a non-archived time entry,
-  including Complete WOs.
-- Sorted by most-recent entry_id first so "where did I leave off"
-  surfaces at the top.
-- Added my_last_entry_id field on TaskCard; count in button.
-- Renamed Complete status badge "Built" -> "Completed" on /m task row.
+- Quote-line filter now persists per-job in sessionStorage
+  (survives drill-into-scope + back navigation; dies on tab close)
+- Scope column on quote-line rows now shows a coloured status pill
+  ("Active" blue / "Provisional" amber / "Built" green / "Cancelled" grey)
+  instead of a plain FileText icon. Pill is the link.
+- Scope status values added to statusClass() in lib/utils.ts:
+  Active -> in-progress, Provisional -> on-hold,
+  Workshop Completed -> complete, Cancelled-Cost-Retained -> voided
+- Five stacked panels (PM Queries, Learnings, Invoices, Orders,
+  Job Documents) replaced with a single toolbar row + expand-on-click.
+  Cost Analysis stays full-width above.
+- New RPC rpc_job_header_counts returns counts + invoice unallocated
+  total in one call, parallel to existing rpc_job_detail_data.
+- Button badges: amber warning badge when action needed
+  (open queries, outstanding orders, unallocated invoices, open learnings).
+- PmQueriesJobPanel, JobInvoicesPanel, JobOrdersPanel accept new
+  defaultExpanded/defaultCollapsed prop so toolbar can force open.
