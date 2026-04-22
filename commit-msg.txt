@@ -1,34 +1,10 @@
-S34: Scope pack print moved from WO level to scope level
+S34: Cover page — restore A4 minimum height
 
-Removed the duplicate "Print scope pack" button that rendered on every WO row
-in WorkOrdersPanel. Scope-pack printing now lives on the scope header next
-to the status badge, appearing once when woCount > 0.
+Cover page was shrinking to content size because flowLayout dropped
+min-height entirely. Keep min-height: 287mm (A4) so short cover content
+still fills a full page, and only relax page-break-inside so longer
+content can still spill to a 2nd printed page.
 
-Pack-mode printout restructured:
-  1. Cover page (flow layout, spills to 2nd printed page if needed) —
-     job number, scope item name, event date, scope description (full,
-     verbatim), linked job items table (all items on scope, not filtered
-     per-WO), pack contents summary
-  2. Scope-level drawings (one per page, reusing ImagePage component).
-     Fetched from tbl_wo_documents where scope_item_id = ? AND
-     work_order_id IS NULL AND doc_type = 'drawing'
-  3. Existing per-WO flow (divider -> brief -> cut lists -> drawings -> refs)
-
-Files:
-  - components/traveller/traveller-preview.tsx: split into
-    PrintTravellerButton (single-WO only) and new PrintScopePackButton
-  - components/work-orders-panel.tsx: simplify call site to
-    <PrintTravellerButton wo={...} scopeId={scopeId} />
-  - app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx: render
-    PrintScopePackButton in scope header (gated on woCount > 0)
-  - app/traveller/page.tsx: Scope interface gets description;
-    ScopeJobItem type added; pack-mode loadData fetches
-    tbl_scope_items.description, all scope-level tbl_job_items, and
-    scope-level drawings + OneDrive URLs. Page component's wo prop is
-    optional — scope cover uses "Scope-{id}" in footer and
-    "Scope Pack — Overview" in header. New ScopeOverview component
-    renders cover content.
-  - app/globals.css: .traveller-cover class overrides
-    page-break-inside: avoid so the cover can spill naturally
-
-Schema unchanged.
+- app/traveller/page.tsx: flowLayout pageStyle now keeps minHeight:287mm
+- app/globals.css: .traveller-cover drops min-height:auto override,
+  keeps only page-break-inside:auto

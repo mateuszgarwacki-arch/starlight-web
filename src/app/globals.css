@@ -187,10 +187,9 @@
     page-break-after: auto;
   }
 
-  /* Cover page — allow content to flow across multiple printed pages */
+  /* Cover page — full A4 minimum, but allow content to flow across multiple printed pages if it overflows */
   .traveller-page.traveller-cover {
     page-break-inside: auto !important;
-    min-height: auto !important;
   }
 
   * {

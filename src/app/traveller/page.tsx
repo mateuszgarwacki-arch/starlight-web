@@ -603,9 +603,9 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
   // Flow pages (scope cover): can spill to a 2nd printed page if content is long
   const pageClass = flowLayout ? "traveller-page traveller-cover" : "traveller-page";
   const pageStyle: React.CSSProperties = flowLayout
-    ? { width: "200mm", border: "2px solid #1A1A2E" }
+    ? { width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E" }
     : { width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" };
-  const contentStyle: React.CSSProperties = flowLayout ? {} : { minHeight: "252mm" };
+  const contentStyle: React.CSSProperties = flowLayout ? { minHeight: "252mm" } : { minHeight: "252mm" };
   return (
     <div className={`${pageClass} bg-surface mx-auto my-4 print:my-0 relative`} style={pageStyle}>
       <div className="absolute inset-[3px] border border-subtle pointer-events-none" style={{ zIndex: 0 }} />
