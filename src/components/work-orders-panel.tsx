@@ -167,8 +167,8 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     // Scope-level material add
     const [showScopeMaterialSearch, setShowScopeMaterialSearch] = useState(false);
     const [scopeMatQuery, setScopeMatQuery] = useState("");
-    const [scopeMatResults, setScopeMatResults] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_width: number | null }[]>([]);
-    const [scopeMatSelected, setScopeMatSelected] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; standard_width: number | null } | null>(null);
+    const [scopeMatResults, setScopeMatResults] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; material_category: number | null; standard_width: number | null; standard_length: number | null }[]>([]);
+    const [scopeMatSelected, setScopeMatSelected] = useState<{ material_id: number; material_name: string; unit: string; current_unit_cost: number | null; standard_width: number | null; standard_length: number | null } | null>(null);
     const [scopeMatQty, setScopeMatQty] = useState("1");
     const [scopeMatUnit, setScopeMatUnit] = useState("");
 
@@ -570,9 +570,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       if (catUnit === "m²" && (buyUnit === "linear metre" || buyUnit === "metre") && scopeMatSelected.standard_width) {
         unitCost = Math.round(unitCost * (scopeMatSelected.standard_width / 1000) * 100) / 100;
       }
-      // metre → length conversion (timber pattern)
-      if (catUnit === "metre" && buyUnit === "length") {
-        // Would need standard_length — skip for now, handle in Phase B
+      // metre → length conversion (timber pattern): stored cost must be per-length since unit=Length
+      // S37 invariant: tbl_wo_bom.unit_cost is always per ONE of tbl_wo_bom.unit.
+      if (catUnit === "metre" && buyUnit === "length" && scopeMatSelected.standard_length) {
+        unitCost = Math.round(unitCost * (scopeMatSelected.standard_length / 1000) * 100) / 100;
       }
       await supabase.from("tbl_wo_bom").insert({
         scope_item_id: scopeId, job_id: jobId, material_id: scopeMatSelected.material_id,
@@ -604,20 +605,15 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     const stdLengthMap: Record<number, number> = {};
     (materials || []).forEach(m => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
 
-    // Length-on-Metre multiplier: when a BOM row has unit='Length' but the underlying material
-    // is priced per metre with a known standard_length (mm), cost expands by standard_length/1000.
-    // Timber example: 3x2 Rounded Edge, 4 lengths @ £1.65 = £6.60 nominal → £31.68 with 4.8m std length.
+    // S37 invariant: tbl_wo_bom.unit_cost is the price for ONE of tbl_wo_bom.unit.
+    // Line total is qty × price. No multiplier. Applies to every unit (Metre, Length,
+    // Sheet, Each, Day, etc.) — the stored cost is always per-one-of-stored-unit.
+    // Write paths (cut-list extractor, unit toggle, scope material add) are responsible
+    // for converting cost when they change the stored unit.
     const bomRowCost = (row: { unit?: string | null; unit_cost?: number | null; actual_unit_cost?: number | null; quantity?: number | null; material_id?: number | null }): number => {
       const qty = row.quantity || 0;
       const price = row.actual_unit_cost ?? row.unit_cost ?? 0;
-      const mat = row.material_id ? materials.find(m => m.material_id === row.material_id) : null;
-      const bomUnit = (row.unit || "").toLowerCase();
-      const matUnit = (mat?.unit || "").toLowerCase();
-      const stdLen = mat?.standard_length;
-      const multiplier = (bomUnit === "length" && ["metre", "meter", "m"].includes(matUnit) && stdLen && stdLen > 0)
-        ? stdLen / 1000
-        : 1;
-      return qty * price * multiplier;
+      return qty * price;
     };
 
     const bomRowTotal = (row: BomRow) => bomRowCost(row);
@@ -1127,6 +1123,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         let effectiveCost = scopeMatSelected.current_unit_cost || 0;
                         if (catUnit === "m²" && (buyUnit === "linear metre" || buyUnit === "metre") && scopeMatSelected.standard_width) {
                           effectiveCost = Math.round(effectiveCost * (scopeMatSelected.standard_width / 1000) * 100) / 100;
+                        }
+                        // S37: preview must match what confirmScopeMaterial writes
+                        if (catUnit === "metre" && buyUnit === "length" && scopeMatSelected.standard_length) {
+                          effectiveCost = Math.round(effectiveCost * (scopeMatSelected.standard_length / 1000) * 100) / 100;
                         }
                         const total = qty * effectiveCost;
                         return (

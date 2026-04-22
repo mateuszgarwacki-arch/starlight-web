@@ -1,19 +1,31 @@
-S36c job page: filter persistence, scope pill, toolbar row
+S37 BOM unit_cost invariant — fix triple-multiplier timber costing
 
-- Quote-line filter now persists per-job in sessionStorage
-  (survives drill-into-scope + back navigation; dies on tab close)
-- Scope column on quote-line rows now shows a coloured status pill
-  ("Active" blue / "Provisional" amber / "Built" green / "Cancelled" grey)
-  instead of a plain FileText icon. Pill is the link.
-- Scope status values added to statusClass() in lib/utils.ts:
-  Active -> in-progress, Provisional -> on-hold,
-  Workshop Completed -> complete, Cancelled-Cost-Retained -> voided
-- Five stacked panels (PM Queries, Learnings, Invoices, Orders,
-  Job Documents) replaced with a single toolbar row + expand-on-click.
-  Cost Analysis stays full-width above.
-- New RPC rpc_job_header_counts returns counts + invoice unallocated
-  total in one call, parallel to existing rpc_job_detail_data.
-- Button badges: amber warning badge when action needed
-  (open queries, outstanding orders, unallocated invoices, open learnings).
-- PmQueriesJobPanel, JobInvoicesPanel, JobOrdersPanel accept new
-  defaultExpanded/defaultCollapsed prop so toolbar can force open.
+Root cause: two coexisting conventions for unit_cost on Length rows
+(per-metre vs per-length) with views, RPC, and frontend all applying
+a standard_length/1000 multiplier on top. Timber rows displayed at
+roughly 4.8x their correct total.
+
+Database (migration s37_fix_bom_unit_cost_invariant):
+- Normalised 6 legacy Convention A rows to Convention B
+  (bom_ids 80, 88, 89, 90, 148, 182)
+- qry_bom_enriched rebuilt: planned/reconciled line cost now simply
+  qty * unit_cost. No multiplier.
+- rpc_pm_job_overview rebuilt: same simplification in bom_raw CTE.
+- Column comment on tbl_wo_bom.unit_cost and actual_unit_cost
+  documenting the invariant.
+
+Frontend (work-orders-panel.tsx):
+- bomRowCost: dropped the standard_length multiplier.
+- confirmScopeMaterial: completed the TODO metre->length conversion
+  so new scope material rows write per-length cost when buyUnit=Length.
+- Scope material preview: matching conversion so preview total agrees
+  with the value that gets saved.
+- Types: scopeMatSelected / scopeMatResults now carry standard_length.
+
+Invariant (lock it in):
+tbl_wo_bom.unit_cost is the price for ONE of tbl_wo_bom.unit. Line
+total = quantity * unit_cost. No multipliers at read time. Any write
+path that changes the stored unit must also convert the stored cost.
+
+Verified on Grosvenor (job 8): bom_id 183 (3x1 PAR, 26m actual)
+computes to GBP 31.68 (was GBP 152.06).
