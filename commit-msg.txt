@@ -1,38 +1,10 @@
-S35: Step-by-step instructions per WO
+S35: Docs — TRACKER.md + schema_session35.md
 
-Adds ordered, author-editable steps to each work order. Supplements (does
-not replace) the WO description. Steps shown to freelancers on mobile
-and printed in the traveller pack.
+- TRACKER.md: appended Session 34 (scope pack print) and Session 35
+  (step-by-step instructions) entries with full context, files changed,
+  SQL run, conventions added, and next-session checklist
+- starlight_database_schema_session35.md: created new schema doc based
+  on session33 base. Captures tbl_wo_steps addition, AUDITED_TABLES
+  update, and S34-S35 conventions. 48 tables total now.
 
-Schema:
-  tbl_wo_steps (step_id PK, work_order_id FK cascade, seq, step_text,
-  is_critical, created_at, modified_at)
-  Index on (work_order_id, seq)
-  RLS: admin/PM full CRUD, freelancers SELECT only
-  Registered in AUDITED_TABLES ("step_id")
-
-New component: components/wo-steps-panel.tsx (dual-mode)
-  Authoring (admin/PM on scope page):
-    - Empty state: dashed "Add step 1" button
-    - Enter = save + add next step focused (bulleted-list feel)
-    - Esc = cancel, blur = save + stop
-    - Ctrl/Cmd+Enter = commit edit on existing row
-    - Per-row: critical toggle (amber), up/down reorder, delete
-    - Auto re-sequencing on delete keeps seq 1..N contiguous
-    - All writes via auditedInsert/auditedUpdate/auditedDelete
-  Read-only (mobile + traveller):
-    - Numbered list, critical steps rendered amber with ⚠ prefix
-    - Hidden entirely when no steps exist
-
-Mounts:
-  - components/work-orders-panel.tsx: authoring panel below description
-    inside expanded WO
-  - app/m/wo/[woId]/page.tsx: readOnly view between description and
-    paint notes
-  - app/traveller/page.tsx: steps fetched per WO alongside BOM/docs/
-    junction; rendered in TaskBrief between description and paint
-    notes. Only appears when steps exist (backward compatible with
-    all existing WOs).
-
-Lib:
-  - lib/audit.ts: added tbl_wo_steps to AUDITED_TABLES
+No code changes in this commit.

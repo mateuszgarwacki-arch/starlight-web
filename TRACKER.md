@@ -3138,3 +3138,131 @@ None.
 - **Registering a table in `AUDITED_TABLES` is a prerequisite, not a side effect.** `auditedInsert`/`auditedDelete` gate log writes on the registry; calling them with an unregistered table name silently no-ops the audit branch. When adding audit coverage to a new table, always: (1) add the entry with its PK column to `AUDITED_TABLES`, (2) convert the raw calls, (3) verify by inspecting `tbl_audit_log` after a test action.
 - **Audit inserts vs audit deletes — different value per table.** For tables where the row itself carries `uploaded_by`/`created_by`/`updated_at`, the insert audit log entry is redundant with the row. The delete audit log entry is where the real value lives — once the row is gone, the audit log is the only trace. For `tbl_wo_documents` specifically, `auditedDelete` was the critical half of this change.
 - **Cosmetic updates (sort_order, UI preferences) stay raw.** Auditing drag-drop reorders generates one row per doc per drag — high-volume, low-signal. Same principle applies to any future UI-driven field that doesn't affect financial or operational state.
+
+
+---
+
+## Session 34 — Scope pack print moved from WO level to scope level
+
+Two commits. The scope pack printout was previously triggered from a package-icon button duplicated on every WO row in `WorkOrdersPanel`. Cluttered the per-row action cluster and didn't match the mental model (pack is a scope-level operation, not a WO-level one). Also: pack mode printed only per-WO content — no scope overview, no linked job items, no scope-level drawings (even though S30-S32 added scope-anchored CAD/drawings).
+
+**Changes:**
+
+1. **Split `PrintTravellerButton`** (`src/components/traveller/traveller-preview.tsx`) into two exports:
+   - `PrintTravellerButton` — single-WO only, takes `wo` + `scopeId`. Simplified props (removed `workOrders`, `scope`, `jobId`, `onPrinted` that were only needed for pack mode).
+   - `PrintScopePackButton` — scope-level only, takes `scopeId`. Opens traveller in pack mode.
+
+2. **Scope header gains pack button.** `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` renders `<PrintScopePackButton scopeId={scopeId} />` next to `StatusBadge` when `woCount > 0`.
+
+3. **Pack-mode printout restructured** (`src/app/traveller/page.tsx`):
+   - **Cover page** (flow layout, spills to 2nd printed page if content overflows). Renders scope header (job #, name, item_name, event date, days-to-event with <7-day red), full `tbl_scope_items.description` verbatim in whitespace-pre-wrap block, linked job items table (all `tbl_job_items WHERE scope_item_id = ?`, not filtered per-WO) with Bespoke/Stock badges, pack contents summary.
+   - **Scope-level drawings** — one per page, reusing `ImagePage`. Filter: `tbl_wo_documents WHERE scope_item_id = ? AND work_order_id IS NULL AND doc_type = 'drawing'`. `cad_concept` / `cad_breakdown` not included (strictly drawings).
+   - **Existing per-WO flow unchanged** — divider → brief → cut lists → drawings → references.
+
+4. **`Page` component wo prop made optional.** When rendering scope-level pages the footer shows `Scope-{scope_item_id}` instead of `WO-{wo_id}`, and the header-right shows "Scope Pack — Overview" instead of "Step N of M".
+
+5. **CSS:** `.traveller-cover` class added in `src/app/globals.css` — overrides `page-break-inside: avoid` so cover can spill. Min-height 287mm preserved so short covers still fill A4.
+
+### Bug fix mid-session
+First pass dropped `min-height` entirely in `flowLayout`, causing the cover to shrink to content size. Fixed: keep `minHeight: 287mm`, only relax `page-break-inside`. One follow-up commit.
+
+### SQL Run (Session 34)
+None. No schema changes.
+
+### Files Changed (Session 34)
+| File | Change |
+|------|--------|
+| `src/components/traveller/traveller-preview.tsx` | Split into two components: single-WO (`PrintTravellerButton`) and scope-pack (`PrintScopePackButton`) |
+| `src/components/work-orders-panel.tsx` | Simplified `<PrintTravellerButton>` call site — now passes only `wo` and `scopeId` |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | Imports + renders `PrintScopePackButton` next to `StatusBadge` when `woCount > 0` |
+| `src/app/traveller/page.tsx` | `Scope` interface gains `description`; new `ScopeJobItem` type; pack-mode `loadData` fetches `tbl_scope_items.description` + all scope job items + scope-level drawings; new `ScopeOverview` component; `Page` prop `wo` now optional with alternate header/footer labelling |
+| `src/app/globals.css` | `.traveller-cover` class overrides `page-break-inside: avoid` while preserving A4 min-height |
+
+### Conventions Added (Session 34)
+- **Flow-layout pages** (content that can span multiple printed pages): keep `minHeight: 287mm` so short content still fills an A4 page; only relax `page-break-inside: avoid`. Dropping `min-height` entirely shrinks the page to content, which is usually wrong.
+- **Scope-level vs WO-level anchoring** in `tbl_wo_documents` is filter-disambiguated by `work_order_id IS NULL AND scope_item_id = ?` vs `work_order_id = ?`. Pack-mode needs both: scope-level drawings come from the first filter, WO-level from the second.
+- **Traveller `Page` component** now supports scope-context rendering (no `wo` required). Footer identifier switches to `Scope-{id}`. Useful for any future non-WO pages (summary sheets, packing lists).
+- **Print buttons that act on scope-level data live on the scope page, not on WO rows.** Duplicated action buttons across list rows clutter the UI and confuse the action's scope. One scope-level button next to `StatusBadge` is the right home.
+
+---
+
+## Session 35 — Step-by-step instructions per WO
+
+Single commit. Adds ordered, author-editable steps to each work order to supplement (not replace) the WO description. Addresses the pain point that a flat description blob like "Build rostrum 2400×1200, 18mm ply top, 38×63 frame, pocket-hole screws, sand 120, black matt paint 2 coats" forces freelancers to parse order themselves mid-build and makes it easy for PM to drop details when authoring.
+
+**Design constraints named upfront:**
+- **Authoring friction is the whole game.** 5 min/WO × 8 WOs/day = 40 min/day of extra authoring. If it's hard, Mateusz will stop, crew will stop trusting the feature, it rots. Everything below is shaped around "easy enough that Mateusz actually writes them."
+- **No check-off by freelancers in v1.** Tempting but adds floor friction; freelancers already log time + photo at completion. Add only if steps prove valuable as view-only first.
+- **No per-step estimated minutes in v1.** Sounds data-rich but won't get authored in practice.
+- **No AI draft helper in v1** (user rejected). Re-evaluate after 2-4 weeks of actual authoring.
+
+### Schema
+
+```sql
+CREATE TABLE tbl_wo_steps (
+  step_id       SERIAL PRIMARY KEY,
+  work_order_id INTEGER NOT NULL REFERENCES tbl_work_orders(work_order_id) ON DELETE CASCADE,
+  seq           INTEGER NOT NULL,
+  step_text     TEXT NOT NULL,
+  is_critical   BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  modified_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_wo_steps_wo_seq ON tbl_wo_steps(work_order_id, seq);
+```
+
+**RLS:** admin/PM full CRUD, freelancers SELECT-only. Standard consolidated pattern (1 policy per action, `TO authenticated`, `get_my_role()` CASE).
+
+**Registered in `AUDITED_TABLES`** (`tbl_wo_steps: "step_id"`).
+
+### Component: `src/components/wo-steps-panel.tsx` (dual-mode, 365 lines)
+
+**Authoring mode** (default, admin/PM on scope page):
+- Empty state: single dashed "Add step 1" button, zero nag
+- Enter = save + open new step input below, focused (bulleted-list feel)
+- Esc = cancel, blur = save + stop adding
+- Ctrl/Cmd+Enter = commit edit on existing row
+- Per-row: ⚠ critical toggle (amber bg + amber border + amber seq number), ↑/↓ reorder, 🗑 delete with confirm
+- Auto re-sequencing on delete keeps seq 1..N contiguous
+- All writes via `auditedInsert` / `auditedUpdate` / `auditedDelete`
+
+**Read-only mode** (`readOnly` prop, mobile + traveller):
+- Numbered list, critical steps rendered with amber bg + `⚠` prefix
+- Hidden entirely when no steps exist (backward-compatible with every pre-S35 WO)
+
+### Mounts
+- **Scope page** (`work-orders-panel.tsx`): authoring panel below description inside expanded WO, before the metadata grid (est. hours / assignees / etc)
+- **Mobile** (`/m/wo/[woId]/page.tsx`): read-only view between description and paint notes callout
+- **Traveller print** (`/traveller/page.tsx`): steps fetched per WO alongside BOM/docs/junction in `Promise.all`; stored on `WOData`; rendered in `TaskBrief` between "Task description" and "Paint notes" sections. Appears only when steps exist.
+
+### Failure modes flagged at design time (not yet mitigated)
+- **Mateusz writes 2 steps day 1, then stops.** Mitigation: zero-friction UI; empty state doesn't nag. Re-evaluate adoption after 2 weeks.
+- **Steps drift out of sync with description.** Cultural mitigation in v1: treat description as brief (authoritative, rarely changes), steps as plan (subordinate, may edit). Technical divergence-flagging deferred to phase 2.
+- **Scope changes mid-WO, steps are now wrong.** Freelancer in the middle of step 4 doesn't see step 3 was edited. v1 accepts this — same problem description has today. Revisit once steps are adopted.
+
+### SQL Run (Session 35)
+- `CREATE TABLE tbl_wo_steps ...` via `Supabase:apply_migration` as `s35_create_tbl_wo_steps` — includes table, index, RLS enable, 4 policies (SELECT/INSERT/UPDATE/DELETE).
+
+### Files Changed (Session 35)
+| File | Change |
+|------|--------|
+| `src/lib/audit.ts` | Added `tbl_wo_steps: "step_id"` to `AUDITED_TABLES` |
+| `src/components/wo-steps-panel.tsx` | New file. Dual-mode component (authoring + read-only). 365 lines |
+| `src/components/work-orders-panel.tsx` | Imported `WOStepsPanel`; mounted inside expanded WO below description, before metadata grid |
+| `src/app/m/wo/[woId]/page.tsx` | Imported `WOStepsPanel`; rendered `readOnly` between description and paint notes |
+| `src/app/traveller/page.tsx` | Added `WOStep` interface; extended `WOData` with `steps: WOStep[]`; fourth parallel query in per-WO `Promise.all`; `TaskBrief` gains `steps` prop and renders amber-for-critical numbered list between description and paint notes |
+
+### Conventions Added (Session 35)
+- **Don't manually write `modified_at` on every update** if the field isn't in `SKIP_FIELDS` — every update generates an audit log entry for the timestamp change, spamming the audit trail. Either add a DB trigger to set it automatically, or add it to `SKIP_FIELDS`, or don't track modification time at all. For `tbl_wo_steps` v1 chose option 3.
+- **Authoring UX: Enter-to-advance pattern** is the right feel for list-style content (steps, tags, items). Esc cancels, blur commits-and-stops. Much better than explicit Save/Add buttons for rapid entry.
+- **Empty states for optional features should not nag.** A dashed "Add step 1" button on scope pages where steps aren't needed yet should invite, not reproach. If prompt text becomes annoying after a week of use, shrink to a neutral `+ Add step`.
+- **`ON DELETE CASCADE` on FK is the right call** for child rows like steps, BOM rows, junction rows — voiding/deleting a WO should atomically clean up its steps. Don't rely on application-level cascade.
+- **Critical-flag pattern** (single `is_critical` BOOLEAN, amber styling in read-only, warning prefix in print) is a cheap way to surface "one or two things you must not miss" without enforcing a heavier workflow like mandatory acknowledgement. Can lift this pattern to other tables (e.g. `tbl_wo_bom.is_critical` for must-order-today materials) if we find adoption.
+
+---
+
+## S35 Checklist for next session
+- [ ] Verify `tbl_wo_steps` entries appear in `tbl_audit_log` after test authoring (audit branch is gated on AUDITED_TABLES registration — if mis-typed, silently no-ops).
+- [ ] After 2 weeks of use: check how many WOs have steps authored vs. not. If <30%, feature isn't landing — revisit empty state messaging or friction points before adding features.
+- [ ] Consider: step-level photo attachment? Step-level completion check-off? Both deferred until adoption proven.
+- [ ] Schema doc refresh: create `starlight_database_schema_session35.md` from session33 base + S34 (no changes) + S35 (new table, new index, new RLS).
