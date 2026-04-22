@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
 import { useRouter } from "next/navigation";
-import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight, UserCheck } from "lucide-react";
+import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight, UserCheck, Search, X, Tag } from "lucide-react";
 
 interface TaskCard {
   work_order_id: number;
@@ -47,6 +47,25 @@ export default function MobileTaskList() {
   const [myId, setMyId] = useState<number>(0);
   const [myName, setMyName] = useState("");
   const [collapsedJobs, setCollapsedJobs] = useState<Set<number>>(new Set());
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  // Debounce search input → actual search term used for filtering
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.toLowerCase().trim()), 150);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Persist collapsed state per freelancer
+  useEffect(() => {
+    if (!myId) return;
+    try {
+      localStorage.setItem(
+        `m-tasks-collapsed-${myId}`,
+        JSON.stringify(Array.from(collapsedJobs))
+      );
+    } catch { /* localStorage unavailable (private mode etc.) */ }
+  }, [collapsedJobs, myId]);
 
   const toggleJob = (jobId: number) => {
     setCollapsedJobs(prev => {
@@ -65,6 +84,16 @@ export default function MobileTaskList() {
     const fName = user.user_metadata?.name || "You";
     setMyId(fId);
     setMyName(fName);
+
+    // Restore collapsed state from localStorage in the same pass
+    // (inline here to avoid a flicker between "all expanded" and restored state)
+    try {
+      const raw = localStorage.getItem(`m-tasks-collapsed-${fId}`);
+      if (raw) {
+        const arr = JSON.parse(raw) as number[];
+        setCollapsedJobs(new Set(arr));
+      }
+    } catch { /* localStorage unavailable */ }
 
     // Load Ready + In-Progress WOs
     const { data: activeWos } = await supabase
@@ -190,7 +219,7 @@ export default function MobileTaskList() {
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
-  // Filter logic
+  // Status filter
   const activeTasks = tasks.filter(t => t.status !== "Complete");
   const doneTasks = tasks.filter(t => t.status === "Complete");
   const paintingCount = tasks.filter(t => t.paint_notes).length;
@@ -206,10 +235,27 @@ export default function MobileTaskList() {
     ? doneTasks
     : activeTasks;
 
-  // Group filtered tasks into Job → Scope → WOs
+  // Search filter layered on top of status filter
+  const searched = search
+    ? filtered.filter(t => {
+        const haystack = [
+          t.description || "",
+          t.scope_name,
+          t.job_name,
+          t.job_number,
+          t.activity_label,
+        ].join(" ").toLowerCase();
+        return haystack.includes(search);
+      })
+    : filtered;
+
+  // When searching, auto-expand all jobs so matches are visible regardless of collapse state
+  const effectiveCollapsed = search ? new Set<number>() : collapsedJobs;
+
+  // Group searched tasks into Job → Scope → WOs
   const jobGroups: JobGroup[] = (() => {
     const jobMap = new Map<number, JobGroup>();
-    for (const task of filtered) {
+    for (const task of searched) {
       if (!jobMap.has(task.job_id)) {
         jobMap.set(task.job_id, {
           job_id: task.job_id,
@@ -240,9 +286,9 @@ export default function MobileTaskList() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header with toggle */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-3">
+      {/* Title + filter pills (not sticky) */}
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-bold text-navy">Tasks</h1>
         <div className="flex bg-surface rounded-lg border border-subtle overflow-hidden">
           <button
@@ -285,18 +331,56 @@ export default function MobileTaskList() {
         </div>
       </div>
 
+      {/* Sticky search bar */}
+      <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-base/95 backdrop-blur-sm border-b border-subtle/50">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-faint pointer-events-none" />
+          <input
+            type="text"
+            inputMode="search"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder={`Search ${filtered.length} task${filtered.length !== 1 ? "s" : ""}\u2026`}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full pl-8 pr-8 py-2 text-sm bg-surface border border-subtle rounded-lg focus:border-starlight-blue focus:outline-none"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-faint active:text-muted p-0.5"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {search && (
+          <p className="text-[10px] text-muted mt-1.5">
+            {searched.length} of {filtered.length} match
+          </p>
+        )}
+      </div>
+
+      {/* Greeting */}
       <p className="text-sm text-muted">Hey {myName}. {filtered.length} task{filtered.length !== 1 ? "s" : ""} available.</p>
 
-      {/* Tree: Job → Scope → WO */}
+      {/* Tree */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-faint text-sm">No tasks right now</div>
+      ) : search && searched.length === 0 ? (
+        <div className="text-center py-12 text-faint text-sm">
+          No tasks match &ldquo;{searchInput}&rdquo;
+        </div>
       ) : (
         <div className="space-y-3">
           {jobGroups.map((job) => {
-            const isCollapsed = collapsedJobs.has(job.job_id);
+            const isCollapsed = effectiveCollapsed.has(job.job_id);
             return (
               <div key={job.job_id} className="bg-surface rounded-xl border border-subtle overflow-hidden">
-                {/* Job header */}
+                {/* Job header — the only interactive group header */}
                 <button
                   onClick={() => toggleJob(job.job_id)}
                   className="w-full flex items-center gap-2 px-4 py-3 active:bg-surface-dim transition-colors"
@@ -314,13 +398,13 @@ export default function MobileTaskList() {
                   <div className="border-t border-subtle">
                     {job.scopes.map((scope, si) => (
                       <div key={scope.scope_item_id}>
-                        {/* Scope header */}
-                        <div className="px-4 py-2 bg-surface-dim/50 flex items-center gap-2">
-                          <div className="w-1 h-4 bg-starlight-amber rounded-full shrink-0" />
-                          <span className="text-xs font-bold text-navy uppercase tracking-wide">{scope.scope_name}</span>
-                          <span className="text-[10px] text-muted">({scope.tasks.length})</span>
+                        {/* Scope header — flat label, clearly not a button */}
+                        <div className="px-4 pt-3 pb-1.5 flex items-center gap-1.5">
+                          <Tag className="h-3 w-3 text-faint shrink-0" />
+                          <span className="text-xs text-muted font-medium">{scope.scope_name}</span>
+                          <span className="text-[10px] text-faint">&middot; {scope.tasks.length}</span>
                         </div>
-                        {/* WO rows */}
+                        {/* WO rows — the actionable things */}
                         {scope.tasks.map((task) => (
                           <button
                             key={task.work_order_id}
@@ -329,13 +413,13 @@ export default function MobileTaskList() {
                           >
                             {/* Phase dot */}
                             <div className={"w-1.5 h-1.5 rounded-full shrink-0 " + (phaseColors[task.phase_number || 0] || "bg-surface-top")} />
-                            {/* Activity badge */}
-                            <span className="text-[10px] font-medium text-muted bg-surface-top px-1.5 py-0.5 rounded shrink-0 min-w-[3rem] text-center">
-                              {task.activity_label.length > 12 ? task.activity_label.slice(0, 12) + "…" : task.activity_label}
+                            {/* Activity badge — full width, no truncation */}
+                            <span className="text-[10px] font-medium text-muted bg-surface-top px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">
+                              {task.activity_label}
                             </span>
-                            {/* Description = headline */}
+                            {/* Description = headline, wraps if needed */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-navy truncate">{task.description || task.activity_label}</p>
+                              <p className="text-sm text-navy break-words">{task.description || task.activity_label}</p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 {task.workers.length > 0 && task.workers.map((w) => (
                                   <span key={w.freelancer_id} className="inline-flex items-center gap-1 text-[10px] font-medium text-starlight-blue bg-starlight-blue/10 px-1.5 py-0.5 rounded-full">
@@ -355,11 +439,8 @@ export default function MobileTaskList() {
                                 <p className="text-[10px] text-starlight-amber bg-starlight-amber/10 rounded px-1.5 py-0.5 mt-1">{task.paint_notes}</p>
                               )}
                             </div>
-                            {/* Status indicators */}
+                            {/* Status indicators — Live pill removed, worker pills carry that signal */}
                             <div className="shrink-0 flex items-center gap-1">
-                              {task.status === "In-Progress" && (
-                                <span className="text-[9px] bg-starlight-blue/10 text-starlight-blue px-1.5 py-0.5 rounded-full font-medium">Live</span>
-                              )}
                               {task.status === "Complete" && (
                                 <span className="text-[9px] bg-starlight-green/10 text-starlight-green px-1.5 py-0.5 rounded-full font-medium">Built</span>
                               )}

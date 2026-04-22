@@ -1,10 +1,11 @@
-S35: Docs — TRACKER.md + schema_session35.md
+S36 mobile tasks: search, scope-as-label, no truncation, persist collapse, drop Live pill
 
-- TRACKER.md: appended Session 34 (scope pack print) and Session 35
-  (step-by-step instructions) entries with full context, files changed,
-  SQL run, conventions added, and next-session checklist
-- starlight_database_schema_session35.md: created new schema doc based
-  on session33 base. Captures tbl_wo_steps addition, AUDITED_TABLES
-  update, and S34-S35 conventions. 48 tables total now.
-
-No code changes in this commit.
+- Sticky search bar at top of /m page, debounced 150ms
+- Filters across description, scope name, job name, job number, activity label
+- Auto-expands all jobs when search is active so matches are visible
+- Scope headers redesigned as flat labels (Tag icon, muted, no bg, no uppercase)
+  to stop freelancers mis-tapping them as buttons
+- Removed truncation on activity label (was sliced at 12 chars) and description
+  (was truncate class) - per no-truncation convention
+- Collapsed job state now persists in localStorage per freelancer
+- Dropped "Live" status pill on In-Progress WOs - worker pills already signal it
