@@ -1,26 +1,34 @@
-S33 brain files: schema doc + tracker sync
+S34: Scope pack print moved from WO level to scope level
 
-Docs-only commit to sync the persistent-brain files with live state
-before closing session 33.
+Removed the duplicate "Print scope pack" button that rendered on every WO row
+in WorkOrdersPanel. Scope-pack printing now lives on the scope header next
+to the status badge, appearing once when woCount > 0.
 
-New file:
-- starlight_database_schema_session33.md — captures delta from S29
-  (doc_type split cad_model -> cad_concept+cad_breakdown in S30,
-  qry_wo_cost_material dropped in S33, qry_bom_enriched documented
-  as BOM cost source of truth with inline definition + Grosvenor
-  verification evidence). Full conventions section reinforcing the
-  S30-S33 learnings.
+Pack-mode printout restructured:
+  1. Cover page (flow layout, spills to 2nd printed page if needed) —
+     job number, scope item name, event date, scope description (full,
+     verbatim), linked job items table (all items on scope, not filtered
+     per-WO), pack contents summary
+  2. Scope-level drawings (one per page, reusing ImagePage component).
+     Fetched from tbl_wo_documents where scope_item_id = ? AND
+     work_order_id IS NULL AND doc_type = 'drawing'
+  3. Existing per-WO flow (divider -> brief -> cut lists -> drawings -> refs)
 
-TRACKER.md updates:
-- Project Overview counts refreshed 42/38/6/115 -> 47/41/10/200+
-- Auth description: middleware.ts -> src/proxy.ts
-- Freelancer auth: phone+PIN -> phone+password (PIN dropped S10b)
-- Replaced 40-line stale "Database Schema (verified 26 Mar 2026)"
-  block with pointer to versioned schema doc + three critical
-  convention callouts (qry_bom_enriched source of truth, doc_type
-  values, AUDITED_TABLES registry including new tbl_wo_documents)
+Files:
+  - components/traveller/traveller-preview.tsx: split into
+    PrintTravellerButton (single-WO only) and new PrintScopePackButton
+  - components/work-orders-panel.tsx: simplify call site to
+    <PrintTravellerButton wo={...} scopeId={scopeId} />
+  - app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx: render
+    PrintScopePackButton in scope header (gated on woCount > 0)
+  - app/traveller/page.tsx: Scope interface gets description;
+    ScopeJobItem type added; pack-mode loadData fetches
+    tbl_scope_items.description, all scope-level tbl_job_items, and
+    scope-level drawings + OneDrive URLs. Page component's wo prop is
+    optional — scope cover uses "Scope-{id}" in footer and
+    "Scope Pack — Overview" in header. New ScopeOverview component
+    renders cover content.
+  - app/globals.css: .traveller-cover class overrides
+    page-break-inside: avoid so the cover can spill naturally
 
-Brain files pattern now established: when finishing a session,
-(1) create/update starlight_database_schema_session{N}.md,
-(2) update TRACKER.md with session log entry + backlog + counts,
-(3) commit as a single tracker-only commit.
+Schema unchanged.

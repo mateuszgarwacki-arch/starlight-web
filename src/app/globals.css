@@ -187,6 +187,12 @@
     page-break-after: auto;
   }
 
+  /* Cover page — allow content to flow across multiple printed pages */
+  .traveller-page.traveller-cover {
+    page-break-inside: auto !important;
+    min-height: auto !important;
+  }
+
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

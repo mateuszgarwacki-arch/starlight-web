@@ -14,6 +14,7 @@ import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
 import { LearningsSection } from "@/components/learnings-section";
 import { WODocumentsPanel } from "@/components/wo-documents-panel";
+import { PrintScopePackButton } from "@/components/traveller/traveller-preview";
 import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -264,6 +265,7 @@ export default function ScopeDetailPage() {
           </div>
           <div className="flex items-center gap-2">
               <StatusBadge status={scope.status} />
+              {woCount > 0 && <PrintScopePackButton scopeId={scopeId} />}
               {scope.status === "Provisional" && woCount === 0 && (
                 <button
                   onClick={deleteScope}

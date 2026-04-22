@@ -73,6 +73,19 @@ interface Scope {
   job_name: string | null;
   job_number: string | null;
   event_date: string | null;
+  description: string | null;
+}
+
+interface ScopeJobItem {
+  item_id: number;
+  description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  item_type: string | null;
+  finish_required: string | null;
+  item_source: string | null;
+  stock_reference: string | null;
+  notes: string | null;
 }
 
 interface WOData {
@@ -93,6 +106,9 @@ export default function TravellerPage() {
   const [scope, setScope] = useState<Scope | null>(null);
   const [allWOs, setAllWOs] = useState<TravellerWO[]>([]);
   const [woDataMap, setWoDataMap] = useState<Record<number, WOData>>({});
+  const [scopeJobItems, setScopeJobItems] = useState<ScopeJobItem[]>([]);
+  const [scopeDrawings, setScopeDrawings] = useState<Doc[]>([]);
+  const [scopeDrawingUrls, setScopeDrawingUrls] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [printed, setPrinted] = useState(false);
@@ -115,11 +131,16 @@ export default function TravellerPage() {
     if (!scopeId) return;
     setLoading(true);
 
-    // 1. Scope context
-    const { data: scopeData } = await supabase
-      .from("qry_scope_context").select("*").eq("scope_item_id", scopeId).single();
-    if (!scopeData) { setError("Scope item not found"); setLoading(false); return; }
-    setScope(scopeData as Scope);
+    // 1. Scope context + description
+    const [scopeCtxRes, scopeDescRes] = await Promise.all([
+      supabase.from("qry_scope_context").select("*").eq("scope_item_id", scopeId).single(),
+      supabase.from("tbl_scope_items").select("description").eq("scope_item_id", scopeId).single(),
+    ]);
+    if (!scopeCtxRes.data) { setError("Scope item not found"); setLoading(false); return; }
+    setScope({
+      ...(scopeCtxRes.data as any),
+      description: (scopeDescRes.data as any)?.description ?? null,
+    } as Scope);
 
     // 2. All WOs for this scope (for enrichment)
     const { data: rawWOs } = await supabase
@@ -264,6 +285,40 @@ export default function TravellerPage() {
     }
 
     setWoDataMap(dataMap);
+
+    // 6. Pack-mode only: scope-level job items + scope-level drawings
+    if (mode === "pack") {
+      const [sItemsRes, sDocsRes] = await Promise.all([
+        supabase.from("tbl_job_items")
+          .select("item_id, description, quantity, unit, item_type, finish_required, item_source, stock_reference, notes")
+          .eq("scope_item_id", scopeId)
+          .order("item_id"),
+        supabase.from("tbl_wo_documents")
+          .select("doc_id, doc_type, file_name, onedrive_path, caption, sort_order, extracted_data, extraction_status")
+          .eq("scope_item_id", scopeId)
+          .is("work_order_id", null)
+          .eq("doc_type", "drawing")
+          .order("sort_order"),
+      ]);
+      setScopeJobItems((sItemsRes.data || []) as ScopeJobItem[]);
+      const sDocs = (sDocsRes.data || []) as Doc[];
+      setScopeDrawings(sDocs);
+      const sUrls: Record<number, string> = {};
+      for (const d of sDocs) {
+        if (!d.onedrive_path) continue;
+        try {
+          sUrls[d.doc_id] = await getOneDriveUrl(d.onedrive_path);
+        } catch (_e) {
+          // Skip unavailable files — leaves key unset; ImagePage will show placeholder
+        }
+      }
+      setScopeDrawingUrls(sUrls);
+    } else {
+      setScopeJobItems([]);
+      setScopeDrawings([]);
+      setScopeDrawingUrls({});
+    }
+
     setLoading(false);
   }, [scopeId, mode, singleWoId]);
 
@@ -319,6 +374,12 @@ export default function TravellerPage() {
 
   // Count pages
   let totalPages = 0;
+  // Pack mode: scope cover (1 logical page — browser may paginate further if description is long)
+  //            + one page per scope-level drawing
+  if (mode === "pack") {
+    totalPages += 1; // cover
+    totalPages += scopeDrawings.length;
+  }
   for (const wo of wosToPrint) {
     const data = woDataMap[wo.work_order_id];
     if (!data) continue;
@@ -362,6 +423,39 @@ export default function TravellerPage() {
     .filter((w) => w.status !== "Voided")
     .sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
   const totalWOCount = allSortedWOs.length;
+
+  // ───── Pack mode: scope cover + scope-level drawings come before the WO loop ─────
+  if (mode === "pack") {
+    pageNum++;
+    pages.push(
+      <Page key="scope-cover" scope={scope} pageNum={pageNum} totalPages={totalPages} printDate={nowStr} flowLayout>
+        <ScopeOverview
+          scope={scope}
+          jobItems={scopeJobItems}
+          drawingCount={scopeDrawings.length}
+          woCount={totalWOCount}
+          daysRemaining={daysRemaining}
+        />
+      </Page>
+    );
+
+    for (const d of scopeDrawings) {
+      pageNum++;
+      const rKey = `scope-drw-${d.doc_id}`;
+      pages.push(
+        <Page key={rKey} scope={scope} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+          <ImagePage
+            url={scopeDrawingUrls[d.doc_id] || ""}
+            fileName={d.file_name}
+            label="Scope drawing"
+            rotationKey={rKey}
+            rotation={rotations[rKey] || 0}
+            onRotate={() => toggleRotation(rKey)}
+          />
+        </Page>
+      );
+    }
+  }
 
   for (let woIdx = 0; woIdx < wosToPrint.length; woIdx++) {
     const wo = wosToPrint[woIdx];
@@ -495,13 +589,25 @@ export default function TravellerPage() {
    Page Frame (header + footer + double border on every page)
    ================================================================ */
 
-function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, children }: {
-  scope: Scope; wo: TravellerWO; woIdx: number; totalWOs: number;
+function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, children, flowLayout }: {
+  scope: Scope; wo?: TravellerWO; woIdx?: number; totalWOs?: number;
   pageNum: number; totalPages: number; printDate: string;
   children: React.ReactNode;
+  flowLayout?: boolean;
 }) {
+  const rightTitle = wo
+    ? `Step ${(woIdx ?? 0) + 1} of ${totalWOs ?? 0} ${wo.activity_label}`
+    : "Scope Pack — Overview";
+  const footerRef = wo ? `WO-${wo.work_order_id}` : `Scope-${scope.scope_item_id}`;
+  // Normal pages: fixed A4 with page-break-inside: avoid (via .traveller-page CSS)
+  // Flow pages (scope cover): can spill to a 2nd printed page if content is long
+  const pageClass = flowLayout ? "traveller-page traveller-cover" : "traveller-page";
+  const pageStyle: React.CSSProperties = flowLayout
+    ? { width: "200mm", border: "2px solid #1A1A2E" }
+    : { width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" };
+  const contentStyle: React.CSSProperties = flowLayout ? {} : { minHeight: "252mm" };
   return (
-    <div className="traveller-page bg-surface mx-auto my-4 print:my-0 relative" style={{ width: "200mm", minHeight: "287mm", border: "2px solid #1A1A2E", pageBreakInside: "avoid" }}>
+    <div className={`${pageClass} bg-surface mx-auto my-4 print:my-0 relative`} style={pageStyle}>
       <div className="absolute inset-[3px] border border-subtle pointer-events-none" style={{ zIndex: 0 }} />
       <div className="relative" style={{ zIndex: 1, padding: "7mm 8mm" }}>
         {/* Header */}
@@ -512,19 +618,19 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
               <span className="text-faint">|</span>
               <span className="text-muted">{scope.job_name}</span>
             </div>
-            <span className="font-semibold text-foreground shrink-0">Step {woIdx + 1} of {totalWOs} {wo.activity_label}</span>
+            <span className="font-semibold text-foreground shrink-0">{rightTitle}</span>
           </div>
           <p className="text-muted mt-0.5 leading-tight">{scope.item_name}</p>
         </div>
 
         {/* Content */}
-        <div style={{ minHeight: "252mm" }}>{children}</div>
+        <div style={contentStyle}>{children}</div>
 
         {/* Footer */}
         <div className="flex items-center justify-between text-[9px] text-muted pt-2 mt-3 border-t border-subtle">
           <span>Printed: {printDate}</span>
           <span className="font-medium text-muted">Page {pageNum} of {totalPages}</span>
-          <span>WO-{wo.work_order_id} · Starlight</span>
+          <span>{footerRef} · Starlight</span>
         </div>
       </div>
     </div>
@@ -719,6 +825,110 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
       <div className="mt-1">
         <p className="text-[9px] text-muted mb-0.5">Notes on completion:</p>
         <div className="border border-dashed border-subtle rounded h-10" />
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   Scope Overview (pack cover page content)
+   ================================================================ */
+
+function ScopeOverview({ scope, jobItems, drawingCount, woCount, daysRemaining }: {
+  scope: Scope; jobItems: ScopeJobItem[];
+  drawingCount: number; woCount: number; daysRemaining: number | null;
+}) {
+  const bespokeCount = jobItems.filter((i) => i.item_source !== "stock" && i.item_source !== "promoted").length;
+  const stockCount = jobItems.length - bespokeCount;
+
+  return (
+    <div className="space-y-3 text-[13px]">
+      {/* Title */}
+      <div>
+        <h1 className="text-lg font-bold text-foreground">{scope.job_number} — {scope.job_name}</h1>
+        <p className="text-sm font-medium text-foreground mt-1 break-words">{scope.item_name}</p>
+        <p className="text-xs text-muted mt-1">
+          <span className="font-semibold text-foreground">Scope Pack</span>
+          {" · "}{woCount} work order{woCount === 1 ? "" : "s"}
+          {" · "}Event: {formatDate(scope.event_date)}
+          {daysRemaining !== null && (
+            <span className={daysRemaining < 7 ? " text-starlight-red font-semibold" : ""}>
+              {" · "}{daysRemaining >= 0 ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} to event` : `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} past event`}
+            </span>
+          )}
+        </p>
+      </div>
+
+      <hr className="border-subtle" />
+
+      {/* Scope description — full, no truncation (flow layout handles overflow to 2nd page) */}
+      <div>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Scope description</p>
+        {scope.description ? (
+          <p className="text-[13px] text-foreground bg-surface-dim px-3 py-2 rounded leading-snug break-words whitespace-pre-wrap">{scope.description}</p>
+        ) : (
+          <p className="text-xs text-muted italic">No description provided</p>
+        )}
+      </div>
+
+      <hr className="border-subtle" />
+
+      {/* Linked job items — full scope inventory */}
+      <div>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">
+          Linked job items
+          {jobItems.length > 0 && (
+            <span className="ml-2 font-normal text-muted normal-case tracking-normal">
+              ({jobItems.length} total{bespokeCount > 0 || stockCount > 0 ? ` — ${bespokeCount} bespoke, ${stockCount} stock` : ""})
+            </span>
+          )}
+        </p>
+        {jobItems.length === 0 ? (
+          <p className="text-xs text-muted italic">No job items assigned to this scope</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-surface-mid print:bg-surface-mid">
+                <th className="text-left py-1 px-2 font-semibold text-muted w-16">Source</th>
+                <th className="text-left py-1 px-2 font-semibold text-muted">Item</th>
+                <th className="text-right py-1 px-2 font-semibold text-muted w-14">Qty</th>
+                <th className="text-left py-1 px-2 font-semibold text-muted w-24">Finish</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobItems.map((it) => {
+                const isStock = it.item_source === "stock" || it.item_source === "promoted";
+                const qtyDisplay = it.quantity ? `${it.quantity}${it.unit && it.unit !== "ea" ? ` ${it.unit}` : ""}` : "—";
+                return (
+                  <tr key={it.item_id} className="border-b border-subtle align-top">
+                    <td className="py-1 px-2">
+                      <span className={`text-[10px] font-semibold ${isStock ? "text-starlight-amber" : "text-navy"}`}>
+                        {isStock ? "Stock" : "Bespoke"}
+                      </span>
+                    </td>
+                    <td className="py-1 px-2 text-foreground">
+                      <div>{it.description || "—"}</div>
+                      {it.stock_reference && <div className="text-[10px] font-mono text-muted">{it.stock_reference}</div>}
+                      {it.notes && it.notes !== "PROMOTE_TO_STOCK" && <div className="text-[10px] text-muted italic mt-0.5">{it.notes}</div>}
+                    </td>
+                    <td className="py-1 px-2 text-right">{qtyDisplay}</td>
+                    <td className="py-1 px-2 text-[11px] text-muted">{it.finish_required || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pack contents summary */}
+      <hr className="border-subtle" />
+      <div>
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Pack contents</p>
+        <p className="text-xs text-muted">
+          {drawingCount > 0 && `${drawingCount} scope drawing${drawingCount === 1 ? "" : "s"} · `}
+          {woCount} work order{woCount === 1 ? "" : "s"} (each with brief, BOM, drawings, and sign-off sheet) follow.
+        </p>
       </div>
     </div>
   );
