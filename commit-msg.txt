@@ -1,27 +1,39 @@
-S37b audit follow-through — invariant watcher + dead code cleanup
+S38 timesheet gap detection (Stage 1)
 
-Audit findings (post-S37):
-- unit_to_base_multiplier column: zero consumers in code, unused in views.
-  Dropped from qry_bom_enriched. Two dependent views (qry_wo_estimated_cost,
-  qry_scope_estimated_cost) rebuilt via CASCADE.
-- actual_unit_cost: zero write paths exist. Latent column. When invoice
-  reconciliation eventually writes it, the invariant lives in the column
-  comment waiting.
-- All 7 active BOM write paths audited: every one maintains the invariant.
-- tbl_invoice_lines: uses line_total directly for aggregation (not
-  qty x unit_cost). Same bug class structurally absent.
-- 51 invoice lines audited: 0 inconsistent (qty x unit_cost ~= line_total).
+Problem: freelancers log partial hours (5h on a 10h day) and Mateusz
+has to chase. Now automated.
 
-Removed:
-- src/components/scope-bom.tsx: orphaned since S19 scope-page unification.
-  No imports anywhere in codebase.
+Data:
+- tbl_timesheet_flags (freelancer_id, flag_date, expected/logged hours,
+  status, reason). UNIQUE(freelancer_id, flag_date). RLS: freelancers
+  see/update their own; admin/pm see all.
+- Registered in AUDITED_TABLES as flag_id.
 
-Added:
-- qry_bom_invariant_violations: view that returns zero rows when the
-  Length-on-Metre unit_cost invariant holds. Returns rows if a write path
-  slips up. Wire to a Vercel cron later for proactive alerting.
+Detection:
+- rpc_detect_timesheet_gaps(flag_date) — for the given date, finds
+  freelancers who logged some hours but under 90% of their standard day
+  (default 10h). Upserts to tbl_timesheet_flags. Idempotent:
+  re-running refreshes logged_hours on open flags; auto-closes flags
+  if hours now hit 90%; leaves resolved flags alone.
+- pg_cron schedule 'timesheet-gap-detect-daily' at 0 6 * * * UTC runs
+  the detector for CURRENT_DATE - 1 day.
 
-Verified:
-- Violations view: 0 rows
-- bom_id 183 (screenshot row): GBP 31.68
-- Scope 25 total: GBP 256.08
+UI:
+- components/timesheet-flags.tsx: TimesheetFlagsBanner (red strip with
+  count, tap to /m/me), TimesheetFlagsPanel (date rows with "Add hours"
+  deep-link and "Give reason" chip picker + note).
+- /m page: banner at top.
+- /m/me page: full panel above stats.
+- /m/task: reads ?date= and ?short= URL params, pre-fills LogSheet date
+  and hours, shows red banner explaining context.
+
+Admin:
+- /review/timesheets: open flags table (freelancer, date, logged/expected,
+  short-hours, raised date, admin-close button) + collapsible resolved
+  section showing how each was closed (logged / reason / admin) with the
+  reason note.
+
+Verified against live data:
+- Cron SQL returns 2 flags for 2026-04-22 (Karol 7.5h, Kamran 3.25h);
+  Mark and Martin clean at 10h.
+- Re-running the detector is a no-op.

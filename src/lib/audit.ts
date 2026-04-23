@@ -35,6 +35,7 @@ const AUDITED_TABLES: Record<string, string> = {
   tbl_scope_options: "option_id",
   tbl_wo_documents: "doc_id",
   tbl_wo_steps: "step_id",
+  tbl_timesheet_flags: "flag_id",
 };
 
 // Fields to skip auditing (noisy, system-managed)

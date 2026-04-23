@@ -10,6 +10,7 @@ import { LogSheet, type LogSheetData } from "@/components/log-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { auditedUpdate, getAuditContext } from "@/lib/audit";
+import { TimesheetFlagsPanel } from "@/components/timesheet-flags";
 
 interface HoursSummary { hours_this_week: number; hours_this_month: number; }
 interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: number | null; date: string; job_number: string | null; status?: string; review_note?: string | null; flag_note?: string | null; }
@@ -161,6 +162,9 @@ export default function MobileProfilePage() {
         </div>
         <button onClick={handleLogout} className="text-muted active:text-starlight-red p-2"><LogOut className="h-5 w-5" /></button>
       </div>
+
+      {/* Missing hours — open timesheet flags for this freelancer */}
+      <TimesheetFlagsPanel myId={myId} onResolved={() => setRefreshKey((k) => k + 1)} />
 
       {activeTimer && (
         <div className="bg-starlight-blue/10 border border-starlight-blue/30 rounded-xl p-4">

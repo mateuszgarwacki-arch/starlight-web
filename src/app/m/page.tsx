@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
 import { useRouter } from "next/navigation";
 import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight, UserCheck, Search, X, Tag } from "lucide-react";
+import { TimesheetFlagsBanner } from "@/components/timesheet-flags";
 
 interface TaskCard {
   work_order_id: number;
@@ -294,6 +295,9 @@ export default function MobileTaskList() {
 
   return (
     <div className="space-y-3">
+      {/* Missing-hours banner — only renders when there are open flags */}
+      <TimesheetFlagsBanner myId={myId} />
+
       {/* Title + filter pills (not sticky) */}
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-bold text-navy">Tasks</h1>

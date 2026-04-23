@@ -42,8 +42,22 @@ export default function MobileTaskPage() {
   const [showScanner, setShowScanner] = useState(false);
   const scannerRef = useRef<any>(null);
   const [showLogSheet, setShowLogSheet] = useState(false);
+  // Prefill from ?date=YYYY-MM-DD&short=H  (used by timesheet-flag "Add hours" link)
+  const [prefillDate, setPrefillDate] = useState<string | undefined>(undefined);
+  const [prefillHours, setPrefillHours] = useState(1);
 
   useEffect(() => {
+    // Read prefill from URL (from timesheet flag "Add hours" deep link)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const d = params.get("date");
+      const s = params.get("short");
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setPrefillDate(d);
+      if (s) {
+        const n = parseFloat(s);
+        if (!isNaN(n) && n > 0) setPrefillHours(Math.round(n * 4) / 4);
+      }
+    }
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/m/login"); return; }
@@ -171,6 +185,12 @@ export default function MobileTaskPage() {
         <button onClick={() => router.back()} className="text-muted active:text-navy"><ArrowLeft className="h-5 w-5" /></button>
         <h1 className="text-lg font-bold text-navy">Log a Task</h1>
       </div>
+      {prefillDate && (
+        <div className="bg-starlight-red/5 border border-starlight-red/30 rounded-xl px-4 py-3 text-xs">
+          <p className="text-starlight-red font-semibold">Filling in {formatHours(prefillHours)} for {prefillDate}</p>
+          <p className="text-muted mt-0.5">Pick the Work Order you worked on that day, then open the log sheet — date is pre-filled.</p>
+        </div>
+      )}
       {activeWarning && <div className="bg-starlight-amber/10 border border-starlight-amber/30 rounded-xl px-4 py-3 text-xs text-starlight-amber">{activeWarning}</div>}
 
       {/* Title */}
@@ -280,7 +300,8 @@ export default function MobileTaskPage() {
         onSubmit={handleQuickLog}
         contextLabel={logContext.label}
         contextSublabel={logContext.sub}
-        defaultHours={1}
+        defaultHours={prefillHours}
+        defaultDate={prefillDate}
         showDatePicker={true}
         notesPlaceholder="Any extra detail..."
         submitting={submitting}

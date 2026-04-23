@@ -3500,3 +3500,83 @@ The durable fix is the invariant itself, not any single code change: **stored `u
 - **Scan other views for similar "clever normalisation"** — if any view has a `CASE` that tries to reconcile a read-time ambiguity, the ambiguity probably belongs at write-time. Low priority; S37 covered the known cases (`qry_bom_enriched`, `rpc_pm_job_overview`).
 - **Consider dropping `unit_to_base_multiplier` from the view** in a future pass, once we're sure no dashboard or RPC still reads it. It's harmless as a constant `1.0` for now.
 - **`05_conventions.md` update** — write the BOM invariant into the conventions doc next time it's edited. The column comment on `tbl_wo_bom.unit_cost` is the canonical reference but the conventions doc should echo it so it's discoverable without SQL access.
+
+
+### S37b Addendum — Audit follow-through
+
+After shipping S37, did the two audits I flagged as "real risks" rather than left them as speculation.
+
+#### Audit 1 — `unit_to_base_multiplier` consumers
+
+Grepped the entire `src/` tree. Zero references. Checked views and functions via `information_schema` + `pg_proc` — only the view itself defines it. Safe to remove.
+
+Action: dropped the column from `qry_bom_enriched` (needed `DROP VIEW ... CASCADE` because column list changed). Rebuilt the 2 dependent views (`qry_wo_estimated_cost`, `qry_scope_estimated_cost`) with identical definitions. No behaviour change — the column was already a constant `1.0` since S37. Just less surface area for a future query to misuse.
+
+#### Audit 2 — every BOM write path
+
+Systematic grep of every `.from("tbl_wo_bom")` call and every `auditedInsert/auditedUpdate` with that table:
+
+| Path | Status |
+|---|---|
+| `work-orders-panel.tsx :: selectMaterial` (WO-level) | ✅ unit = mat.unit, cost per that unit |
+| `work-orders-panel.tsx :: addCustomBomRow` | ✅ no cost written initially |
+| `work-orders-panel.tsx :: updateBomField` (inc. unit toggle) | ✅ toggle converts both qty and cost |
+| `work-orders-panel.tsx :: addStockItem` | ✅ unit=Day, cost=hire_cost_day |
+| `work-orders-panel.tsx :: confirmScopeMaterial` | ✅ fixed in S37 |
+| `scope/[scopeId]/page.tsx` stock paired BOM | ✅ unit=Day, cost=hire_cost_day |
+| `cutlist-extractor.tsx :: addToBom` | ✅ timber per-length conversion |
+| `components/scope-bom.tsx` | ☠️ orphaned (not imported anywhere) |
+
+Orphan check: `scope-bom.tsx` was imported as `ScopeBom` only inside itself (internal type ref). Left behind from the S19 scope-page unification. Deleted the file.
+
+#### Audit 3 — `actual_unit_cost` writes
+
+Searched for `actual_unit_cost:` assignments across the codebase. **Zero write paths.** The column is declared on the type but nothing populates it. Invoice reconciliation (in `lib/invoice-routing.ts`) doesn't touch `tbl_wo_bom` at all — invoices allocate via `tbl_invoice_allocations` (percentage split, separate table). In the DB: 0 of 112 BOM rows have `actual_unit_cost` populated.
+
+So when invoice reconciliation eventually writes to `actual_unit_cost` (S38? S40?), the S37 schema comment on that column is waiting there as documentation. No bug to fix today.
+
+#### Audit 4 — `tbl_invoice_lines` (same shape, different behaviour)
+
+Checked whether invoice-lines suffers the same class bug. No: `qry_invoice_job_rollup` uses `line_total` directly (supplier-provided), not `qty × unit_cost`. Additionally confirmed with data: 51 of 51 invoice lines have `qty × unit_cost` matching `line_total` within 2p. Structurally bug-class-absent.
+
+#### The invariant watcher
+
+Added `qry_bom_invariant_violations` — a view that returns rows **only** if the Length-on-Metre unit_cost invariant is violated. Current state: zero rows. Wire to a cron later.
+
+Definition logic: for any BOM row with `unit='Length'` on a metre-priced material with known `standard_length > 1.1m`, the stored `unit_cost` should be roughly `current_unit_cost × standard_length/1000` (per-length). If `unit_cost` matches `current_unit_cost` within 1%, that's a Convention A slip — violation flagged.
+
+Comment on the view documents its role:
+> Returns zero rows when tbl_wo_bom.unit_cost is correctly denominated per stored unit for all Length-on-Metre timber rows. Any row returned here indicates a write path violated the invariant. Run periodically; alert if non-empty.
+
+#### SQL run (S37b)
+Migration: `s37b_drop_unit_to_base_multiplier_and_add_invariant_watcher`
+- `DROP VIEW qry_bom_enriched CASCADE` + rebuild without the multiplier column
+- Recreate `qry_wo_estimated_cost` + `qry_scope_estimated_cost` with identical logic
+- `CREATE VIEW qry_bom_invariant_violations`
+- View comment documenting its role
+
+#### Verification
+- `SELECT COUNT(*) FROM qry_bom_invariant_violations` → 0
+- `bom_id 183` planned_line_cost → £31.68 ✅ (was £152.06 pre-S37)
+- Scope 25 (Grosvenor bar carcass scope) total → £256.08 ✅
+
+#### Files changed
+| File | Change |
+|---|---|
+| `qry_bom_enriched` (view) | Dropped `unit_to_base_multiplier` column (always 1.0 since S37) |
+| `qry_wo_estimated_cost`, `qry_scope_estimated_cost` | Recreated via CASCADE rebuild, identical logic |
+| `qry_bom_invariant_violations` (view, NEW) | Watchman view — returns rows only on violation |
+| `src/components/scope-bom.tsx` | Deleted (orphaned since S19) |
+
+#### Conventions added (S37b)
+
+- **Decline to keep lying columns for "backward compat"**: a column that always returns the same constant value tempts future-you to use it. Drop it instead. Comfortable migration via `DROP CASCADE` + rebuild of dependents if the dependent logic was sound.
+- **Invariant watchers over invariant triggers**: when you suspect a class of bug might recur, prefer a "returns zero rows when healthy" view that anyone can query (and cron can monitor) over a DB trigger that might block legitimate edge cases. A watcher surfaces the problem without second-guessing the write.
+- **Audit every write path before declaring an invariant "locked"**: don't assume unvisited code paths respect the rule. Grep every `.from("<table>").insert|update` for the affected table, spot-check each one. 15 minutes of work that could save another bad-row incident.
+- **Dead code removal is real cleanup**: orphaned components are a bigger risk than they look — a future session might repair-then-re-import one without noticing it was meant to be gone. `grep` for `from ".../component-name"` before leaving a file behind.
+
+#### Still deferred (real this time)
+
+- **Wire the watcher to an alert**: a Vercel cron or Supabase Edge Function that queries `qry_bom_invariant_violations` daily and emails if rows exist. Without this, the watcher is diagnostic-only. Low urgency while it's known-zero.
+- **Extend the invariant doctrine to `tbl_invoice_lines` when reconciliation is built**: when `actual_unit_cost` starts being written (invoice reconciliation to BOM row), apply the same invariant — `actual_unit_cost` denominated in the stored BOM `unit`. Write path must convert. Add a symmetric watcher.
+- **`05_conventions.md` update**: the BOM invariant + the write-path audit pattern both belong in the conventions doc. Not done today.
