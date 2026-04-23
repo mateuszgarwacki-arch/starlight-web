@@ -51,6 +51,21 @@ export default function TimesheetsReviewPage() {
   const [showResolved, setShowResolved] = useState(false);
 
   const load = useCallback(async () => {
+    // Option 3 (S38c): page-load re-run of the detector for the last 14 days
+    // as a safety net in case the on-write trigger ever misses something or
+    // a new write path isn't yet covered. Cheap (idempotent, narrow-scope
+    // query) and guarantees the admin always sees current state.
+    const dates: string[] = [];
+    const d = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const dt = new Date(d);
+      dt.setDate(dt.getDate() - i);
+      dates.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`);
+    }
+    await Promise.all(dates.map(date =>
+      supabase.rpc("rpc_detect_timesheet_gaps", { p_flag_date: date })
+    ));
+
     const { data } = await supabase
       .from("tbl_timesheet_flags")
       .select("flag_id, freelancer_id, flag_date, expected_hours, logged_hours, status, reason_category, reason_note, raised_at, resolved_at")

@@ -59,6 +59,19 @@ export function TimesheetFlagsPanel({ myId, onResolved }: TimesheetFlagsPanelPro
 
   const load = useCallback(async () => {
     if (!myId) return;
+    // S38c: re-run the detector for the last 14 days before fetching, so any
+    // hours added via other surfaces (admin edits, manual corrections) are
+    // reflected immediately instead of waiting for the 06:00 cron.
+    const dates: string[] = [];
+    const now = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const dt = new Date(now);
+      dt.setDate(dt.getDate() - i);
+      dates.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`);
+    }
+    await Promise.all(dates.map(date =>
+      supabase.rpc("rpc_detect_timesheet_gaps", { p_flag_date: date })
+    ));
     const { data } = await supabase
       .from("tbl_timesheet_flags")
       .select("*")

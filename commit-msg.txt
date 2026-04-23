@@ -1,22 +1,18 @@
-S38b review nav fix + chip strip + timesheets in sidebar
+S38c timesheet flag real-time sync
 
-Problem: sidebar "Review" amber badge pointed to /review (Cost Visibility)
-which has no inbox — the 2 pending tasks lived at /review/inbox. Badge
-felt broken. Also, the new /review/timesheets page from S38 was findable
-only by URL.
+Problem: flag rows only updated on 06:00 cron. Admin/freelancer edits
+during the day leave stale flag values visible until next morning.
+User edited Karol's hours to hit 10h but flag kept showing 7.5h.
 
-Fixes:
-- Sidebar Review item: when inboxCount > 0, clicking the item now lands
-  on /review/inbox (via badgeHref). When count is 0, stays on /review
-  (Cost Visibility landing).
-- New sidebar item "Timesheets" (Clock icon, red badge) linking directly
-  to /review/timesheets with live count of open tbl_timesheet_flags.
-- Shared ReviewNavChips component (src/components/review-nav-chips.tsx):
-  three-chip nav (Cost Visibility / Workshop Inbox / Timesheet gaps) with
-  active state and live counts via realtime channels. Mounted on all
-  three pages so you can jump between them regardless of entry point.
-- Dropped redundant back-arrow links from inbox and timesheets pages
-  (nav chips replace them).
+Fix 1 (trigger): AFTER INSERT/UPDATE/DELETE on tbl_wo_time_entries,
+trg_timesheet_recompute_for_time_entry calls rpc_detect_timesheet_gaps
+for the affected date. On UPDATE that changes the date, also recomputes
+the old date. Idempotent — safe to fire on every write.
 
-Three uncommitted changes from an earlier incomplete session (the
-review-nav-chips component + sidebar tweaks) picked up and completed.
+Fix 2 (page-load): /review/timesheets and /m/me flag panel both
+re-run the detector for the last 14 days before fetching. Belt-and-
+braces — if trigger ever misfires or new write path isn't covered,
+loading the page gives current state.
+
+Verified: Karol's flag auto-resolved to 10h immediately on no-op update
+to entry 124. Trigger fires. Page reload returns accurate state.
