@@ -49,8 +49,6 @@ export interface QuoteLine {
   line_sub_group: string | null;
   category: string | null;
   pm_note: string | null;
-  interpretation_complete: string | null; // "true"/"false" via ODBC
-  kit_list_exported: string | null;
   imported_at: string | null;
   updated_at?: string | null;
   pm_est_cost: number | null;

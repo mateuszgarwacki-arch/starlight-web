@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, Check, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle } from "lucide-react";
+import { ArrowLeft, Plus, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -98,8 +98,8 @@ const FILTERS: FilterDef[] = [
   },
   {
     key: "done",
-    label: "Done",
-    filter: (l) => isTruthy(l.interpretation_complete),
+    label: "Interpreted",
+    filter: () => false, // Short-circuited in filteredLines via activeFilter === "done" branch (needs interpretedSet from component state)
     color: "bg-starlight-green/10 text-starlight-green border-starlight-green/30",
   },
 ];
@@ -149,6 +149,13 @@ export default function JobDetailPage() {
   const [scopeDialogLine, setScopeDialogLine] = useState<QuoteLine | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
 
+  // --- Quote line badges ---
+  // Sourced from qry_quote_line_badges. Manual checks are toggled via
+  // tbl_quote_line_checks; derived alerts (materials_needed) are read-only.
+  const [interpretedSet,    setInterpretedSet]    = useState<Set<number>>(new Set());
+  const [kitListReadySet,   setKitListReadySet]   = useState<Set<number>>(new Set());
+  const [materialsNeededSet, setMaterialsNeededSet] = useState<Set<number>>(new Set());
+
   // --- ADD LINE state ---
   const [showAddLine, setShowAddLine] = useState(false);
   const [newLine, setNewLine] = useState({ line_text: "", line_value: "", quantity: "", unit_price: "", event_zone: "", line_sub_group: "", category: "Workshop Build" });
@@ -190,6 +197,30 @@ export default function JobDetailPage() {
     if (d.quotes) setQuotes(d.quotes);
     if (d.lines) setLines(d.lines);
     if (d.scopes) setScopes(d.scopes);
+
+    // Load all badges for this job's lines (manual checks + derived alerts)
+    const lineIds = (d.lines || []).map((l: any) => l.quote_line_id);
+    if (lineIds.length > 0) {
+      const { data: badges } = await supabase
+        .from("qry_quote_line_badges")
+        .select("quote_line_id, badge_code")
+        .in("quote_line_id", lineIds);
+      const interp   = new Set<number>();
+      const kitReady = new Set<number>();
+      const matsNeed = new Set<number>();
+      for (const b of (badges || []) as any[]) {
+        if (b.badge_code === "interpreted")       interp.add(b.quote_line_id);
+        else if (b.badge_code === "kit_list_ready") kitReady.add(b.quote_line_id);
+        else if (b.badge_code === "materials_needed") matsNeed.add(b.quote_line_id);
+      }
+      setInterpretedSet(interp);
+      setKitListReadySet(kitReady);
+      setMaterialsNeededSet(matsNeed);
+    } else {
+      setInterpretedSet(new Set());
+      setKitListReadySet(new Set());
+      setMaterialsNeededSet(new Set());
+    }
 
     // Enrich WO data with activity labels
     const wos = d.work_orders || [];
@@ -287,10 +318,19 @@ export default function JobDetailPage() {
   }
 
   // ================================================================
-  // DONE = manual tick only (interpretation_complete field)
+  // Quote line badge helpers
+  //   isDone            — 'interpreted' manual check (junction table)
+  //   isKitListReady    — 'kit_list_ready' manual check (junction table)
+  //   hasMaterialsNeeded — derived alert from qry_quote_line_badges
   // ================================================================
   function isDone(line: QuoteLine): boolean {
-    return isTruthy(line.interpretation_complete);
+    return interpretedSet.has(line.quote_line_id);
+  }
+  function isKitListReady(line: QuoteLine): boolean {
+    return kitListReadySet.has(line.quote_line_id);
+  }
+  function hasMaterialsNeeded(line: QuoteLine): boolean {
+    return materialsNeededSet.has(line.quote_line_id);
   }
 
   // ================================================================
@@ -385,10 +425,35 @@ export default function JobDetailPage() {
     });
   };
 
-  const toggleInterpretation = async (line: QuoteLine) => {
-    const newVal = isTruthy(line.interpretation_complete) ? "false" : "true";
-    await updateLine(line.quote_line_id, "interpretation_complete", newVal);
+  // Toggle a manual check on a quote line. Works for any check_code in tbl_check_types.
+  // Uses optimistic local update; rolls back on error.
+  const toggleCheck = async (
+    line: QuoteLine,
+    checkCode: "interpreted" | "kit_list_ready",
+  ) => {
+    const set    = checkCode === "interpreted" ? interpretedSet    : kitListReadySet;
+    const setter = checkCode === "interpreted" ? setInterpretedSet : setKitListReadySet;
+    const isTicked = set.has(line.quote_line_id);
+
+    if (isTicked) {
+      const { error } = await supabase
+        .from("tbl_quote_line_checks")
+        .delete()
+        .eq("quote_line_id", line.quote_line_id)
+        .eq("check_code", checkCode);
+      if (error) { toast.error("Failed to untick: " + error.message); return; }
+      setter((prev) => { const n = new Set(prev); n.delete(line.quote_line_id); return n; });
+    } else {
+      const { error } = await supabase
+        .from("tbl_quote_line_checks")
+        .insert({ quote_line_id: line.quote_line_id, check_code: checkCode });
+      if (error) { toast.error("Failed to tick: " + error.message); return; }
+      setter((prev) => new Set(prev).add(line.quote_line_id));
+    }
   };
+
+  const toggleInterpretation = (line: QuoteLine) => toggleCheck(line, "interpreted");
+  const toggleKitListReady   = (line: QuoteLine) => toggleCheck(line, "kit_list_ready");
 
   const handleScopeCreated = (scopeItemId: number) => {
     setScopeDialogLine(null);
@@ -439,7 +504,6 @@ export default function JobDetailPage() {
       event_zone: newLine.event_zone.trim() || null,
       line_sub_group: newLine.line_sub_group.trim() || null,
       category: newLine.category || null,
-      interpretation_complete: "false",
     }, jobId);
 
     if (error) { toast.error("Failed to add line"); setAddingSaving(false); return; }
@@ -649,7 +713,6 @@ export default function JobDetailPage() {
   function renderLineRow(line: QuoteLine) {
     const config = getCategoryConfig(line.category);
     const lineIsDone = isDone(line);
-    const isManuallyDone = isTruthy(line.interpretation_complete);
     const isUninterpreted = config.showAmber && !lineIsDone;
     const hasScope = scopes.some((s) => s.quote_line_id === line.quote_line_id && s.status !== "Cancelled-Cost-Retained");
     const contractorInfo = contractorMap[line.quote_line_id];
@@ -859,23 +922,46 @@ export default function JobDetailPage() {
           )}
         </td>
 
-        {/* Done — manual only */}
-        <td className="px-3 py-2.5 text-center">
-          {config.showDoneCheckbox ? (
-            <button
-              onClick={() => toggleInterpretation(line)}
-              title={isManuallyDone ? "Marked done (click to undo)" : "Mark as done"}
-              className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
-                lineIsDone
-                  ? "bg-starlight-green border-starlight-green text-white"
-                  : "border-subtle hover:border-starlight-amber"
-              }`}
-            >
-              {lineIsDone && <Check className="h-3.5 w-3.5" />}
-            </button>
-          ) : (
-            <span className="text-faint">&mdash;</span>
-          )}
+        {/* Flags — manual checks + derived alerts */}
+        <td className="px-3 py-2.5">
+          <div className="flex items-center justify-center gap-1.5">
+            {config.showDoneCheckbox ? (
+              <>
+                <button
+                  onClick={() => toggleInterpretation(line)}
+                  title={lineIsDone ? "Interpreted — click to untick" : "Mark Interpreted"}
+                  className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center text-[10px] font-semibold transition-all ${
+                    lineIsDone
+                      ? "bg-starlight-green border-starlight-green text-white"
+                      : "border-subtle text-faint hover:border-starlight-amber hover:text-starlight-amber"
+                  }`}
+                >
+                  I
+                </button>
+                <button
+                  onClick={() => toggleKitListReady(line)}
+                  title={isKitListReady(line) ? "Kit List Ready — click to untick" : "Mark Kit List Ready"}
+                  className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center text-[10px] font-semibold transition-all ${
+                    isKitListReady(line)
+                      ? "bg-starlight-green border-starlight-green text-white"
+                      : "border-subtle text-faint hover:border-starlight-amber hover:text-starlight-amber"
+                  }`}
+                >
+                  K
+                </button>
+              </>
+            ) : (
+              <span className="text-faint">&mdash;</span>
+            )}
+            {hasMaterialsNeeded(line) && (
+              <span
+                title="Materials Needed — BOM rows flagged for ordering"
+                className="inline-flex items-center gap-0.5 px-1.5 h-6 rounded-md bg-starlight-amber/10 text-starlight-amber border border-starlight-amber/30 text-[10px] font-medium"
+              >
+                <AlertCircle className="h-3 w-3" />
+              </span>
+            )}
+          </div>
         </td>
 
         {/* Delete */}
@@ -924,7 +1010,7 @@ export default function JobDetailPage() {
         <th className="px-3 py-2.5 font-medium text-muted w-24 text-right">Value</th>
         <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Scope</th>
         <th className="px-3 py-2.5 font-medium text-muted w-28 text-right">PM Est</th>
-        <th className="px-3 py-2.5 font-medium text-muted w-16 text-center">Done</th>
+        <th className="px-3 py-2.5 font-medium text-muted w-28 text-center">Flags</th>
         <th className="px-3 py-2.5 font-medium text-muted w-10"></th>
       </tr>
     </thead>

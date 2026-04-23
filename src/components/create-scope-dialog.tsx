@@ -63,11 +63,13 @@ export function CreateScopeDialog({
       return;
     }
 
-    // Mark quote line as interpretation complete
+    // Mark quote line as interpreted (idempotent)
     await supabase
-      .from("tbl_quote_lines")
-      .update({ interpretation_complete: "true" })
-      .eq("quote_line_id", quoteLine.quote_line_id);
+      .from("tbl_quote_line_checks")
+      .upsert(
+        { quote_line_id: quoteLine.quote_line_id, check_code: "interpreted" },
+        { onConflict: "quote_line_id,check_code" }
+      );
 
     if (data) {
       onCreated(data.scope_item_id);

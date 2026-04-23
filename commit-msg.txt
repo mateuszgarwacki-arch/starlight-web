@@ -1,11 +1,20 @@
-docs: wrap up Session 23 Apr 2026 (S37 + S37b + S38 + S38b + S38c)
+S38d: Quote line badges — checklist pattern
 
-TRACKER.md updated:
-- Top-of-file schema counts refreshed (49 tables, 33 views, 12 RPCs).
-- Addendum for S38b (review nav fix, shared ReviewNavChips).
-- Addendum for S38c (trigger + page-load re-run for real-time flag sync).
-- Session wrap-up block covering all shipped work today.
+Replaces ad-hoc booleans (interpretation_complete, kit_list_exported) with
+a lookup + junction pattern. New check types = data, not migrations.
 
-Knowledge base docs (03_database_schema.md, 05_conventions.md) produced
-fresh as local outputs — need to be uploaded to project knowledge
-manually alongside the other KB docs.
+DB (migration s38d_quote_line_badges_checklist):
+- tbl_check_types: lookup (check_code, label, display_order, badge_color)
+- tbl_quote_line_checks: junction; presence of row = ticked
+- Seeded with 'interpreted' and 'kit_list_ready'
+- Backfilled 24 previously-ticked rows from interpretation_complete
+- qry_quote_line_badges: unified feed — manual checks + derived materials_needed
+- qry_dash_quote_stats: rewritten to read from junction
+- Dropped tbl_quote_lines.interpretation_complete + kit_list_exported
+
+Frontend (jobs/[id]/page.tsx):
+- Loads all badges from qry_quote_line_badges in one query
+- Generic toggleCheck(line, checkCode) replaces duplicated handlers
+- Flags column now shows [I] [K] toggles + amber materials_needed chip
+- "Done" column header renamed to "Flags"
+- Removed orphaned Check icon import
