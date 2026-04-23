@@ -1,18 +1,11 @@
-S38c timesheet flag real-time sync
+docs: wrap up Session 23 Apr 2026 (S37 + S37b + S38 + S38b + S38c)
 
-Problem: flag rows only updated on 06:00 cron. Admin/freelancer edits
-during the day leave stale flag values visible until next morning.
-User edited Karol's hours to hit 10h but flag kept showing 7.5h.
+TRACKER.md updated:
+- Top-of-file schema counts refreshed (49 tables, 33 views, 12 RPCs).
+- Addendum for S38b (review nav fix, shared ReviewNavChips).
+- Addendum for S38c (trigger + page-load re-run for real-time flag sync).
+- Session wrap-up block covering all shipped work today.
 
-Fix 1 (trigger): AFTER INSERT/UPDATE/DELETE on tbl_wo_time_entries,
-trg_timesheet_recompute_for_time_entry calls rpc_detect_timesheet_gaps
-for the affected date. On UPDATE that changes the date, also recomputes
-the old date. Idempotent — safe to fire on every write.
-
-Fix 2 (page-load): /review/timesheets and /m/me flag panel both
-re-run the detector for the last 14 days before fetching. Belt-and-
-braces — if trigger ever misfires or new write path isn't covered,
-loading the page gives current state.
-
-Verified: Karol's flag auto-resolved to 10h immediately on no-op update
-to entry 124. Trigger fires. Page reload returns accurate state.
+Knowledge base docs (03_database_schema.md, 05_conventions.md) produced
+fresh as local outputs — need to be uploaded to project knowledge
+manually alongside the other KB docs.

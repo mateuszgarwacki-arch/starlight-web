@@ -26,7 +26,7 @@ _No open items. See S33 session entry for cleanup history._
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — **47 tables, 41 views, 10 RPC functions, 200+ indexes** (verified 22 Apr 2026 via `starlight_database_schema_session33.md`).
+**Backend:** Supabase (PostgreSQL) — **49 tables, 33 views, 12 RPC functions, 200+ indexes** (verified 23 Apr 2026 after S38).
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
 **Auth:** Supabase Auth (email+password for PM/foreman/admin, phone+password for freelancers). Three-layer security: proxy session validation (`src/proxy.ts` since S33, was `middleware.ts`) + API route auth + RLS on all tables. See Security conventions below.
@@ -3713,3 +3713,80 @@ Re-running the detector for the same date is a no-op (logged_hours matches exist
 - Are reasons being filled honestly or always "Other"? If "Other" dominates, preset list needs tuning
 - Are freelancers finding the Add-hours deep-link works? The `/m/task` landing needs the pre-fill to be unmissable
 - False positive rate: freelancers ending genuinely early on Fridays, trained days with shorter schedules, etc. standard_day_hours may need per-freelancer exceptions or per-day-of-week overrides later
+
+
+### Addendum S38b — Review nav fix
+
+Sidebar "Review" amber badge pointed to `/review` (Cost Visibility — no inbox). The 2 pending tasks live at `/review/inbox`. Badge felt broken; destination was wrong.
+
+While fixing, found three uncommitted local changes from an incomplete earlier session — `badgeHref` wiring on the sidebar, a `review-nav-chips` component, and a `/review` page edit using it. Completed and shipped those.
+
+**Shipped:**
+- `badgeHref: "/review/inbox"` on the Review nav item. When `inboxCount > 0` the link routes to the inbox; otherwise stays on `/review`.
+- New sidebar entry "Timesheets" (Clock icon, red badge) linking to `/review/timesheets`. Realtime-subscribed to `tbl_timesheet_flags` for live count. Red colour distinguishes it from amber inbox (inbox = "please review when you can"; timesheets = "missing commercial data, more urgent").
+- Shared `<ReviewNavChips />` component (`src/components/review-nav-chips.tsx`) — three-chip strip (Cost Visibility / Workshop Inbox / Timesheet gaps) mounted on all three review pages, showing active state and live counts. Replaces the per-page back-arrow links.
+
+**Convention added:** Before starting any fix, `git status` first. If there are already local changes to files you're about to edit, either complete them or consciously overwrite — don't assume a deployed file matches a working-directory file. Recurring risk: work-on-disk ≠ work-in-production.
+
+
+### Addendum S38c — Real-time flag sync
+
+**Problem:** flag rows only recomputed at 06:00 UTC cron. Admin edit to Karol's hours (4.5h → 10h) left the flag displaying stale 7.5h until next morning.
+
+**Root cause:** the auto-resolve in `rpc_detect_timesheet_gaps` only ran when the detector was called. Only caller was the pg_cron job.
+
+**Fix 1 — trigger (real-time correctness):**
+`trg_timesheet_recompute_for_time_entry` on `tbl_wo_time_entries` AFTER INSERT/UPDATE/DELETE calls `rpc_detect_timesheet_gaps` for the affected date. On UPDATE that changes the date, recomputes both old and new. Scope narrow (one freelancer, one date), idempotent, safe on every write.
+
+**Fix 2 — page-load re-run (belt-and-braces):**
+`/review/timesheets` and the `TimesheetFlagsPanel` on `/m/me` both call `rpc_detect_timesheet_gaps` for the last 14 days before fetching. Catches anything the trigger might miss (new write path not yet covered, direct SQL edits, bugs).
+
+Verified live: no-op UPDATE on Karol's entry 124 caused `updated_at` on flag row to refresh without status change. Karol's flag auto-resolved to 10h correctly.
+
+**Known edge case (deferred):** detector has `HAVING SUM > 0` — if all of a date's hours are moved elsewhere or all archived, the resulting zero-hour day doesn't re-evaluate the existing flag; it stays open with stale numbers. Unreachable in normal operation; admin-close covers the rare case. Will revisit if it fires in practice.
+
+**Convention added:**
+- **Trigger on the write for cross-table consistency; re-run on the read as backstop.** The pattern: any table whose state depends on another table's SUM/COUNT should have a trigger to keep it fresh, AND a cheap re-compute on whatever page reads it. Two layers: one fast, one safety.
+
+
+---
+
+## Session wrap (23 Apr 2026)
+
+Full list of what shipped today across S37 / S37b / S38 / S38b / S38c:
+
+### BOM invariant (S37 + S37b)
+- Locked `tbl_wo_bom.unit_cost` invariant (price per stored unit). No read-time multipliers.
+- Normalised 6 legacy Convention A rows. Dropped `unit_to_base_multiplier` column.
+- `qry_bom_enriched`, `rpc_pm_job_overview`, `bomRowCost` helper all simplified.
+- Every BOM write path audited — 7 active paths all safe.
+- Added `qry_bom_invariant_violations` watcher view (currently 0 rows).
+- `actual_unit_cost` has zero writers yet (latent). `tbl_invoice_lines` uses `line_total` directly (no bug class).
+- Deleted orphan `scope-bom.tsx`.
+
+### Timesheet gap detection (S38 + S38b + S38c)
+- New table `tbl_timesheet_flags` (freelancer_id, flag_date, expected/logged hours, status, reason). UNIQUE(freelancer_id, flag_date) for idempotency.
+- RPC `rpc_detect_timesheet_gaps(DATE)` — plpgsql SECURITY DEFINER, flags freelancers who logged > 0 but < 90% of `standard_day_hours` (default 10h).
+- pg_cron schedule `timesheet-gap-detect-daily` at 06:00 UTC daily against yesterday.
+- Trigger `trg_timesheet_recompute_for_time_entry` keeps flags in sync with time entries in realtime.
+- Mobile: red banner on `/m` task list, full panel on `/m/me` with Add-hours deep-link and 5-chip reason picker.
+- Admin: new page `/review/timesheets` with open/resolved sections and admin-close button.
+- Page-load re-run of detector on `/review/timesheets` and `TimesheetFlagsPanel` for belt-and-braces.
+- Shared `<ReviewNavChips />` component across all three review pages (`/review`, `/review/inbox`, `/review/timesheets`).
+- Sidebar: Review badge routes to `/review/inbox` when inbox count > 0. New "Timesheets" entry with red badge for open timesheet flags.
+
+### Schema counts
+49 tables (was 48), 33 views (was 41 — drop likely reflects unused views being dropped in earlier cleanup, not S37/S38 work), 12 RPC functions (was 10: +`rpc_job_header_counts`, +`rpc_detect_timesheet_gaps`).
+
+### Live data state at session end
+- Karol's 22 Apr flag — resolved (reached 10h)
+- Kamran's 22 Apr flag — still open at 3.25h
+- 2 pending tasks in Workshop Inbox (Agata timer, Kamran priming)
+- BOM invariant watcher — 0 violations
+
+### Deferred / follow-up candidates
+- **PWA push notifications** for 06:00 flag creation (iOS needs Home-Screen install, Android works straight from the browser). Free, non-trivial setup.
+- **`actual_unit_cost` write path** — when invoice-to-BOM reconciliation is eventually built, apply same invariant. Comment on the column already states this.
+- **Per-freelancer or per-day-of-week `standard_day_hours` overrides** — if the 10h default produces false positives for apprentices / short-day arrangements.
+- **Detector edge case**: zero-hour days don't downgrade flags (all entries moved/archived elsewhere). Fix when/if it happens.
+- **Behaviour to watch after first week of S38:** flag resolution rate, "Other" reason frequency (is the preset list right?), false positive rate, whether Add-hours deep-link works in practice.
