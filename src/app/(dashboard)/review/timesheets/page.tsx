@@ -7,6 +7,7 @@ import { AlertTriangle, Check, User, Clock, X } from "lucide-react";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
 import Link from "next/link";
+import { ReviewNavChips } from "@/components/review-nav-chips";
 
 interface FlagRow {
   flag_id: number;
@@ -88,13 +89,12 @@ export default function TimesheetsReviewPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-navy">Timesheet gaps</h1>
-          <p className="text-xs text-muted mt-0.5">Days where a freelancer logged some hours but less than 90% of their standard day.</p>
-        </div>
-        <Link href="/review" className="text-xs text-muted active:text-navy">← Back to Review</Link>
+      <div>
+        <h1 className="text-xl font-bold text-navy">Timesheet gaps</h1>
+        <p className="text-xs text-muted mt-0.5">Days where a freelancer logged some hours but less than 90% of their standard day.</p>
       </div>
+
+      <ReviewNavChips />
 
       {/* Open flags */}
       <div className="card overflow-hidden">

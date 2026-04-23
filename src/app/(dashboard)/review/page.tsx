@@ -15,6 +15,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { CompletedWorkTab } from "@/components/completed-work-tab";
 import { LearningsTab } from "@/components/learnings-tab";
+import { ReviewNavChips } from "@/components/review-nav-chips";
 
 interface JobCost {
   job_id: number;
@@ -294,19 +295,8 @@ export default function ReviewPage() {
         </button>
       </div>
 
-      {/* Inbox banner */}
-      {inboxCount > 0 && (
-        <Link href="/review/inbox" className="card px-5 py-3 border-l-4 border-l-starlight-amber flex items-center justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-3">
-            <Inbox className="h-5 w-5 text-starlight-amber" />
-            <div>
-              <p className="text-sm font-semibold text-navy">{inboxCount} item{inboxCount !== 1 ? "s" : ""} in Workshop Inbox</p>
-              <p className="text-[10px] text-muted">Pending tasks and open requests from freelancers</p>
-            </div>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted" />
-        </Link>
-      )}
+      {/* Secondary nav — shared chip strip, realtime counts */}
+      <ReviewNavChips />
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">

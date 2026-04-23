@@ -3580,3 +3580,136 @@ Migration: `s37b_drop_unit_to_base_multiplier_and_add_invariant_watcher`
 - **Wire the watcher to an alert**: a Vercel cron or Supabase Edge Function that queries `qry_bom_invariant_violations` daily and emails if rows exist. Without this, the watcher is diagnostic-only. Low urgency while it's known-zero.
 - **Extend the invariant doctrine to `tbl_invoice_lines` when reconciliation is built**: when `actual_unit_cost` starts being written (invoice reconciliation to BOM row), apply the same invariant — `actual_unit_cost` denominated in the stored BOM `unit`. Write path must convert. Add a symmetric watcher.
 - **`05_conventions.md` update**: the BOM invariant + the write-path audit pattern both belong in the conventions doc. Not done today.
+
+
+---
+
+## Session 38 — 23 April 2026
+
+### Timesheet gap detection (Stage 1)
+
+**Problem:** freelancers occasionally log partial days (3h or 5h on a 10h standard day), Mateusz has to chase manually, doesn't scale as team grows. Automated.
+
+**Rule:** at 06:00 UTC daily, look at yesterday. Any freelancer who logged any hours but < 90% of their `standard_day_hours` (default 10h) gets flagged. One flag per (freelancer, date). Freelancer resolves by adding hours (auto-closes next run) or giving a preset reason + optional note. Admin can close any flag.
+
+Key design decision: **no booking-status filter**. The trigger is "logged something but not enough" — this catches the intended case (forgotten entries, abandoned mid-day) without false positives for genuine days off. Freelancer must have interacted with the system that day for the flag to fire — if they didn't log anything at all, they're invisible to this detector (different problem, separate solution).
+
+### Schema (`tbl_timesheet_flags`)
+
+```sql
+flag_id         SERIAL PK
+freelancer_id   INT FK ON DELETE CASCADE
+flag_date       DATE
+expected_hours  NUMERIC
+logged_hours    NUMERIC
+status          TEXT CHECK (open | resolved_logged | resolved_reason | resolved_admin)
+reason_category TEXT CHECK (sick | left_early | materials | site_closed | other)
+reason_note     TEXT
+raised_at       TIMESTAMPTZ
+resolved_at     TIMESTAMPTZ
+resolved_by     INT
+resolved_by_admin BOOLEAN
+updated_at      TIMESTAMPTZ (trigger-managed)
+UNIQUE(freelancer_id, flag_date)
+```
+
+Registered in `AUDITED_TABLES` as `flag_id`. RLS: freelancer sees/updates own; admin/PM see all; foreman read-only; delete admin-only.
+
+The UNIQUE constraint is what makes the detector idempotent — same date rerun refreshes `logged_hours` on open flags; auto-closes ones now satisfying 90%; leaves already-resolved flags alone.
+
+### Detector (`rpc_detect_timesheet_gaps(DATE)`)
+
+Plpgsql SECURITY DEFINER. For a given date:
+
+1. Groups time entries by freelancer where `archived_at IS NULL` and `SUM > 0`
+2. Joins standard day (default 10h if null)
+3. Classifies as short if `logged < std × 0.9`
+4. Upserts short rows as `open` flags (ON CONFLICT refreshes logged_hours for still-open rows)
+5. Updates any existing open flag to `resolved_logged` if hours now satisfy 90%
+6. Returns per-row outcome: `flagged` / `auto_resolved` / `ok`
+
+One gotcha to document: the column-name ambiguity problem. PL/pgSQL RETURN QUERY with CTEs that reference freelancer_id collides with the RETURNS TABLE's freelancer_id. Solved by aliasing the CTE columns (`f_id`, `f_name`) and prefixing the RETURNS TABLE outputs (`out_freelancer_id`, etc.).
+
+### Scheduling (pg_cron)
+
+```sql
+SELECT cron.schedule(
+  'timesheet-gap-detect-daily',
+  '0 6 * * *',
+  $$ SELECT rpc_detect_timesheet_gaps(CURRENT_DATE - INTERVAL '1 day'); $$
+);
+```
+
+pg_cron was already installed on the Supabase project (v1.6.4). Server time is UTC. 06:00 UTC = 06:00 or 07:00 local depending on BST, which matches the "06:00 AM" intent closely enough. If we want strictly 06:00 London time year-round, we revisit with a second schedule for BST.
+
+### UI components (`src/components/timesheet-flags.tsx`)
+
+Two exports:
+
+- **TimesheetFlagsBanner** (`myId`) — compact red strip on `/m` task page when open flags exist. Realtime-subscribed to `tbl_timesheet_flags` (filter by freelancer_id), updates count instantly on resolve. Tap to jump to `/m/me`.
+- **TimesheetFlagsPanel** (`myId`, `onResolved`) — full panel on `/m/me`. Per-flag row with:
+  - Date label ("Yesterday", "Tuesday", or "14 Apr")
+  - "Logged X of Y · Z short"
+  - Two buttons: `Add hours` (deep-link) and `Give reason` (inline expand)
+  - Reason mode: 5 preset chips (Off sick / Left early / Materials delayed / Site closed / Other) + optional note textarea + Submit
+
+### Mobile wiring
+
+- `/m/page.tsx`: `<TimesheetFlagsBanner myId={myId} />` at top of page content
+- `/m/me/page.tsx`: `<TimesheetFlagsPanel myId={myId} onResolved={...} />` above active-timer section
+- `/m/task/page.tsx`: reads `?date=YYYY-MM-DD&short=N.NN` URL params via `window.location.search` (Next 16 Suspense convention), prefills LogSheet `defaultDate` and `defaultHours`, shows red context banner so freelancer knows they landed via a flag deep-link
+
+### Admin view (`/review/timesheets`)
+
+New page. Two sections:
+- **Open** — table: freelancer (link to crew detail), date, logged, expected, short (red), raised date, admin-close button
+- **Resolved** (collapsible) — how closed, reason category + note
+
+Freelancer names resolved via a second query (RLS means `tbl_timesheet_flags` doesn't have freelancer_name; safest to do the join client-side). `auditedUpdate` writes the admin close with `resolved_by_admin: true` flag for audit trail.
+
+### Verification against live data
+
+Target date 2026-04-22:
+- Karol Socha: 7.5h / 10h → flagged (short 2.5h)
+- Kamran Cheema: 3.25h / 10h → flagged (short 6.75h)
+- Mark Cambell: 10h → not flagged
+- Martin Smith: 10h → not flagged
+
+Re-running the detector for the same date is a no-op (logged_hours matches existing). Confirmed idempotency before scheduling the cron.
+
+### Files
+
+| File | Change |
+|---|---|
+| `tbl_timesheet_flags` (new table) | + RLS policies + updated_at trigger |
+| `rpc_detect_timesheet_gaps(DATE)` (new fn) | SECURITY DEFINER plpgsql detector |
+| `cron.job 'timesheet-gap-detect-daily'` | pg_cron schedule 06:00 UTC daily |
+| `src/lib/audit.ts` | `tbl_timesheet_flags: "flag_id"` added to AUDITED_TABLES |
+| `src/components/timesheet-flags.tsx` (new) | 243 lines: Banner + Panel |
+| `src/app/m/page.tsx` | Banner mount |
+| `src/app/m/me/page.tsx` | Panel mount |
+| `src/app/m/task/page.tsx` | URL params for date/short prefill + context banner |
+| `src/app/(dashboard)/review/timesheets/page.tsx` (new) | 200 lines: admin flags table |
+
+### Conventions added (S38)
+
+- **pg_cron for periodic server-side tasks before adding external schedulers**: if the job is "run this SQL function daily", `cron.schedule` is free, built-in, and writes to `cron.job_run_details` for log access. Don't build a Vercel cron or Edge Function for purely SQL-native work.
+- **UNIQUE constraint = idempotent upsert**: any time you want "run this detector repeatedly without duplicating", a UNIQUE (entity_id, date) constraint + `ON CONFLICT DO UPDATE` is the pattern. No "already seen" tracking table needed.
+- **Auto-resolve when the condition no longer applies**: a detector that only *creates* flags but never *closes* them creates manual cleanup work. Every re-run should close open flags that now pass the check — it costs one extra UPDATE statement and keeps the list honest.
+- **RLS function ambiguity**: when a plpgsql RETURN QUERY returns a TABLE(), and the body has CTEs with columns matching the RETURNS TABLE names, PostgreSQL throws a cryptic "ambiguous column" error. Workaround: prefix RETURNS TABLE outputs (`out_*`) and/or alias the CTE columns. Not a workaround, just a naming discipline.
+- **Deep-link URL params on Next 16 client components**: `window.location.search` inside `useEffect` (not `useSearchParams`, which wants Suspense) is the S27 convention and works here too.
+- **Realtime subscriptions with filter**: `supabase.channel.on('postgres_changes', { filter: 'freelancer_id=eq.X' })` gives row-level filtering at the channel level. Combined with `REPLICA IDENTITY FULL` (not strictly needed here since we refetch rather than diff, but worth checking if we ever process the payload directly).
+
+### Stage 2 (not yet shipped, flagged)
+
+- **PWA push notification** at 06:00 alongside the flag creation. Requires VAPID key setup, service worker push listener, subscription table, and iOS Home Screen install flow. Non-trivial but free — queue for a follow-up session if in-app surfacing proves insufficient.
+- **Sidebar badge on the PM sidebar** — count of open timesheet flags across all freelancers. Pattern already exists for Review Inbox. Useful once flags start flowing.
+- **Freelancer-level view on `/crew/[id]`** — show timesheet flag history, patterns, reason frequency. Commercially useful signal ("Karol is sick every other Monday") but not the point of v1.
+- **Per-job reporting**: which jobs correlate with short-day flags. Useful for job post-mortems.
+
+### Behaviour to watch after first week
+
+- Do freelancers actually resolve the flags or ignore them? If ignored, the banner needs to be louder, or push notification is needed
+- Are reasons being filled honestly or always "Other"? If "Other" dominates, preset list needs tuning
+- Are freelancers finding the Add-hours deep-link works? The `/m/task` landing needs the pre-fill to be unmissable
+- False positive rate: freelancers ending genuinely early on Fridays, trained days with shorter schedules, etc. standard_day_hours may need per-freelancer exceptions or per-day-of-week overrides later

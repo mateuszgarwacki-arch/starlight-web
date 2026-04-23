@@ -7,9 +7,10 @@ import { formatHours } from "@/lib/format-hours";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Clock, Package, Wrench, Archive, AlertTriangle, MessageSquare, Check, X, CornerDownRight, RefreshCw, ChevronDown, Search, Image } from "lucide-react";
+import { Clock, Package, Wrench, Archive, AlertTriangle, MessageSquare, Check, X, CornerDownRight, RefreshCw, ChevronDown, Search, Image } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { ReviewNavChips } from "@/components/review-nav-chips";
 
 interface InboxItem { item_type: "task" | "request"; item_id: number; freelancer_id: number; freelancer_name: string; category: string; title: string; description: string | null; claimed_hours: number | null; worked_date: string | null; job_id: number | null; job_name: string | null; job_number: string | null; urgency: string | null; photo_url: string | null; photo_urls: string[] | null; work_order_id: number | null; status: string; created_at: string; }
 interface WOOption { work_order_id: number; description: string | null; scope_name: string; job_number: string; job_id: number; status: string; }
@@ -117,12 +118,14 @@ export default function ReviewInboxPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/review" className="text-muted hover:text-navy"><ArrowLeft className="h-5 w-5" /></Link>
-          <div><h1 className="text-xl font-bold text-navy">Workshop Inbox</h1><p className="text-sm text-muted mt-0.5">{pendingTasks.length} pending task{pendingTasks.length !== 1 ? "s" : ""}, {openRequests.length} open request{openRequests.length !== 1 ? "s" : ""}</p></div>
+        <div>
+          <h1 className="text-xl font-bold text-navy">Workshop Inbox</h1>
+          <p className="text-sm text-muted mt-0.5">{pendingTasks.length} pending task{pendingTasks.length !== 1 ? "s" : ""}, {openRequests.length} open request{openRequests.length !== 1 ? "s" : ""}</p>
         </div>
         <button onClick={loadInbox} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors"><RefreshCw className="h-4 w-4" /> Refresh</button>
       </div>
+
+      <ReviewNavChips />
 
       {items.length === 0 && (<div className="card px-8 py-12 text-center"><Check className="h-10 w-10 text-starlight-green mx-auto mb-3" /><p className="text-lg font-semibold text-navy">All clear</p><p className="text-sm text-muted mt-1">No pending tasks or open requests</p></div>)}
 
