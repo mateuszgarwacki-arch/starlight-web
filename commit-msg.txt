@@ -1,31 +1,27 @@
-S37 BOM unit_cost invariant — fix triple-multiplier timber costing
+S37b audit follow-through — invariant watcher + dead code cleanup
 
-Root cause: two coexisting conventions for unit_cost on Length rows
-(per-metre vs per-length) with views, RPC, and frontend all applying
-a standard_length/1000 multiplier on top. Timber rows displayed at
-roughly 4.8x their correct total.
+Audit findings (post-S37):
+- unit_to_base_multiplier column: zero consumers in code, unused in views.
+  Dropped from qry_bom_enriched. Two dependent views (qry_wo_estimated_cost,
+  qry_scope_estimated_cost) rebuilt via CASCADE.
+- actual_unit_cost: zero write paths exist. Latent column. When invoice
+  reconciliation eventually writes it, the invariant lives in the column
+  comment waiting.
+- All 7 active BOM write paths audited: every one maintains the invariant.
+- tbl_invoice_lines: uses line_total directly for aggregation (not
+  qty x unit_cost). Same bug class structurally absent.
+- 51 invoice lines audited: 0 inconsistent (qty x unit_cost ~= line_total).
 
-Database (migration s37_fix_bom_unit_cost_invariant):
-- Normalised 6 legacy Convention A rows to Convention B
-  (bom_ids 80, 88, 89, 90, 148, 182)
-- qry_bom_enriched rebuilt: planned/reconciled line cost now simply
-  qty * unit_cost. No multiplier.
-- rpc_pm_job_overview rebuilt: same simplification in bom_raw CTE.
-- Column comment on tbl_wo_bom.unit_cost and actual_unit_cost
-  documenting the invariant.
+Removed:
+- src/components/scope-bom.tsx: orphaned since S19 scope-page unification.
+  No imports anywhere in codebase.
 
-Frontend (work-orders-panel.tsx):
-- bomRowCost: dropped the standard_length multiplier.
-- confirmScopeMaterial: completed the TODO metre->length conversion
-  so new scope material rows write per-length cost when buyUnit=Length.
-- Scope material preview: matching conversion so preview total agrees
-  with the value that gets saved.
-- Types: scopeMatSelected / scopeMatResults now carry standard_length.
+Added:
+- qry_bom_invariant_violations: view that returns zero rows when the
+  Length-on-Metre unit_cost invariant holds. Returns rows if a write path
+  slips up. Wire to a Vercel cron later for proactive alerting.
 
-Invariant (lock it in):
-tbl_wo_bom.unit_cost is the price for ONE of tbl_wo_bom.unit. Line
-total = quantity * unit_cost. No multipliers at read time. Any write
-path that changes the stored unit must also convert the stored cost.
-
-Verified on Grosvenor (job 8): bom_id 183 (3x1 PAR, 26m actual)
-computes to GBP 31.68 (was GBP 152.06).
+Verified:
+- Violations view: 0 rows
+- bom_id 183 (screenshot row): GBP 31.68
+- Scope 25 total: GBP 256.08
