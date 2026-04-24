@@ -298,13 +298,28 @@ export default function TravellerPage() {
 
     setWoDataMap(dataMap);
 
-    // 6. Pack-mode only: scope-level job items + scope-level drawings
+    // 6. Pack-mode only: scope-level deliverables + scope-level drawings.
+    //    "Scope-level deliverables" is the union of two tables:
+    //      - tbl_job_items      : kit/stock/bespoke items at scope level
+    //      - tbl_wo_bom         : raw materials added at scope level (timbers,
+    //                             scaff, etc. — things that leave the workshop
+    //                             to be cut/fitted on site). Filter by
+    //                             work_order_id IS NULL AND job_item_id IS NULL
+    //                             so we only pick up rows the user put directly
+    //                             on the scope (not BOM attached to a WO or
+    //                             auto-paired to an existing job item).
     if (mode === "pack") {
-      const [sItemsRes, sDocsRes] = await Promise.all([
+      const [sItemsRes, sBomRes, sDocsRes] = await Promise.all([
         supabase.from("tbl_job_items")
           .select("item_id, description, quantity, unit, item_type, finish_required, item_source, stock_reference, notes")
           .eq("scope_item_id", scopeId)
           .order("item_id"),
+        supabase.from("tbl_wo_bom")
+          .select("bom_id, item_description, quantity, unit, notes")
+          .eq("scope_item_id", scopeId)
+          .is("work_order_id", null)
+          .is("job_item_id", null)
+          .order("bom_id"),
         supabase.from("tbl_wo_documents")
           .select("doc_id, doc_type, file_name, onedrive_path, caption, sort_order, extracted_data, extraction_status")
           .eq("scope_item_id", scopeId)
@@ -312,7 +327,24 @@ export default function TravellerPage() {
           .eq("doc_type", "drawing")
           .order("sort_order"),
       ]);
-      setScopeJobItems((sItemsRes.data || []) as ScopeJobItem[]);
+
+      // Merge BOM rows in as synthetic ScopeJobItem entries so the existing
+      // ScopeOverview renderer picks them up without changes. Negative item_id
+      // keeps them unique vs real job_items and flags the origin.
+      const jobItems = (sItemsRes.data || []) as ScopeJobItem[];
+      const bomItems: ScopeJobItem[] = ((sBomRes.data || []) as any[]).map((b) => ({
+        item_id: -b.bom_id,
+        description: b.item_description,
+        quantity: b.quantity,
+        unit: b.unit,
+        item_type: "Material",
+        finish_required: null,
+        item_source: "material",
+        stock_reference: null,
+        notes: b.notes,
+      }));
+      setScopeJobItems([...jobItems, ...bomItems]);
+
       const sDocs = (sDocsRes.data || []) as Doc[];
       setScopeDrawings(sDocs);
       const sUrls: Record<number, string> = {};

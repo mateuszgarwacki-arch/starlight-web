@@ -1,20 +1,15 @@
-S38d: Quote line badges — checklist pattern
+S38e: Kit list — include scope-level BOM materials
 
-Replaces ad-hoc booleans (interpretation_complete, kit_list_exported) with
-a lookup + junction pattern. New check types = data, not migrations.
+Scope-level materials added to tbl_wo_bom (e.g. 3x2 timbers put directly
+on a scope for on-site use) were invisible on the traveller pack-mode
+kit list because pack-mode fetched only tbl_job_items. Site-bound
+materials must be on the pack list — end of.
 
-DB (migration s38d_quote_line_badges_checklist):
-- tbl_check_types: lookup (check_code, label, display_order, badge_color)
-- tbl_quote_line_checks: junction; presence of row = ticked
-- Seeded with 'interpreted' and 'kit_list_ready'
-- Backfilled 24 previously-ticked rows from interpretation_complete
-- qry_quote_line_badges: unified feed — manual checks + derived materials_needed
-- qry_dash_quote_stats: rewritten to read from junction
-- Dropped tbl_quote_lines.interpretation_complete + kit_list_exported
+Fix (traveller/page.tsx):
+- Pack-mode now loads both tbl_job_items (deliverables) AND tbl_wo_bom
+  (scope-level materials where work_order_id IS NULL AND job_item_id IS NULL)
+- BOM rows merged in as synthetic ScopeJobItem entries (negative item_id)
+  so ScopeOverview renders them without changes
+- rpc_load_list already includes these rows; no RPC change needed
 
-Frontend (jobs/[id]/page.tsx):
-- Loads all badges from qry_quote_line_badges in one query
-- Generic toggleCheck(line, checkCode) replaces duplicated handlers
-- Flags column now shows [I] [K] toggles + amber materials_needed chip
-- "Done" column header renamed to "Flags"
-- Removed orphaned Check icon import
+No schema change.
