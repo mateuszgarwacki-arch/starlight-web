@@ -1,28 +1,25 @@
-Handover Phase 3 complete — line overrides + WO notes (Turn C)
+Fix blank-page print regression on traveller + other print pages
 
-Authoring (edit page):
-- Per-zone expandable list of quote lines. Each line has an include
-  checkbox (default: included), a line-note textarea, and its WOs
-  listed underneath with per-WO note textareas.
-- Line inclusion writes to tbl_handover_line_overrides.is_included.
-- Line note writes tbl_handover_line_overrides.notes; upserts the row
-  with is_included=true if it didn't exist yet.
-- WO note writes to tbl_handover_wo_notes.notes. Sparse row created
-  only when non-empty, deleted when cleared to zero.
-- Auto-save on blur for note fields; toggle saves instantly.
-- Inline lines are loaded on-demand when the lines section is expanded
-  to avoid hydrating every line for every zone up front.
+My handover print CSS added an aggressive whitelist rule:
 
-Print (/reports/handover/[jobId]):
-- Cover banner surfaces excluded_line_count — "N quote lines have
-  been excluded from this handover" so the reader knows the doc
-  was filtered, not accidentally short.
-- Per-line note renders as a sky-blue left-bordered quote block
-  under the line header, before the scope breakdown.
-- Per-WO note renders as a smaller sky-blue strip between the WO
-  description and the "Who knows" workers line.
+  body > *:not(.handover-root):not(.handover-print-area) {
+    display: none !important;
+  }
 
-Data layer was already shipped in the previous migration; this turn
-is purely frontend consumption of existing JSON fields.
+This was meant to hide the dashboard shell when printing a handover,
+but it applied to EVERY print call — so clicking Print on the
+traveller, load list, or any other print surface hid the actual
+content and produced a blank page.
 
-No schema change.
+The existing traveller @media print block at the top of globals.css
+already handles dashboard chrome hiding via `nav, .sidebar, header,
+.print\:hidden`. My rule was both redundant and harmful.
+
+Removed the whitelist. Handover print still works because:
+- Chrome hiding comes from the existing traveller rule (which
+  applies globally, same as all other print surfaces).
+- The handover-specific `.handover-toolbar { display: none }` rule
+  still handles the handover's own on-screen toolbar.
+
+Added a comment above the handover block warning future edits
+against re-adding the whitelist pattern.

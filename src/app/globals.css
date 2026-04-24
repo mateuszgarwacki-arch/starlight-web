@@ -291,10 +291,10 @@
    Handover Print Styles (@media print)
    ============================================================ */
 @media print {
-  /* Hide the whole dashboard shell */
-  body > *:not(.handover-root):not(.handover-print-area) {
-    display: none !important;
-  }
+  /* NOTE: Chrome/sidebar hiding is handled by the Traveller @media
+     print block above (nav, .sidebar, header, .print\:hidden).
+     Do NOT add a `body > *:not(...)` whitelist here — it would
+     blank every other print surface in the app. */
 
   .handover-toolbar {
     display: none !important;
