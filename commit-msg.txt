@@ -1,25 +1,42 @@
-Fix blank-page print regression on traveller + other print pages
+Handover: zone-level inclusion toggle
 
-My handover print CSS added an aggressive whitelist rule:
+Lets the PM exclude whole zones from the handover — not just
+individual lines. For a workshop-prep handover, zones like
+Crewing & Logistics / Lighting BR / Production are noise.
 
-  body > *:not(.handover-root):not(.handover-print-area) {
-    display: none !important;
-  }
+Schema:
+- tbl_handover_zone_notes gains is_included BOOLEAN NOT NULL
+  DEFAULT true. Sparse — absence of a row still means included.
 
-This was meant to hide the dashboard shell when printing a handover,
-but it applied to EVERY print call — so clicking Print on the
-traveller, load list, or any other print surface hid the actual
-content and produced a blank page.
+RPC (rpc_job_handover_data):
+- Filters zones where is_included=false at the top-level aggregation.
+  Everything below (their lines, scopes, WOs, drawings, readiness)
+  drops with them.
+- Returns new excluded_zone_count at the top level.
+- excluded_line_count now only counts lines in INCLUDED zones
+  (double-excluded lines — excluded zone AND excluded line — don't
+  inflate the line count banner).
 
-The existing traveller @media print block at the top of globals.css
-already handles dashboard chrome hiding via `nav, .sidebar, header,
-.print\:hidden`. My rule was both redundant and harmful.
+Edit page:
+- Each zone header now carries an "Include" checkbox on the right.
+- Excluded zones render dimmed (opacity-50), with strikethrough
+  name and an amber "Excluded" pill. Arrows are disabled for
+  excluded zones (their position doesn't matter in the output,
+  and touching them is confusing when they're not printing).
+- Notes and drawings on excluded zones stay editable — so the
+  PM can prep work for a zone they're currently hiding without
+  losing progress if they re-include it later.
+- Upserts for reorder and note-save now preserve is_included
+  so toggling doesn't ping-pong on other edits.
 
-Removed the whitelist. Handover print still works because:
-- Chrome hiding comes from the existing traveller rule (which
-  applies globally, same as all other print surfaces).
-- The handover-specific `.handover-toolbar { display: none }` rule
-  still handles the handover's own on-screen toolbar.
+Print page:
+- Cover banner now covers both zones and lines. Two-line format
+  when both exist: "N zones have been excluded … M lines have
+  been excluded." One-line format when only one side has
+  exclusions.
+- Numbered "Zones in this handover" list automatically reflects
+  the filtered set (it reads data.zones which is now filtered).
+- Overall readiness totals are summed over filtered zones only —
+  excluded zones don't inflate WO-complete/in-progress counts.
 
-Added a comment above the handover block warning future edits
-against re-adding the whitelist pattern.
+No frontend change to the non-handover app.

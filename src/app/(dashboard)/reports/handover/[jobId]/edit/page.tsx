@@ -29,6 +29,7 @@ interface ZoneRow {
   event_zone: string;
   sort_order: number;
   notes: string;
+  is_included: boolean;
 }
 
 interface JobDoc {
@@ -115,7 +116,7 @@ export default function HandoverEditPage({
 
     const { data: noteData } = await supabase
       .from("tbl_handover_zone_notes")
-      .select("event_zone, notes, sort_order")
+      .select("event_zone, notes, sort_order, is_included")
       .eq("job_id", jobId);
     const noteMap = new Map(
       (noteData || []).map((n) => [
@@ -123,6 +124,7 @@ export default function HandoverEditPage({
         {
           notes: (n.notes as string | null) || "",
           sort_order: n.sort_order as number,
+          is_included: (n.is_included as boolean | null) ?? true,
         },
       ]),
     );
@@ -131,6 +133,7 @@ export default function HandoverEditPage({
       event_zone: z,
       sort_order: noteMap.get(z)?.sort_order ?? 999,
       notes: noteMap.get(z)?.notes ?? "",
+      is_included: noteMap.get(z)?.is_included ?? true,
     }));
     zonesArr.sort((a, b) => {
       if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
@@ -295,6 +298,7 @@ export default function HandoverEditPage({
           event_zone: zone,
           notes: notes || null,
           sort_order: current.sort_order,
+          is_included: current.is_included,
           modified_at: new Date().toISOString(),
         },
         { onConflict: "job_id,event_zone" },
@@ -305,6 +309,33 @@ export default function HandoverEditPage({
     }
     setZones((prev) =>
       prev.map((z) => (z.event_zone === zone ? { ...z, notes } : z)),
+    );
+  }
+
+  async function toggleZoneInclusion(zone: string, is_included: boolean) {
+    const current = zones.find((z) => z.event_zone === zone);
+    if (!current) return;
+    const { error } = await supabase
+      .from("tbl_handover_zone_notes")
+      .upsert(
+        {
+          job_id: jobId,
+          event_zone: zone,
+          notes: current.notes || null,
+          sort_order: current.sort_order,
+          is_included,
+          modified_at: new Date().toISOString(),
+        },
+        { onConflict: "job_id,event_zone" },
+      );
+    if (error) {
+      toast.error("Failed to toggle zone");
+      return;
+    }
+    setZones((prev) =>
+      prev.map((z) =>
+        z.event_zone === zone ? { ...z, is_included } : z,
+      ),
     );
   }
 
@@ -327,6 +358,7 @@ export default function HandoverEditPage({
       event_zone: z.event_zone,
       notes: z.notes || null,
       sort_order: z.sort_order,
+      is_included: z.is_included,
       modified_at: new Date().toISOString(),
     }));
     const { error } = await supabase
@@ -599,6 +631,9 @@ export default function HandoverEditPage({
               onMoveUp={() => moveZone(zone.event_zone, -1)}
               onMoveDown={() => moveZone(zone.event_zone, 1)}
               onNoteSave={(notes) => saveNote(zone.event_zone, notes)}
+              onToggleInclusion={(inc) =>
+                toggleZoneInclusion(zone.event_zone, inc)
+              }
               onToggleDoc={(docId, checked) =>
                 toggleDoc(zone.event_zone, docId, checked)
               }
@@ -631,6 +666,7 @@ function ZoneEditor({
   onMoveUp,
   onMoveDown,
   onNoteSave,
+  onToggleInclusion,
   onToggleDoc,
   lines,
   onLineToggle,
@@ -645,6 +681,7 @@ function ZoneEditor({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onNoteSave: (notes: string) => void;
+  onToggleInclusion: (is_included: boolean) => void;
   onToggleDoc: (docId: number, checked: boolean) => void;
   lines: ZoneLine[];
   onLineToggle: (quote_line_id: number, is_included: boolean) => void;
@@ -667,14 +704,25 @@ function ZoneEditor({
   };
 
   const linkedDocs = docs.filter((d) => linkedDocIds.includes(d.doc_id));
+  const excluded = !zone.is_included;
 
   return (
-    <section className="card overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-subtle bg-surface-dim">
+    <section
+      className={
+        "card overflow-hidden transition-opacity " +
+        (excluded ? "opacity-50" : "")
+      }
+    >
+      <div
+        className={
+          "flex items-center gap-3 px-5 py-3 border-b border-subtle " +
+          (excluded ? "bg-surface-dim/50" : "bg-surface-dim")
+        }
+      >
         <div className="flex flex-col gap-0.5 shrink-0">
           <button
             onClick={onMoveUp}
-            disabled={idx === 0}
+            disabled={idx === 0 || excluded}
             className="p-1 hover:bg-surface-mid rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
             aria-label="Move up"
           >
@@ -682,7 +730,7 @@ function ZoneEditor({
           </button>
           <button
             onClick={onMoveDown}
-            disabled={idx === total - 1}
+            disabled={idx === total - 1 || excluded}
             className="p-1 hover:bg-surface-mid rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
             aria-label="Move down"
           >
@@ -694,9 +742,21 @@ function ZoneEditor({
             <span className="text-[10px] font-mono text-faint shrink-0">
               {String(idx + 1).padStart(2, "0")}
             </span>
-            <h3 className="text-base font-semibold text-navy truncate">
+            <h3
+              className={
+                "text-base font-semibold truncate " +
+                (excluded
+                  ? "text-muted line-through"
+                  : "text-navy")
+              }
+            >
               {zone.event_zone}
             </h3>
+            {excluded && (
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-starlight-amber bg-starlight-amber/10 border border-starlight-amber/30 px-1.5 py-0.5 rounded shrink-0">
+                Excluded
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 text-[10px] text-muted mt-0.5">
             {linkedDocs.length > 0 && (
@@ -714,6 +774,22 @@ function ZoneEditor({
             )}
           </div>
         </div>
+        <label
+          className="flex items-center gap-2 text-xs text-muted cursor-pointer shrink-0 select-none"
+          title={
+            zone.is_included
+              ? "Zone included in handover. Untick to hide this whole zone from the print."
+              : "Zone excluded. Tick to include it in the handover again."
+          }
+        >
+          <input
+            type="checkbox"
+            checked={zone.is_included}
+            onChange={(e) => onToggleInclusion(e.target.checked)}
+            className="accent-starlight-blue h-4 w-4"
+          />
+          <span className="hidden sm:inline">Include</span>
+        </label>
       </div>
 
       <div className="px-5 py-4 border-b border-subtle">

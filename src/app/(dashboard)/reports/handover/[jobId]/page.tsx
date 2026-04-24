@@ -118,6 +118,7 @@ interface HandoverData {
   zones: HandoverZone[];
   unassigned_lines: UnassignedLine[];
   excluded_line_count: number;
+  excluded_zone_count: number;
   generated_at: string;
 }
 
@@ -695,7 +696,7 @@ export default function HandoverPage() {
     );
   }
 
-  const { job, zones, unassigned_lines, excluded_line_count } = data;
+  const { job, zones, unassigned_lines, excluded_line_count, excluded_zone_count } = data;
 
   return (
     <div className="handover-root">
@@ -788,12 +789,26 @@ export default function HandoverPage() {
             </div>
           )}
 
-          {excluded_line_count > 0 && (
+          {(excluded_zone_count > 0 || excluded_line_count > 0) && (
             <div className="p-3 bg-neutral-100 border-l-4 border-neutral-400 rounded-r mb-8 text-xs text-neutral-700">
-              <strong>{excluded_line_count}</strong> quote line
-              {excluded_line_count > 1 ? "s have" : " has"} been excluded
-              from this handover (install-only, handled elsewhere, or done).
-              Manage from the Edit Handover page if that&apos;s wrong.
+              {excluded_zone_count > 0 && (
+                <div>
+                  <strong>{excluded_zone_count}</strong> zone
+                  {excluded_zone_count > 1 ? "s have" : " has"} been
+                  excluded from this handover (everything in them — lines,
+                  drawings, WOs — is hidden below).
+                </div>
+              )}
+              {excluded_line_count > 0 && (
+                <div className={excluded_zone_count > 0 ? "mt-1" : ""}>
+                  <strong>{excluded_line_count}</strong> individual quote
+                  line{excluded_line_count > 1 ? "s have" : " has"} been
+                  excluded (install-only, handled elsewhere, or done).
+                </div>
+              )}
+              <div className="mt-1 text-[11px] text-neutral-500">
+                Manage from the Edit Handover page if that&apos;s wrong.
+              </div>
             </div>
           )}
 
