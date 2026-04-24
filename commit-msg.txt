@@ -1,31 +1,34 @@
-Handover: strip ceremony + fix misleading kit-list readiness
+Handover edit page — Turn B (zone reorder + notes + drawings)
 
-Four fixes based on live feedback from Grosvenor's first handover:
+New route /reports/handover/[jobId]/edit. First pass of Phase 3
+authoring:
 
-1. Cover header: strip "Handover Summary" + subtitle + Starlight
-   eyebrow. Job number + name with the bordered frame is
-   self-evident. Less paperwork ceremony, more info density.
+- Zone list derived live from event_zone on quote lines (overhead
+  excluded). Sorted by sort_order, fallback alphabetical for zones
+  without a row yet.
+- Up/Down arrows per zone. Clicking persists explicit sort_order
+  values to tbl_handover_zone_notes for every zone (normalised to
+  1..N on first reorder so alphabetical fallback is locked in).
+- Per-zone notes textarea. Auto-save on blur, small green "Saved"
+  pulse confirms. Notes land in tbl_handover_zone_notes.
+- Per-zone drawings picker. Lists all job-level documents (scope_item_id
+  IS NULL AND work_order_id IS NULL) as a compact checkbox list.
+  Toggle checkbox → insert/delete row in tbl_handover_zone_documents.
+  Collapsible, opens by default if zone already has attached drawings.
 
-2. Remove client name from cover. Starlight's clients value
-   discretion — their names don't belong on internal paperwork
-   circulating around the workshop.
+Job page gains a second action link next to "Handover Summary" print
+button: "Edit Handover" → opens the new edit page. Both sit in the
+Reports action row already on the job page.
 
-3. Kit-list readiness was misleading. `kit_list_exported=true`
-   means "on the truck plan", which happens *after* items are
-   prep-ready. Showing "0 of 89 items kit-listed" implied the
-   workshop is nowhere near ready when in fact they're fully
-   prep-ready — the truck plan just hasn't been made yet.
-   Replaced with a neutral "89 items" count on the readiness
-   strip. Kit column on the per-item table removed for the
-   same reason — CircleDashed amber icons on every row told
-   the wrong story.
+No print-view change this turn. Zone notes + drawings already land
+correctly on the print page (it reads straight off the RPC, which
+already joins tbl_handover_zone_notes and tbl_handover_zone_documents).
 
-4. Removed the "No drawings attached to this zone. Attach them
-   from the job page when back at the office." empty-state
-   message. Zones without drawings now just show nothing.
-   Until the Phase 3 authoring UI ships, the message is just
-   noise on every page.
+Turn C wraps the rest of Phase 3:
+- Per-zone expandable list of quote lines with include/exclude
+  checkboxes + line notes + WO notes
+- Print page renders the excluded-count banner + line notes + WO
+  notes shipped to the RPC last turn
 
-Also drops the now-unused Briefcase lucide import.
-
-No schema change. Data layer unchanged.
+Data flow verified on the server side last turn; this turn is
+pure frontend + one tiny job-page link addition.

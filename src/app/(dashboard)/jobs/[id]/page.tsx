@@ -1147,6 +1147,13 @@ export default function JobDetailPage() {
           <Printer className="h-4 w-4" /> Handover Summary
         </Link>
         <Link
+          href={`/reports/handover/${jobId}/edit`}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-surface border border-subtle rounded-lg hover:bg-surface-mid hover:border-navy/30 transition-all text-muted hover:text-navy"
+          title="Edit the handover — zone order, notes and drawings"
+        >
+          <FileText className="h-4 w-4" /> Edit Handover
+        </Link>
+        <Link
           href={`/reports/load-list/${jobId}`}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-surface border border-subtle rounded-lg hover:bg-surface-mid hover:border-navy/30 transition-all text-navy"
         >
