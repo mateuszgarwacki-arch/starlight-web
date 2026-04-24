@@ -1,31 +1,5 @@
-Handover: cover/zone/scope cleanup + WO column on items table
+Handover: "Who knows" → "Hands on" on WO cards
 
-Four changes from live feedback on the Grosvenor handover preview:
-
-1. Cover page — remove the "N zones / M lines have been excluded"
-   banner. The reader doesn't need to know what was filtered out;
-   the document is what it is. Excluded data is still hidden
-   correctly from the body — just not announced on the cover.
-
-2. Zone intro page — replace the 3 stat cards (quote lines / drawing
-   / job items) with a clean numbered list of all the quote lines
-   in the zone. Acts as the table of contents for the breakdown
-   pages that follow. Same layout pattern as the cover's "Zones in
-   this handover" list.
-
-3. Scope card — drop the duplicated header. Previously printed
-   the line text again in a "scope name" position right below the
-   line text header itself, which read as the same sentence twice.
-   Now: status pill + scope description (when present) only.
-   Scope description is usually empty, so often the card collapses
-   to just a status pill above the items table — much cleaner.
-
-4. Items table — add WO column showing every WO each job item
-   is linked to (e.g. "WO-21, WO-22"). Cross-references the
-   work-orders block below so the reader can trace which built
-   piece relates to which fab task. Also added a thin spacer
-   column between Qty and Finish so the numbers don't smash into
-   the finish notes.
-
-RPC change: tbl_jobitem_workorder is now joined into each job
-item under linked_wos: { work_order_id, wo_sequence, status }[].
+Small label swap — stronger responsibility signal without the
+semantic baggage of "Owner" (which implies one named person when
+in fact the list is everyone who logged time on the WO).

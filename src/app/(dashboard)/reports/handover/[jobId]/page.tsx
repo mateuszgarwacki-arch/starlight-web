@@ -442,7 +442,7 @@ function WOCard({ wo, baseUrl }: { wo: HandoverWO; baseUrl: string }) {
         )}
         {wo.workers.length > 0 && (
           <div className="text-[10px] text-neutral-600 flex items-center gap-1">
-            <User size={10} /> Who knows: {wo.workers.join(", ")}
+            <User size={10} /> Hands on: {wo.workers.join(", ")}
           </div>
         )}
       </div>
