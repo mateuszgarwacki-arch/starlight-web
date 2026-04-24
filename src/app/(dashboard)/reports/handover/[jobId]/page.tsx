@@ -73,6 +73,7 @@ interface HandoverWO {
   status: string;
   activity_verb: string | null;
   wo_sequence: number | null;
+  wo_note: string | null;
   workers: string[];
 }
 
@@ -92,6 +93,7 @@ interface HandoverLine {
   line_text: string;
   quantity: number;
   line_sub_group: string | null;
+  line_note: string | null;
   scopes: HandoverScope[];
 }
 
@@ -115,6 +117,7 @@ interface HandoverData {
   job: HandoverJob;
   zones: HandoverZone[];
   unassigned_lines: UnassignedLine[];
+  excluded_line_count: number;
   generated_at: string;
 }
 
@@ -370,6 +373,11 @@ function WOCard({ wo, baseUrl }: { wo: HandoverWO; baseUrl: string }) {
             <span className="italic text-neutral-400">No description</span>
           )}
         </div>
+        {wo.wo_note && wo.wo_note.trim() !== "" && (
+          <div className="mt-1 mb-1 px-2 py-1.5 bg-sky-50 border-l-2 border-sky-400 rounded-r text-[11px] text-sky-900 whitespace-pre-wrap">
+            {wo.wo_note}
+          </div>
+        )}
         {wo.workers.length > 0 && (
           <div className="text-[10px] text-neutral-600 flex items-center gap-1">
             <User size={10} /> Who knows: {wo.workers.join(", ")}
@@ -487,6 +495,15 @@ function QuoteLineBlock({
           Qty {line.quantity}
         </span>
       </div>
+
+      {line.line_note && line.line_note.trim() !== "" && (
+        <div className="mt-2 px-3 py-2 bg-sky-50 border-l-4 border-sky-500 rounded-r text-xs text-sky-900 whitespace-pre-wrap">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-sky-700 mb-1">
+            Note
+          </div>
+          {line.line_note}
+        </div>
+      )}
 
       {line.scopes.length === 0 && (
         <div className="mt-2 px-3 py-2 text-xs italic text-neutral-500 border border-dashed border-neutral-300 rounded">
@@ -678,7 +695,7 @@ export default function HandoverPage() {
     );
   }
 
-  const { job, zones, unassigned_lines } = data;
+  const { job, zones, unassigned_lines, excluded_line_count } = data;
 
   return (
     <div className="handover-root">
@@ -768,6 +785,15 @@ export default function HandoverPage() {
                   </ul>
                 </div>
               </div>
+            </div>
+          )}
+
+          {excluded_line_count > 0 && (
+            <div className="p-3 bg-neutral-100 border-l-4 border-neutral-400 rounded-r mb-8 text-xs text-neutral-700">
+              <strong>{excluded_line_count}</strong> quote line
+              {excluded_line_count > 1 ? "s have" : " has"} been excluded
+              from this handover (install-only, handled elsewhere, or done).
+              Manage from the Edit Handover page if that&apos;s wrong.
             </div>
           )}
 

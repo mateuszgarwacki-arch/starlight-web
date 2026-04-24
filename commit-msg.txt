@@ -1,34 +1,28 @@
-Handover edit page — Turn B (zone reorder + notes + drawings)
+Handover Phase 3 complete — line overrides + WO notes (Turn C)
 
-New route /reports/handover/[jobId]/edit. First pass of Phase 3
-authoring:
+Authoring (edit page):
+- Per-zone expandable list of quote lines. Each line has an include
+  checkbox (default: included), a line-note textarea, and its WOs
+  listed underneath with per-WO note textareas.
+- Line inclusion writes to tbl_handover_line_overrides.is_included.
+- Line note writes tbl_handover_line_overrides.notes; upserts the row
+  with is_included=true if it didn't exist yet.
+- WO note writes to tbl_handover_wo_notes.notes. Sparse row created
+  only when non-empty, deleted when cleared to zero.
+- Auto-save on blur for note fields; toggle saves instantly.
+- Inline lines are loaded on-demand when the lines section is expanded
+  to avoid hydrating every line for every zone up front.
 
-- Zone list derived live from event_zone on quote lines (overhead
-  excluded). Sorted by sort_order, fallback alphabetical for zones
-  without a row yet.
-- Up/Down arrows per zone. Clicking persists explicit sort_order
-  values to tbl_handover_zone_notes for every zone (normalised to
-  1..N on first reorder so alphabetical fallback is locked in).
-- Per-zone notes textarea. Auto-save on blur, small green "Saved"
-  pulse confirms. Notes land in tbl_handover_zone_notes.
-- Per-zone drawings picker. Lists all job-level documents (scope_item_id
-  IS NULL AND work_order_id IS NULL) as a compact checkbox list.
-  Toggle checkbox → insert/delete row in tbl_handover_zone_documents.
-  Collapsible, opens by default if zone already has attached drawings.
+Print (/reports/handover/[jobId]):
+- Cover banner surfaces excluded_line_count — "N quote lines have
+  been excluded from this handover" so the reader knows the doc
+  was filtered, not accidentally short.
+- Per-line note renders as a sky-blue left-bordered quote block
+  under the line header, before the scope breakdown.
+- Per-WO note renders as a smaller sky-blue strip between the WO
+  description and the "Who knows" workers line.
 
-Job page gains a second action link next to "Handover Summary" print
-button: "Edit Handover" → opens the new edit page. Both sit in the
-Reports action row already on the job page.
+Data layer was already shipped in the previous migration; this turn
+is purely frontend consumption of existing JSON fields.
 
-No print-view change this turn. Zone notes + drawings already land
-correctly on the print page (it reads straight off the RPC, which
-already joins tbl_handover_zone_notes and tbl_handover_zone_documents).
-
-Turn C wraps the rest of Phase 3:
-- Per-zone expandable list of quote lines with include/exclude
-  checkboxes + line notes + WO notes
-- Print page renders the excluded-count banner + line notes + WO
-  notes shipped to the RPC last turn
-
-Data flow verified on the server side last turn; this turn is
-pure frontend + one tiny job-page link addition.
+No schema change.

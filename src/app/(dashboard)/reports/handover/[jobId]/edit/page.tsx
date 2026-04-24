@@ -45,6 +45,25 @@ interface ZoneDocLink {
   sort_order: number;
 }
 
+interface ZoneLineWO {
+  work_order_id: number;
+  description: string;
+  status: string;
+  activity_label: string | null;
+  wo_sequence: number | null;
+  wo_note: string;
+}
+
+interface ZoneLine {
+  quote_line_id: number;
+  line_number: string;
+  line_text: string;
+  import_sequence: number;
+  is_included: boolean;
+  line_note: string;
+  wos: ZoneLineWO[];
+}
+
 // ————————————————————————————————————————————————————————
 // Page
 // ————————————————————————————————————————————————————————
@@ -63,6 +82,9 @@ export default function HandoverEditPage({
   const [zones, setZones] = useState<ZoneRow[]>([]);
   const [jobDocs, setJobDocs] = useState<JobDoc[]>([]);
   const [zoneDocLinks, setZoneDocLinks] = useState<ZoneDocLink[]>([]);
+  const [linesByZone, setLinesByZone] = useState<Map<string, ZoneLine[]>>(
+    new Map(),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,6 +152,130 @@ export default function HandoverEditPage({
       .select("event_zone, doc_id, sort_order")
       .eq("job_id", jobId);
     setZoneDocLinks((zds as ZoneDocLink[]) || []);
+
+    // Quote lines (non-overhead, zoned)
+    const { data: allLines } = await supabase
+      .from("tbl_quote_lines")
+      .select(
+        "quote_line_id, line_number, line_text, event_zone, import_sequence, line_sub_group",
+      )
+      .eq("job_id", jobId);
+    const usableLines = (allLines || []).filter(
+      (l) =>
+        l.event_zone &&
+        l.event_zone.trim() !== "" &&
+        (l.line_sub_group || "") !== "Overhead",
+    );
+
+    // Line overrides (sparse)
+    const { data: overrides } = await supabase
+      .from("tbl_handover_line_overrides")
+      .select("quote_line_id, is_included, notes")
+      .eq("job_id", jobId);
+    const overrideMap = new Map(
+      (overrides || []).map((o) => [
+        o.quote_line_id as number,
+        {
+          is_included: o.is_included as boolean,
+          notes: (o.notes as string | null) || "",
+        },
+      ]),
+    );
+
+    // Scopes (non-general) for the job — to join WOs back to their quote line
+    const { data: scopeRows } = await supabase
+      .from("tbl_scope_items")
+      .select("scope_item_id, quote_line_id, is_general")
+      .eq("job_id", jobId);
+    const scopesFiltered = (scopeRows || []).filter((s) => !s.is_general);
+    const scopeToLine = new Map(
+      scopesFiltered.map((s) => [
+        s.scope_item_id as number,
+        s.quote_line_id as number,
+      ]),
+    );
+    const scopeIds = scopesFiltered.map((s) => s.scope_item_id as number);
+
+    // WOs for these scopes
+    const { data: woRows } =
+      scopeIds.length > 0
+        ? await supabase
+            .from("tbl_work_orders")
+            .select(
+              "work_order_id, scope_item_id, description, status, activity_verb, wo_sequence",
+            )
+            .in("scope_item_id", scopeIds)
+        : { data: [] as any[] };
+
+    // Activity verb labels
+    const { data: activityRows } = await supabase
+      .from("tbl_master_lookups")
+      .select("lookup_id, lookup_value")
+      .eq("category", "ACTIVITY");
+    const activityMap = new Map(
+      (activityRows || []).map((a) => [
+        a.lookup_id as number,
+        a.lookup_value as string,
+      ]),
+    );
+
+    // WO notes (sparse)
+    const { data: woNoteRows } = await supabase
+      .from("tbl_handover_wo_notes")
+      .select("work_order_id, notes")
+      .eq("job_id", jobId);
+    const woNoteMap = new Map(
+      (woNoteRows || []).map((n) => [
+        n.work_order_id as number,
+        (n.notes as string | null) || "",
+      ]),
+    );
+
+    // Assemble: group WOs by their line, group lines by zone
+    const woByLine = new Map<number, ZoneLineWO[]>();
+    (woRows || []).forEach((wo: any) => {
+      const lineId = scopeToLine.get(wo.scope_item_id);
+      if (!lineId) return;
+      if (!woByLine.has(lineId)) woByLine.set(lineId, []);
+      woByLine.get(lineId)!.push({
+        work_order_id: wo.work_order_id,
+        description: wo.description || "",
+        status: wo.status || "",
+        activity_label: wo.activity_verb
+          ? activityMap.get(wo.activity_verb) || null
+          : null,
+        wo_sequence: wo.wo_sequence,
+        wo_note: woNoteMap.get(wo.work_order_id) || "",
+      });
+    });
+    woByLine.forEach((arr) => {
+      arr.sort((a, b) => {
+        const sa = a.wo_sequence ?? 999;
+        const sb = b.wo_sequence ?? 999;
+        if (sa !== sb) return sa - sb;
+        return a.work_order_id - b.work_order_id;
+      });
+    });
+
+    const byZone = new Map<string, ZoneLine[]>();
+    usableLines.forEach((l) => {
+      const zone = l.event_zone as string;
+      if (!byZone.has(zone)) byZone.set(zone, []);
+      const override = overrideMap.get(l.quote_line_id as number);
+      byZone.get(zone)!.push({
+        quote_line_id: l.quote_line_id as number,
+        line_number: (l.line_number as string) || "",
+        line_text: (l.line_text as string) || "",
+        import_sequence: (l.import_sequence as number) ?? 0,
+        is_included: override?.is_included ?? true,
+        line_note: override?.notes || "",
+        wos: woByLine.get(l.quote_line_id as number) || [],
+      });
+    });
+    byZone.forEach((arr) =>
+      arr.sort((a, b) => a.import_sequence - b.import_sequence),
+    );
+    setLinesByZone(byZone);
 
     setLoading(false);
   }, [jobId, supabase]);
@@ -232,6 +378,144 @@ export default function HandoverEditPage({
     }
   }
 
+  // Helper: find a line by id in the zones map
+  function findLine(quote_line_id: number): ZoneLine | undefined {
+    for (const arr of linesByZone.values()) {
+      const found = arr.find((l) => l.quote_line_id === quote_line_id);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  function patchLine(quote_line_id: number, patch: Partial<ZoneLine>) {
+    setLinesByZone((prev) => {
+      const next = new Map(prev);
+      for (const [zone, arr] of next) {
+        const idx = arr.findIndex((l) => l.quote_line_id === quote_line_id);
+        if (idx >= 0) {
+          const copy = [...arr];
+          copy[idx] = { ...copy[idx], ...patch };
+          next.set(zone, copy);
+          break;
+        }
+      }
+      return next;
+    });
+  }
+
+  async function toggleLineIncluded(
+    quote_line_id: number,
+    is_included: boolean,
+  ) {
+    const line = findLine(quote_line_id);
+    if (!line) return;
+    const { error } = await supabase
+      .from("tbl_handover_line_overrides")
+      .upsert(
+        {
+          job_id: jobId,
+          quote_line_id,
+          is_included,
+          notes: line.line_note || null,
+          modified_at: new Date().toISOString(),
+        },
+        { onConflict: "job_id,quote_line_id" },
+      );
+    if (error) {
+      toast.error("Failed to update line");
+      return;
+    }
+    patchLine(quote_line_id, { is_included });
+  }
+
+  async function saveLineNote(quote_line_id: number, notes: string) {
+    const line = findLine(quote_line_id);
+    if (!line) return;
+    if (notes === line.line_note) return;
+    const { error } = await supabase
+      .from("tbl_handover_line_overrides")
+      .upsert(
+        {
+          job_id: jobId,
+          quote_line_id,
+          is_included: line.is_included,
+          notes: notes || null,
+          modified_at: new Date().toISOString(),
+        },
+        { onConflict: "job_id,quote_line_id" },
+      );
+    if (error) {
+      toast.error("Failed to save line note");
+      return;
+    }
+    patchLine(quote_line_id, { line_note: notes });
+  }
+
+  async function saveWoNote(work_order_id: number, notes: string) {
+    // Find the line containing this WO for local state update
+    let targetLineId: number | null = null;
+    let targetZone: string | null = null;
+    for (const [zone, arr] of linesByZone) {
+      for (const line of arr) {
+        if (line.wos.some((w) => w.work_order_id === work_order_id)) {
+          targetLineId = line.quote_line_id;
+          targetZone = zone;
+          break;
+        }
+      }
+      if (targetLineId) break;
+    }
+    if (!targetLineId || !targetZone) return;
+
+    if (!notes || notes.trim() === "") {
+      const { error } = await supabase
+        .from("tbl_handover_wo_notes")
+        .delete()
+        .eq("job_id", jobId)
+        .eq("work_order_id", work_order_id);
+      if (error) {
+        toast.error("Failed to clear WO note");
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("tbl_handover_wo_notes")
+        .upsert(
+          {
+            job_id: jobId,
+            work_order_id,
+            notes,
+            modified_at: new Date().toISOString(),
+          },
+          { onConflict: "job_id,work_order_id" },
+        );
+      if (error) {
+        toast.error("Failed to save WO note");
+        return;
+      }
+    }
+
+    setLinesByZone((prev) => {
+      const next = new Map(prev);
+      const arr = next.get(targetZone!);
+      if (!arr) return prev;
+      const copy = arr.map((l) =>
+        l.quote_line_id === targetLineId
+          ? {
+              ...l,
+              wos: l.wos.map((w) =>
+                w.work_order_id === work_order_id
+                  ? { ...w, wo_note: notes }
+                  : w,
+              ),
+            }
+          : l,
+      );
+      next.set(targetZone!, copy);
+      return next;
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen text-muted">
@@ -318,6 +602,10 @@ export default function HandoverEditPage({
               onToggleDoc={(docId, checked) =>
                 toggleDoc(zone.event_zone, docId, checked)
               }
+              lines={linesByZone.get(zone.event_zone) || []}
+              onLineToggle={toggleLineIncluded}
+              onLineNoteSave={saveLineNote}
+              onWoNoteSave={saveWoNote}
             />
           ))}
         </div>
@@ -344,6 +632,10 @@ function ZoneEditor({
   onMoveDown,
   onNoteSave,
   onToggleDoc,
+  lines,
+  onLineToggle,
+  onLineNoteSave,
+  onWoNoteSave,
 }: {
   zone: ZoneRow;
   idx: number;
@@ -354,6 +646,10 @@ function ZoneEditor({
   onMoveDown: () => void;
   onNoteSave: (notes: string) => void;
   onToggleDoc: (docId: number, checked: boolean) => void;
+  lines: ZoneLine[];
+  onLineToggle: (quote_line_id: number, is_included: boolean) => void;
+  onLineNoteSave: (quote_line_id: number, notes: string) => void;
+  onWoNoteSave: (work_order_id: number, notes: string) => void;
 }) {
   const [noteDraft, setNoteDraft] = useState(zone.notes);
   const [savedPulse, setSavedPulse] = useState(false);
@@ -517,6 +813,300 @@ function ZoneEditor({
           </div>
         )}
       </div>
+
+      {/* Quote lines */}
+      {lines.length > 0 && (
+        <LinesSection
+          lines={lines}
+          onLineToggle={onLineToggle}
+          onLineNoteSave={onLineNoteSave}
+          onWoNoteSave={onWoNoteSave}
+        />
+      )}
     </section>
+  );
+}
+
+// ————————————————————————————————————————————————————————
+// Lines section — inclusion toggles + line notes + WO notes
+// ————————————————————————————————————————————————————————
+
+function LinesSection({
+  lines,
+  onLineToggle,
+  onLineNoteSave,
+  onWoNoteSave,
+}: {
+  lines: ZoneLine[];
+  onLineToggle: (quote_line_id: number, is_included: boolean) => void;
+  onLineNoteSave: (quote_line_id: number, notes: string) => void;
+  onWoNoteSave: (work_order_id: number, notes: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const includedCount = lines.filter((l) => l.is_included).length;
+  const excludedCount = lines.length - includedCount;
+  const linesWithNotes = lines.filter(
+    (l) => l.line_note && l.line_note.trim().length > 0,
+  ).length;
+  const wosWithNotes = lines.reduce(
+    (m, l) =>
+      m +
+      l.wos.filter((w) => w.wo_note && w.wo_note.trim().length > 0).length,
+    0,
+  );
+
+  return (
+    <div className="px-5 py-3 border-t border-subtle">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <FileText className="h-3.5 w-3.5 text-muted" />
+          <span className="text-[10px] uppercase tracking-wider text-muted font-semibold">
+            Quote lines
+          </span>
+          <span className="text-xs text-muted">
+            ({includedCount}/{lines.length} included
+            {excludedCount > 0 ? ` · ${excludedCount} excluded` : ""}
+            {linesWithNotes > 0 ? ` · ${linesWithNotes} line note${linesWithNotes !== 1 ? "s" : ""}` : ""}
+            {wosWithNotes > 0 ? ` · ${wosWithNotes} WO note${wosWithNotes !== 1 ? "s" : ""}` : ""}
+            )
+          </span>
+        </div>
+        <span className="text-[10px] text-muted">
+          {open ? "hide" : "edit"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          {lines.map((line) => (
+            <LineEditor
+              key={line.quote_line_id}
+              line={line}
+              onToggle={(incl) => onLineToggle(line.quote_line_id, incl)}
+              onNoteSave={(notes) =>
+                onLineNoteSave(line.quote_line_id, notes)
+              }
+              onWoNoteSave={onWoNoteSave}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LineEditor({
+  line,
+  onToggle,
+  onNoteSave,
+  onWoNoteSave,
+}: {
+  line: ZoneLine;
+  onToggle: (is_included: boolean) => void;
+  onNoteSave: (notes: string) => void;
+  onWoNoteSave: (work_order_id: number, notes: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(line.line_note);
+  const [savedPulse, setSavedPulse] = useState(false);
+
+  useEffect(() => {
+    setNoteDraft(line.line_note);
+  }, [line.line_note]);
+
+  const handleNoteBlur = async () => {
+    if (noteDraft === line.line_note) return;
+    await onNoteSave(noteDraft);
+    setSavedPulse(true);
+    setTimeout(() => setSavedPulse(false), 900);
+  };
+
+  const hasLineNote = line.line_note && line.line_note.trim().length > 0;
+  const woNoteCount = line.wos.filter(
+    (w) => w.wo_note && w.wo_note.trim().length > 0,
+  ).length;
+
+  const excluded = !line.is_included;
+
+  return (
+    <div
+      className={
+        "border border-subtle rounded bg-surface-dim transition-opacity " +
+        (excluded ? "opacity-50" : "")
+      }
+    >
+      {/* Header row */}
+      <div className="flex items-start gap-2 px-3 py-2">
+        <input
+          type="checkbox"
+          checked={line.is_included}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="mt-0.5 accent-starlight-blue shrink-0"
+          title={
+            line.is_included
+              ? "Included in handover — click to exclude"
+              : "Excluded — click to include"
+          }
+        />
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="flex-1 text-left min-w-0"
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] font-mono text-faint shrink-0">
+              #{line.line_number}
+            </span>
+            <span
+              className={
+                "text-xs truncate " +
+                (excluded ? "line-through text-muted" : "text-navy")
+              }
+            >
+              {line.line_text.slice(0, 120)}
+              {line.line_text.length > 120 ? "…" : ""}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted">
+            {line.wos.length > 0 && (
+              <span>
+                {line.wos.length} WO{line.wos.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            {hasLineNote && (
+              <span className="text-starlight-blue">line note set</span>
+            )}
+            {woNoteCount > 0 && (
+              <span className="text-starlight-blue">
+                {woNoteCount} WO note{woNoteCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-subtle px-3 py-3 space-y-3 bg-surface">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] uppercase tracking-wider text-muted font-semibold">
+                Line note
+              </label>
+              {savedPulse && (
+                <span className="text-[10px] text-starlight-green">
+                  Saved
+                </span>
+              )}
+            </div>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              onBlur={handleNoteBlur}
+              placeholder="Optional — prints above this line on the handover."
+              className="w-full px-2 py-1.5 bg-surface-dim border border-subtle rounded text-xs resize-y min-h-[2.25rem] focus:outline-none focus:ring-2 focus:ring-starlight-blue/30"
+              rows={2}
+            />
+          </div>
+
+          {line.wos.length > 0 && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted font-semibold block mb-1.5">
+                Work orders ({line.wos.length})
+              </label>
+              <div className="space-y-1.5">
+                {line.wos.map((wo) => (
+                  <WoNoteEditor
+                    key={wo.work_order_id}
+                    wo={wo}
+                    onSave={(notes) =>
+                      onWoNoteSave(wo.work_order_id, notes)
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WoNoteEditor({
+  wo,
+  onSave,
+}: {
+  wo: ZoneLineWO;
+  onSave: (notes: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(
+    !!wo.wo_note && wo.wo_note.trim().length > 0,
+  );
+  const [noteDraft, setNoteDraft] = useState(wo.wo_note);
+  const [savedPulse, setSavedPulse] = useState(false);
+
+  useEffect(() => {
+    setNoteDraft(wo.wo_note);
+  }, [wo.wo_note]);
+
+  const handleBlur = async () => {
+    if (noteDraft === wo.wo_note) return;
+    await onSave(noteDraft);
+    setSavedPulse(true);
+    setTimeout(() => setSavedPulse(false), 900);
+  };
+
+  const hasNote = wo.wo_note && wo.wo_note.trim().length > 0;
+
+  return (
+    <div className="border border-subtle rounded bg-surface-dim">
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
+      >
+        <span className="text-[9px] font-mono font-semibold text-faint shrink-0 uppercase">
+          {wo.status || "—"}
+        </span>
+        {wo.activity_label && (
+          <span className="text-[10px] text-starlight-blue shrink-0">
+            {wo.activity_label}
+          </span>
+        )}
+        <span className="text-xs text-navy truncate flex-1 min-w-0">
+          {wo.description || "(no description)"}
+        </span>
+        {hasNote && (
+          <span className="text-[10px] text-starlight-blue shrink-0">
+            ✎ note
+          </span>
+        )}
+        <span className="text-[10px] text-faint shrink-0">
+          {expanded ? "−" : "+"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="border-t border-subtle px-2 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] uppercase tracking-wider text-muted font-semibold">
+              WO note
+            </span>
+            {savedPulse && (
+              <span className="text-[9px] text-starlight-green">Saved</span>
+            )}
+          </div>
+          <textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onBlur={handleBlur}
+            placeholder="Optional — prints under this WO description on the handover."
+            className="w-full px-2 py-1.5 bg-surface border border-subtle rounded text-xs resize-y min-h-[2rem] focus:outline-none focus:ring-2 focus:ring-starlight-blue/30"
+            rows={2}
+          />
+        </div>
+      )}
+    </div>
   );
 }
