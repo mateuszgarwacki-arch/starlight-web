@@ -1,23 +1,10 @@
-Redesign task routing modal: two-pane job + WO picker (S39b)
+Show freelancer's note in route-task modal header
 
-Replace cramped 512px flat-list modal with a 1024px two-pane layout:
+Modal header was showing only the task title, not the description
+the freelancer typed when logging the task — so the PM couldn't see
+what the task was actually about without going back to the inbox.
 
-- Left pane: job picker with search, task's origin job auto-selected and
-  badged, sorted by event date. Shows job number, name, event date, WO
-  count, and an amber coin icon marking jobs with the S39 overhead bucket.
-- Right pane: WOs for the selected job. Overhead WO pinned to the top in
-  a distinct amber-outlined card (one-click routing to the overhead
-  bucket). Regular WOs grouped by scope below so the PM scans by build
-  area, not by raw WO description.
-- Removes the silent 20-WO cap by fetching all active WOs across active
-  jobs up front and filtering client-side.
-
-Extracted to src/components/route-task-modal.tsx so the inbox page stays
-readable. Inbox page now renders <RouteTaskModal> when a task is being
-routed; old inline modal, filteredWos derivation, and WOOption type
-removed.
-
-Addresses the UX friction where freelancer tasks with a known job_id
-still required searching through a flat global list of 60+ WOs to find
-the right one, and where routing to the new S39 overhead bucket required
-three clicks of guesswork because it wasn't visually distinguished.
+Adds description to RoutableTask interface and renders it in a blue
+left-bordered quote block under the metadata strip when present,
+labelled "Freelancer's note". Scrollable, capped at ~128px high so
+long notes don't blow out the header.

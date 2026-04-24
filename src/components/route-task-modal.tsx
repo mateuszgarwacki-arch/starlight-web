@@ -25,6 +25,7 @@ import {
 export interface RoutableTask {
   item_id: number; // task_id
   title: string;
+  description: string | null; // freelancer's note, if any
   freelancer_id: number;
   freelancer_name: string;
   claimed_hours: number | null;
@@ -431,6 +432,14 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                 </>
               )}
             </div>
+            {task.description && (
+              <div className="mt-2 px-3 py-2 bg-surface-dim border-l-2 border-starlight-blue/60 rounded-r text-xs text-navy whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                <div className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-0.5">
+                  Freelancer&apos;s note
+                </div>
+                {task.description}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}

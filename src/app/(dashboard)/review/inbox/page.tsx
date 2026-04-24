@@ -152,6 +152,7 @@ export default function ReviewInboxPage() {
           task={{
             item_id: routingTask.item_id,
             title: routingTask.title,
+            description: routingTask.description,
             freelancer_id: routingTask.freelancer_id,
             freelancer_name: routingTask.freelancer_name,
             claimed_hours: routingTask.claimed_hours,
