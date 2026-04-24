@@ -3790,3 +3790,161 @@ Full list of what shipped today across S37 / S37b / S38 / S38b / S38c:
 - **Per-freelancer or per-day-of-week `standard_day_hours` overrides** — if the 10h default produces false positives for apprentices / short-day arrangements.
 - **Detector edge case**: zero-hour days don't downgrade flags (all entries moved/archived elsewhere). Fix when/if it happens.
 - **Behaviour to watch after first week of S38:** flag resolution rate, "Other" reason frequency (is the preset list right?), false positive rate, whether Add-hours deep-link works in practice.
+
+
+---
+
+## Session 38d–38h — 24 April 2026
+
+Work spanned five commits in one continuous session. Theme: making the PM review experience match how Mateusz actually works — quote lines, kit lists, crew timesheets, and mobile timer flows.
+
+### S38d — Quote line badges: checklist pattern
+
+**Problem:** `tbl_quote_lines` had two ad-hoc booleans (`interpretation_complete`, `kit_list_exported`). Mateusz wanted a third (`kit_list_ready`), and mentioned a fourth (`materials_needed` as a derived alert) was likely. Bolting on more columns was the wrong shape.
+
+**Design:**
+- **Lookup + junction** instead of more booleans.
+  - `tbl_check_types` (check_code PK, label, entity_type, display_order, badge_color, description, is_active).
+  - `tbl_quote_line_checks` (quote_line_id, check_code, checked_at, checked_by, note) — PK `(quote_line_id, check_code)`. Presence of row = ticked.
+- **Derived badges** live in a view, not the junction. `qry_quote_line_badges` UNIONs manual ticks with any derived conditions (first one: `materials_needed` = BOM rows with `needs_ordering=true AND ordered_at IS NULL AND from_stock=false`).
+- New checks are data, not migrations. Adding one is `INSERT INTO tbl_check_types`.
+
+**Seed:** `interpreted` (renamed from "Done" in UI, green), `kit_list_ready` (green). `materials_needed` exists only in the derived view (amber, outlined).
+
+**Migration:** backfilled 24 existing `interpretation_complete=true` rows into the junction. Rewrote `qry_dash_quote_stats` to read from junction. Dropped both columns.
+
+**UI (jobs/[id]/page.tsx):** single load of `qry_quote_line_badges` for the job. "Done" column renamed to "Flags". Two clickable ticks — `I` and `K` — plus a read-only amber chip when materials are outstanding. A generic `toggleCheck(line, checkCode)` replaces duplicated handlers.
+
+**Convention:**
+- **Manual checks go in a junction table; derived alerts go in a view.** They have different meanings (intent vs state of the world), different authors (user vs system), and different lifecycles.
+- **Lookup-driven UI badges scale**; boolean-columns-on-the-row do not. When the second flag arrives, switch to the pattern before adding it.
+
+---
+
+### S38e — Kit list: include scope-level BOM materials
+
+**Problem:** Mateusz added raw materials (3x2 Rounded Edge × 4 Length) at scope level on a "pleated flats" scope. They didn't appear on the traveller pack-mode kit list.
+
+**Root cause:** pack-mode fetched `tbl_job_items` at scope level but ignored `tbl_wo_bom` at scope level. The `rpc_load_list` RPC had the logic correct (and the admin-facing load-list page worked); only the freelancer-facing pack-mode was incomplete.
+
+**Fix:** pack-mode now also loads `tbl_wo_bom` where `scope_item_id IS NOT NULL AND work_order_id IS NULL AND job_item_id IS NULL`. Rows merged into the existing `ScopeJobItem[]` list as synthetic entries (negative `item_id` to guarantee uniqueness) so `ScopeOverview` renders them without changes.
+
+**Conceptual line, clarified in conversation:**
+- BOM on a **Work Order** = materials consumed to BUILD a thing. Costing/procurement only. Doesn't leave the workshop.
+- BOM on a **Scope** (no WO, no job_item) = raw material that physically travels to site for on-site use.
+- `tbl_job_items` at scope level = finished deliverables.
+
+The existing filter (`work_order_id IS NULL`) already encodes the distinction correctly. No schema change — this was a presentation bug.
+
+**Smell flagged (not acted on):** the split between `tbl_job_items` and scope-level `tbl_wo_bom` for site delivery is currently "where did you type it in." Both leave the workshop. If a third rendering needs the union (procurement view, stock reservation view, etc.), consider either a unifying `qry_scope_deliverables` view or consolidating the two tables. Not today.
+
+---
+
+### S38f — Crew timeline: one unified view (By Day default, Log alternate)
+
+**Problem:** `/crew/[id]` had two modes — "Flat" (rich, all info) and "By Day" (compact, missing info). Mateusz used By Day but had to flip to Flat whenever he needed detail. Dumb toggle dance.
+
+**Changes (crew/[id]/page.tsx):**
+- Default view: `flat` → `by-day`. Renamed internal key `flat` → `log`. Button label "Flat" → "Log".
+- **Days without a date float to the TOP** in By Day (were buried at the bottom by lexical sort). Explicit `unknown`-first comparator.
+- Loaded previously-missing fields: `actual_start_timestamp`, `actual_end_timestamp`, `timestamp_edited_flag` on entries; `photo_urls`, `started_at` on tasks. `photo_urls` parsed defensively from JSON-text column.
+- **By-day rows gained a detail strip** rendered inline (no extra expand): start→end times + "edited" badge + full flag note; for tasks — start time + category + description + photo thumbnails + PM review note. Strip omitted entirely when nothing to show.
+- **Log view** also gained: photo thumbnails on task cards; "edited" badge on WO cards when timestamps adjusted.
+
+**Sharepoint image caveat:** photo URLs are Sharepoint direct links requiring same-browser 365 auth. Broken-image `onError` fallback renders a small "img" placeholder. Not fixing unless it becomes a problem — proxying would mean a new API route.
+
+**Convention:**
+- **Progressive disclosure by content presence, not by click.** When a view lacks info, *render it when it exists* rather than adding another expand/collapse layer. Dense but honest.
+- **Default views should be the one people actually use**, even if it's not the "everything" view. If they had to switch to the everything view for info, fix the compact view instead of training them to toggle.
+
+---
+
+### S38g — Edit time-entry date from By Day + preserve time-of-day
+
+**Problem:** after S38f switched By Day to default, Mateusz couldn't edit the date on an entry (Kamran put hours on the wrong day). By Day's inline edit only had an hours input.
+
+**Fix 1 — UI:** added a date + flag panel below the row when editing, matching the archive-reason panel pattern. Log view already had this.
+
+**Fix 2 — handler (`handleEditEntry`):** was hard-coding `T09:00:00` on date change and never touching `system_end_timestamp`. Moving an entry across days would reset start-of-day AND strand the end on the original date, breaking duration and ordering.
+
+New behaviour: preserve original time-of-day on start, compute date delta, shift end by the same delta. Sets `timestamp_edited_flag = true` so the "edited" badge surfaces. No Z suffix on timestamp strings (BST date-shift prevention). If entry has no original end (open timer), skip end update.
+
+**Convention:**
+- **When changing one timestamp, preserve the others' relationships.** Date edits that reset time-of-day or orphan end timestamps are the kind of subtle corruption that hides for a week before someone notices weird durations.
+- **Never use `toISOString()` for stored local timestamps** — this is in memory; it bit here again in the delta calculation and was handled with plain `YYYY-MM-DDTHH:MM:SS` strings.
+
+---
+
+### S38h — Timer stop: round UP to 15m + optional WO routing
+
+**Problem 1:** timer elapsed→hours used `Math.round(..*4)/4` (nearest quarter) — could round down. A 2h 1min timer became 2h. Mateusz wanted round UP to next 15m (2h 15m).
+
+**Problem 2:** LogSheet showed decimal hours in an `<input>` ("2.25"). Freelancers think in h/m, not decimals.
+
+**Problem 3:** Quick Timer stop flow fell straight into "pending ad-hoc task" for PM review. By the time they stop, freelancers often know what the work was for. No way to self-route at log time.
+
+**Changes:**
+
+1. **`Math.round` → `Math.ceil`** on every elapsed→hours default:
+   - `m/me/page.tsx` — Log Hours button default
+   - `m/wo/[woId]` — default on opening log sheet; auto-log of stalled ad-hoc tasks when a new WO timer starts; auto-close of open entries on other WOs
+   - Running-elapsed display left alone (it's not a default).
+
+2. **LogSheet display (`components/log-sheet.tsx`)**: center `<input>` replaced with a read-only `<span>` showing `formatHours(hours)` ("2h 15m"). Adjusted via existing ± buttons (still 15-min steps). Lose direct-typing — accepted trade-off on mobile.
+
+3. **Optional WO routing in LogSheet:**
+   - New `WoOption` export + `woOptions?: WoOption[]` prop. If passed, renders a searchable WO picker grouped by scope (same pattern as `/m/task`).
+   - `LogSheetData.routedWoId?: number | null` included on submit.
+   - `/m/me` now loads active WOs on Active jobs at page load and passes them through.
+   - When freelancer stops a Quick Timer and picks a WO:
+     * Insert real `tbl_wo_time_entries` row using the timer's actual `started_at` and "now" as timestamps, with `applied_hourly_rate` and `entry_cost` from the freelancer's rate.
+     * `flag_note = "Self-routed from timer[: {note}]"`.
+     * Mark `tbl_tasks` row as `status='routed'` with `routed_to_wo_id`/`routed_hours` so it drops out of the PM review inbox.
+   - Default behaviour unchanged when no WO picked: task stays pending for PM review.
+
+**Design decisions worth flagging:**
+- **Self-routing skips PM approval.** Freelancer owns attribution, Mateusz reviews the daily timesheet afterward. Adds no friction to correct entries, adds no safety against miscategorisation. Acceptable for small-team trust model; revisit if abuse emerges.
+- **`Math.ceil` favours over-claiming slightly** on one-click log. That's the safer direction (freelancers underlogging is the real risk, not overlogging).
+- **WO picker shows all active WOs on Active jobs.** Could be 50+ rows. Searchable. Narrow later to "recently worked on by this freelancer" if noise complaints arise.
+
+**Conventions added:**
+- **On mobile, the primary gesture is tap, not type.** Decimal inputs on a phone are always wrong when the user thinks in h/m; render the formatted display, keep the ± buttons.
+- **Round UP elapsed → hours for user-facing defaults.** Round-to-nearest lets small under-runs silently eat claimed time. Freelancer can always reduce with minus; rarely does.
+
+---
+
+### Files changed this session
+
+| File | Kind | Notes |
+|---|---|---|
+| Migration `s38d_quote_line_badges_checklist` | SQL | Adds `tbl_check_types`, `tbl_quote_line_checks`, `qry_quote_line_badges`. Rewrites `qry_dash_quote_stats`. Drops `interpretation_complete`, `kit_list_exported`. Backfills junction. RLS policies for both new tables. |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | edit | Badges wiring — generic `toggleCheck`, Flags column replaces Done. |
+| `src/app/traveller/page.tsx` | edit | Pack mode fetches scope-level BOM alongside job items; merged as synthetic ScopeJobItem entries. |
+| `src/app/(dashboard)/crew/[id]/page.tsx` | edit | Default By Day, Log rename, unknown-first sort, detail strip, edit-date panel, duration-preserving handler. |
+| `src/components/log-sheet.tsx` | edit | formatHours display; optional WoOption picker; routedWoId on submit. |
+| `src/app/m/me/page.tsx` | edit | Load woOptions; Math.ceil defaults; handleLogTimer branches on routedWoId. |
+| `src/app/m/wo/[woId]/page.tsx` | edit | Math.ceil on all elapsed→hours defaults (15-min precision). |
+
+### Schema counts at session end
+
+- **Tables: 51** (+2: `tbl_check_types`, `tbl_quote_line_checks`)
+- **Views: 34** (+1: `qry_quote_line_badges`)
+- **RPCs: 12** (no change)
+
+### Deferred / follow-up
+
+- **Ad-hoc Tasks still in a separate section in Log view.** If Mateusz wants one unified chronological Log stream, that's a bigger merge. Left as-is.
+- **Log view filter key renamed target `"done"`.** Display label is "Interpreted" but underlying filter key still says `done` — harmless, not worth the risk of a rename without clear benefit.
+- **Kit list item grouping (Materials vs Items)** — when 3x2 timbers appear mixed with bespoke builds alphabetically, adding a subheader might read better on the printed pack list. Not urgent.
+- **Sharepoint image proxy** — photo thumbnails require 365 auth in same browser. Proxy endpoint would fix this for non-365 viewers. Low priority.
+- **WO picker scope on `/m/me`** — currently all active WOs on Active jobs. Consider narrowing to "this freelancer's recent WOs" if lists grow noisy.
+- **`drawings_ready` and other checks** — the junction pattern is ready. Add via a single `INSERT INTO tbl_check_types` when the need arises.
+- **Scope-level BOM ↔ job_items unification** — model smell noted in S38e. Revisit if a third view needs the union.
+
+### Behaviour to watch
+
+- Do freelancers use the WO router at log time, or default to ad-hoc and let PM route later?
+- Does the By Day detail strip feel dense or overwhelming on days with 8+ entries?
+- Does `Math.ceil` lead to noticeable over-attribution on timers that ran a minute over the hour?
+- Are Sharepoint image thumbnails actually loading for Mateusz on admin review?
+- Does self-routing accuracy hold up vs PM routing? Compare error rates after a fortnight.

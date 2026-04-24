@@ -1,35 +1,10 @@
-S38h: Timer stop — round up to 15m + optional WO routing at log time
+docs: S38d–h session wrap in TRACKER.md
 
-Two changes to the mobile timer-to-log flow.
+Session covered:
+- S38d: quote line badges checklist pattern (lookup + junction, derived view)
+- S38e: kit list includes scope-level BOM materials
+- S38f: crew timeline unified (By Day default, Log alternate, all info inline)
+- S38g: edit time-entry date from By Day + preserve time-of-day on shift
+- S38h: timer stop rounds UP to 15m, LogSheet shows h/m, optional WO self-routing
 
-1. Round UP to next 15m on every timer→hours default.
-   Old: Math.round(...) — could round down.
-   New: Math.ceil(...) — timer of 2h 1min becomes 2h 15m.
-   Applied at:
-   - m/me/page.tsx  → Log Hours button default
-   - m/wo/[woId]   → default when opening log sheet
-                   → auto-log of stalled ad-hoc tasks (on new timer start)
-                   → auto-close of open entries on other WOs
-
-2. LogSheet display switches from decimal input to formatted read-out.
-   Old: <input type="number" step="0.25"> showed "2.25".
-   New: read-only centered display showing formatHours(hours) → "2h 15m".
-        Adjusted via the existing ± buttons (still 15-min steps).
-        Freelancers rarely typed decimals; + / − is the primary gesture.
-
-3. Optional "Route to WO" in LogSheet (components/log-sheet.tsx).
-   - New WoOption export + woOptions prop. If the parent passes a list,
-     the sheet shows a searchable WO picker (groups by scope, same
-     pattern as /m/task).
-   - New LogSheetData.routedWoId (nullable). Parent receives it on submit.
-   - /m/me loads active WOs on Active jobs at page load and passes them
-     through. When a freelancer stops a Quick Timer and picks a WO:
-       * insert a real tbl_wo_time_entries row using the timer's actual
-         started_at and now as timestamps, with applied_hourly_rate and
-         entry_cost from the freelancer's rate
-       * flag_note set to "Self-routed from timer" (plus any note they added)
-       * mark tbl_tasks row as status='routed' with routed_to_wo_id so it
-         drops out of the PM review inbox (PM still sees the time entry
-         in the daily timesheet and can archive/edit if wrong).
-   - Default behaviour unchanged when no WO picked: task stays pending
-     for PM review.
+Schema: 51 tables, 34 views, 12 RPCs.
