@@ -1,39 +1,31 @@
-Handover Summary — Phase 2 read-only printout (S39d)
+Handover: strip ceremony + fix misleading kit-list readiness
 
-Delivers the printable handover document at /reports/handover/[jobId],
-plus a "Print Handover" button on the job page. Reads live data from
-rpc_job_handover_data (Phase 1). No authoring UI yet — notes empty,
-no drawings attached — that's Phase 3 next session.
+Four fixes based on live feedback from Grosvenor's first handover:
 
-Document structure (A4 portrait, each section breaks to a new page):
+1. Cover header: strip "Handover Summary" + subtitle + Starlight
+   eyebrow. Job number + name with the bordered frame is
+   self-evident. Less paperwork ceremony, more info density.
 
-- Cover page: job number/name/event date/location/PM/print date, plus
-  overall readiness totals across all zones.
-- Per zone, in PM-chosen order (defaults to alphabetical):
-  - Zone intro page: name, notes (once authoring ships), readiness
-    strip with WO complete count, kit-list progress, on-hold flag.
-  - One full page per attached drawing (images native, PDFs fall
-    back to filename placeholder for now — pdf.js on-demand later
-    if needed).
-  - Data pages: quote lines grouped under the zone, each showing
-    scope(s) with job items (mini load list) and WOs with
-    description, status pill, QR code linking to /m/wo/[woId], and
-    names of everyone who logged time on it. No hours, no rates,
-    no financials anywhere.
+2. Remove client name from cover. Starlight's clients value
+   discretion — their names don't belong on internal paperwork
+   circulating around the workshop.
 
-Banner at top flags any quote lines that don't have an event_zone —
-nothing gets silently dropped.
+3. Kit-list readiness was misleading. `kit_list_exported=true`
+   means "on the truck plan", which happens *after* items are
+   prep-ready. Showing "0 of 89 items kit-listed" implied the
+   workshop is nowhere near ready when in fact they're fully
+   prep-ready — the truck plan just hasn't been made yet.
+   Replaced with a neutral "89 items" count on the readiness
+   strip. Kit column on the per-item table removed for the
+   same reason — CircleDashed amber icons on every row told
+   the wrong story.
 
-Overhead bucket (S39) explicitly excluded — it's internal.
+4. Removed the "No drawings attached to this zone. Attach them
+   from the job page when back at the office." empty-state
+   message. Zones without drawings now just show nothing.
+   Until the Phase 3 authoring UI ships, the message is just
+   noise on every page.
 
-Files:
-- src/app/(dashboard)/reports/handover/[jobId]/page.tsx — the page
-- src/app/globals.css — print CSS (.handover-page forces light theme,
-  A4 page size, section page breaks, hide Print button on print)
-- src/app/(dashboard)/jobs/[id]/page.tsx — Print Handover button in
-  the reports action row
+Also drops the now-unused Briefcase lucide import.
 
-DB (already shipped in Phase 1):
-- tbl_handover_zone_notes, tbl_handover_zone_documents
-- rpc_job_handover_data(p_job_id INT) — returns full JSON payload,
-  excludes overhead bucket, computes per-zone readiness.
+No schema change. Data layer unchanged.

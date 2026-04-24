@@ -17,7 +17,6 @@ import {
   User,
   Calendar,
   MapPin,
-  Briefcase,
   Wrench,
   Layers,
 } from "lucide-react";
@@ -258,7 +257,6 @@ function ReadinessStrip({ r }: { r: Readiness }) {
     );
   }
   const woDone = r.wo_total > 0 && r.wo_complete === r.wo_total;
-  const kitDone = r.items_total > 0 && r.items_kit_ready === r.items_total;
   return (
     <div className="handover-readiness">
       {r.wo_total > 0 && (
@@ -276,11 +274,8 @@ function ReadinessStrip({ r }: { r: Readiness }) {
         </span>
       )}
       {r.items_total > 0 && (
-        <span className={kitDone ? "text-emerald-700 font-semibold" : "text-amber-700"}>
-          {kitDone ? (
-            <CheckCircle2 className="inline mr-1" size={12} />
-          ) : null}
-          {r.items_kit_ready} of {r.items_total} items kit-listed
+        <span className="text-neutral-600">
+          {r.items_total} item{r.items_total !== 1 ? "s" : ""}
         </span>
       )}
       {r.wo_on_hold > 0 && (
@@ -426,7 +421,6 @@ function ScopeBlock({
                 <th className="py-1">Description</th>
                 <th className="w-20 py-1 text-right">Qty</th>
                 <th className="w-20 py-1">Finish</th>
-                <th className="w-12 py-1 text-center">Kit</th>
               </tr>
             </thead>
             <tbody>
@@ -443,19 +437,6 @@ function ScopeBlock({
                   </td>
                   <td className="py-1 text-neutral-600">
                     {item.finish_required || "—"}
-                  </td>
-                  <td className="py-1 text-center">
-                    {item.kit_list_exported ? (
-                      <CheckCircle2
-                        size={12}
-                        className="inline text-emerald-700"
-                      />
-                    ) : (
-                      <CircleDashed
-                        size={12}
-                        className="inline text-amber-600"
-                      />
-                    )}
                   </td>
                 </tr>
               ))}
@@ -586,13 +567,6 @@ function ZoneSection({
           </div>
         </div>
 
-        {zone.documents.length === 0 && (
-          <div className="mt-8 p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900">
-            <AlertCircle size={12} className="inline mr-1" /> No drawings
-            attached to this zone. Attach them from the job page when back at
-            the office.
-          </div>
-        )}
       </section>
 
       {/* Drawing pages — one per drawing */}
@@ -731,16 +705,6 @@ export default function HandoverPage() {
       <div className="handover-print-area">
         {/* COVER */}
         <section className="handover-page handover-cover-page">
-          <div className="text-xs uppercase tracking-widest text-neutral-500 mb-8">
-            Starlight Design
-          </div>
-          <h1 className="text-5xl font-bold mb-2 leading-tight">
-            Handover Summary
-          </h1>
-          <div className="text-lg text-neutral-600 mb-12">
-            Read this before picking up anything on the floor.
-          </div>
-
           <div className="py-6 border-t-2 border-b-2 border-neutral-800 mb-8">
             <div className="font-mono text-sm text-neutral-500">
               {job.job_number}
@@ -749,16 +713,6 @@ export default function HandoverPage() {
           </div>
 
           <div className="space-y-2 text-sm mb-8">
-            {job.client_name && (
-              <div className="flex items-center gap-3">
-                <Briefcase
-                  size={14}
-                  className="text-neutral-500 shrink-0"
-                />
-                <span className="text-neutral-500 w-20">Client</span>
-                <strong>{job.client_name}</strong>
-              </div>
-            )}
             {job.event_date && (
               <div className="flex items-center gap-3">
                 <Calendar
