@@ -337,10 +337,38 @@ export default function FreelancerDetailPage() {
     const newCost = Math.round(hours * rate * 100) / 100;
 
     const updates: Record<string, any> = { actual_hours: hours, entry_cost: newCost };
-    // Update date if changed
-    if (editDateValue) {
-      updates.system_start_timestamp = editDateValue + "T09:00:00";
-      updates.actual_start_timestamp = editDateValue + "T09:00:00";
+    // Update date if changed. We shift the entry to the new date while
+    // preserving the original time-of-day on BOTH start and end timestamps,
+    // so the stored times remain coherent (end > start, durations intact).
+    // If the original entry had no start timestamp (very rare), fall back to
+    // a sensible 09:00 default just for the start.
+    let newStartTimestamp: string | null = entry?.system_start_timestamp || null;
+    if (editDateValue && entry) {
+      const origStart = entry.system_start_timestamp ? new Date(entry.system_start_timestamp) : null;
+      const origEnd   = entry.system_end_timestamp   ? new Date(entry.system_end_timestamp)   : null;
+      // Build new start by grafting the new date onto the original time-of-day.
+      // Using plain string concatenation (no Z suffix) keeps this in local time
+      // and avoids the BST date-shift pitfall Claude has hit before.
+      const timeOfDay = origStart
+        ? `${String(origStart.getHours()).padStart(2, "0")}:${String(origStart.getMinutes()).padStart(2, "0")}:${String(origStart.getSeconds()).padStart(2, "0")}`
+        : "09:00:00";
+      const newStartStr = `${editDateValue}T${timeOfDay}`;
+      updates.system_start_timestamp = newStartStr;
+      updates.actual_start_timestamp = newStartStr;
+      newStartTimestamp = newStartStr;
+
+      // Shift end by the same number of days so duration is preserved.
+      if (origStart && origEnd) {
+        const deltaMs = new Date(newStartStr).getTime() - origStart.getTime();
+        const newEnd = new Date(origEnd.getTime() + deltaMs);
+        // Reformat as local ISO without Z.
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const newEndStr = `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}:${pad(newEnd.getSeconds())}`;
+        updates.system_end_timestamp = newEndStr;
+        updates.actual_end_timestamp = newEndStr;
+      }
+      // Mark that timestamps were manually edited so the "edited" badge appears.
+      updates.timestamp_edited_flag = true;
     }
     // Update flag_note
     updates.flag_note = editFlagValue.trim() || null;
@@ -351,7 +379,11 @@ export default function FreelancerDetailPage() {
     setTimeEntries(prev => prev.map(e => e.entry_id === entryId ? {
       ...e, actual_hours: hours, entry_cost: newCost,
       flag_note: editFlagValue.trim() || null,
-      system_start_timestamp: editDateValue ? editDateValue + "T09:00:00" : e.system_start_timestamp,
+      system_start_timestamp: updates.system_start_timestamp ?? e.system_start_timestamp,
+      system_end_timestamp:   updates.system_end_timestamp   ?? e.system_end_timestamp,
+      actual_start_timestamp: updates.actual_start_timestamp ?? e.actual_start_timestamp,
+      actual_end_timestamp:   updates.actual_end_timestamp   ?? e.actual_end_timestamp,
+      timestamp_edited_flag:  updates.timestamp_edited_flag  ?? e.timestamp_edited_flag,
     } : e));
     setEditingEntry(null);
     toast.success("Entry updated");
@@ -1190,6 +1222,25 @@ export default function FreelancerDetailPage() {
                                   </div>
                                 );
                               })()}
+                              {isEditingThis && (
+                                <div className="ml-16 mt-1 mb-1 p-2 bg-starlight-blue/5 border border-starlight-blue/20 rounded flex flex-wrap items-end gap-2">
+                                  <div>
+                                    <label className="text-[9px] text-muted block mb-0.5">Date</label>
+                                    <input type="date" value={editDateValue}
+                                      onChange={ev => setEditDateValue(ev.target.value)}
+                                      onKeyDown={ev => { if (ev.key === "Enter") handleEditEntry(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                                      className="px-2 py-1 text-xs border border-starlight-blue/40 rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                                  </div>
+                                  <div className="flex-1 min-w-[140px]">
+                                    <label className="text-[9px] text-muted block mb-0.5">Flag / Note</label>
+                                    <input type="text" value={editFlagValue}
+                                      onChange={ev => setEditFlagValue(ev.target.value)}
+                                      onKeyDown={ev => { if (ev.key === "Enter") handleEditEntry(e.entry_id); if (ev.key === "Escape") setEditingEntry(null); }}
+                                      placeholder="Flag note..."
+                                      className="w-full px-2 py-1 text-xs border border-starlight-blue/40 rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                                  </div>
+                                </div>
+                              )}
                               {isArchivingThis && (
                                 <div className="ml-16 mt-1 mb-1 p-2 bg-starlight-red/10 border border-starlight-red/20 rounded flex items-center gap-2">
                                   <input type="text" value={archiveReason} onChange={ev => setArchiveReason(ev.target.value)}

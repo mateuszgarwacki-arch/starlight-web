@@ -1,24 +1,21 @@
-S38f: Crew timeline — one unified view (by-day default, Log alternate)
+S38g: Edit time-entry date from by-day view + preserve time-of-day
 
-Mateusz wanted a single view of a crew member's time entries that
-shows everything recorded without switching to the Flat tab.
+Mateusz could not edit a time entry's date in the new default by-day
+view — a freelancer put hours on the wrong day and there was no date
+field in the inline edit. Fixed two problems:
 
-Changes (crew/[id]/page.tsx):
-- Default viewMode: "flat" → "by-day"
-- Renamed "Flat" → "Log" (internal key + button label)
-- By-day sort: entries without a date now float to the TOP instead of
-  being buried at the bottom (unknown-first, then reverse chronological)
-- Loaded previously-missing fields: tbl_wo_time_entries.actual_start_timestamp,
-  actual_end_timestamp, timestamp_edited_flag; tbl_tasks.photo_urls,
-  started_at
-- By-day rows gained a detail strip rendered inline (no extra expand):
-    WO rows:    start→end times + "edited" badge + full flag note text
-                + archive reason when applicable
-    Task rows:  start time + category + description + photo thumbnails
-                + PM review note
-  Detail strip omitted entirely when there's nothing to show.
-- Log (Flat) view gained: photo thumbnails on task cards + "edited" badge
-  on WO cards when timestamps were manually adjusted.
+1. By-day edit UI (crew/[id]/page.tsx):
+   Added a date + flag panel below the row when editing. Same pattern
+   as the archive-reason panel. Log view already had this; now parity.
 
-Photos are Sharepoint URLs and require the viewer to be signed into 365
-in the same browser session. Broken-image handler falls back to a placeholder.
+2. handleEditEntry logic:
+   Old behaviour hard-coded "T09:00:00" on date change and never
+   touched system_end_timestamp — so moving an entry across days would
+   reset the start time and leave the end timestamp stranded on the
+   original day, breaking duration and ordering.
+
+   New behaviour: preserve original time-of-day on start, compute the
+   date delta, shift end by the same delta. Sets timestamp_edited_flag
+   so the "edited" badge surfaces. No Z suffix on the timestamp strings
+   to avoid BST date-shift. If the entry has no original end (open
+   timer), skip the end update rather than invent one.
