@@ -98,6 +98,30 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey, hid
 
   useEffect(() => { load(); }, [scopeItemId, jobId, refreshKey]);
 
+  // Report summary to parent shells (e.g. scope tabs).
+  // Must sit before the `if (loading) return` below so hooks count stays constant across renders.
+  useEffect(() => {
+    if (!onSummaryChange) return;
+    const q = d.quotedWorkshop;
+    const estTotal = d.estLabour + d.estMaterials;
+    const committedTotal = d.actLabour + d.actMatsPlanned;
+    const plannedMarginPct = q > 0 ? ((q - estTotal) / q) * 100 : 0;
+    const liveMarginPct = q > 0 ? ((q - committedTotal) / q) * 100 : 0;
+    const bestMarginPct = committedTotal > 0 ? liveMarginPct : plannedMarginPct;
+    const hasInvoiced = d.invoicedMats > 0 || d.invoicedUnallocated > 0;
+    onSummaryChange({
+      quoted: q,
+      pmEstTotal: d.pmEstTotal,
+      estTotal,
+      committedTotal,
+      marginPct: q > 0 && (estTotal > 0 || committedTotal > 0) ? bestMarginPct : null,
+      woCount: d.woCount,
+      completedWOs: d.completedWOs,
+      hasInvoiced,
+      invoicedTotal: d.invoicedMats,
+    });
+  }, [d, onSummaryChange]);
+
   const load = async () => {
     setLoading(true);
     const col = scopeItemId ? "scope_item_id" : "job_id";
@@ -339,21 +363,6 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey, hid
     const cat = (l.category || "").toLowerCase();
     return cat.includes("workshop") || cat.includes("stock pick") || cat.includes("stock-and-hire");
   });
-
-  // Report summary to parent shells (e.g. scope tabs). Fires whenever core numbers change.
-  useEffect(() => {
-    onSummaryChange?.({
-      quoted: q,
-      pmEstTotal: d.pmEstTotal,
-      estTotal,
-      committedTotal,
-      marginPct: q > 0 && (estTotal > 0 || committedTotal > 0) ? bestMarginPct : null,
-      woCount: d.woCount,
-      completedWOs: d.completedWOs,
-      hasInvoiced,
-      invoicedTotal: d.invoicedMats,
-    });
-  }, [q, d.pmEstTotal, estTotal, committedTotal, bestMarginPct, d.woCount, d.completedWOs, hasInvoiced, d.invoicedMats, onSummaryChange]);
 
   return (
     <div className="bg-surface border border-subtle rounded-lg overflow-hidden">

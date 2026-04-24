@@ -1,27 +1,16 @@
-Scope detail: tab Cost / Learnings / Documents instead of stacking (S39c)
+Fix React #310 in CostBreakdown onSummaryChange effect
 
-Replace three stacked accordion sections on the scope detail page with
-a tabbed row at the top, each tab expanding full-width below. Only one
-panel is active at a time, which cuts the vertical scroll on every
-scope page and lets each panel breathe in the full width it needs
-(cost tables, doc grids).
+The onSummaryChange useEffect was placed AFTER an early
+`if (loading) return ...` statement. On first render loading===true
+so the effect never ran. After data loaded, loading===false, the
+component rendered past the early return, and the effect DID run
+— meaning more hooks ran on subsequent renders than on the first,
+which triggers React error #310 "Rendered more hooks than during
+the previous render."
 
-Tab pills carry summary data even when inactive, so glance-info from
-the old always-visible headers isn't lost:
-- Cost tab shows "3/5 WOs · 44.4%" with margin colour + trend icon.
-- Learnings tab shows count plus an amber "N open" pip when non-zero.
-- Documents tab shows file count.
-
-Tab state persists per browser via localStorage, and the URL hash
-(#cost / #learnings / #docs) makes tabs deep-linkable from chat and
-bookmarks.
-
-Wiring:
-- New component src/components/scope-tabs.tsx wraps the existing three
-  components, feeding each an onSummaryChange callback + hideHeader prop.
-- CostBreakdown + LearningsSection gained hideHeader & onSummaryChange
-  props. All 3 panels mount always (hidden via CSS when inactive) so
-  summary callbacks keep firing and switching tabs is instant with no
-  re-fetch.
-- Cost tab active by default on first visit — matches current priority
-  for PMs auditing job spend. Last-clicked tab remembered from then on.
+Moved the effect to right after the load() useEffect, before the
+early return. Derived values (q, estTotal, committedTotal,
+bestMarginPct, hasInvoiced) are computed inside the effect body
+rather than referenced from scope below the early return, so the
+hook call order is identical across all renders regardless of
+loading state.
