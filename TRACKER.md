@@ -11,6 +11,13 @@ _No open correctness items. S28d closed out in S33 — see session entry below._
 _No open items. See S33 session entry for cleanup history._
 
 ### Features deferred
+- [ ] **Overhead bucket UI polish** *(S39)* — data model shipped; UI follow-ups remain:
+  - Line-level margin on overhead rows shows `-∞%` / `NaN` (£0 quote, £X spent). Detect `line_sub_group = 'Overhead'` and render a plain spend figure with an "Overhead" pill, no percentage. Applies to quote lines table on job page, cost breakdown per-line table, and PM 100m view.
+  - Visual distinction for the overhead row in the quote lines table — subtle tint + "Overhead" badge — so it doesn't read as a normal line the PM forgot to price.
+  - **"Route to Overhead"** one-click button in review inbox (`/review/inbox`) alongside "Route to WO". Finds the job's `is_general=true` scope's Ready WO with `activity_verb = OVERHEAD` and routes the task there. Saves ~4 clicks per task.
+  - Quote PDF export filter: skip `line_sub_group = 'Overhead'` rows. Client must never see internal overhead lines. Verify whichever export path exists (quote PDF, Project Pack xlsx).
+  - Cross-job overhead report: total overhead spend per job, sorted descending. Simple page or a chart on `/review`. One bucket per job, no sub-categories (decision S39).
+  - Check that `qry_quoteline_margin` and `qry_job_quote_margin` don't propagate NaN from the £0 line anywhere user-facing. Spot-check cost breakdown and dashboard stats.
 - [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
 - [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.

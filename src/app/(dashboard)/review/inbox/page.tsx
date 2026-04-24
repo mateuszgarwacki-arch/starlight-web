@@ -2,18 +2,18 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { getAuditContext, auditedInsert } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit";
 import { formatHours } from "@/lib/format-hours";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { formatDate } from "@/lib/utils";
-import { Clock, Package, Wrench, Archive, AlertTriangle, MessageSquare, Check, X, CornerDownRight, RefreshCw, ChevronDown, Search, Image } from "lucide-react";
+import { Clock, Package, Wrench, Archive, AlertTriangle, MessageSquare, Check, X, CornerDownRight, RefreshCw, ChevronDown, Image } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ReviewNavChips } from "@/components/review-nav-chips";
+import { RouteTaskModal } from "@/components/route-task-modal";
 
 interface InboxItem { item_type: "task" | "request"; item_id: number; freelancer_id: number; freelancer_name: string; category: string; title: string; description: string | null; claimed_hours: number | null; worked_date: string | null; job_id: number | null; job_name: string | null; job_number: string | null; urgency: string | null; photo_url: string | null; photo_urls: string[] | null; work_order_id: number | null; status: string; created_at: string; }
-interface WOOption { work_order_id: number; description: string | null; scope_name: string; job_number: string; job_id: number; status: string; }
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: any }> = { job_work: { label: "Job Work", icon: Clock }, maintenance: { label: "Maintenance", icon: Wrench }, workshop_general: { label: "Workshop General", icon: Archive }, other: { label: "Other", icon: MessageSquare }, order_material: { label: "Order Material", icon: Package }, repair_equipment: { label: "Repair Equipment", icon: Wrench }, restock: { label: "Restock", icon: Archive }, safety: { label: "Safety", icon: AlertTriangle }, general: { label: "General", icon: MessageSquare } };
 
@@ -22,12 +22,6 @@ export default function ReviewInboxPage() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [routingTask, setRoutingTask] = useState<InboxItem | null>(null);
-  const [woOptions, setWoOptions] = useState<WOOption[]>([]);
-  const [woSearch, setWoSearch] = useState("");
-  const [selectedWo, setSelectedWo] = useState<number | null>(null);
-  const [routeHours, setRouteHours] = useState("");
-  const [routeNote, setRouteNote] = useState("");
-  const [routeSubmitting, setRouteSubmitting] = useState(false);
   const [actionItem, setActionItem] = useState<InboxItem | null>(null);
   const [actionType, setActionType] = useState<string>("");
   const [actionNote, setActionNote] = useState("");
@@ -53,34 +47,8 @@ export default function ReviewInboxPage() {
   useEffect(() => { loadInbox(); }, [loadInbox]);
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], loadInbox);
 
-  const openRouteModal = async (task: InboxItem) => {
-    setRoutingTask(task); setRouteHours(String(task.claimed_hours || "")); setRouteNote(""); setSelectedWo(task.work_order_id || null); setWoSearch("");
-    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
-    if (!wos) { setWoOptions([]); return; }
-    const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
-    const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
-    const [scopeRes, jobRes] = await Promise.all([scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] }, jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] }]);
-    const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
-    const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
-    const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
-    if (task.job_id) { enriched.sort((a, b) => { if (a.job_id === task.job_id && b.job_id !== task.job_id) return -1; if (b.job_id === task.job_id && a.job_id !== task.job_id) return 1; return 0; }); }
-    setWoOptions(enriched);
-  };
-
-  const handleRouteToWO = async () => {
-    if (!routingTask || !selectedWo) return;
-    const hrs = parseFloat(routeHours); if (!hrs || hrs <= 0) { toast.error("Enter valid hours"); return; }
-    setRouteSubmitting(true);
-    try {
-      const ctx = await getAuditContext(supabase); const wo = woOptions.find((w) => w.work_order_id === selectedWo);
-      const { data: freelancer } = await supabase.from("tbl_freelancers").select("day_rate, standard_day_hours").eq("freelancer_id", routingTask.freelancer_id).single();
-      const hourlyRate = freelancer && freelancer.standard_day_hours > 0 ? freelancer.day_rate / freelancer.standard_day_hours : 0;
-      await auditedInsert(ctx, "tbl_wo_time_entries", { work_order_id: selectedWo, freelancer_id: routingTask.freelancer_id, actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: hrs * hourlyRate, system_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null, actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null, system_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null, actual_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null, flag_note: routeNote.trim() ? `Routed: ${routeNote.trim()}` : "Routed from ad-hoc task" }, wo?.job_id);
-      await supabase.from("tbl_tasks").update({ status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs, reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: routeNote || null }).eq("task_id", routingTask.item_id);
-      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${formatHours(hrs)} routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId: routingTask.freelancer_id, woId: selectedWo, jobId: wo?.job_id });
-      toast.success("Task routed to WO"); setRoutingTask(null); loadInbox();
-    } catch { toast.error("Failed to route task"); }
-    setRouteSubmitting(false);
+  const openRouteModal = (task: InboxItem) => {
+    setRoutingTask(task);
   };
 
   const handleApproveOverhead = async (task: InboxItem, note: string) => {
@@ -109,7 +77,6 @@ export default function ReviewInboxPage() {
     toast.success(action === "acknowledged" ? "Acknowledged" : `Request ${action}`); loadInbox();
   };
 
-  const filteredWos = woOptions.filter((w) => (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) || w.job_number.toLowerCase().includes(woSearch.toLowerCase()));
   const pendingTasks = items.filter((i) => i.item_type === "task");
   const openRequests = items.filter((i) => i.item_type === "request");
 
@@ -181,30 +148,23 @@ export default function ReviewInboxPage() {
       </div>
 
       {routingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setRoutingTask(null)} />
-          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-navy">Route Task to Work Order</h3>
-            <p className="text-sm text-muted">{routingTask.title} — {routingTask.freelancer_name}</p>
-            <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted" /><input type="text" value={woSearch} onChange={(e) => setWoSearch(e.target.value)} placeholder="Search work orders..." className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
-            <div className="border border-subtle rounded-lg max-h-48 overflow-y-auto divide-y divide-subtle">
-              {filteredWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
-                filteredWos.slice(0, 20).map((wo) => (
-                  <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)} className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
-                    <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted"><span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span><span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span></div>
-                  </button>)))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted mb-1 block">Hours</label><input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5" className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />{routingTask.claimed_hours && routeHours && parseFloat(routeHours) !== routingTask.claimed_hours && (<p className="text-[10px] text-starlight-amber mt-1">Claimed: {formatHours(routingTask.claimed_hours)}</p>)}</div>
-              <div><label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label><input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..." className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" /></div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
-              <button onClick={handleRouteToWO} disabled={!selectedWo || routeSubmitting} className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">{routeSubmitting ? "Routing..." : "Route & Create Entry"}</button>
-            </div>
-          </div>
-        </div>
+        <RouteTaskModal
+          task={{
+            item_id: routingTask.item_id,
+            title: routingTask.title,
+            freelancer_id: routingTask.freelancer_id,
+            freelancer_name: routingTask.freelancer_name,
+            claimed_hours: routingTask.claimed_hours,
+            worked_date: routingTask.worked_date,
+            job_id: routingTask.job_id,
+            work_order_id: routingTask.work_order_id,
+          }}
+          onClose={() => setRoutingTask(null)}
+          onSuccess={() => {
+            setRoutingTask(null);
+            loadInbox();
+          }}
+        />
       )}
 
       {actionItem && (

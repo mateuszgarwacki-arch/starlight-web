@@ -1,10 +1,10 @@
-docs: S38d–h session wrap in TRACKER.md
+S39b Route-task modal redesign
 
-Session covered:
-- S38d: quote line badges checklist pattern (lookup + junction, derived view)
-- S38e: kit list includes scope-level BOM materials
-- S38f: crew timeline unified (By Day default, Log alternate, all info inline)
-- S38g: edit time-entry date from By Day + preserve time-of-day on shift
-- S38h: timer stop rounds UP to 15m, LogSheet shows h/m, optional WO self-routing
-
-Schema: 51 tables, 34 views, 12 RPCs.
+- Extract routing modal to src/components/route-task-modal.tsx
+- max-w-5xl (1024px) two-pane layout: jobs left, WOs right
+- Job pane: search, sorted by event date, task's job pinned with badge, overhead-marker icon
+- WO pane: overhead WO pinned to top with amber callout, regular WOs grouped by scope
+- Auto-clears stale WO selection when job changes
+- Closes on ESC
+- Notification text distinguishes overhead routing vs regular WO
+- Drop inline modal JSX + WOOption interface + stale imports from inbox page
