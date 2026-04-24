@@ -20,6 +20,9 @@ interface TimeEntryRow {
   flag_note: string | null;
   system_start_timestamp: string | null;
   system_end_timestamp: string | null;
+  actual_start_timestamp: string | null;
+  actual_end_timestamp: string | null;
+  timestamp_edited_flag: boolean | null;
   entry_cost: number | null;
   // Joined fields
   wo_description: string | null;
@@ -65,9 +68,11 @@ interface PendingTask {
   job_name?: string | null;
   job_number?: string | null;
   created_at: string;
+  started_at: string | null;
   status: string;
   review_note?: string | null;
   routed_to_wo_id?: number | null;
+  photo_urls_parsed?: string[];  // Parsed from tbl_tasks.photo_urls (JSON text)
 }
 
 interface WOOption {
@@ -93,7 +98,7 @@ export default function FreelancerDetailPage() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [activeTab, setActiveTab] = useState<"timeline" | "bookings">("timeline");
-  const [viewMode, setViewMode] = useState<"flat" | "by-day">("flat");
+  const [viewMode, setViewMode] = useState<"log" | "by-day">("by-day");
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [editingEntry, setEditingEntry] = useState<number | null>(null);
@@ -147,7 +152,7 @@ export default function FreelancerDetailPage() {
     // Load time entries with WO + job context
     const { data: entries } = await supabase
       .from("tbl_wo_time_entries")
-      .select("entry_id, work_order_id, actual_hours, flag_note, system_start_timestamp, system_end_timestamp, entry_cost, archived_at, archive_reason")
+      .select("entry_id, work_order_id, actual_hours, flag_note, system_start_timestamp, system_end_timestamp, actual_start_timestamp, actual_end_timestamp, timestamp_edited_flag, entry_cost, archived_at, archive_reason")
       .eq("freelancer_id", freelancerId)
       .order("system_start_timestamp", { ascending: false })
       .limit(200);
@@ -253,7 +258,7 @@ export default function FreelancerDetailPage() {
     // Load all tasks (any status)
     const { data: taskData } = await supabase
       .from("tbl_tasks")
-      .select("task_id, title, description, category, hours, worked_date, job_id, created_at, status, review_note, routed_to_wo_id")
+      .select("task_id, title, description, category, hours, worked_date, job_id, created_at, started_at, status, review_note, routed_to_wo_id, photo_urls")
       .eq("freelancer_id", freelancerId)
       .order("created_at", { ascending: false });
     if (taskData && taskData.length > 0) {
@@ -267,6 +272,15 @@ export default function FreelancerDetailPage() {
         ...t,
         job_name: t.job_id ? tjMap[t.job_id]?.job_name || null : null,
         job_number: t.job_id ? tjMap[t.job_id]?.job_number || null : null,
+        photo_urls_parsed: (() => {
+          // photo_urls is JSON-stringified array in tbl_tasks.photo_urls (text column).
+          // Parse defensively — a single bad row shouldn't blow up the whole list.
+          if (!t.photo_urls) return [];
+          try {
+            const parsed = JSON.parse(t.photo_urls);
+            return Array.isArray(parsed) ? parsed.filter((u: any) => typeof u === "string") : [];
+          } catch { return []; }
+        })(),
       })));
     } else {
       setAllTasks([]);
@@ -757,13 +771,13 @@ export default function FreelancerDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
-                  <button onClick={() => setViewMode("flat")}
-                    className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "flat" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
-                    Flat
-                  </button>
                   <button onClick={() => setViewMode("by-day")}
                     className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "by-day" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
                     By Day
+                  </button>
+                  <button onClick={() => setViewMode("log")}
+                    className={"px-3 py-1 text-xs font-medium rounded-md transition-colors " + (viewMode === "log" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>
+                    Log
                   </button>
                 </div>
                 <button onClick={openAddEntry}
@@ -778,7 +792,7 @@ export default function FreelancerDetailPage() {
               </label>
             </div>
           )}
-          {viewMode === "flat" && (<>
+          {viewMode === "log" && (<>
           {(() => {
             const visible = showArchived ? timeEntries : timeEntries.filter(e => !e.archived_at);
             if (visible.length === 0 && reviewedTasks.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No activity recorded yet.</div>;
@@ -796,6 +810,9 @@ export default function FreelancerDetailPage() {
                     {e.system_start_timestamp ? new Date(e.system_start_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
                     {e.system_end_timestamp ? " → " + new Date(e.system_end_timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""}
                   </p>
+                  {e.timestamp_edited_flag && (
+                    <span className="inline-block mt-0.5 text-[8px] px-1 py-0 rounded bg-starlight-amber/15 text-starlight-amber">edited</span>
+                  )}
                   {editingEntry === e.entry_id ? (
                     <p className="text-lg font-semibold text-starlight-blue">{formatHours(parseFloat(editHoursValue) || 0)}</p>
                   ) : (
@@ -967,6 +984,17 @@ export default function FreelancerDetailPage() {
                         {t.job_number && <span className="font-mono">{t.job_number} — {t.job_name}</span>}
                         {t.hours != null && hourlyRate > 0 && <span className="font-mono">{formatCurrency(t.hours * hourlyRate)}</span>}
                       </div>
+                      {(t.photo_urls_parsed && t.photo_urls_parsed.length > 0) && (
+                        <div className="flex gap-1.5 mt-2">
+                          {t.photo_urls_parsed.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                               className="block w-14 h-14 rounded border border-subtle overflow-hidden bg-surface-mid hover:ring-2 hover:ring-starlight-blue transition-all">
+                              <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover"
+                                   onError={(ev) => { (ev.target as HTMLImageElement).style.display = "none"; (ev.target as HTMLImageElement).parentElement!.innerHTML = '<div class=\"w-full h-full flex items-center justify-center text-faint text-[10px]\">img</div>'; }} />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       {t.review_note && (
                         <div className="mt-2 flex items-start gap-2 bg-navy/5 rounded px-3 py-2">
                           <p className="text-xs text-muted leading-relaxed">PM note: {t.review_note}</p>
@@ -1036,7 +1064,13 @@ export default function FreelancerDetailPage() {
               else day.totalHours += hrs;
             });
 
-            const sortedDays = [...dayMap.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+            // Sort days: "unknown" (entries without a date) floats to the top so
+            // Mateusz can triage them first; everything else reverse chronological.
+            const sortedDays = [...dayMap.entries()].sort((a, b) => {
+              if (a[0] === "unknown" && b[0] !== "unknown") return -1;
+              if (b[0] === "unknown" && a[0] !== "unknown") return 1;
+              return b[0].localeCompare(a[0]);
+            });
 
             if (sortedDays.length === 0) return <div className="card px-6 py-10 text-center text-muted text-sm">No activity recorded yet.</div>;
 
@@ -1123,6 +1157,39 @@ export default function FreelancerDetailPage() {
                                   </button>
                                 )}
                               </div>
+                              {/* Detail strip — shown when there's anything worth seeing.
+                                  Tight, muted, indented under the summary row. Omits
+                                  entirely when nothing is recorded beyond the summary. */}
+                              {(() => {
+                                const hasTimes = e.system_start_timestamp || e.system_end_timestamp;
+                                const hasFlag = !!e.flag_note;
+                                const hasArchive = isArchived && e.archive_reason;
+                                if (!hasTimes && !hasFlag && !hasArchive) return null;
+                                const fmt = (ts: string | null) => ts ? new Date(ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—";
+                                return (
+                                  <div className="ml-16 mb-1 text-[11px] text-muted leading-relaxed space-y-0.5">
+                                    {hasTimes && (
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="h-3 w-3 text-faint shrink-0" />
+                                        <span>{fmt(e.system_start_timestamp)} → {fmt(e.system_end_timestamp)}</span>
+                                        {e.timestamp_edited_flag && <span className="text-[9px] px-1 py-0 rounded bg-starlight-amber/15 text-starlight-amber">edited</span>}
+                                      </div>
+                                    )}
+                                    {hasFlag && (
+                                      <div className="flex items-start gap-2 text-starlight-amber">
+                                        <Flag className="h-3 w-3 shrink-0 mt-0.5" />
+                                        <span className="break-words">{e.flag_note}</span>
+                                      </div>
+                                    )}
+                                    {hasArchive && (
+                                      <div className="flex items-start gap-2 text-starlight-red">
+                                        <Archive className="h-3 w-3 shrink-0 mt-0.5" />
+                                        <span className="break-words">Archived: {e.archive_reason}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               {isArchivingThis && (
                                 <div className="ml-16 mt-1 mb-1 p-2 bg-starlight-red/10 border border-starlight-red/20 rounded flex items-center gap-2">
                                   <input type="text" value={archiveReason} onChange={ev => setArchiveReason(ev.target.value)}
@@ -1190,6 +1257,43 @@ export default function FreelancerDetailPage() {
                                   </button>
                                 )}
                               </div>
+                              {/* Task detail strip — description, category, photos, review note */}
+                              {(() => {
+                                const photos = t.photo_urls_parsed || [];
+                                const hasDesc = !isEditingThisTask && !!t.description;
+                                const hasReview = !!t.review_note;
+                                const hasPhotos = photos.length > 0;
+                                const hasStarted = !!t.started_at;
+                                if (!hasDesc && !hasReview && !hasPhotos && !hasStarted) return null;
+                                return (
+                                  <div className="ml-16 mb-1 text-[11px] text-muted leading-relaxed space-y-0.5">
+                                    {hasStarted && (
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="h-3 w-3 text-faint shrink-0" />
+                                        <span>started {new Date(t.started_at!).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                        <span className="text-faint">· {t.category.replace(/_/g, " ")}</span>
+                                      </div>
+                                    )}
+                                    {hasDesc && (
+                                      <p className="break-words">{t.description}</p>
+                                    )}
+                                    {hasPhotos && (
+                                      <div className="flex gap-1 pt-0.5">
+                                        {photos.map((url, i) => (
+                                          <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                             className="block w-12 h-12 rounded border border-subtle overflow-hidden bg-surface-mid hover:ring-2 hover:ring-starlight-blue transition-all">
+                                            <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover"
+                                                 onError={(ev) => { (ev.target as HTMLImageElement).style.display = "none"; (ev.target as HTMLImageElement).parentElement!.innerHTML = '<div class=\"w-full h-full flex items-center justify-center text-faint text-[9px]\">img</div>'; }} />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {hasReview && (
+                                      <p className="text-navy/70 break-words">PM: {t.review_note}</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         }

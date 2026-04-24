@@ -1,15 +1,24 @@
-S38e: Kit list — include scope-level BOM materials
+S38f: Crew timeline — one unified view (by-day default, Log alternate)
 
-Scope-level materials added to tbl_wo_bom (e.g. 3x2 timbers put directly
-on a scope for on-site use) were invisible on the traveller pack-mode
-kit list because pack-mode fetched only tbl_job_items. Site-bound
-materials must be on the pack list — end of.
+Mateusz wanted a single view of a crew member's time entries that
+shows everything recorded without switching to the Flat tab.
 
-Fix (traveller/page.tsx):
-- Pack-mode now loads both tbl_job_items (deliverables) AND tbl_wo_bom
-  (scope-level materials where work_order_id IS NULL AND job_item_id IS NULL)
-- BOM rows merged in as synthetic ScopeJobItem entries (negative item_id)
-  so ScopeOverview renders them without changes
-- rpc_load_list already includes these rows; no RPC change needed
+Changes (crew/[id]/page.tsx):
+- Default viewMode: "flat" → "by-day"
+- Renamed "Flat" → "Log" (internal key + button label)
+- By-day sort: entries without a date now float to the TOP instead of
+  being buried at the bottom (unknown-first, then reverse chronological)
+- Loaded previously-missing fields: tbl_wo_time_entries.actual_start_timestamp,
+  actual_end_timestamp, timestamp_edited_flag; tbl_tasks.photo_urls,
+  started_at
+- By-day rows gained a detail strip rendered inline (no extra expand):
+    WO rows:    start→end times + "edited" badge + full flag note text
+                + archive reason when applicable
+    Task rows:  start time + category + description + photo thumbnails
+                + PM review note
+  Detail strip omitted entirely when there's nothing to show.
+- Log (Flat) view gained: photo thumbnails on task cards + "edited" badge
+  on WO cards when timestamps were manually adjusted.
 
-No schema change.
+Photos are Sharepoint URLs and require the viewer to be signed into 365
+in the same browser session. Broken-image handler falls back to a placeholder.
