@@ -164,7 +164,7 @@ export default function MobileWODetail() {
     if (!openTasks || openTasks.length === 0) return;
     for (const task of openTasks) {
       const startMs = new Date(task.started_at).getTime();
-      const elapsedHrs = Math.max(0.5, Math.round(((Date.now() - startMs) / 3600000) * 2) / 2);
+      const elapsedHrs = Math.max(0.25, Math.ceil(((Date.now() - startMs) / 3600000) * 4) / 4);
       await supabase.from("tbl_tasks").update({
         status: "pending",
         hours: elapsedHrs,
@@ -194,7 +194,7 @@ export default function MobileWODetail() {
       // Skip if it's on the current WO (we're about to log those manually)
       if (oe.work_order_id === woId) continue;
       const startMs = oe.system_start_timestamp ? new Date(oe.system_start_timestamp).getTime() : Date.now();
-      const hrs = Math.max(0.5, Math.round(((Date.now() - startMs) / 3600000) * 2) / 2);
+      const hrs = Math.max(0.25, Math.ceil(((Date.now() - startMs) / 3600000) * 4) / 4);
       const cost = hrs * hourlyRate;
       await supabase.from("tbl_wo_time_entries").update({
         system_end_timestamp: now, actual_end_timestamp: now,
@@ -319,8 +319,8 @@ export default function MobileWODetail() {
   const openLogSheet = () => {
     if (myOpenEntry) {
       const start = new Date(myOpenEntry.system_start_timestamp).getTime();
-      const diffHrs = Math.round(((Date.now() - start) / 3600000) * 2) / 2;
-      setDefaultLogHours(Math.max(diffHrs, 0.5));
+      const diffHrs = Math.ceil(((Date.now() - start) / 3600000) * 4) / 4;
+      setDefaultLogHours(Math.max(diffHrs, 0.25));
     }
     setShowLogSheet(true);
   };

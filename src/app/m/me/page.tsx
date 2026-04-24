@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
 import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save, Minus, Plus, Camera } from "lucide-react";
 import { notify } from "@/lib/notifications";
-import { LogSheet, type LogSheetData } from "@/components/log-sheet";
+import { LogSheet, type LogSheetData, type WoOption } from "@/components/log-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { auditedUpdate, getAuditContext } from "@/lib/audit";
@@ -58,6 +58,7 @@ export default function MobileProfilePage() {
   const [showLogSheet, setShowLogSheet] = useState(false);
   const [defaultLogHours, setDefaultLogHours] = useState(0);
   const [logSubmitting, setLogSubmitting] = useState(false);
+  const [woOptions, setWoOptions] = useState<WoOption[]>([]);
   const [, setTick] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingNote, setEditingNote] = useState<{ entryId: number; note: string } | null>(null);
@@ -114,6 +115,42 @@ export default function MobileProfilePage() {
       const recentReviewed = (tasksRes.data || []).filter((t: any) => ["routed", "approved_overhead", "rejected"].includes(t.status)).slice(0, 5);
       setMyTasks([...pendingTasks, ...recentReviewed]);
       if (activeTaskRes.data) { setActiveTimer(activeTaskRes.data as ActiveTimer); }
+
+      // Load active WOs for the optional "route to WO" picker in the LogSheet.
+      // We show WOs the freelancer might plausibly want to route to: anything
+      // Ready / In-Progress / Not-Started on an active job. If this grows too
+      // large we can tighten to "WOs where this freelancer has logged time
+      // recently" — for now a simple list keeps the freelancer's mental model
+      // the same as /m/task's picker.
+      const { data: wos } = await supabase
+        .from("tbl_work_orders")
+        .select("work_order_id, description, scope_item_id, job_id, status")
+        .in("status", ["Ready", "In-Progress", "Not-Started"]);
+      if (wos && wos.length > 0) {
+        const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
+        const jobIds2 = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
+        const [scopeRes, jobRes] = await Promise.all([
+          scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
+          jobIds2.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number, job_status").in("job_id", jobIds2) : { data: [] },
+        ]);
+        const sMap: Record<number, string> = {};
+        ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
+        const jMap: Record<number, { num: string; status: string }> = {};
+        ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = { num: j.job_number, status: j.job_status }; });
+        // Only show WOs on Active jobs.
+        setWoOptions(
+          wos
+            .filter((w: any) => jMap[w.job_id]?.status === "Active")
+            .map((w: any) => ({
+              work_order_id: w.work_order_id,
+              description: w.description,
+              scope_name: sMap[w.scope_item_id] || "—",
+              job_number: jMap[w.job_id]?.num || "—",
+              status: w.status,
+            }))
+        );
+      }
+
       setLoading(false);
     };
     load();
@@ -141,6 +178,66 @@ export default function MobileProfilePage() {
       } catch (err) { console.warn("Photo upload failed:", err); toast.error("Photo upload failed — logging without photos"); }
     }
 
+    // Branch: routed to a WO vs filed as ad-hoc (original behaviour).
+    if (data.routedWoId) {
+      // Self-routed: create a real tbl_wo_time_entries row using the timer's
+      // actual start and "now" as end. Task itself is marked routed so it
+      // drops out of the PM review inbox. PM still sees the time entry in
+      // the daily timesheet and can archive/edit if wrong.
+      const ctx = await getAuditContext(supabase);
+      const startIso = activeTimer.started_at;
+      const endIso = new Date().toISOString();
+      const wo = woOptions.find(w => w.work_order_id === data.routedWoId);
+      // Hourly rate snapshot for this entry.
+      const { data: me } = await supabase.from("tbl_freelancers")
+        .select("day_rate, standard_day_hours").eq("freelancer_id", myId).maybeSingle();
+      const rate = me?.day_rate && me?.standard_day_hours && me.standard_day_hours > 0
+        ? Number(me.day_rate) / Number(me.standard_day_hours) : 0;
+      const flag = data.notes
+        ? `Self-routed from timer: ${data.notes}`
+        : "Self-routed from timer";
+      const { error: teErr } = await supabase.from("tbl_wo_time_entries").insert({
+        work_order_id: data.routedWoId,
+        freelancer_id: myId,
+        system_start_timestamp: startIso,
+        actual_start_timestamp: startIso,
+        system_end_timestamp: endIso,
+        actual_end_timestamp: endIso,
+        actual_hours: hrs,
+        applied_hourly_rate: rate,
+        entry_cost: Math.round(hrs * rate * 100) / 100,
+        flag_note: flag,
+      });
+      if (teErr) { toast.error("Failed to route: " + teErr.message); setLogSubmitting(false); return; }
+
+      // Mark the task routed so the review inbox doesn't surface it.
+      const taskUpdate: any = {
+        hours: hrs,
+        worked_date: activeTimer.started_at.split("T")[0],
+        logged_at: new Date().toISOString(),
+        status: "routed",
+        routed_to_wo_id: data.routedWoId,
+        routed_hours: hrs,
+        description: data.notes || null,
+        review_note: "Self-routed at log time",
+      };
+      if (photoUrls.length > 0) taskUpdate.photo_urls = JSON.stringify(photoUrls);
+      await supabase.from("tbl_tasks").update(taskUpdate).eq("task_id", activeTimer.task_id);
+
+      await notify({
+        supabase, type: "task_submitted",
+        title: `${formatHours(hrs)} routed to ${wo?.scope_name || "WO"}`,
+        detail: wo ? `${wo.job_number} · ${wo.description || ""}` : "",
+        severity: "info", freelancerId: myId,
+        jobId: undefined, actionUrl: "/review/timesheets",
+      });
+      toast.success("Logged to WO");
+      setActiveTimer(null); setShowLogSheet(false); setLogSubmitting(false);
+      window.location.reload();
+      return;
+    }
+
+    // Default: file as a pending ad-hoc task for PM review.
     const updateData: any = { hours: hrs, worked_date: activeTimer.started_at.split("T")[0], logged_at: new Date().toISOString(), status: "pending", description: data.notes || null };
     if (photoUrls.length > 0) { updateData.photo_urls = JSON.stringify(photoUrls); }
     const { error } = await supabase.from("tbl_tasks").update(updateData).eq("task_id", activeTimer.task_id);
@@ -173,7 +270,7 @@ export default function MobileProfilePage() {
               <Timer className="h-4 w-4 text-starlight-blue animate-pulse" />
               <div><p className="text-sm font-semibold text-navy">{activeTimer.title}</p><p className="text-xs text-starlight-blue">{elapsedSince(activeTimer.started_at)} elapsed</p></div>
             </div>
-            <button onClick={() => { const ms = Date.now() - new Date(activeTimer.started_at).getTime(); const hrs = Math.round((ms / 3600000) * 4) / 4; setDefaultLogHours(Math.max(0.25, hrs)); setShowLogSheet(true); }} className="px-4 py-2 bg-starlight-blue text-white text-xs font-semibold rounded-lg active:bg-starlight-blue/90">Log Hours</button>
+            <button onClick={() => { const ms = Date.now() - new Date(activeTimer.started_at).getTime(); const hrs = Math.ceil((ms / 3600000) * 4) / 4; setDefaultLogHours(Math.max(0.25, hrs)); setShowLogSheet(true); }} className="px-4 py-2 bg-starlight-blue text-white text-xs font-semibold rounded-lg active:bg-starlight-blue/90">Log Hours</button>
           </div>
         </div>
       )}
@@ -264,6 +361,7 @@ export default function MobileProfilePage() {
         defaultHours={defaultLogHours}
         notesPlaceholder="What did you work on..."
         submitting={logSubmitting}
+        woOptions={woOptions}
       />
     </div>
   );

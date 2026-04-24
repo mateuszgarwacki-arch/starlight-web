@@ -1,14 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Minus, Plus, Camera, X } from "lucide-react";
+import { Minus, Plus, Camera, X, Search, ArrowRight } from "lucide-react";
 import { formatHours } from "@/lib/format-hours";
+
+export interface WoOption {
+  work_order_id: number;
+  description: string | null;
+  scope_name: string;
+  job_number: string;
+  status: string | null;
+}
 
 export interface LogSheetData {
   hours: number;
   date: string;
   notes: string;
   photos: { file: File; preview: string }[];
+  /** If set, the parent should route this log to a WO instead of keeping it ad-hoc. */
+  routedWoId?: number | null;
 }
 
 interface LogSheetProps {
@@ -23,6 +33,10 @@ interface LogSheetProps {
   notesPlaceholder?: string;
   submitLabel?: string;
   submitting?: boolean;
+  /** If provided, show an optional "Route to WO" section. The freelancer can
+      pick one to attribute this log to a work order instead of filing it
+      as a pending ad-hoc task. Omit to hide the section entirely. */
+  woOptions?: WoOption[];
 }
 
 function localDateStr(): string {
@@ -34,11 +48,15 @@ export function LogSheet({
   open, onClose, onSubmit, contextLabel, contextSublabel,
   defaultHours = 0, defaultDate, showDatePicker = false,
   notesPlaceholder = "Any notes...", submitLabel, submitting = false,
+  woOptions,
 }: LogSheetProps) {
   const [hours, setHours] = useState(defaultHours);
   const [date, setDate] = useState(defaultDate || localDateStr());
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [routedWo, setRoutedWo] = useState<WoOption | null>(null);
+  const [woSearch, setWoSearch] = useState("");
+  const [showWoPicker, setShowWoPicker] = useState(false);
 
   // Reset state every time the sheet opens
   useEffect(() => {
@@ -47,17 +65,23 @@ export function LogSheet({
       setDate(defaultDate || localDateStr());
       setNotes("");
       setPhotos([]);
+      setRoutedWo(null);
+      setWoSearch("");
+      setShowWoPicker(false);
     }
   }, [open, defaultHours, defaultDate]);
 
   if (!open) return null;
 
   const adjustHours = (delta: number) => setHours(prev => Math.max(0.25, Math.round((prev + delta) * 4) / 4));
-  const label = submitLabel || `Log ${hours > 0 ? formatHours(hours) : "hours"}`;
+  const label = submitLabel || `Log ${hours > 0 ? formatHours(hours) : "hours"}${routedWo ? " to WO" : ""}`;
 
   const handleSubmit = async () => {
     if (hours <= 0) return;
-    await onSubmit({ hours, date, notes: notes.trim(), photos });
+    await onSubmit({
+      hours, date, notes: notes.trim(), photos,
+      routedWoId: routedWo?.work_order_id ?? null,
+    });
   };
 
   const addPhoto = (file: File) => {
@@ -65,6 +89,13 @@ export function LogSheet({
     reader.onload = (ev) => setPhotos(prev => [...prev, { file, preview: ev.target?.result as string }]);
     reader.readAsDataURL(file);
   };
+
+  const filteredWos = (woOptions || []).filter(w =>
+    !woSearch.trim() ||
+    (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) ||
+    w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) ||
+    w.job_number.toLowerCase().includes(woSearch.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-end justify-center">
@@ -78,14 +109,15 @@ export function LogSheet({
           <button onClick={onClose} className="p-1 text-muted shrink-0 ml-2"><X className="h-5 w-5" /></button>
         </div>
 
-        {/* Hours stepper */}
+        {/* Hours stepper — center is a formatted read-out (h/m), not a decimal input.
+            Freelancer adjusts via ± buttons; direct-typing decimals was rarely used. */}
         <div className="flex items-center gap-3">
           <label className="text-xs font-medium text-muted shrink-0 w-12">Hours</label>
           <div className="flex items-center bg-surface-dim border border-subtle rounded-xl overflow-hidden flex-1 min-w-0">
             <button type="button" onClick={() => adjustHours(-0.25)} className="shrink-0 px-4 py-3 text-muted active:bg-surface-mid border-r border-subtle"><Minus className="h-4 w-4" /></button>
-            <input type="number" step="0.25" value={hours || ""} onChange={e => setHours(parseFloat(e.target.value) || 0)}
-              className="min-w-0 flex-1 text-center py-3 text-lg font-bold text-navy bg-transparent focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              inputMode="decimal" />
+            <div className="min-w-0 flex-1 text-center py-3 text-lg font-bold text-navy bg-transparent font-mono tabular-nums select-none">
+              {hours > 0 ? formatHours(hours) : "—"}
+            </div>
             <button type="button" onClick={() => adjustHours(0.25)} className="shrink-0 px-4 py-3 text-muted active:bg-surface-mid border-l border-subtle"><Plus className="h-4 w-4" /></button>
           </div>
         </div>
@@ -96,6 +128,65 @@ export function LogSheet({
             <label className="text-xs font-medium text-muted shrink-0 w-12">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
               className="flex-1 px-3 py-2.5 bg-surface-dim border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+          </div>
+        )}
+
+        {/* Route to WO — optional. Shown only when woOptions prop is provided. */}
+        {woOptions && woOptions.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-muted mb-1.5 block">Route to Work Order (optional)</label>
+            {routedWo ? (
+              <div className="flex items-center justify-between bg-starlight-blue/10 border border-starlight-blue/30 rounded-xl px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-navy truncate">{routedWo.scope_name}</p>
+                  <p className="text-[10px] text-muted truncate">{routedWo.job_number} · {routedWo.description || "—"}</p>
+                </div>
+                <button onClick={() => setRoutedWo(null)} className="text-xs text-starlight-red ml-2 shrink-0">Clear</button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
+                  <input type="text" value={woSearch}
+                    onChange={e => { setWoSearch(e.target.value); setShowWoPicker(true); }}
+                    onFocus={() => setShowWoPicker(true)}
+                    placeholder="Search work orders..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-surface-dim border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                {showWoPicker && filteredWos.length > 0 && (
+                  <div className="bg-surface border border-subtle rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                    {(() => {
+                      // Group by scope so multiple WOs on the same scope show together.
+                      const groups: Record<string, WoOption[]> = {};
+                      filteredWos.slice(0, 30).forEach(w => {
+                        const key = `${w.job_number}|${w.scope_name}`;
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(w);
+                      });
+                      return Object.entries(groups).map(([key, ws]) => (
+                        <div key={key}>
+                          <div className="px-3 py-1.5 bg-surface-dim/50 border-b border-subtle sticky top-0">
+                            <p className="text-[10px] font-bold text-navy uppercase tracking-wide truncate">{ws[0].scope_name}</p>
+                            <p className="text-[9px] text-muted font-mono">{ws[0].job_number}</p>
+                          </div>
+                          {ws.map(w => (
+                            <button key={w.work_order_id}
+                              onClick={() => { setRoutedWo(w); setWoSearch(""); setShowWoPicker(false); }}
+                              className="w-full text-left pl-6 pr-4 py-2 hover:bg-surface-dim active:bg-surface-mid border-b border-subtle/50 last:border-0 flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm text-navy truncate">{w.description || "—"}</p>
+                                <p className="text-[10px] text-muted">{w.status}</p>
+                              </div>
+                              <ArrowRight className="h-3 w-3 text-faint shrink-0" />
+                            </button>
+                          ))}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
