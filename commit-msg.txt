@@ -1,10 +1,27 @@
-Show freelancer's note in route-task modal header
+Scope detail: tab Cost / Learnings / Documents instead of stacking (S39c)
 
-Modal header was showing only the task title, not the description
-the freelancer typed when logging the task — so the PM couldn't see
-what the task was actually about without going back to the inbox.
+Replace three stacked accordion sections on the scope detail page with
+a tabbed row at the top, each tab expanding full-width below. Only one
+panel is active at a time, which cuts the vertical scroll on every
+scope page and lets each panel breathe in the full width it needs
+(cost tables, doc grids).
 
-Adds description to RoutableTask interface and renders it in a blue
-left-bordered quote block under the metadata strip when present,
-labelled "Freelancer's note". Scrollable, capped at ~128px high so
-long notes don't blow out the header.
+Tab pills carry summary data even when inactive, so glance-info from
+the old always-visible headers isn't lost:
+- Cost tab shows "3/5 WOs · 44.4%" with margin colour + trend icon.
+- Learnings tab shows count plus an amber "N open" pip when non-zero.
+- Documents tab shows file count.
+
+Tab state persists per browser via localStorage, and the URL hash
+(#cost / #learnings / #docs) makes tabs deep-linkable from chat and
+bookmarks.
+
+Wiring:
+- New component src/components/scope-tabs.tsx wraps the existing three
+  components, feeding each an onSummaryChange callback + hideHeader prop.
+- CostBreakdown + LearningsSection gained hideHeader & onSummaryChange
+  props. All 3 panels mount always (hidden via CSS when inactive) so
+  summary callbacks keep firing and switching tabs is instant with no
+  re-fetch.
+- Cost tab active by default on first visit — matches current priority
+  for PMs auditing job spend. Last-clicked tab remembered from then on.

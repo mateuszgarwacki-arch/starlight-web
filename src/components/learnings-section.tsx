@@ -28,6 +28,10 @@ interface LearningsSectionProps {
   title?: string;
   defaultCollapsed?: boolean;
   canEdit?: boolean;
+  /** When true, suppress the collapse header & title — caller wraps it in their own shell (e.g. tabs). */
+  hideHeader?: boolean;
+  /** Callback fired whenever the learnings count changes — used by parent shells (e.g. tabs) for pill counts. */
+  onSummaryChange?: (summary: { total: number; openCount: number }) => void;
 }
 
 export function LearningsSection({
@@ -35,6 +39,7 @@ export function LearningsSection({
   filterCategories,
   excludeCategories,
   title = "Learnings", defaultCollapsed = false, canEdit = true,
+  hideHeader = false, onSummaryChange,
 }: LearningsSectionProps) {
   const supabase = createClient();
   const [rows, setRows] = useState<LearningEnriched[]>([]);
@@ -64,6 +69,11 @@ export function LearningsSection({
 
   const openCount = rows.filter((r) => r.actionable && !r.resolved_at).length;
 
+  // Report summary to parent shells (e.g. scope tabs). Re-fires whenever rows or openCount change.
+  useEffect(() => {
+    onSummaryChange?.({ total: rows.length, openCount });
+  }, [rows.length, openCount, onSummaryChange]);
+
   const handleResolve = async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("tbl_learnings")
@@ -89,27 +99,37 @@ export function LearningsSection({
 
   return (
     <section className="card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
-        <button onClick={() => setCollapsed((c) => !c)} className="flex items-center gap-2 text-navy hover:text-muted">
-          {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-          <BookOpen size={16} className="text-muted" />
-          <span className="font-medium">{title}</span>
-          <span className="text-sm text-muted">({rows.length})</span>
-          {openCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-starlight-amber">
-              <AlertCircle size={12} /> {openCount} open
-            </span>
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
+          <button onClick={() => setCollapsed((c) => !c)} className="flex items-center gap-2 text-navy hover:text-muted">
+            {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            <BookOpen size={16} className="text-muted" />
+            <span className="font-medium">{title}</span>
+            <span className="text-sm text-muted">({rows.length})</span>
+            {openCount > 0 && (
+              <span className="flex items-center gap-1 text-xs text-starlight-amber">
+                <AlertCircle size={12} /> {openCount} open
+              </span>
+            )}
+          </button>
+          {canEdit && (
+            <button onClick={() => setCaptureOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface-hi hover:bg-surface-mid text-navy rounded border border-subtle">
+              <Plus size={14} /> Add
+            </button>
           )}
-        </button>
-        {canEdit && (
+        </div>
+      )}
+      {hideHeader && canEdit && (
+        <div className="px-4 py-2 border-b border-subtle flex items-center justify-end">
           <button onClick={() => setCaptureOpen(true)}
             className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface-hi hover:bg-surface-mid text-navy rounded border border-subtle">
             <Plus size={14} /> Add
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {!collapsed && (
+      {(hideHeader || !collapsed) && (
         <div className="divide-y divide-subtle">
           {loading ? (
             <div className="px-4 py-6 text-sm text-muted">Loading…</div>

@@ -46,6 +46,20 @@ interface Props {
   jobId?: number;
   quotedValue?: number;
   refreshKey?: number;
+  /** When true, suppress the collapse/expand header — caller wraps this in their own shell (e.g. tabs). */
+  hideHeader?: boolean;
+  /** Callback fired whenever totals change — used by parent shells for pill summaries. */
+  onSummaryChange?: (summary: {
+    quoted: number;
+    pmEstTotal: number;
+    estTotal: number;
+    committedTotal: number;
+    marginPct: number | null;
+    woCount: number;
+    completedWOs: number;
+    hasInvoiced: boolean;
+    invoicedTotal: number;
+  }) => void;
 }
 
 interface ScopeTimeEntry {
@@ -64,7 +78,7 @@ function fmt(n: number) {
   return n.toLocaleString("en-GB", { style: "currency", currency: "GBP" });
 }
 
-export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: Props) {
+export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey, hideHeader = false, onSummaryChange }: Props) {
   const supabase = createClient();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -326,10 +340,26 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
     return cat.includes("workshop") || cat.includes("stock pick") || cat.includes("stock-and-hire");
   });
 
+  // Report summary to parent shells (e.g. scope tabs). Fires whenever core numbers change.
+  useEffect(() => {
+    onSummaryChange?.({
+      quoted: q,
+      pmEstTotal: d.pmEstTotal,
+      estTotal,
+      committedTotal,
+      marginPct: q > 0 && (estTotal > 0 || committedTotal > 0) ? bestMarginPct : null,
+      woCount: d.woCount,
+      completedWOs: d.completedWOs,
+      hasInvoiced,
+      invoicedTotal: d.invoicedMats,
+    });
+  }, [q, d.pmEstTotal, estTotal, committedTotal, bestMarginPct, d.woCount, d.completedWOs, hasInvoiced, d.invoicedMats, onSummaryChange]);
+
   return (
     <div className="bg-surface border border-subtle rounded-lg overflow-hidden">
-      <button onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-surface-dim transition-colors">
+      {!hideHeader && (
+        <button onClick={() => setExpanded(!expanded)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-surface-dim transition-colors">
         <div className="flex items-center gap-3">
           {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
           <span className="text-sm font-semibold text-navy">Cost analysis</span>
@@ -358,9 +388,10 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey }: P
           )}
         </div>
       </button>
+      )}
 
-      {expanded && (
-        <div className="border-t border-subtle px-4 py-4 space-y-4">
+      {(hideHeader || expanded) && (
+        <div className={`${hideHeader ? "" : "border-t border-subtle "}px-4 py-4 space-y-4`}>
           {/* Cost layers grid */}
           <div className="grid grid-cols-5 gap-0 text-xs">
             <div className="text-muted font-medium py-1.5 uppercase tracking-wider text-[10px]">Layer</div>

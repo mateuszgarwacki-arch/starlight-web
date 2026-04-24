@@ -8,12 +8,10 @@ import { DaysRemainingBadge, StatusBadge } from "@/components/ui/badges";
 import { LookupCombo } from "@/components/ui/lookup-combo";
 import { PromptPanel } from "@/components/prompt-panel";
 import { CreateWODialog } from "@/components/create-wo-dialog";
-import { CostBreakdown } from "@/components/cost-breakdown";
 import { ScopeOptions } from "@/components/scope-options";
 import { PmQueriesPanel } from "@/components/pm-queries-panel";
 import { WorkOrdersPanel, type WorkOrdersPanelRef, WO_COLORS } from "@/components/work-orders-panel";
-import { LearningsSection } from "@/components/learnings-section";
-import { WODocumentsPanel } from "@/components/wo-documents-panel";
+import { ScopeTabs } from "@/components/scope-tabs";
 import { PrintScopePackButton } from "@/components/traveller/traveller-preview";
 import { ArrowLeft, Trash2, AlertTriangle, Warehouse, Paintbrush } from "lucide-react";
 import Link from "next/link";
@@ -378,36 +376,17 @@ export default function ScopeDetailPage() {
       {/* Build options */}
       <ScopeOptions scopeItemId={scope.scope_item_id} jobId={jobId} quotedValue={scope.line_value || undefined} />
 
-      {/* Cost analysis */}
-      <CostBreakdown scopeItemId={scope.scope_item_id} quotedValue={scope.line_value || undefined} refreshKey={costRefreshKey} />
-
-      {/* Learnings attached to this scope item */}
-      <LearningsSection
-        filterField="scope_item_id"
-        filterValue={scope.scope_item_id}
-        context={{
-          scope_item_id: scope.scope_item_id,
-          job_id: jobId,
-          contextLabel: `Scope — ${scope.item_name || "Unnamed"}`,
-          contextSublabel: scope.description || undefined,
-        }}
-        defaultCollapsed
+      {/* Cost / Learnings / Documents — tabbed, full-width */}
+      <ScopeTabs
+        scopeItemId={scope.scope_item_id}
+        jobId={jobId}
+        scopeName={scope.item_name || ""}
+        scopeDescription={scope.description}
+        jobNumber={scope.job_number || ""}
+        jobName={scope.job_name || ""}
+        quotedValue={scope.line_value || undefined}
+        costRefreshKey={costRefreshKey}
       />
-
-      {/* Scope-level documents — CAD concept/breakdown, scope-wide drawings, reference material */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-3">
-          <h2 className="text-sm font-semibold text-navy">Scope Documents</h2>
-          <p className="text-xs text-muted mt-0.5">CAD concept &amp; breakdown, drawings and references for this scope item. WO-specific files live on the WO itself.</p>
-        </div>
-        <WODocumentsPanel
-          jobId={jobId}
-          scopeItemId={scope.scope_item_id}
-          scopeName={scope.item_name || ""}
-          jobNumber={scope.job_number || ""}
-          jobName={scope.job_name || ""}
-        />
-      </div>
 
       {/* Main content: inventory + prompt (left) | build plan (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
