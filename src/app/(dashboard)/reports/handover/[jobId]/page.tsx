@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
@@ -19,6 +19,7 @@ import {
   MapPin,
   Wrench,
   Layers,
+  RotateCw,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
@@ -146,9 +147,20 @@ const isPdfDoc = (doc: HandoverDoc): boolean => {
 // Drawing page — one drawing fills nearly a full A4
 // ————————————————————————————————————————————————————————
 
-function DrawingPage({ doc, zoneName }: { doc: HandoverDoc; zoneName: string }) {
+function DrawingPage({
+  doc,
+  zoneName,
+  rotation,
+  onRotate,
+}: {
+  doc: HandoverDoc;
+  zoneName: string;
+  rotation: number;
+  onRotate: () => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [autoRotated, setAutoRotated] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,15 +187,62 @@ function DrawingPage({ doc, zoneName }: { doc: HandoverDoc; zoneName: string }) 
   const image = isImageDoc(doc);
   const pdf = isPdfDoc(doc);
 
+  // Auto-rotate landscape images 90° once so they fill the portrait page.
+  // Runs only once per drawing (guarded by autoRotated) — the PM can still
+  // override manually afterwards.
+  useEffect(() => {
+    if (!url || !image || autoRotated) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (img.naturalWidth > img.naturalHeight * 1.2 && rotation === 0) {
+        onRotate();
+      }
+      setAutoRotated(true);
+    };
+    img.onerror = () => setAutoRotated(true);
+    img.src = url;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, image]);
+
+  const isRotated = rotation === 90 || rotation === 270;
+  const imgStyle: React.CSSProperties = {
+    transform: `rotate(${rotation}deg)`,
+    transformOrigin: "center",
+    maxWidth: isRotated ? "260mm" : "100%",
+    maxHeight: isRotated ? "184mm" : "240mm",
+    width: "auto",
+    height: "auto",
+    objectFit: "contain",
+    transition: "transform 0.2s ease",
+  };
+
   return (
     <section className="handover-page handover-drawing-page">
       <div className="handover-drawing-label">
-        <span className="text-[10px] uppercase tracking-widest text-neutral-500">
-          {zoneName}
-        </span>
-        <span className="font-semibold text-sm">
-          {doc.caption || doc.file_name}
-        </span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[10px] uppercase tracking-widest text-neutral-500">
+              {zoneName}
+            </span>
+            <span className="font-semibold text-sm truncate">
+              {doc.caption || doc.file_name}
+            </span>
+          </div>
+          {image && url && (
+            <button
+              onClick={onRotate}
+              className="print:hidden shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded text-neutral-700 transition-colors"
+              title="Rotate 90° — does not affect the file, only this print layout"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              <span>
+                Rotate
+                {rotation > 0 ? ` (${rotation}°)` : ""}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
       <div className="handover-drawing-canvas">
         {err && (
@@ -201,6 +260,7 @@ function DrawingPage({ doc, zoneName }: { doc: HandoverDoc; zoneName: string }) 
             src={url}
             alt={doc.caption || doc.file_name}
             className="handover-drawing-img"
+            style={imgStyle}
           />
         )}
         {url && pdf && (
@@ -531,9 +591,13 @@ function QuoteLineBlock({
 function ZoneSection({
   zone,
   baseUrl,
+  rotations,
+  onRotate,
 }: {
   zone: HandoverZone;
   baseUrl: string;
+  rotations: Record<string, number>;
+  onRotate: (key: string) => void;
 }) {
   return (
     <>
@@ -588,13 +652,18 @@ function ZoneSection({
       </section>
 
       {/* Drawing pages — one per drawing */}
-      {zone.documents.map((doc) => (
-        <DrawingPage
-          key={doc.doc_id}
-          doc={doc}
-          zoneName={zone.event_zone}
-        />
-      ))}
+      {zone.documents.map((doc) => {
+        const rKey = `${zone.event_zone}:${doc.doc_id}`;
+        return (
+          <DrawingPage
+            key={doc.doc_id}
+            doc={doc}
+            zoneName={zone.event_zone}
+            rotation={rotations[rKey] || 0}
+            onRotate={() => onRotate(rKey)}
+          />
+        );
+      })}
 
       {/* Data page(s) — quote lines flow */}
       <section className="handover-page handover-zone-data">
@@ -652,6 +721,16 @@ export default function HandoverPage() {
   }, [jobId, supabase]);
 
   const baseUrl = useMemo(() => getBaseUrl(), []);
+
+  // Per-drawing rotation state (in-memory only, not persisted).
+  // Cycles 0 → 90 → 180 → 270 → 0.
+  const [rotations, setRotations] = useState<Record<string, number>>({});
+  const toggleRotation = useCallback((key: string) => {
+    setRotations((prev) => ({
+      ...prev,
+      [key]: ((prev[key] || 0) + 90) % 360,
+    }));
+  }, []);
 
   const totalReadiness: Readiness | null = useMemo(() => {
     if (!data) return null;
@@ -861,6 +940,8 @@ export default function HandoverPage() {
             key={zone.event_zone}
             zone={zone}
             baseUrl={baseUrl}
+            rotations={rotations}
+            onRotate={toggleRotation}
           />
         ))}
 

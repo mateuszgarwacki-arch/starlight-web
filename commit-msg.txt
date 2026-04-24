@@ -1,42 +1,17 @@
-Handover: zone-level inclusion toggle
+Handover: rotate drawings feature (port of traveller pattern)
 
-Lets the PM exclude whole zones from the handover — not just
-individual lines. For a workshop-prep handover, zones like
-Crewing & Logistics / Lighting BR / Production are noise.
+Same rotation pattern the traveller print surface uses:
+- Per-drawing rotation state in HandoverPage. Cycles 0→90→180→270→0.
+- Rotate button (small, next to the caption) with "print:hidden" so
+  it shows on screen but doesn't appear on the printed page.
+- Auto-detect landscape images on load and rotate 90° once so they
+  fill the portrait page. PM can override manually after.
+- Rotation key scoped per zone-drawing pair (event_zone:doc_id) so
+  the same document attached to multiple zones rotates independently.
+- Swaps max-width/max-height at 90°/270° so rotated images don't
+  overflow the A4 page frame.
 
-Schema:
-- tbl_handover_zone_notes gains is_included BOOLEAN NOT NULL
-  DEFAULT true. Sparse — absence of a row still means included.
-
-RPC (rpc_job_handover_data):
-- Filters zones where is_included=false at the top-level aggregation.
-  Everything below (their lines, scopes, WOs, drawings, readiness)
-  drops with them.
-- Returns new excluded_zone_count at the top level.
-- excluded_line_count now only counts lines in INCLUDED zones
-  (double-excluded lines — excluded zone AND excluded line — don't
-  inflate the line count banner).
-
-Edit page:
-- Each zone header now carries an "Include" checkbox on the right.
-- Excluded zones render dimmed (opacity-50), with strikethrough
-  name and an amber "Excluded" pill. Arrows are disabled for
-  excluded zones (their position doesn't matter in the output,
-  and touching them is confusing when they're not printing).
-- Notes and drawings on excluded zones stay editable — so the
-  PM can prep work for a zone they're currently hiding without
-  losing progress if they re-include it later.
-- Upserts for reorder and note-save now preserve is_included
-  so toggling doesn't ping-pong on other edits.
-
-Print page:
-- Cover banner now covers both zones and lines. Two-line format
-  when both exist: "N zones have been excluded … M lines have
-  been excluded." One-line format when only one side has
-  exclusions.
-- Numbered "Zones in this handover" list automatically reflects
-  the filtered set (it reads data.zones which is now filtered).
-- Overall readiness totals are summed over filtered zones only —
-  excluded zones don't inflate WO-complete/in-progress counts.
-
-No frontend change to the non-handover app.
+Not persisted — per-session only. Matches traveller behaviour.
+Good enough for the "oops, that drawing is sideways" case; if you
+later want the rotation to stick across sessions, that's a small
+follow-up (add rotation to tbl_handover_zone_documents).
