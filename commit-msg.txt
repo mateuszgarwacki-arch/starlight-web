@@ -1,5 +1,28 @@
-Handover: "Who knows" → "Hands on" on WO cards
+docs: S39 session wrap + schema snapshot
 
-Small label swap — stronger responsibility signal without the
-semantic baggage of "Owner" (which implies one named person when
-in fact the list is everyone who logged time on the WO).
+Appended S39 session entry to TRACKER.md (~240 lines) covering:
+- Overhead bucket (per-job auto-triple)
+- Suneil Birthday / Tite Street multi-quote job import
+- Route-task modal redesign (1024px two-pane)
+- Scope tabs (Cost/Learnings/Documents)
+- Handover Summary end-to-end (Phase 1 data → Phase 2 print →
+  Phase 3 authoring + overrides + zone inclusion)
+- 9 live-feedback iteration fixes (blank-print regression, cover
+  ceremony strip, kit-list readiness fix, drawing path, chrome
+  leakage, rotation, cleanup iterations, "Hands on")
+- Files changed table (19 entries), schema counts (51→55 tables,
+  12→13 RPCs), conventions added.
+
+Created starlight_database_schema_session39.md (~310 lines):
+- Overhead trigger function + lookup
+- Four new handover tables with full DDL
+- rpc_job_handover_data JSON shape + filter logic
+- Schema diff vs session35
+
+Updated Cleanup Backlog at top of TRACKER:
+- Added handover follow-ups (PDF rendering, rotation persistence,
+  activity-aware verbs, multi-scope name display, multi-quote
+  audit) and mobile completion prompt.
+- Overhead UI polish items marked partially addressed where
+  relevant.
+- Project Overview schema count: 49→55 tables, 12→13 RPCs.

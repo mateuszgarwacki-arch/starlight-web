@@ -11,13 +11,23 @@ _No open correctness items. S28d closed out in S33 — see session entry below._
 _No open items. See S33 session entry for cleanup history._
 
 ### Features deferred
+- [ ] **Handover — PDF drawing rendering** *(S39)* — image drawings render full-page inline; PDF drawings currently show a fallback "Open PDF" box. Add pdf.js (dynamic import, ~500KB gzipped) and render PDF pages to canvas at 2× DPR for crisp print. Applies to `DrawingPage` in `/reports/handover/[jobId]/page.tsx`.
+- [ ] **Handover — persist drawing rotation** *(S39)* — rotation state is currently in-memory only (matches traveller). If a zone has 10 landscape drawings, every session restart means re-rotating. Add `rotation INT DEFAULT 0` on `tbl_handover_zone_documents` and persist on rotate. One small migration + a PATCH on the handler.
+- [ ] **Handover — activity-aware "built by" verbs** *(S39)* — current label "Hands on:" is universal. If real handover use reads too soft, upgrade to activity-aware verbs: "Built by:" for BUILD, "Painted by:" for PAINT, "Upholstered by:" for COVER, fallback "Hands on:" for anything unmapped. Small verb map maintained as new activities ship. Stronger signature/ownership feel.
+- [ ] **Handover — multi-scope scope-name display** *(S39)* — the scope card currently drops `scope.item_name` (it duplicated the line text when there was one scope per line). When a line has 2+ scopes, name differentiation becomes useful again. Either always show `item_name` when it meaningfully differs from `line_text`, or always show it when there are multiple scopes on the line. Not actionable until a real 2-scope line appears on a handover.
+- [ ] **Handover — multi-quote job audit** *(S39)* — Tite Street (job 14) is the only multi-quote job. Verify:
+  - Job page lists both quotes, cost analysis sums across them.
+  - `qry_dash_quote_stats` aggregates correctly.
+  - Handover doc treats the job's lines as one unified body (already verified — no per-quote split on the handover).
 - [ ] **Overhead bucket UI polish** *(S39)* — data model shipped; UI follow-ups remain:
   - Line-level margin on overhead rows shows `-∞%` / `NaN` (£0 quote, £X spent). Detect `line_sub_group = 'Overhead'` and render a plain spend figure with an "Overhead" pill, no percentage. Applies to quote lines table on job page, cost breakdown per-line table, and PM 100m view.
   - Visual distinction for the overhead row in the quote lines table — subtle tint + "Overhead" badge — so it doesn't read as a normal line the PM forgot to price.
-  - **"Route to Overhead"** one-click button in review inbox (`/review/inbox`) alongside "Route to WO". Finds the job's `is_general=true` scope's Ready WO with `activity_verb = OVERHEAD` and routes the task there. Saves ~4 clicks per task.
+  - **"Route to Overhead"** one-click button in review inbox (`/review/inbox`) alongside "Route to WO". *Partially addressed in S39b* (overhead WO now pinned at top of the new two-pane modal). Full one-click still useful — saves picking the job first.
   - Quote PDF export filter: skip `line_sub_group = 'Overhead'` rows. Client must never see internal overhead lines. Verify whichever export path exists (quote PDF, Project Pack xlsx).
   - Cross-job overhead report: total overhead spend per job, sorted descending. Simple page or a chart on `/review`. One bucket per job, no sub-categories (decision S39).
   - Check that `qry_quoteline_margin` and `qry_job_quote_margin` don't propagate NaN from the £0 line anywhere user-facing. Spot-check cost breakdown and dashboard stats.
+- [ ] **Mobile completion prompt** *(S39, observed)* — Mateusz noticed mid-session that freelancers rarely mark WOs complete; the WO status dropdown is buried inside the expanded WO details on the scope page. Root cause is mobile UX, not PM UX: when a freelancer stops a timer and isn't planning to come back to the WO, nudge "is this WO done?" on the stop flow. Would cut Mateusz's retroactive status-catch-up work.
+- [ ] **PM-side bulk WO complete** *(S39, conditional)* — if one-at-a-time status editing from the scope page's expanded WO details becomes painful across many jobs, add a multi-select "catch-up" surface. Not urgent yet.
 - [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
 - [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
 - [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
@@ -33,7 +43,7 @@ _No open items. See S33 session entry for cleanup history._
 ## Project Overview
 
 **What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — **49 tables, 33 views, 12 RPC functions, 200+ indexes** (verified 23 Apr 2026 after S38).
+**Backend:** Supabase (PostgreSQL) — **55 tables, 34 views, 13 RPC functions, 200+ indexes** (verified 24 Apr 2026 after S39).
 **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
 **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
 **Auth:** Supabase Auth (email+password for PM/foreman/admin, phone+password for freelancers). Three-layer security: proxy session validation (`src/proxy.ts` since S33, was `middleware.ts`) + API route auth + RLS on all tables. See Security conventions below.
@@ -3955,3 +3965,243 @@ New behaviour: preserve original time-of-day on start, compute date delta, shift
 - Does `Math.ceil` lead to noticeable over-attribution on timers that ran a minute over the hour?
 - Are Sharepoint image thumbnails actually loading for Mateusz on admin review?
 - Does self-routing accuracy hold up vs PM routing? Compare error rates after a fortnight.
+
+
+---
+
+## Session 39 — 24 April 2026
+
+Long session (16 commits + one data-only job import). Theme: making jobs legible to people who weren't in the room — starting with overhead cost visibility, then the route-task modal, then a proper printable handover document for Mateusz to leave behind before travelling.
+
+---
+
+### S39a — Job Overhead bucket (per-job)
+
+**Problem:** non-deliverable time and materials (pre-quote visits, van loading, post-event admin, supplier chasing, scope creep) had no billable home. Mateusz's hunch — they were distorting every margin number invisibly. Conversation separated two distinct needs:
+- **Need A** — truly non-recoverable overhead (no billable home).
+- **Need B** — billable work with no deliverable (e.g. £10K "Event management & coordination" quote lines).
+
+Only A was built this session; B gets a convention (fake scope + long-running WO) for now, pending evidence it's needed.
+
+**Design chosen — one bucket per job, at the quote-line tier:**
+- Every job gets an auto-created **triple**: a £0 quote line (`line_sub_group = 'Overhead'`, `category = 'General'`) → a scope with `is_general=true` → a WO with `activity_verb = OVERHEAD`.
+- Flows through existing cost views (nothing to rewrite — they all join `quote_line_id`).
+- Freelancers log against the WO; PMs attach materials to scope/WO; invoices allocate via existing S29 flow. All three entry points, one bucket, reduces job margin honestly.
+
+**What rejected:**
+- **Parallel `tbl_job_overhead` table** — would mean rewriting six cost views for no gain.
+- **Sub-categories (pre-quote / coordination / load / post-event)** — deferred explicitly until real data tells us what categories matter. Decision reached in conversation: "no sub-categories."
+
+**Implementation:**
+- Added `ACTIVITY.OVERHEAD` lookup value (phase_number NULL so it doesn't compete for fabrication scheduling).
+- `fn_create_job_overhead(INT)` — plpgsql SECURITY DEFINER, idempotent guard via `is_general=true` check.
+- Trigger `trg_create_job_overhead` on `INSERT tbl_production_plan` — auto-creates for all future jobs.
+- Retrofit migration ran `fn_create_job_overhead` across all 9 existing jobs. Tite Street (job 14) got one via the trigger when created that same session.
+
+**Known visual gaps (deferred, added to Cleanup Backlog):** line-level margin on overhead rows shows `-∞%` / `NaN`; no visual distinction yet on the quote lines table; no "Route to Overhead" one-click button; quote PDF export filter needs to skip `line_sub_group='Overhead'`; no cross-job overhead report.
+
+---
+
+### Suneil Birthday — Tite Street quote import (data only)
+
+**New operational pattern established:** one job, multiple quotes. Existing jobs all had exactly one quote; this job had two (Pool Nightclub + Reception).
+
+- Job 14 created (`13757` · "Suneil Birthday - Tite Street") with `budget_allowance = £157,515` and event date 16 May 2026 (inferred from install/de-rig schedule).
+- Quote 12 (40922 v9, £124,480) and quote 13 (40923 v3, £33,035) both linked to job 14.
+- 52 lines imported (30 + 22), reconciled to zero pence on both quotes.
+- Schema permitted it; cost views on the job page work against multi-quote without change. Flagged for verification that no code path assumed single-quote.
+
+---
+
+### S39b — Route-task modal redesign
+
+**Problem (from screenshot):** the route-to-WO modal on `/review/inbox` was a 512px flat list of every active WO across every active job, silently capped at 20 (dropping the rest), with job numbers rendered as 10pt grey text. Freelancer tasks with a known `job_id` still required searching. The S39 overhead WO on every job was buried in the noise.
+
+**Redesign:**
+- **1024px two-pane** (`max-w-5xl`).
+- Left pane: job picker with search, task's origin job auto-selected and badged "Task's job" at top, sorted by event date. Amber coin icon marks jobs with overhead bucket. Shows job number, name, event date, WO count.
+- Right pane: WOs for the selected job. **Overhead WO pinned at top** in a distinct amber-outlined card — one-click route to the job's overhead bucket. Regular WOs grouped by scope below.
+- No more silent 20-WO cap — fetches all active WOs up front and filters client-side.
+- Extracted to `src/components/route-task-modal.tsx`.
+
+**Follow-up iteration (same session):** freelancer's note was missing from the modal header. The `description` field existed on `InboxItem` but wasn't threaded through to the modal. Added `description` to `RoutableTask` and rendered it as a blue-left-bordered quote block under the metadata strip when present. Max-height 128px with scroll so long notes don't blow out the header.
+
+---
+
+### S39c — Scope tabs (Cost / Learnings / Documents)
+
+**Problem (from screenshot):** scope detail page had three stacked accordion sections (Cost Analysis, Learnings, Scope Documents). Mateusz asked to tab them with full-width expansion.
+
+**Design:**
+- Three pills in a row, one active at a time, active panel renders full-width below.
+- **Summary info stays on the inactive pills** — Cost pill shows "3/5 WOs · 44.4%" with margin colour + trend icon; Learnings pill shows count + amber "N open" pip; Documents pill shows file count. Glance-info preserved.
+- **All three panels mount always** (hidden by CSS when inactive). Summary callbacks keep firing and switching tabs is instant with no re-fetch.
+- Tab state persists per browser via localStorage; URL hash (`#cost` / `#learnings` / `#docs`) makes tabs deep-linkable.
+- Cost default on first visit — matches PM priority for auditing spend.
+
+**Wiring:**
+- New `src/components/scope-tabs.tsx`.
+- `CostBreakdown` and `LearningsSection` gained `hideHeader` + `onSummaryChange` props. Each still owns its own fetch.
+- Scope detail page imports simplified from 3 components to 1 (`<ScopeTabs>`).
+
+**Bug discovered in same session — React #310 "rendered more hooks than previous render":** the new `onSummaryChange` `useEffect` in `CostBreakdown` was placed AFTER an early `if (loading) return ...`. On first render, loading=true → effect never registered. On second render, loading=false → effect tried to register → hook-count mismatch. Moved the effect above the early return with all derived values computed inside the effect body. Classic React trap, documented.
+
+---
+
+### S39d — Handover Summary (the big one)
+
+**Problem:** Mateusz flying away next week; Grosvenor's final prep in the hands of someone else. No existing mechanism to leave behind a printable briefing. Directive: **workshop prep doc, not client-facing, not financial, live data (not snapshot).**
+
+**Shape agreed in conversation:**
+- Zone-first (driven by `event_zone` on quote lines), not parallel sections. Reasoning: zones already exist on every quote line; forcing manual section tagging = busywork + drift risk.
+- Overrides for the ~10% of cases where zones aren't quite the right structure (pick lines in/out, pick zones in/out, per-line notes, per-WO notes).
+- Read-only print view; authoring surface separate.
+- One full-page per drawing (not thumbnails — Mateusz explicit).
+- QR codes per WO linking to `/m/wo/[woId]`.
+
+**Delivered across three phases:**
+
+#### Phase 1 (data) — 2 tables + RPC
+- `tbl_handover_zone_notes`  — per-zone notes, sort_order, is_included. Unique on `(job_id, event_zone)`.
+- `tbl_handover_zone_documents` — junction to `tbl_wo_documents` for picking which job-level docs appear in which zone. CASCADE on both FKs.
+- `rpc_job_handover_data(INT)` — single-call JSON payload: `job`, `zones[]` (notes, readiness, documents, quote_lines → scopes → job_items + work_orders with worker names), `unassigned_lines[]`, `excluded_line_count`, `excluded_zone_count`, `generated_at`.
+- Overhead bucket explicitly excluded at every level (`line_sub_group != 'Overhead'`, `is_general = false`).
+- Readiness per zone: `wo_total`, `wo_complete`, `wo_in_progress`, `wo_on_hold`, `items_total`, `items_kit_ready`.
+
+#### Phase 2 (print page) — `/reports/handover/[jobId]`
+- A4 portrait, forced light theme, page breaks per zone + per drawing.
+- Cover page → per zone (intro page with notes + readiness + zone's quote lines list as TOC → one page per drawing → data pages).
+- QR codes via `qrcode.react` scanning to `/m/wo/[id]`.
+- Print button hidden on actual print via `print:hidden`.
+- Live data, not snapshot — reprint pulls current state.
+
+#### Phase 3 (authoring + overrides)
+- `tbl_handover_line_overrides` (job_id, quote_line_id PK) — `is_included` + `notes`. Sparse, absence = included + no note.
+- `tbl_handover_wo_notes` (job_id, work_order_id PK) — `notes`. Sparse.
+- RPC patched to filter excluded lines at every level (zones, readiness counts, unassigned), attach `line_note` and `wo_note` per row.
+- New edit page `/reports/handover/[jobId]/edit` — dark-theme admin surface:
+  - Zone reorder (up/down arrows; on first click, normalises all zones to 1..N so alphabetical fallback is locked in).
+  - Per-zone notes (auto-save on blur with green "Saved" pulse).
+  - Per-zone drawing picker (multi-select from job-level documents, instant save on checkbox toggle).
+  - Per-zone expandable quote-lines list with include checkbox + line-note textarea; each line's WOs listed underneath with per-WO note textarea.
+- "Edit Handover" link added to job page next to existing "Handover Summary" print link.
+
+#### S39f — Zone-level inclusion toggle (added same session per Mateusz request)
+- `ALTER TABLE tbl_handover_zone_notes ADD COLUMN is_included BOOLEAN NOT NULL DEFAULT true`.
+- RPC filters zones where `is_included=false` at top-level aggregation. Everything below (their lines, scopes, WOs, drawings, readiness) drops with them.
+- `excluded_line_count` only counts lines in INCLUDED zones (double-exclusion hygiene).
+- Edit page: "Include" checkbox on each zone's header. Excluded zones render dimmed (`opacity-50`) with strikethrough name and amber "Excluded" pill. Arrows disabled for excluded zones. Notes/drawings on excluded zones stay editable — so a PM who toggles a zone on/off doesn't lose work.
+
+---
+
+### Handover — live feedback cycle (same session, multiple iterations)
+
+After deploying the first print view against Grosvenor data, Mateusz printed it and came back with concrete pain points. Fixed in order:
+
+**Fix 1 — blank-page regression on traveller print.** My `@media print` block for the handover had a whitelist rule:
+```
+body > *:not(.handover-root):not(.handover-print-area) {
+  display: none !important;
+}
+```
+Aimed at hiding dashboard chrome on handover print. Side effect: hid every other print surface in the app (traveller, load list, etc.) because they weren't in the whitelist. Removed the rule entirely; the existing traveller `@media print` block already handles chrome hiding with a blacklist. Added a comment warning against re-adding the whitelist pattern.
+
+**Fix 2 — cover page: strip ceremony.** Mateusz: "No need for a header 'Handover Summary' and bullshit text — name of the job and info is obvious." Removed the "Handover Summary" title + "Read this before picking up anything on the floor." subtitle + "Starlight Design" eyebrow. Also removed the client-name row (Starlight's clients value discretion — names don't belong on internal paperwork).
+
+**Fix 3 — kit-list readiness misleading.** The per-zone readiness strip and cover totals showed "0 of 89 items kit-listed" with amber/urgent styling. But `kit_list_exported=true` means "on the truck plan," which happens AFTER items are prep-ready. Showing 0/89 implied nowhere-near-ready when the workshop was fully prep-ready — just the truck plan hadn't been made. Replaced with a neutral "89 items" count on the readiness strip. Removed the Kit column from the per-item table for the same reason — amber `CircleDashed` icons on every row told the wrong story.
+
+**Fix 4 — "No drawings attached..." empty-state nag.** Mateusz: "scrap it." Removed the amber empty-state message entirely. Zones without drawings now show nothing in the drawings space.
+
+**Fix 5 — drawing wouldn't load ("No file path").** First real drawing attached to a zone triggered the error. Root cause: RPC returned `onedrive_item_id` but not `onedrive_path`, and the print page used `onedrive_path` to call `getOneDriveUrl()`. Added `onedrive_path` to the documents subquery in the RPC. Data layer only — no frontend change needed.
+
+**Fix 6 — dashboard chrome leaking onto print.** Sidebar, top bar with ViewSwitcher, and RecentJobsStrip were all rendering on printed pages from handover. Root cause: existing traveller `@media print` CSS hid `nav, .sidebar, header` — but sidebar uses `<aside>` (semantically correct HTML), which wasn't in the list. Traveller never suffered this because `/traveller` sits outside the `(dashboard)` route group. Fix applied at layout level via Tailwind `print:hidden`:
+- `components/sidebar.tsx` — `print:hidden` on the `<aside>`
+- `components/pm-sidebar.tsx` — same treatment for PM view
+- `app/(dashboard)/layout.tsx` — `print:ml-0` on `<main>`, `print:hidden` on top bar, RecentJobsStrip wrapped in `print:hidden`, inner container gets `print:p-0 print:max-w-none`
+
+Global improvement — any future printable page inside `(dashboard)` now inherits clean chrome handling without page-specific CSS.
+
+**Fix 7 — drawing rotation feature** (parity with traveller). Per-drawing rotation state cycling 0→90→180→270→0. Small rotate button next to caption with `print:hidden` so it doesn't appear on printed pages. Auto-detect landscape on load, auto-rotate 90° once so landscape drawings fill portrait page (PM can override manually after). Rotation key scoped per zone-drawing pair (`event_zone:doc_id`) so same doc in multiple zones rotates independently. Not persisted — per-session only (matches traveller).
+
+**Fix 8 — four more polish iterations** per Mateusz's review:
+1. **Cover excluded banner removed.** Decision: the reader doesn't need to know what was filtered out; the document is what it is.
+2. **Zone intro — replace 3 stat cards with a quote-lines list.** The "3 quote lines · 1 drawing · 12 job items" stat cards got replaced with a numbered list of every quote line in the zone. Acts as the TOC for the breakdown pages that follow.
+3. **Scope card — drop duplicated header.** The scope card was printing `scope.item_name` which (in practice) matched the quote line text that appeared directly above it. Dropped `item_name` display entirely; now shows status pill + optional scope description only. When scope has no description (common), the card collapses to just a thin status strip above the items table.
+4. **Items table — add WO column + Qty/Finish gap.** RPC patched to add `linked_wos: {work_order_id, wo_sequence, status}[]` per job_item via `tbl_jobitem_workorder` junction. Items table now shows each item's WOs as `WO-21, WO-22` in monospace. Thin spacer column added between Qty and Finish so numbers don't smash into finish notes.
+
+**Fix 9 — "Who knows:" → "Hands on:"** Mateusz wanted stronger responsibility framing. Discussion weighed "Owners" (rejected — implies one named person when the list is everyone who logged time), "Built by" (activity-dependent, breaks on PAINT/COVER), "Crew" (team-oriented but less individual pull), and "Hands on" (universal, responsibility-adjacent without false ownership claim). Settled on "Hands on".
+
+---
+
+### Files changed this session
+
+| File | Kind | Notes |
+|---|---|---|
+| Migration `s39_overhead_bucket_per_job` | SQL | `ACTIVITY.OVERHEAD` lookup + `fn_create_job_overhead` + `trg_create_job_overhead` + retrofit over 9 existing jobs. |
+| Data import for Suneil Birthday / Tite Street | SQL | Job 14, quotes 12 + 13, 52 quote lines. Single atomic CTE-chained migration. |
+| `src/components/route-task-modal.tsx` | new | Extracted + redesigned 1024px two-pane job/WO picker. |
+| `src/app/(dashboard)/review/inbox/page.tsx` | edit | Use new modal; drop inline modal + unused types. Thread `description` through to modal. |
+| `src/components/scope-tabs.tsx` | new | Cost / Learnings / Documents tab shell with summary pills. |
+| `src/components/cost-breakdown.tsx` | edit | `hideHeader` + `onSummaryChange` props. React #310 fix (effect hoisted above early return). |
+| `src/components/learnings-section.tsx` | edit | `hideHeader` + `onSummaryChange` props. |
+| `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` | edit | Replace 3 stacked sections with `<ScopeTabs>`. |
+| Migration `s39d_handover_summary_tables_and_rpc` | SQL | `tbl_handover_zone_notes` + `tbl_handover_zone_documents` + first `rpc_job_handover_data` + RLS policies. |
+| Migration `s39d_rpc_job_handover_data` | SQL | RPC body (replaced cleanly in later migrations). |
+| Migration `s39e_handover_line_overrides_and_wo_notes` | SQL | `tbl_handover_line_overrides` + `tbl_handover_wo_notes` + RLS. |
+| Migration `s39e_rpc_job_handover_data_with_overrides` | SQL | RPC patched to filter excluded lines, surface `line_note` + `wo_note`. |
+| Migration `s39f_handover_zone_inclusion` | SQL | `ALTER TABLE tbl_handover_zone_notes ADD COLUMN is_included`. RPC filters zones at top. |
+| Migration `s39g_rpc_add_onedrive_path_to_docs` | SQL | Fix — RPC returns `onedrive_path` alongside `onedrive_item_id`. |
+| Migration `s39h_rpc_add_item_linked_wos` | SQL | RPC adds `linked_wos[]` per job_item via `tbl_jobitem_workorder`. |
+| `src/app/(dashboard)/reports/handover/[jobId]/page.tsx` | new | Read-only print page. A4 portrait, rotations, QR codes, excluded banners, line/WO notes. |
+| `src/app/(dashboard)/reports/handover/[jobId]/edit/page.tsx` | new | Admin authoring surface. Reorder, notes, drawings, line include/exclude, per-line/per-WO notes, zone include toggle. |
+| `src/app/(dashboard)/jobs/[id]/page.tsx` | edit | "Handover Summary" + "Edit Handover" links in reports action row. |
+| `src/app/globals.css` | edit | Handover `@media print` rules. Removed the `body > *:not(...)` whitelist that blanked traveller print. |
+| `src/components/sidebar.tsx` | edit | `print:hidden` on `<aside>` root. |
+| `src/components/pm-sidebar.tsx` | edit | Same treatment for PM view. |
+| `src/app/(dashboard)/layout.tsx` | edit | `print:hidden` on top bar + RecentJobsStrip; `print:ml-0` on main; `print:p-0 print:max-w-none` on inner container. |
+
+### Schema counts at session end
+
+- **Tables: 55** (+4: `tbl_handover_zone_notes`, `tbl_handover_zone_documents`, `tbl_handover_line_overrides`, `tbl_handover_wo_notes`).
+- **Views: 34** (unchanged).
+- **RPCs: 13** (+1: `rpc_job_handover_data`). Plus two internal functions: `fn_create_job_overhead`, `trg_fn_create_job_overhead` (wired via trigger, not user-facing).
+- New lookup values: `ACTIVITY.OVERHEAD` (1).
+
+### Live data state at session end
+
+- 10 jobs in `tbl_production_plan` (retrofit + new Tite Street).
+- 10 overhead triples in place (one per job). Zero spend logged against any of them yet.
+- Grosvenor (job 8): 11 zones derived, first handover exercise done. 1 drawing attached to Ballroom Foyer (`Main-Ballroom-entance.jpg`). WO completion rate creeping up during session (Mateusz used the expand-status dropdown after discovering it).
+- Handover docs: only Grosvenor tested end-to-end. Other 9 jobs have the feature available but no authoring done.
+
+---
+
+### Conventions added / reinforced
+
+- **"Manual checks go in a junction table; derived alerts go in a view"** (reinforced from S38d).
+- **Whitelist `@media print` selectors are dangerous.** Always blacklist specific chrome elements (`nav, .sidebar, header, aside, .print\:hidden`). A whitelist rule like `body > *:not(...)` blanks every print surface not explicitly listed.
+- **Semantic HTML beats nominal classes for chrome hiding.** Sidebar used `<aside>` (correct), not `.sidebar`, so the old rule missed it. Hide via Tailwind `print:hidden` at component level rather than central CSS — future additions inherit the behaviour.
+- **Sparse tables for overrides.** `tbl_handover_line_overrides` has a row only when the PM has changed something from default. No backfill needed, no rows per job except when authored. Same pattern as `tbl_handover_wo_notes`.
+- **Default-include, override-exclude.** The handover defaults to showing everything; PM unticks what shouldn't print. Safer than default-exclude — the risk of silent omission is higher than the risk of an install-only line appearing on a prep document.
+- **Actions first, narrative second** (process convention). Four sessions in a row cut off at the deploy stage because verbose explanation text ate the response budget before `git push && vercel --prod`. Going forward: commit + push + deploy happens before the explanatory post-amble.
+- **Read-only diagnostic before destructive edits** (process convention). When picking up a possibly-interrupted session, check `git log` + `git status` + Vercel deployment list first. Several sessions this day the work was already on disk / already deployed — the actual task was verification, not rebuild.
+
+### Deferred / follow-up
+
+All items added to Cleanup Backlog at top of TRACKER. Summary:
+
+- **Overhead UI polish** (6 items): line-level margin NaN, visual distinguishing, one-click "Route to Overhead", Project Pack export filter, cross-job report, `qry_quoteline_margin` NaN spot-check.
+- **Handover — drawing rendering**: pdf.js for PDF drawings (currently shows fallback "Open PDF" box); persist rotation across sessions via a column on `tbl_handover_zone_documents`.
+- **Handover — authoring**: activity-aware "Built by / Painted by" verbs if "Hands on:" reads too soft after real use; scope-name differentiation when multiple scopes per line (rare but real).
+- **Handover — multi-quote job** (Tite Street): verify job page, cost analysis, and handover surfaces all handle two quotes under one job_id. Only live instance.
+- **Mobile completion prompt**: when a freelancer stops a timer and isn't returning, prompt "is this WO done?" — cuts the retroactive status-catch-up work Mateusz did mid-session after noticing the status dropdown is buried in the expanded WO view.
+- **PM-side bulk WO complete**: if one-at-a-time from the scope page becomes painful across many jobs, add a multi-select catch-up surface. Not needed yet.
+- **GitHub repo transfer** (outstanding from S29 era): from personal to company account.
+
+### Behaviour to watch
+
+- Does anyone actually log against the overhead bucket, or does it sit empty? If empty after Grosvenor wraps, the "PM's job to log coordination time" assumption is wrong and we need a different prompt.
+- Does the handover doc help the stand-in during Grosvenor, or does the stand-in go back to asking Mateusz over WhatsApp? That's the real test.
+- Does Tite Street's multi-quote job surface any regressions on the job page or cost views?
+- Does auto-landscape rotation on drawings produce readable prints, or does it clip on Mateusz's actual printer?
+- Does "Hands on:" read correctly for multi-person rows, or does it still feel soft compared to "Built by" per activity?
