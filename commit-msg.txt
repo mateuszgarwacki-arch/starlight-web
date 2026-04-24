@@ -1,16 +1,39 @@
-Fix React #310 in CostBreakdown onSummaryChange effect
+Handover Summary — Phase 2 read-only printout (S39d)
 
-The onSummaryChange useEffect was placed AFTER an early
-`if (loading) return ...` statement. On first render loading===true
-so the effect never ran. After data loaded, loading===false, the
-component rendered past the early return, and the effect DID run
-— meaning more hooks ran on subsequent renders than on the first,
-which triggers React error #310 "Rendered more hooks than during
-the previous render."
+Delivers the printable handover document at /reports/handover/[jobId],
+plus a "Print Handover" button on the job page. Reads live data from
+rpc_job_handover_data (Phase 1). No authoring UI yet — notes empty,
+no drawings attached — that's Phase 3 next session.
 
-Moved the effect to right after the load() useEffect, before the
-early return. Derived values (q, estTotal, committedTotal,
-bestMarginPct, hasInvoiced) are computed inside the effect body
-rather than referenced from scope below the early return, so the
-hook call order is identical across all renders regardless of
-loading state.
+Document structure (A4 portrait, each section breaks to a new page):
+
+- Cover page: job number/name/event date/location/PM/print date, plus
+  overall readiness totals across all zones.
+- Per zone, in PM-chosen order (defaults to alphabetical):
+  - Zone intro page: name, notes (once authoring ships), readiness
+    strip with WO complete count, kit-list progress, on-hold flag.
+  - One full page per attached drawing (images native, PDFs fall
+    back to filename placeholder for now — pdf.js on-demand later
+    if needed).
+  - Data pages: quote lines grouped under the zone, each showing
+    scope(s) with job items (mini load list) and WOs with
+    description, status pill, QR code linking to /m/wo/[woId], and
+    names of everyone who logged time on it. No hours, no rates,
+    no financials anywhere.
+
+Banner at top flags any quote lines that don't have an event_zone —
+nothing gets silently dropped.
+
+Overhead bucket (S39) explicitly excluded — it's internal.
+
+Files:
+- src/app/(dashboard)/reports/handover/[jobId]/page.tsx — the page
+- src/app/globals.css — print CSS (.handover-page forces light theme,
+  A4 page size, section page breaks, hide Print button on print)
+- src/app/(dashboard)/jobs/[id]/page.tsx — Print Handover button in
+  the reports action row
+
+DB (already shipped in Phase 1):
+- tbl_handover_zone_notes, tbl_handover_zone_documents
+- rpc_job_handover_data(p_job_id INT) — returns full JSON payload,
+  excludes overhead bucket, computes per-zone readiness.

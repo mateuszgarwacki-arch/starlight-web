@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle } from "lucide-react";
+import { ArrowLeft, Plus, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle, Printer } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -1135,6 +1135,23 @@ export default function JobDetailPage() {
           <p className="text-xs text-muted">Value Covered</p>
           <p className="text-lg font-semibold text-navy">{formatCurrency(doneValue)}</p>
         </div>
+      </div>
+
+      {/* Reports — outbound deliverables for this job */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Link
+          href={`/reports/handover/${jobId}`}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-surface border border-subtle rounded-lg hover:bg-surface-mid hover:border-navy/30 transition-all text-navy"
+          title="Printable handover summary — zone by zone, with drawings, WOs, and QR codes"
+        >
+          <Printer className="h-4 w-4" /> Handover Summary
+        </Link>
+        <Link
+          href={`/reports/load-list/${jobId}`}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-surface border border-subtle rounded-lg hover:bg-surface-mid hover:border-navy/30 transition-all text-navy"
+        >
+          <Package className="h-4 w-4" /> Load List
+        </Link>
       </div>
 
       {/* Needs action alert */}

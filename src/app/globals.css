@@ -203,3 +203,165 @@
     margin: 5mm;
   }
 }
+
+
+/* ============================================================
+   Handover Summary — light theme + A4 print layout
+   ============================================================ */
+.handover-root {
+  color-scheme: light;
+  background: #f7f7f8;
+  min-height: 100vh;
+  color: #1A1A2E;
+}
+
+.handover-print-area {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 20px 0;
+  background: #f7f7f8;
+}
+
+.handover-page {
+  width: 200mm;
+  min-height: 287mm;
+  margin: 0 auto 12mm auto;
+  padding: 15mm 12mm;
+  background: white;
+  color: #1A1A2E;
+  border: 1px solid #d4d4d4;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.handover-cover-page {
+  padding-top: 25mm;
+}
+
+.handover-zone-intro {
+  justify-content: flex-start;
+}
+
+/* Drawing page: label row, big canvas, filename footer */
+.handover-drawing-page {
+  padding: 10mm 8mm;
+}
+.handover-drawing-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 6mm 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 6mm;
+}
+.handover-drawing-canvas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 240mm;
+}
+.handover-drawing-img {
+  max-width: 100%;
+  max-height: 240mm;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+.handover-drawing-footer {
+  margin-top: 6mm;
+  padding-top: 3mm;
+  border-top: 1px solid #e0e0e0;
+  text-align: right;
+}
+
+/* Readiness strip — inline chips */
+.handover-readiness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  align-items: center;
+}
+
+/* ============================================================
+   Handover Print Styles (@media print)
+   ============================================================ */
+@media print {
+  /* Hide the whole dashboard shell */
+  body > *:not(.handover-root):not(.handover-print-area) {
+    display: none !important;
+  }
+
+  .handover-toolbar {
+    display: none !important;
+  }
+
+  .handover-root {
+    background: white !important;
+  }
+
+  .handover-print-area {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .handover-page {
+    margin: 0 !important;
+    width: 100% !important;
+    min-height: auto !important;
+    page-break-after: always;
+    page-break-inside: avoid;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    padding: 12mm 10mm;
+  }
+
+  .handover-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Drawing pages: allow the canvas to fill the page properly */
+  .handover-drawing-page {
+    padding: 8mm;
+  }
+  .handover-drawing-canvas {
+    min-height: 248mm;
+  }
+  .handover-drawing-img {
+    max-height: 248mm;
+  }
+
+  /* Data pages flow across multiple printed pages if needed */
+  .handover-zone-data {
+    page-break-inside: auto !important;
+  }
+
+  /* Keep quote lines intact across pages where possible */
+  .handover-line {
+    page-break-inside: avoid;
+  }
+  .handover-wo {
+    page-break-inside: avoid;
+  }
+  .handover-scope {
+    page-break-inside: avoid;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
