@@ -1,28 +1,31 @@
-Hide dashboard chrome on print (sidebar + topbar + recent-jobs-strip)
+Handover: cover/zone/scope cleanup + WO column on items table
 
-The handover print preview was leaking three bits of dashboard chrome
-onto every printed page: the sidebar, the top bar with ViewSwitcher,
-and the RecentJobsStrip under it.
+Four changes from live feedback on the Grosvenor handover preview:
 
-Root cause: my existing @media print CSS hides `nav, .sidebar, header`
-but the sidebar uses `<aside>`. The traveller doesn't suffer this
-because /traveller sits outside the (dashboard) route group and has
-no dashboard layout — but anything inside (dashboard) that prints
-(handover, future reports) has been leaking the whole shell.
+1. Cover page — remove the "N zones / M lines have been excluded"
+   banner. The reader doesn't need to know what was filtered out;
+   the document is what it is. Excluded data is still hidden
+   correctly from the body — just not announced on the cover.
 
-Fixes, targeted via Tailwind `print:hidden` so we don't need CSS
-selector games that could over-match:
+2. Zone intro page — replace the 3 stat cards (quote lines / drawing
+   / job items) with a clean numbered list of all the quote lines
+   in the zone. Acts as the table of contents for the breakdown
+   pages that follow. Same layout pattern as the cover's "Zones in
+   this handover" list.
 
-- components/sidebar.tsx — add print:hidden to the <aside> root
-- components/pm-sidebar.tsx — same treatment for the PM-view sidebar
-- app/(dashboard)/layout.tsx:
-  - <main> gets print:ml-0 so content sits at page edge (no offset
-    once the sidebar is hidden)
-  - Top bar div gets print:hidden
-  - RecentJobsStrip wrapped in print:hidden
-  - Inner content container gets print:p-0 print:max-w-none so A4
-    layout isn't constrained by dashboard padding
+3. Scope card — drop the duplicated header. Previously printed
+   the line text again in a "scope name" position right below the
+   line text header itself, which read as the same sentence twice.
+   Now: status pill + scope description (when present) only.
+   Scope description is usually empty, so often the card collapses
+   to just a status pill above the items table — much cleaner.
 
-This is a global improvement. Any future printable page inside
-(dashboard) will inherit clean print chrome handling without needing
-page-specific CSS.
+4. Items table — add WO column showing every WO each job item
+   is linked to (e.g. "WO-21, WO-22"). Cross-references the
+   work-orders block below so the reader can trace which built
+   piece relates to which fab task. Also added a thin spacer
+   column between Qty and Finish so the numbers don't smash into
+   the finish notes.
+
+RPC change: tbl_jobitem_workorder is now joined into each job
+item under linked_wos: { work_order_id, wo_sequence, status }[].

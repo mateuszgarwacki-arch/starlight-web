@@ -66,6 +66,7 @@ interface HandoverJobItem {
   unit: string | null;
   finish_required: string | null;
   kit_list_exported: boolean;
+  linked_wos: { work_order_id: number; wo_sequence: number | null; status: string }[];
 }
 
 interface HandoverWO {
@@ -468,12 +469,16 @@ function ScopeBlock({
 }) {
   return (
     <div className="handover-scope mt-3 border border-neutral-300 rounded overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border-b border-neutral-300">
-        <Wrench size={12} className="text-neutral-600" />
-        <span className="font-semibold text-sm">
-          {scope.item_name || "Unnamed scope"}
-        </span>
-        <span className="text-[10px] px-2 py-0.5 bg-white rounded text-neutral-700 ml-auto">
+      <div className="flex items-start gap-2 px-3 py-1.5 bg-neutral-100 border-b border-neutral-300">
+        <Wrench size={12} className="text-neutral-600 mt-1 shrink-0" />
+        <div className="flex-1 min-w-0">
+          {scope.description && scope.description.trim() !== "" && (
+            <p className="text-xs text-neutral-700 leading-snug">
+              {scope.description}
+            </p>
+          )}
+        </div>
+        <span className="text-[10px] px-2 py-0.5 bg-white rounded text-neutral-700 shrink-0">
           {scope.status}
         </span>
       </div>
@@ -489,7 +494,9 @@ function ScopeBlock({
                 <th className="w-6 py-1">#</th>
                 <th className="py-1">Description</th>
                 <th className="w-20 py-1 text-right">Qty</th>
-                <th className="w-20 py-1">Finish</th>
+                <th className="w-2 py-1"></th>
+                <th className="w-24 py-1">Finish</th>
+                <th className="w-24 py-1">WO</th>
               </tr>
             </thead>
             <tbody>
@@ -504,8 +511,20 @@ function ScopeBlock({
                     {item.quantity}
                     {item.unit ? ` ${item.unit}` : ""}
                   </td>
+                  <td className="py-1"></td>
                   <td className="py-1 text-neutral-600">
                     {item.finish_required || "—"}
+                  </td>
+                  <td className="py-1 text-neutral-700">
+                    {item.linked_wos.length === 0 ? (
+                      <span className="text-neutral-300">—</span>
+                    ) : (
+                      <span className="font-mono">
+                        {item.linked_wos
+                          .map((w) => `WO-${w.work_order_id}`)
+                          .join(", ")}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -628,26 +647,26 @@ function ZoneSection({
           <ReadinessStrip r={zone.readiness} />
         </div>
 
-        <div className="mt-8 grid grid-cols-3 gap-4">
-          <div className="text-center p-4 border border-neutral-300 rounded">
-            <div className="text-4xl font-bold">{zone.quote_lines.length}</div>
-            <div className="text-xs text-neutral-500 mt-1">
-              quote line{zone.quote_lines.length !== 1 ? "s" : ""}
+        {zone.quote_lines.length > 0 && (
+          <div className="mt-8">
+            <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-3">
+              Quote lines in this zone
             </div>
+            <ol className="space-y-1.5 text-sm">
+              {zone.quote_lines.map((l) => (
+                <li key={l.quote_line_id} className="flex items-baseline gap-3 border-b border-neutral-200 pb-1">
+                  <span className="font-mono text-xs text-neutral-500 shrink-0 w-8">
+                    #{l.line_number}
+                  </span>
+                  <span className="flex-1 leading-snug">{l.line_text}</span>
+                  <span className="text-xs text-neutral-600 shrink-0">
+                    Qty {l.quantity}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
-          <div className="text-center p-4 border border-neutral-300 rounded">
-            <div className="text-4xl font-bold">{zone.documents.length}</div>
-            <div className="text-xs text-neutral-500 mt-1">
-              drawing{zone.documents.length !== 1 ? "s" : ""}
-            </div>
-          </div>
-          <div className="text-center p-4 border border-neutral-300 rounded">
-            <div className="text-4xl font-bold">
-              {zone.readiness.items_total}
-            </div>
-            <div className="text-xs text-neutral-500 mt-1">job items</div>
-          </div>
-        </div>
+        )}
 
       </section>
 
@@ -775,7 +794,7 @@ export default function HandoverPage() {
     );
   }
 
-  const { job, zones, unassigned_lines, excluded_line_count, excluded_zone_count } = data;
+  const { job, zones, unassigned_lines } = data;
 
   return (
     <div className="handover-root">
@@ -864,29 +883,6 @@ export default function HandoverPage() {
                     )}
                   </ul>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {(excluded_zone_count > 0 || excluded_line_count > 0) && (
-            <div className="p-3 bg-neutral-100 border-l-4 border-neutral-400 rounded-r mb-8 text-xs text-neutral-700">
-              {excluded_zone_count > 0 && (
-                <div>
-                  <strong>{excluded_zone_count}</strong> zone
-                  {excluded_zone_count > 1 ? "s have" : " has"} been
-                  excluded from this handover (everything in them — lines,
-                  drawings, WOs — is hidden below).
-                </div>
-              )}
-              {excluded_line_count > 0 && (
-                <div className={excluded_zone_count > 0 ? "mt-1" : ""}>
-                  <strong>{excluded_line_count}</strong> individual quote
-                  line{excluded_line_count > 1 ? "s have" : " has"} been
-                  excluded (install-only, handled elsewhere, or done).
-                </div>
-              )}
-              <div className="mt-1 text-[11px] text-neutral-500">
-                Manage from the Edit Handover page if that&apos;s wrong.
               </div>
             </div>
           )}
