@@ -1,17 +1,28 @@
-Handover: rotate drawings feature (port of traveller pattern)
+Hide dashboard chrome on print (sidebar + topbar + recent-jobs-strip)
 
-Same rotation pattern the traveller print surface uses:
-- Per-drawing rotation state in HandoverPage. Cycles 0→90→180→270→0.
-- Rotate button (small, next to the caption) with "print:hidden" so
-  it shows on screen but doesn't appear on the printed page.
-- Auto-detect landscape images on load and rotate 90° once so they
-  fill the portrait page. PM can override manually after.
-- Rotation key scoped per zone-drawing pair (event_zone:doc_id) so
-  the same document attached to multiple zones rotates independently.
-- Swaps max-width/max-height at 90°/270° so rotated images don't
-  overflow the A4 page frame.
+The handover print preview was leaking three bits of dashboard chrome
+onto every printed page: the sidebar, the top bar with ViewSwitcher,
+and the RecentJobsStrip under it.
 
-Not persisted — per-session only. Matches traveller behaviour.
-Good enough for the "oops, that drawing is sideways" case; if you
-later want the rotation to stick across sessions, that's a small
-follow-up (add rotation to tbl_handover_zone_documents).
+Root cause: my existing @media print CSS hides `nav, .sidebar, header`
+but the sidebar uses `<aside>`. The traveller doesn't suffer this
+because /traveller sits outside the (dashboard) route group and has
+no dashboard layout — but anything inside (dashboard) that prints
+(handover, future reports) has been leaking the whole shell.
+
+Fixes, targeted via Tailwind `print:hidden` so we don't need CSS
+selector games that could over-match:
+
+- components/sidebar.tsx — add print:hidden to the <aside> root
+- components/pm-sidebar.tsx — same treatment for the PM-view sidebar
+- app/(dashboard)/layout.tsx:
+  - <main> gets print:ml-0 so content sits at page edge (no offset
+    once the sidebar is hidden)
+  - Top bar div gets print:hidden
+  - RecentJobsStrip wrapped in print:hidden
+  - Inner content container gets print:p-0 print:max-w-none so A4
+    layout isn't constrained by dashboard padding
+
+This is a global improvement. Any future printable page inside
+(dashboard) will inherit clean print chrome handling without needing
+page-specific CSS.

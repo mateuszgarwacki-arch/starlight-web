@@ -23,7 +23,7 @@ export function PmSidebar() {
   };
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-56 bg-base text-white flex flex-col z-50 border-r border-subtle">
+    <aside className="fixed top-0 left-0 h-screen w-56 bg-base text-white flex flex-col z-50 border-r border-subtle print:hidden">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-subtle">
         <Star className="h-6 w-6 text-starlight-pink shrink-0" />

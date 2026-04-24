@@ -10,14 +10,16 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-base">
       <Sidebar />
-      {/* Main content — offset by sidebar width */}
-      <main className="ml-56 min-h-screen">
-        {/* Top bar with view switcher */}
-        <div className="sticky top-0 z-30 flex items-center justify-end gap-3 px-6 h-12 bg-base/95 backdrop-blur border-b border-subtle">
+      {/* Main content — offset by sidebar width (removed on print) */}
+      <main className="ml-56 min-h-screen print:ml-0">
+        {/* Top bar with view switcher — chrome, hide on print */}
+        <div className="sticky top-0 z-30 flex items-center justify-end gap-3 px-6 h-12 bg-base/95 backdrop-blur border-b border-subtle print:hidden">
           <ViewSwitcher />
         </div>
-        <div className="p-6 max-w-7xl mx-auto">
-          <RecentJobsStrip />
+        <div className="p-6 max-w-7xl mx-auto print:p-0 print:max-w-none">
+          <div className="print:hidden">
+            <RecentJobsStrip />
+          </div>
           {children}
         </div>
       </main>
