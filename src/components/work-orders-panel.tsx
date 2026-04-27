@@ -1172,6 +1172,8 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
             defaultFinish={scope?.finish_relative}
             predecessorWO={nextStepPredecessor}
             scopeFinish={scope?.finish_relative}
+            scopeDescription={scope?.description}
+            scopeItemName={scope?.item_name}
             onClose={() => setNextStepPredecessor(null)}
             onCreated={async (woId) => {
               setNextStepPredecessor(null);

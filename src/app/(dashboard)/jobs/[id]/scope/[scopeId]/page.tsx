@@ -553,6 +553,8 @@ export default function ScopeDetailPage() {
           selectedItemIds={selectedItemIds}
           defaultComplexity={scope?.complexity_construction}
           defaultFinish={scope?.finish_relative}
+          scopeDescription={scope?.description}
+          scopeItemName={scope?.item_name}
           onClose={() => setShowWODialog(false)}
           onCreated={handleWOCreated}
         />

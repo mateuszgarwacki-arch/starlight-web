@@ -1,84 +1,94 @@
 # Starlight Web App — Development Tracker
-
 ## 🧹 Cleanup Backlog
 
 Running list of known debt, deferred work, and small follow-ups. Reviewed at the start of every session. Items are added whenever a session ships something with a known deferral or a correctness bug that we chose not to fix in-flight. Order roughly reflects priority — top items are the ones to do next. Check items off as they ship; move completed ones to the relevant session entry.
 
 ### Correctness (do first)
-_No open correctness items. S28d closed out in S33 — see session entry below._
+
+*No open correctness items. S28d closed out in S33 — see session entry below.*
 
 ### Small/mechanical (easy wins)
-_No open items. See S33 session entry for cleanup history._
+
+*No open items. See S33 session entry for cleanup history.*
 
 ### Features deferred
-- [ ] **Handover — PDF drawing rendering** *(S39)* — image drawings render full-page inline; PDF drawings currently show a fallback "Open PDF" box. Add pdf.js (dynamic import, ~500KB gzipped) and render PDF pages to canvas at 2× DPR for crisp print. Applies to `DrawingPage` in `/reports/handover/[jobId]/page.tsx`.
-- [ ] **Handover — persist drawing rotation** *(S39)* — rotation state is currently in-memory only (matches traveller). If a zone has 10 landscape drawings, every session restart means re-rotating. Add `rotation INT DEFAULT 0` on `tbl_handover_zone_documents` and persist on rotate. One small migration + a PATCH on the handler.
-- [ ] **Handover — activity-aware "built by" verbs** *(S39)* — current label "Hands on:" is universal. If real handover use reads too soft, upgrade to activity-aware verbs: "Built by:" for BUILD, "Painted by:" for PAINT, "Upholstered by:" for COVER, fallback "Hands on:" for anything unmapped. Small verb map maintained as new activities ship. Stronger signature/ownership feel.
-- [ ] **Handover — multi-scope scope-name display** *(S39)* — the scope card currently drops `scope.item_name` (it duplicated the line text when there was one scope per line). When a line has 2+ scopes, name differentiation becomes useful again. Either always show `item_name` when it meaningfully differs from `line_text`, or always show it when there are multiple scopes on the line. Not actionable until a real 2-scope line appears on a handover.
-- [ ] **Handover — multi-quote job audit** *(S39)* — Tite Street (job 14) is the only multi-quote job. Verify:
+
+- \[ \] **Handover — PDF drawing rendering** *(S39)* — image drawings render full-page inline; PDF drawings currently show a fallback "Open PDF" box. Add pdf.js (dynamic import, \~500KB gzipped) and render PDF pages to canvas at 2× DPR for crisp print. Applies to `DrawingPage` in `/reports/handover/[jobId]/page.tsx`.
+- \[ \] **Handover — persist drawing rotation** *(S39)* — rotation state is currently in-memory only (matches traveller). If a zone has 10 landscape drawings, every session restart means re-rotating. Add `rotation INT DEFAULT 0` on `tbl_handover_zone_documents` and persist on rotate. One small migration + a PATCH on the handler.
+- \[ \] **Handover — activity-aware "built by" verbs** *(S39)* — current label "Hands on:" is universal. If real handover use reads too soft, upgrade to activity-aware verbs: "Built by:" for BUILD, "Painted by:" for PAINT, "Upholstered by:" for COVER, fallback "Hands on:" for anything unmapped. Small verb map maintained as new activities ship. Stronger signature/ownership feel.
+- \[ \] **Handover — multi-scope scope-name display** *(S39)* — the scope card currently drops `scope.item_name` (it duplicated the line text when there was one scope per line). When a line has 2+ scopes, name differentiation becomes useful again. Either always show `item_name` when it meaningfully differs from `line_text`, or always show it when there are multiple scopes on the line. Not actionable until a real 2-scope line appears on a handover.
+- \[ \] **Handover — multi-quote job audit** *(S39)* — Tite Street (job 14) is the only multi-quote job. Verify:
   - Job page lists both quotes, cost analysis sums across them.
   - `qry_dash_quote_stats` aggregates correctly.
   - Handover doc treats the job's lines as one unified body (already verified — no per-quote split on the handover).
-- [ ] **Overhead bucket UI polish** *(S39)* — data model shipped; UI follow-ups remain:
+- \[ \] **Overhead bucket UI polish** *(S39)* — data model shipped; UI follow-ups remain:
   - Line-level margin on overhead rows shows `-∞%` / `NaN` (£0 quote, £X spent). Detect `line_sub_group = 'Overhead'` and render a plain spend figure with an "Overhead" pill, no percentage. Applies to quote lines table on job page, cost breakdown per-line table, and PM 100m view.
   - Visual distinction for the overhead row in the quote lines table — subtle tint + "Overhead" badge — so it doesn't read as a normal line the PM forgot to price.
   - **"Route to Overhead"** one-click button in review inbox (`/review/inbox`) alongside "Route to WO". *Partially addressed in S39b* (overhead WO now pinned at top of the new two-pane modal). Full one-click still useful — saves picking the job first.
   - Quote PDF export filter: skip `line_sub_group = 'Overhead'` rows. Client must never see internal overhead lines. Verify whichever export path exists (quote PDF, Project Pack xlsx).
   - Cross-job overhead report: total overhead spend per job, sorted descending. Simple page or a chart on `/review`. One bucket per job, no sub-categories (decision S39).
   - Check that `qry_quoteline_margin` and `qry_job_quote_margin` don't propagate NaN from the £0 line anywhere user-facing. Spot-check cost breakdown and dashboard stats.
-- [ ] **Mobile completion prompt** *(S39, observed)* — Mateusz noticed mid-session that freelancers rarely mark WOs complete; the WO status dropdown is buried inside the expanded WO details on the scope page. Root cause is mobile UX, not PM UX: when a freelancer stops a timer and isn't planning to come back to the WO, nudge "is this WO done?" on the stop flow. Would cut Mateusz's retroactive status-catch-up work.
-- [ ] **PM-side bulk WO complete** *(S39, conditional)* — if one-at-a-time status editing from the scope page's expanded WO details becomes painful across many jobs, add a multi-select "catch-up" surface. Not urgent yet.
-- [ ] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
-- [ ] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit ~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
-- [ ] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
+- \[ \] **Mobile completion prompt** *(S39, observed)* — Mateusz noticed mid-session that freelancers rarely mark WOs complete; the WO status dropdown is buried inside the expanded WO details on the scope page. Root cause is mobile UX, not PM UX: when a freelancer stops a timer and isn't planning to come back to the WO, nudge "is this WO done?" on the stop flow. Would cut Mateusz's retroactive status-catch-up work.
+- \[ \] **PM-side bulk WO complete** *(S39, conditional)* — if one-at-a-time status editing from the scope page's expanded WO details becomes painful across many jobs, add a multi-select "catch-up" surface. Not urgent yet.
+- \[ \] **Job-level CAD filename collisions** *(S31)* — when a PM uploads `model.skp` at job level twice, the second overwrites (no activity/scope prefix + OneDrive `conflictBehavior: "replace"`). Options: append a short timestamp to the basename when no context prefix, or show a client-side "file exists, replace?" prompt. Low priority — filename version discipline works as mitigation.
+- \[ \] **Admin dashboard PM-note flag widget** *(S28b)* — show recent `pm_note` learnings on `/` so new notes surface without drilling into a job. Query: `tbl_learnings WHERE category='pm_note'` joined to `tbl_quote_lines` + `tbl_production_plan` for active jobs, newest first, limit \~10. Render as a card on the admin home, click-through to `/pm/jobs/{id}` (or `/jobs/{id}` in admin view).
+- \[ \] **Image thumbnail proxy** *(S28b)* — PM view doc cards currently show type-icon placeholders because OneDrive direct paths can't be used as `<img src>`. Needs a signed-URL or thumbnail endpoint (Graph API `driveItem/thumbnails` or a Vercel proxy route) so `.png/.jpg/.jpeg/.webp` docs show actual previews in the DocumentGallery.
 
 ### Testing gaps
-- [ ] **Multi-scope rendering on PM view** *(S28)* — code path is implemented but no quote line in production has 2+ scopes yet. First time a line is split, validate the scope-tier rendering (blue left border, per-scope WO groups, scope notes thread).
+
+- \[ \] **Multi-scope rendering on PM view** *(S28)* — code path is implemented but no quote line in production has 2+ scopes yet. First time a line is split, validate the scope-tier rendering (blue left border, per-scope WO groups, scope notes thread).
 
 ### Stock/catalogue polish
-- [ ] **Stock build-state badge for promoted stock** *(S27)* — when a PM picks a promoted stock item, show whether it's physically available ("Built and available") vs still in build ("In build: 2/5 WOs complete"). View over `tbl_stock_items` joined to its `source_job_item_id` → scope → WOs. Low urgency while you're the only PM promoting, but important before handing stock picking to other PMs.
+
+- \[ \] **Stock build-state badge for promoted stock** *(S27)* — when a PM picks a promoted stock item, show whether it's physically available ("Built and available") vs still in build ("In build: 2/5 WOs complete"). View over `tbl_stock_items` joined to its `source_job_item_id` → scope → WOs. Low urgency while you're the only PM promoting, but important before handing stock picking to other PMs.
 
 ---
 
 ## Project Overview
 
-**What:** Web application replacing MS Access front-end for Starlight Design's production management system.
-**Backend:** Supabase (PostgreSQL) — **55 tables, 34 views, 13 RPC functions, 200+ indexes** (verified 24 Apr 2026 after S39).
-**Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns.
-**Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app
-**Auth:** Supabase Auth (email+password for PM/foreman/admin, phone+password for freelancers). Three-layer security: proxy session validation (`src/proxy.ts` since S33, was `middleware.ts`) + API route auth + RLS on all tables. See Security conventions below.
-**Git:** github.com/mateuszgarwacki-arch/starlight-web
-**Deploy:** `vercel --prod` from CLI (use cmd shell, not powershell)
-**Test Job:** Chelsea In Bloom (job_id=6, job_number=13794). Real production jobs: Grosvenor Hotel Wedding (13725), and active workload.
+**What:** Web application replacing MS Access front-end for Starlight Design's production management system. **Backend:** Supabase (PostgreSQL) — **55 tables, 34 views, 13 RPC functions, 200+ indexes** (verified 24 Apr 2026 after S39). **Frontend:** Next.js 16.1.7 / React / Tailwind CSS / shadcn/ui patterns. **Hosting:** Vercel (hobby tier) — workshop-five-gamma.vercel.app **Auth:** Supabase Auth (email+password for PM/foreman/admin, phone+password for freelancers). Three-layer security: proxy session validation (`src/proxy.ts` since S33, was `middleware.ts`) + API route auth + RLS on all tables. See Security conventions below. **Git:** [github.com/mateuszgarwacki-arch/starlight-web](http://github.com/mateuszgarwacki-arch/starlight-web)**Deploy:** `vercel --prod` from CLI (use cmd shell, not powershell) **Test Job:** Chelsea In Bloom (job_id=6, job_number=13794). Real production jobs: Grosvenor Hotel Wedding (13725), and active workload.
 
 ## Build Status
 
 ### Phase 0: Foundation ✅
+
 ### Phase 1: Dashboard ✅
+
 ### Phase 2: Jobs & Quote Lines ✅
+
 ### Category Redesign ✅
+
 ### Phase 3: Scope Breakdown ✅
+
 ### Phase 4: Work Orders & BOM ✅
+
 ### Phase 5: Freelancer Mobile ✅
+
 ### Phase 5.5: Workshop & Scheduling ✅
+
 ### Phase 6: Cost Visibility & Review ✅
+
 ### Phase 7: Capacity & Materials ✅
+
 ### Invoice Processing System ✅
+
 ### Suppliers System ✅
+
 ### Dashboard Polish ✅
 
 ### Phase 8: Polish & Handover — MOSTLY COMPLETE
 
 #### Traveller PDF ✅ (Session 5)
-- [x] Full traveller page at `/traveller?scopeId=X&mode=single&woId=Y`
-- [x] Page layout: double border frame, header (job no, job name, step X of Y, scope item name), footer (print date, page X of Y, WO-id)
-- [x] TaskBrief section: full description, BOM with stock pull column, linked items, sibling WOs with descriptions, sign-off slots
-- [x] Image pages: auto-detect landscape, rotate button, pdf.js canvas rendering for cut lists
-- [x] Real QR codes via qrcode.react — scans to `/m/wo/{id}` for instant mobile access
-- [x] Print & Release button: writes `traveller_printed_at`, sets Not-Started → Ready
-- [x] Print CSS fixed for Next.js 16 (no `#__next` wrapper — `body > *` rule was hiding everything)
-- [x] Blank last page eliminated (removed inline `pageBreakAfter: "always"`, CSS `:last-child` rule handles it)
-- [x] Step numbering: "Step 1 of 2" format, counts ALL WOs on scope not just filtered
+
+- \[x\] Full traveller page at `/traveller?scopeId=X&mode=single&woId=Y`
+- \[x\] Page layout: double border frame, header (job no, job name, step X of Y, scope item name), footer (print date, page X of Y, WO-id)
+- \[x\] TaskBrief section: full description, BOM with stock pull column, linked items, sibling WOs with descriptions, sign-off slots
+- \[x\] Image pages: auto-detect landscape, rotate button, pdf.js canvas rendering for cut lists
+- \[x\] Real QR codes via qrcode.react — scans to `/m/wo/{id}` for instant mobile access
+- \[x\] Print & Release button: writes `traveller_printed_at`, sets Not-Started → Ready
+- \[x\] Print CSS fixed for Next.js 16 (no `#__next` wrapper — `body > *` rule was hiding everything)
+- \[x\] Blank last page eliminated (removed inline `pageBreakAfter: "always"`, CSS `:last-child` rule handles it)
+- \[x\] Step numbering: "Step 1 of 2" format, counts ALL WOs on scope not just filtered
 - [x] Sibling WOs show description + status (not hours estimate)
 - [x] Days remaining removed from traveller (stale after printing)
 - [x] Order column removed from traveller BOM (procurement is PM concern, not workshop)
@@ -3755,16 +3765,15 @@ While fixing, found three uncommitted local changes from an incomplete earlier s
 **Fix 1 — trigger (real-time correctness):**
 `trg_timesheet_recompute_for_time_entry` on `tbl_wo_time_entries` AFTER INSERT/UPDATE/DELETE calls `rpc_detect_timesheet_gaps` for the affected date. On UPDATE that changes the date, recomputes both old and new. Scope narrow (one freelancer, one date), idempotent, safe on every write.
 
-**Fix 2 — page-load re-run (belt-and-braces):**
-`/review/timesheets` and the `TimesheetFlagsPanel` on `/m/me` both call `rpc_detect_timesheet_gaps` for the last 14 days before fetching. Catches anything the trigger might miss (new write path not yet covered, direct SQL edits, bugs).
+**Fix 2 — page-load re-run (belt-and-braces):**`/review/timesheets` and the `TimesheetFlagsPanel` on `/m/me` both call `rpc_detect_timesheet_gaps` for the last 14 days before fetching. Catches anything the trigger might miss (new write path not yet covered, direct SQL edits, bugs).
 
 Verified live: no-op UPDATE on Karol's entry 124 caused `updated_at` on flag row to refresh without status change. Karol's flag auto-resolved to 10h correctly.
 
 **Known edge case (deferred):** detector has `HAVING SUM > 0` — if all of a date's hours are moved elsewhere or all archived, the resulting zero-hour day doesn't re-evaluate the existing flag; it stays open with stale numbers. Unreachable in normal operation; admin-close covers the rare case. Will revisit if it fires in practice.
 
 **Convention added:**
-- **Trigger on the write for cross-table consistency; re-run on the read as backstop.** The pattern: any table whose state depends on another table's SUM/COUNT should have a trigger to keep it fresh, AND a cheap re-compute on whatever page reads it. Two layers: one fast, one safety.
 
+- **Trigger on the write for cross-table consistency; re-run on the read as backstop.** The pattern: any table whose state depends on another table's SUM/COUNT should have a trigger to keep it fresh, AND a cheap re-compute on whatever page reads it. Two layers: one fast, one safety.
 
 ---
 
@@ -3773,6 +3782,7 @@ Verified live: no-op UPDATE on Karol's entry 124 caused `updated_at` on flag row
 Full list of what shipped today across S37 / S37b / S38 / S38b / S38c:
 
 ### BOM invariant (S37 + S37b)
+
 - Locked `tbl_wo_bom.unit_cost` invariant (price per stored unit). No read-time multipliers.
 - Normalised 6 legacy Convention A rows. Dropped `unit_to_base_multiplier` column.
 - `qry_bom_enriched`, `rpc_pm_job_overview`, `bomRowCost` helper all simplified.
@@ -3782,32 +3792,35 @@ Full list of what shipped today across S37 / S37b / S38 / S38b / S38c:
 - Deleted orphan `scope-bom.tsx`.
 
 ### Timesheet gap detection (S38 + S38b + S38c)
+
 - New table `tbl_timesheet_flags` (freelancer_id, flag_date, expected/logged hours, status, reason). UNIQUE(freelancer_id, flag_date) for idempotency.
-- RPC `rpc_detect_timesheet_gaps(DATE)` — plpgsql SECURITY DEFINER, flags freelancers who logged > 0 but < 90% of `standard_day_hours` (default 10h).
+- RPC `rpc_detect_timesheet_gaps(DATE)` — plpgsql SECURITY DEFINER, flags freelancers who logged &gt; 0 but &lt; 90% of `standard_day_hours` (default 10h).
 - pg_cron schedule `timesheet-gap-detect-daily` at 06:00 UTC daily against yesterday.
 - Trigger `trg_timesheet_recompute_for_time_entry` keeps flags in sync with time entries in realtime.
 - Mobile: red banner on `/m` task list, full panel on `/m/me` with Add-hours deep-link and 5-chip reason picker.
 - Admin: new page `/review/timesheets` with open/resolved sections and admin-close button.
 - Page-load re-run of detector on `/review/timesheets` and `TimesheetFlagsPanel` for belt-and-braces.
 - Shared `<ReviewNavChips />` component across all three review pages (`/review`, `/review/inbox`, `/review/timesheets`).
-- Sidebar: Review badge routes to `/review/inbox` when inbox count > 0. New "Timesheets" entry with red badge for open timesheet flags.
+- Sidebar: Review badge routes to `/review/inbox` when inbox count &gt; 0. New "Timesheets" entry with red badge for open timesheet flags.
 
 ### Schema counts
+
 49 tables (was 48), 33 views (was 41 — drop likely reflects unused views being dropped in earlier cleanup, not S37/S38 work), 12 RPC functions (was 10: +`rpc_job_header_counts`, +`rpc_detect_timesheet_gaps`).
 
 ### Live data state at session end
+
 - Karol's 22 Apr flag — resolved (reached 10h)
 - Kamran's 22 Apr flag — still open at 3.25h
 - 2 pending tasks in Workshop Inbox (Agata timer, Kamran priming)
 - BOM invariant watcher — 0 violations
 
 ### Deferred / follow-up candidates
+
 - **PWA push notifications** for 06:00 flag creation (iOS needs Home-Screen install, Android works straight from the browser). Free, non-trivial setup.
-- **`actual_unit_cost` write path** — when invoice-to-BOM reconciliation is eventually built, apply same invariant. Comment on the column already states this.
-- **Per-freelancer or per-day-of-week `standard_day_hours` overrides** — if the 10h default produces false positives for apprentices / short-day arrangements.
+- `actual_unit_cost` **write path** — when invoice-to-BOM reconciliation is eventually built, apply same invariant. Comment on the column already states this.
+- **Per-freelancer or per-day-of-week** `standard_day_hours` **overrides** — if the 10h default produces false positives for apprentices / short-day arrangements.
 - **Detector edge case**: zero-hour days don't downgrade flags (all entries moved/archived elsewhere). Fix when/if it happens.
 - **Behaviour to watch after first week of S38:** flag resolution rate, "Other" reason frequency (is the preset list right?), false positive rate, whether Add-hours deep-link works in practice.
-
 
 ---
 
@@ -3820,6 +3833,7 @@ Work spanned five commits in one continuous session. Theme: making the PM review
 **Problem:** `tbl_quote_lines` had two ad-hoc booleans (`interpretation_complete`, `kit_list_exported`). Mateusz wanted a third (`kit_list_ready`), and mentioned a fourth (`materials_needed` as a derived alert) was likely. Bolting on more columns was the wrong shape.
 
 **Design:**
+
 - **Lookup + junction** instead of more booleans.
   - `tbl_check_types` (check_code PK, label, entity_type, display_order, badge_color, description, is_active).
   - `tbl_quote_line_checks` (quote_line_id, check_code, checked_at, checked_by, note) — PK `(quote_line_id, check_code)`. Presence of row = ticked.
@@ -3830,9 +3844,10 @@ Work spanned five commits in one continuous session. Theme: making the PM review
 
 **Migration:** backfilled 24 existing `interpretation_complete=true` rows into the junction. Rewrote `qry_dash_quote_stats` to read from junction. Dropped both columns.
 
-**UI (jobs/[id]/page.tsx):** single load of `qry_quote_line_badges` for the job. "Done" column renamed to "Flags". Two clickable ticks — `I` and `K` — plus a read-only amber chip when materials are outstanding. A generic `toggleCheck(line, checkCode)` replaces duplicated handlers.
+**UI (jobs/\[id\]/page.tsx):** single load of `qry_quote_line_badges` for the job. "Done" column renamed to "Flags". Two clickable ticks — `I` and `K` — plus a read-only amber chip when materials are outstanding. A generic `toggleCheck(line, checkCode)` replaces duplicated handlers.
 
 **Convention:**
+
 - **Manual checks go in a junction table; derived alerts go in a view.** They have different meanings (intent vs state of the world), different authors (user vs system), and different lifecycles.
 - **Lookup-driven UI badges scale**; boolean-columns-on-the-row do not. When the second flag arrives, switch to the pattern before adding it.
 

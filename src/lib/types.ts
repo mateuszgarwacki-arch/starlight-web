@@ -245,6 +245,7 @@ export interface ScopeContext {
   scope_item_id: number;
   job_id: number;
   item_name: string | null;
+  description: string | null;
   scope_status: string | null;
   complexity_construction: string | null;
   finish_relative: string | null;

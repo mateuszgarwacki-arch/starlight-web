@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuditContext, auditedInsert } from "@/lib/audit";
-import { X, ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { X, ArrowRight, CheckCircle2, Circle, ArrowDownToLine } from "lucide-react";
 
 interface Activity {
   lookup_id: number;
@@ -34,13 +34,15 @@ interface CreateWODialogProps {
   defaultFinish?: string | null;
   predecessorWO?: PredecessorWO | null;
   scopeFinish?: string | null;
+  scopeDescription?: string | null;
+  scopeItemName?: string | null;
   onClose: () => void;
   onCreated: (workOrderId: number) => void;
 }
 
 export function CreateWODialog({
   jobId, scopeItemId, selectedItemIds, defaultComplexity, defaultFinish,
-  predecessorWO, scopeFinish, onClose, onCreated,
+  predecessorWO, scopeFinish, scopeDescription, scopeItemName, onClose, onCreated,
 }: CreateWODialogProps) {
   const supabase = createClient();
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
@@ -99,6 +101,18 @@ export function CreateWODialog({
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
+  };
+
+  // Prefer description, fall back to item_name. Trim and normalise whitespace.
+  const scopeCopyText = (scopeDescription?.trim() || scopeItemName?.trim() || "");
+  const canCopyFromScope = scopeCopyText.length > 0;
+  const copyFromScope = () => {
+    if (!canCopyFromScope) return;
+    if (description.trim().length > 0) {
+      const ok = window.confirm("Replace the current description with the scope text?");
+      if (!ok) return;
+    }
+    setDescription(scopeCopyText);
   };
 
   const previewLabel = chosenActivities.map((a) => a.lookup_value).join(" + ") || "No activities selected";
@@ -225,10 +239,27 @@ export function CreateWODialog({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Description</label>
-            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-muted">Description</label>
+              {canCopyFromScope && (
+                <button
+                  type="button"
+                  onClick={copyFromScope}
+                  title={scopeCopyText.length > 80 ? scopeCopyText.slice(0, 80) + "…" : scopeCopyText}
+                  className="flex items-center gap-1 text-xs text-starlight-blue hover:underline"
+                >
+                  <ArrowDownToLine className="h-3 w-3" />
+                  Copy from scope
+                </button>
+              )}
+            </div>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="What specifically needs doing..."
-              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" />
+              rows={3}
+              className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-y"
+            />
           </div>
 
           <div>
