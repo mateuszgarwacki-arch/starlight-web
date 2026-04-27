@@ -1,23 +1,37 @@
-S39+ Expose CAD breakdown to freelancer mobile
+S39+ Share drawings/files from mobile via OS share sheet
 
-The S30 convention filtered both cad_concept AND cad_breakdown out of
-the freelancer-facing query. That overshot — cad_breakdown is by
-definition the workshop's interpretation FOR the workshop, so hiding it
-from the floor was wrong. Senior carpenters with SketchUp on a workshop
-laptop should be able to download it during build.
+Freelancers can now share drawings, cut lists, CAD breakdowns, and 3D
+models directly from /m/wo/[woId] using the native iOS/Android share
+sheet (WhatsApp, Mail, AirDrop, etc.).
 
-Change:
-- mobile-wo-docs.tsx filter now excludes only cad_concept (design source
-  is still PM-only)
-- New render branch for cad_breakdown — full-row download button with
-  Wrench icon, mirrors the cut_list pattern
-- DOC_ICONS gets cad_breakdown entry: amber Wrench, label "CAD Breakdown"
+Implementation: Web Share API with file blobs (navigator.share with
+files: [File]), not URLs. Critical distinction — OneDrive download
+URLs are signed and expire within ~1hr, so a shared link goes dead
+fast. Sharing the actual file blob means the recipient gets a real
+attachment that doesn't time out.
 
-No size warnings, no Wi-Fi prompts, no permission tier — read-only
-download for everyone on /m/wo/[woId]. Junior carpenters who download a
-.skp they can't open just learn not to tap it again. Self-correcting.
+Flow:
+- Tap drawing thumbnail → lightbox opens (unchanged)
+- Lightbox now has Share button (blue circle) next to close
+- Tap Share → fetch blob → wrap in File → open OS share sheet
+- Spinner while fetching (large PDFs take a few seconds)
+- AbortError on user cancel is silently ignored
+- Falls back to opening download URL if browser lacks file-share
+  support (uncommon on mobile, covers old desktop browsers)
+
+Same Share button added inline on cut_list, cad_breakdown, and model
+rows — converted from full-row buttons to flex containers with
+separate share/download tap targets.
+
+Bonus fix while in the file: PDF lightbox check now case-insensitive
+(.pdf and .PDF both render as iframe, not broken <img>).
 
 Files:
-- src/components/mobile-wo-docs.tsx (filter, DOC_ICONS, render branch)
+- src/components/mobile-wo-docs.tsx (shareFile helper, previewDoc state,
+  Share buttons on lightbox + 4 doc-type rows, .toLowerCase() PDF check)
 
-No SQL. No deps. No API changes.
+No SQL. No new dependencies. No API changes.
+
+Risk note: large PDFs (50MB+) will take a few seconds to fetch before
+the share sheet appears. If this becomes annoying, consider a size
+threshold that falls back to URL-share for >20MB. Ship baseline first.

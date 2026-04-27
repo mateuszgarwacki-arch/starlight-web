@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
-import { FileText, Image, Box, Download, Eye, ChevronDown, ChevronRight, X, Wrench } from "lucide-react";
+import { FileText, Image, Box, Download, Eye, ChevronDown, ChevronRight, X, Wrench, Share2, Loader2 } from "lucide-react";
 
 interface MobileDoc {
   doc_id: number;
@@ -31,10 +31,11 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
   const [docs, setDocs] = useState<MobileDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<MobileDoc | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewName, setPreviewName] = useState("");
   const [showModel, setShowModel] = useState<string | null>(null);
   const [modelName, setModelName] = useState("");
+  const [sharingId, setSharingId] = useState<number | null>(null);
 
   const loadDocs = useCallback(async () => {
     const { data } = await supabase
@@ -65,8 +66,13 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
     try {
       const url = await getOneDriveUrl(doc.onedrive_path);
       setPreviewUrl(url);
-      setPreviewName(doc.caption || doc.file_name);
+      setPreviewDoc(doc);
     } catch { alert("Failed to load image"); }
+  };
+
+  const closePreview = () => {
+    setPreviewUrl(null);
+    setPreviewDoc(null);
   };
 
   const openModel = async (doc: MobileDoc) => {
@@ -84,6 +90,42 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       const url = await getOneDriveUrl(doc.onedrive_path);
       window.open(url, "_blank");
     } catch { alert("Failed to get download link"); }
+  };
+
+  // Share via the OS share sheet with the actual file blob attached.
+  // Falls back to opening the download URL if the browser can't share files
+  // (uncommon on mobile — covers old desktop browsers).
+  const shareFile = async (doc: MobileDoc) => {
+    if (!doc.onedrive_path) return;
+    setSharingId(doc.doc_id);
+    try {
+      const url = await getOneDriveUrl(doc.onedrive_path);
+      const nav = navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+        share?: (data: ShareData) => Promise<void>;
+      };
+
+      if (nav.share && nav.canShare) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Fetch failed");
+        const blob = await res.blob();
+        const file = new File([blob], doc.file_name, { type: blob.type || doc.mime_type || "application/octet-stream" });
+        const shareData: ShareData = { files: [file], title: doc.caption || doc.file_name };
+        if (nav.canShare(shareData)) {
+          await nav.share(shareData);
+          return;
+        }
+      }
+      // Fallback: open the OneDrive URL — user can share manually from there
+      window.open(url, "_blank");
+    } catch (err: any) {
+      // AbortError = user cancelled the share sheet, that's fine
+      if (err?.name !== "AbortError") {
+        alert("Failed to share file");
+      }
+    } finally {
+      setSharingId(null);
+    }
   };
 
   return (
@@ -145,6 +187,14 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                           <button onClick={() => openModel(doc)} className="px-2.5 py-1 bg-starlight-blue text-white text-[11px] font-medium rounded-md active:bg-navy">
                             <Eye className="h-3 w-3 inline mr-1" />3D
                           </button>
+                          <button
+                            onClick={() => shareFile(doc)}
+                            disabled={sharingId === doc.doc_id}
+                            className="p-1.5 text-muted active:text-navy disabled:opacity-50"
+                            title="Share"
+                          >
+                            {sharingId === doc.doc_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                          </button>
                           <button onClick={() => downloadFile(doc)} className="p-1.5 text-muted active:text-navy">
                             <Download className="h-4 w-4" />
                           </button>
@@ -153,36 +203,58 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                     </div>
                   )}
 
-                  {/* Cut lists: download only */}
+                  {/* Cut lists: download + share */}
                   {type === "cut_list" && (
                     <div className="space-y-1.5">
                       {typeDocs.map(doc => (
-                        <button
-                          key={doc.doc_id}
-                          onClick={() => downloadFile(doc)}
-                          className="w-full flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg active:bg-surface-mid"
-                        >
+                        <div key={doc.doc_id} className="flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg">
                           <FileText className="h-4 w-4 text-starlight-green shrink-0" />
-                          <span className="text-sm text-navy flex-1 truncate text-left">{doc.caption || doc.file_name}</span>
-                          <Download className="h-4 w-4 text-muted" />
-                        </button>
+                          <button
+                            onClick={() => downloadFile(doc)}
+                            className="text-sm text-navy flex-1 truncate text-left active:text-starlight-blue"
+                          >
+                            {doc.caption || doc.file_name}
+                          </button>
+                          <button
+                            onClick={() => shareFile(doc)}
+                            disabled={sharingId === doc.doc_id}
+                            className="p-1.5 text-muted active:text-navy disabled:opacity-50"
+                            title="Share"
+                          >
+                            {sharingId === doc.doc_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                          </button>
+                          <button onClick={() => downloadFile(doc)} className="p-1.5 text-muted active:text-navy" title="Download">
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
 
-                  {/* CAD breakdown: download only — opens in CAD app on a workshop laptop */}
+                  {/* CAD breakdown: download + share — opens in CAD app on a workshop laptop */}
                   {type === "cad_breakdown" && (
                     <div className="space-y-1.5">
                       {typeDocs.map(doc => (
-                        <button
-                          key={doc.doc_id}
-                          onClick={() => downloadFile(doc)}
-                          className="w-full flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg active:bg-surface-mid"
-                        >
+                        <div key={doc.doc_id} className="flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg">
                           <Wrench className="h-4 w-4 text-starlight-amber shrink-0" />
-                          <span className="text-sm text-navy flex-1 truncate text-left">{doc.caption || doc.file_name}</span>
-                          <Download className="h-4 w-4 text-muted" />
-                        </button>
+                          <button
+                            onClick={() => downloadFile(doc)}
+                            className="text-sm text-navy flex-1 truncate text-left active:text-starlight-blue"
+                          >
+                            {doc.caption || doc.file_name}
+                          </button>
+                          <button
+                            onClick={() => shareFile(doc)}
+                            disabled={sharingId === doc.doc_id}
+                            className="p-1.5 text-muted active:text-navy disabled:opacity-50"
+                            title="Share"
+                          >
+                            {sharingId === doc.doc_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                          </button>
+                          <button onClick={() => downloadFile(doc)} className="p-1.5 text-muted active:text-navy" title="Download">
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -194,17 +266,29 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       </div>
 
       {/* Image lightbox */}
-      {previewUrl && (
-        <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-3" onClick={() => setPreviewUrl(null)}>
+      {previewUrl && previewDoc && (
+        <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-3" onClick={closePreview}>
           <div className="max-w-full max-h-full relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPreviewUrl(null)} className="absolute -top-2 -right-2 bg-surface rounded-full p-1.5 shadow-lg text-muted active:text-navy z-10">
-              <X className="h-4 w-4" />
-            </button>
-            <p className="text-white text-xs text-center mb-2 truncate max-w-[250px] mx-auto">{previewName}</p>
-            {previewName.endsWith(".pdf") ? (
+            <div className="absolute -top-2 -right-2 flex items-center gap-1.5 z-10">
+              <button
+                onClick={() => shareFile(previewDoc)}
+                disabled={sharingId === previewDoc.doc_id}
+                className="bg-starlight-blue rounded-full p-2 shadow-lg text-white active:bg-navy disabled:opacity-60"
+                title="Share"
+              >
+                {sharingId === previewDoc.doc_id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Share2 className="h-4 w-4" />}
+              </button>
+              <button onClick={closePreview} className="bg-surface rounded-full p-1.5 shadow-lg text-muted active:text-navy">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-white text-xs text-center mb-2 truncate max-w-[250px] mx-auto">{previewDoc.caption || previewDoc.file_name}</p>
+            {previewDoc.file_name.toLowerCase().endsWith(".pdf") ? (
               <iframe src={previewUrl} className="w-[90vw] h-[75vh] rounded-lg bg-surface" />
             ) : (
-              <img src={previewUrl} alt={previewName} className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg" />
+              <img src={previewUrl} alt={previewDoc.file_name} className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg" />
             )}
           </div>
         </div>
