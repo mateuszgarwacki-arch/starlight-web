@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
-import { FileText, Image, Box, Download, Eye, ChevronDown, ChevronRight, X } from "lucide-react";
+import { FileText, Image, Box, Download, Eye, ChevronDown, ChevronRight, X, Wrench } from "lucide-react";
 
 interface MobileDoc {
   doc_id: number;
@@ -23,6 +23,7 @@ const DOC_ICONS: Record<string, { icon: typeof FileText; color: string; label: s
   reference: { icon: Image, color: "text-starlight-amber", label: "References" },
   cut_list: { icon: FileText, color: "text-starlight-green", label: "Cut Lists" },
   model: { icon: Box, color: "text-starlight-red", label: "3D Models" },
+  cad_breakdown: { icon: Wrench, color: "text-starlight-amber", label: "CAD Breakdown" },
 };
 
 export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
@@ -42,10 +43,9 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       .eq("work_order_id", workOrderId)
       .order("doc_type")
       .order("sort_order");
-    // CAD sources are PM/lead reference only — never surface on floor mobile.
-    const filtered = (data || []).filter(
-      d => d.doc_type !== "cad_concept" && d.doc_type !== "cad_breakdown"
-    );
+    // cad_concept (design source) stays PM-only.
+    // cad_breakdown is the workshop's interpretation — surfaced for download here.
+    const filtered = (data || []).filter(d => d.doc_type !== "cad_concept");
     setDocs(filtered);
     setLoading(false);
   }, [workOrderId]);
@@ -163,6 +163,23 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                           className="w-full flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg active:bg-surface-mid"
                         >
                           <FileText className="h-4 w-4 text-starlight-green shrink-0" />
+                          <span className="text-sm text-navy flex-1 truncate text-left">{doc.caption || doc.file_name}</span>
+                          <Download className="h-4 w-4 text-muted" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* CAD breakdown: download only — opens in CAD app on a workshop laptop */}
+                  {type === "cad_breakdown" && (
+                    <div className="space-y-1.5">
+                      {typeDocs.map(doc => (
+                        <button
+                          key={doc.doc_id}
+                          onClick={() => downloadFile(doc)}
+                          className="w-full flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg active:bg-surface-mid"
+                        >
+                          <Wrench className="h-4 w-4 text-starlight-amber shrink-0" />
                           <span className="text-sm text-navy flex-1 truncate text-left">{doc.caption || doc.file_name}</span>
                           <Download className="h-4 w-4 text-muted" />
                         </button>

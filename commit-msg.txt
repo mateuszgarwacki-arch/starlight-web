@@ -1,19 +1,23 @@
-S39+ Copy from scope to WO description
+S39+ Expose CAD breakdown to freelancer mobile
 
-create-wo-dialog: new "Copy from scope" button next to Description label.
-Prefers tbl_scope_items.description, falls back to item_name. Confirms
-before replacing if WO description already has text. Hidden when scope
-has neither field.
+The S30 convention filtered both cad_concept AND cad_breakdown out of
+the freelancer-facing query. That overshot — cad_breakdown is by
+definition the workshop's interpretation FOR the workshop, so hiding it
+from the floor was wrong. Senior carpenters with SketchUp on a workshop
+laptop should be able to download it during build.
 
-Description field bumped from <input> to <textarea rows={3}> so pasted
-multi-line scope text actually shows.
+Change:
+- mobile-wo-docs.tsx filter now excludes only cad_concept (design source
+  is still PM-only)
+- New render branch for cad_breakdown — full-row download button with
+  Wrench icon, mirrors the cut_list pattern
+- DOC_ICONS gets cad_breakdown entry: amber Wrench, label "CAD Breakdown"
 
-ScopeContext gains description field (already in qry_scope_breakdown).
+No size warnings, no Wi-Fi prompts, no permission tier — read-only
+download for everyone on /m/wo/[woId]. Junior carpenters who download a
+.skp they can't open just learn not to tap it again. Self-correcting.
 
 Files:
-- src/components/create-wo-dialog.tsx (new props, copy handler, textarea)
-- src/components/work-orders-panel.tsx (pass scope desc/name through)
-- src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx (same)
-- src/lib/types.ts (ScopeContext.description)
+- src/components/mobile-wo-docs.tsx (filter, DOC_ICONS, render branch)
 
-No SQL. No new dependencies.
+No SQL. No deps. No API changes.
