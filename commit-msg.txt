@@ -1,37 +1,17 @@
-S39+ Share drawings/files from mobile via OS share sheet
+S40 wrap — TRACKER session entry + cleanup backlog
 
-Freelancers can now share drawings, cut lists, CAD breakdowns, and 3D
-models directly from /m/wo/[woId] using the native iOS/Android share
-sheet (WhatsApp, Mail, AirDrop, etc.).
+Documents the three small items shipped this session:
+- S40a: Copy from scope to WO description (+ textarea bump)
+- S40b: CAD breakdown surfaced to freelancer mobile (S30 convention update)
+- S40c: Web Share API for mobile drawings/files (file blob, not URL)
 
-Implementation: Web Share API with file blobs (navigator.share with
-files: [File]), not URLs. Critical distinction — OneDrive download
-URLs are signed and expire within ~1hr, so a shared link goes dead
-fast. Sharing the actual file blob means the recipient gets a real
-attachment that doesn't time out.
+Cleanup Backlog small/mechanical updated with two S40 follow-ups:
+- Update 05_conventions.md §11 (project knowledge file, manual)
+- Share-flow size threshold (conditional, only if 50MB+ PDFs feel slow)
 
-Flow:
-- Tap drawing thumbnail → lightbox opens (unchanged)
-- Lightbox now has Share button (blue circle) next to close
-- Tap Share → fetch blob → wrap in File → open OS share sheet
-- Spinner while fetching (large PDFs take a few seconds)
-- AbortError on user cancel is silently ignored
-- Falls back to opening download URL if browser lacks file-share
-  support (uncommon on mobile, covers old desktop browsers)
+Conventions promoted (in TRACKER session entry):
+- Never share a signed URL when you can share the bytes
+- Auto-fill defaults vs opt-in copy
+- Capability-detect, then fall back
 
-Same Share button added inline on cut_list, cad_breakdown, and model
-rows — converted from full-row buttons to flex containers with
-separate share/download tap targets.
-
-Bonus fix while in the file: PDF lightbox check now case-insensitive
-(.pdf and .PDF both render as iframe, not broken <img>).
-
-Files:
-- src/components/mobile-wo-docs.tsx (shareFile helper, previewDoc state,
-  Share buttons on lightbox + 4 doc-type rows, .toLowerCase() PDF check)
-
-No SQL. No new dependencies. No API changes.
-
-Risk note: large PDFs (50MB+) will take a few seconds to fetch before
-the share sheet appears. If this becomes annoying, consider a size
-threshold that falls back to URL-share for >20MB. Ship baseline first.
+No code changes in this commit. Documentation only.
