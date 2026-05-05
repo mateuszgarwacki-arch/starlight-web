@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, statusClass } from "@/lib/utils";
 import { formatHours } from "@/lib/format-hours";
 import { isTruthy } from "@/lib/types";
 import type { Freelancer } from "@/lib/types";
@@ -445,7 +445,9 @@ export default function FreelancerDetailPage() {
   // ============================================================
   const openRouteModal = async (task: PendingTask) => {
     setRoutingTask(task); setRouteHours(String(task.hours || "")); setRouteNote(""); setSelectedWo(task.routed_to_wo_id || null); setWoSearch("");
-    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
+    // Include Complete so PMs can route late-arriving time to finished WOs.
+    // Complete rows are sorted to the bottom (see sort below) and dimmed in render.
+    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started", "Complete"]);
     if (!wos) { setWoOptions([]); return; }
     const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
     const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
@@ -456,7 +458,15 @@ export default function FreelancerDetailPage() {
     const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
     const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
     const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
-    if (task.job_id) { enriched.sort((a, b) => { if (a.job_id === task.job_id && b.job_id !== task.job_id) return -1; if (b.job_id === task.job_id && a.job_id !== task.job_id) return 1; return 0; }); }
+    // Sort: task's job first; within each, active WOs before Complete.
+    enriched.sort((a, b) => {
+      const aIsTaskJob = task.job_id && a.job_id === task.job_id ? 0 : 1;
+      const bIsTaskJob = task.job_id && b.job_id === task.job_id ? 0 : 1;
+      if (aIsTaskJob !== bIsTaskJob) return aIsTaskJob - bIsTaskJob;
+      const ap = a.status === "Complete" ? 1 : 0;
+      const bp = b.status === "Complete" ? 1 : 0;
+      return ap - bp;
+    });
     setWoOptions(enriched);
   };
 
@@ -529,8 +539,9 @@ export default function FreelancerDetailPage() {
     setAddEntryDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     setAddEntryHours("1"); setAddEntryWoId(null); setAddEntryTitle(""); setAddEntryCategory("job_work"); setAddEntryNote(""); setAddWoSearch(""); setAddEntryType("wo");
     setShowAddEntry(true);
-    // Load WOs
-    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started"]);
+    // Load WOs — include Complete so PM can manually log against finished work
+    // (sorted to bottom, dimmed in render).
+    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started", "Complete"]);
     if (!wos) { setAddWoOptions([]); return; }
     const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
     const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
@@ -540,7 +551,10 @@ export default function FreelancerDetailPage() {
     ]);
     const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
     const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
-    setAddWoOptions(wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" })));
+    const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
+    // Sort: active WOs before Complete (within each, default order from DB).
+    enriched.sort((a, b) => (a.status === "Complete" ? 1 : 0) - (b.status === "Complete" ? 1 : 0));
+    setAddWoOptions(enriched);
   };
 
   const handleAddEntry = async () => {
@@ -1411,11 +1425,11 @@ export default function FreelancerDetailPage() {
               {filteredWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
                 filteredWos.slice(0, 20).map((wo) => (
                   <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)}
-                    className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
+                    className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "") + (wo.status === "Complete" && selectedWo !== wo.work_order_id ? " opacity-60" : "")}>
                     <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
                     <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
                       <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
-                      <span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span>
+                      <span className={"px-1.5 py-0.5 rounded-full font-medium " + statusClass(wo.status)}>{wo.status}</span>
                     </div>
                   </button>
                 ))
@@ -1482,11 +1496,11 @@ export default function FreelancerDetailPage() {
                   {filteredAddWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
                     filteredAddWos.slice(0, 20).map(wo => (
                       <button key={wo.work_order_id} onClick={() => setAddEntryWoId(wo.work_order_id)}
-                        className={"w-full text-left px-4 py-2.5 hover:bg-surface-dim transition-colors " + (addEntryWoId === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "")}>
+                        className={"w-full text-left px-4 py-2.5 hover:bg-surface-dim transition-colors " + (addEntryWoId === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "") + (wo.status === "Complete" && addEntryWoId !== wo.work_order_id ? " opacity-60" : "")}>
                         <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
                           <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
-                          <span className={"px-1.5 py-0.5 rounded-full font-medium " + (wo.status === "In-Progress" ? "bg-starlight-blue/10 text-starlight-blue" : "bg-surface-mid text-muted")}>{wo.status}</span>
+                          <span className={"px-1.5 py-0.5 rounded-full font-medium " + statusClass(wo.status)}>{wo.status}</span>
                         </div>
                       </button>
                     ))

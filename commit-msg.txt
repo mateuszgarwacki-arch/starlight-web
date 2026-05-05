@@ -1,17 +1,22 @@
-S40 wrap — TRACKER session entry + cleanup backlog
+Allow routing time entries to Complete WOs
 
-Documents the three small items shipped this session:
-- S40a: Copy from scope to WO description (+ textarea bump)
-- S40b: CAD breakdown surfaced to freelancer mobile (S30 convention update)
-- S40c: Web Share API for mobile drawings/files (file blob, not URL)
+Three surfaces previously filtered to active statuses only and would not
+let a PM route a late-arriving ad-hoc task (or manually log time) to a
+work order that had already been marked Complete:
 
-Cleanup Backlog small/mechanical updated with two S40 follow-ups:
-- Update 05_conventions.md §11 (project knowledge file, manual)
-- Share-flow size threshold (conditional, only if 50MB+ PDFs feel slow)
+- src/components/route-task-modal.tsx (used on /review/inbox)
+- src/app/(dashboard)/crew/[id]/page.tsx openRouteModal
+- src/app/(dashboard)/crew/[id]/page.tsx openAddEntry
 
-Conventions promoted (in TRACKER session entry):
-- Never share a signed URL when you can share the bytes
-- Auto-fill defaults vs opt-in copy
-- Capability-detect, then fall back
+All three now include "Complete" in the WO status filter. Within each
+scope group, active WOs sort first and Complete sort to the bottom.
+Complete rows render with opacity-60 and the existing badge-complete
+status pill (via statusClass) makes them visually distinct.
 
-No code changes in this commit. Documentation only.
+The crew page's two inline lists previously hardcoded a ternary that
+only highlighted In-Progress; both now use statusClass() for consistent
+badge styling, which gives Complete its proper pill for free.
+
+No schema changes. Freelancer mobile flows (m/me, m/task, m/page) still
+filter active-only by design — only PMs route time, freelancers should
+not be able to log new hours against finished work without PM review.

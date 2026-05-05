@@ -98,7 +98,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Load all active WOs + their scope + job + activity verb
+  // Load all routable WOs + their scope + job + activity verb
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -108,7 +108,11 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
         .select(
           "work_order_id, description, scope_item_id, job_id, status, activity_verb, wo_sequence",
         )
-        .in("status", ["Ready", "In-Progress", "Not-Started"]);
+        // Include Complete so PMs can route late-arriving time to finished WOs.
+        // Complete rows are sorted to the bottom of each scope group and dimmed
+        // (see overhead/scope sort below). The existing statusClass() pill makes
+        // them visually distinct without needing extra labels.
+        .in("status", ["Ready", "In-Progress", "Not-Started", "Complete"]);
 
       if (cancelled) return;
       if (!wos) {
@@ -267,7 +271,13 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
     () =>
       filteredWos
         .filter((w) => w.is_overhead)
-        .sort((a, b) => (a.wo_sequence ?? 0) - (b.wo_sequence ?? 0)),
+        .sort((a, b) => {
+          // Active first, Complete last; within each group, by wo_sequence.
+          const ap = a.status === "Complete" ? 1 : 0;
+          const bp = b.status === "Complete" ? 1 : 0;
+          if (ap !== bp) return ap - bp;
+          return (a.wo_sequence ?? 0) - (b.wo_sequence ?? 0);
+        }),
     [filteredWos],
   );
 
@@ -281,7 +291,13 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
         groups[key].wos.push(wo);
       });
     Object.values(groups).forEach((g) =>
-      g.wos.sort((a, b) => (a.wo_sequence ?? 0) - (b.wo_sequence ?? 0)),
+      g.wos.sort((a, b) => {
+        // Active first, Complete last; within each group, by wo_sequence.
+        const ap = a.status === "Complete" ? 1 : 0;
+        const bp = b.status === "Complete" ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        return (a.wo_sequence ?? 0) - (b.wo_sequence ?? 0);
+      }),
     );
     return groups;
   }, [filteredWos]);
@@ -468,7 +484,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
               </div>
               <div className="mt-2 text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
                 <Briefcase className="h-3 w-3" />
-                {filteredJobs.length} active job
+                {filteredJobs.length} job
                 {filteredJobs.length !== 1 ? "s" : ""}
               </div>
             </div>
@@ -593,7 +609,8 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                                 "w-full text-left p-3 rounded-lg border-2 transition-all " +
                                 (isSel
                                   ? "bg-starlight-amber/15 border-starlight-amber shadow-sm"
-                                  : "bg-starlight-amber/5 border-starlight-amber/30 hover:bg-starlight-amber/10 hover:border-starlight-amber/60")
+                                  : "bg-starlight-amber/5 border-starlight-amber/30 hover:bg-starlight-amber/10 hover:border-starlight-amber/60") +
+                                (wo.status === "Complete" && !isSel ? " opacity-60" : "")
                               }
                             >
                               <div className="flex items-start gap-2.5">
@@ -646,7 +663,8 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                                 "w-full text-left p-3 rounded-lg border transition-all " +
                                 (isSel
                                   ? "bg-starlight-blue/10 border-starlight-blue shadow-sm"
-                                  : "bg-surface-dim/50 border-subtle hover:bg-surface-dim hover:border-starlight-blue/30")
+                                  : "bg-surface-dim/50 border-subtle hover:bg-surface-dim hover:border-starlight-blue/30") +
+                                (wo.status === "Complete" && !isSel ? " opacity-60" : "")
                               }
                             >
                               <div className="flex items-start gap-2.5">
@@ -688,7 +706,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                     scopeGroupsSorted.length === 0 &&
                     !woSearch && (
                       <p className="py-10 text-sm text-muted text-center">
-                        No active work orders in this job.
+                        No work orders in this job.
                       </p>
                     )}
                   {overheadWos.length === 0 &&
