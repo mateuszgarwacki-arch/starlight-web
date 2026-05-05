@@ -1,22 +1,43 @@
-Allow routing time entries to Complete WOs
+Tighten freelancer onboarding flow
 
-Three surfaces previously filtered to active statuses only and would not
-let a PM route a late-arriving ad-hoc task (or manually log time) to a
-work order that had already been marked Complete:
+Three issues stacked on top of each other:
 
-- src/components/route-task-modal.tsx (used on /review/inbox)
-- src/app/(dashboard)/crew/[id]/page.tsx openRouteModal
-- src/app/(dashboard)/crew/[id]/page.tsx openAddEntry
+1. Bug: PIN generator hardcoded to 4 digits.
+   `Math.floor(1000 + Math.random() * 9000)` returned 1000-9999.
+   Fixed to 6-digit (100000-999999).
 
-All three now include "Complete" in the WO status filter. Within each
-scope group, active WOs sort first and Complete sort to the bottom.
-Complete rows render with opacity-60 and the existing badge-complete
-status pill (via statusClass) makes them visually distinct.
+2. Bug: Silent dead write on tbl_freelancers.pin column.
+   The `pin` column doesn't exist on tbl_freelancers (verified via
+   information_schema — 12 columns, none named `pin`). The savePin()
+   handler wrote to it after the auth-sync API succeeded, but the
+   error was never checked and the success toast already fired. So
+   "PIN updated" appeared to work because Supabase Auth (the actual
+   credential store) updated correctly. Removed the dead write and
+   the matching phantom local-state spread.
 
-The crew page's two inline lists previously hardcoded a ternary that
-only highlighted In-Progress; both now use statusClass() for consistent
-badge styling, which gives Complete its proper pill for free.
+3. Security: privilege-escalation foothold in freelancer-sync API.
+   Role check fell back to user_metadata.role, which is user-editable
+   per Supabase Auth model. SP-006 requires app_metadata only. Removed
+   the fallback. No callable surface today exposed it, but defense in
+   depth.
 
-No schema changes. Freelancer mobile flows (m/me, m/task, m/page) still
-filter active-only by design — only PMs route time, freelancers should
-not be able to log new hours against finished work without PM review.
+Plus consistency cleanup:
+- Add Freelancer dialog: dropped the redundant PIN field. Onboarding
+  is now one canonical path: Add → row appears → key icon →
+  Mobile Access dialog → set PIN → WhatsApp invite. The Mobile
+  Access dialog has the polish (Generate, eye toggle, validation,
+  invitation message). Two competing PIN UIs collapsed to one.
+- Mobile Access dialog: copy "PIN (4-6 digits)" → "PIN (6 digits)".
+  Save button validation length >= 4 → length >= 6. Existing
+  4-digit PINs continue to work (Supabase Auth has them hashed
+  already); new and changed PINs must be 6 digits. Placeholder dot
+  count updated.
+- Mobile login: placeholder dot count updated to 6 dots.
+- freelancer-sync API: accepts both `password` (new) and `pin`
+  (deprecated, kept for back-compat) in body. crew page now sends
+  `password`.
+
+No schema changes. No RLS changes. Existing freelancer auth records
+unchanged. Documentation gap (SP-002 in project knowledge claims
+freelancer passwords are >= 8 chars; reality is 6-digit numeric PIN)
+flagged separately for policy update.

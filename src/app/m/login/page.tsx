@@ -66,7 +66,7 @@ export default function MobileLoginPage() {
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               className="w-full px-4 py-3 border border-subtle rounded-xl text-center text-2xl tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-              placeholder="* * * *"
+              placeholder="* * * * * *"
               inputMode="numeric"
               maxLength={6}
               autoComplete="current-password"

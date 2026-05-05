@@ -34,7 +34,8 @@ export default function CrewPage() {
   const [pinResult, setPinResult] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
 
-  // Form state for add/edit
+  // Form state for add/edit. PIN is set separately via the Mobile Access
+  // dialog (key icon on the row) — keeps onboarding as one canonical path.
   const [form, setForm] = useState({
     freelancer_name: "",
     phone: "",
@@ -44,7 +45,6 @@ export default function CrewPage() {
     day_rate: "",
     standard_day_hours: "10",
     notes: "",
-    pin: "",
   });
 
   const loadCrew = useCallback(async () => {
@@ -72,7 +72,8 @@ export default function CrewPage() {
   };
 
   const generatePin = () => {
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    // 6-digit numeric, range 100000-999999.
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
     setNewPin(pin);
     setShowPin(true);
   };
@@ -93,7 +94,10 @@ export default function CrewPage() {
         body: JSON.stringify({
           freelancer_id: freelancer.freelancer_id,
           phone: freelancer.phone,
-          pin: newPin.trim(),
+          // The only credential store is Supabase Auth (bcrypt-hashed).
+          // tbl_freelancers has no `pin` column — historical writes to it
+          // failed silently. Don't reintroduce them.
+          password: newPin.trim(),
           role: (freelancer.role || "Freelancer").toLowerCase().replace(" ", "_"),
           name: freelancer.freelancer_name,
         }),
@@ -105,9 +109,6 @@ export default function CrewPage() {
       } else {
         setPinResult(json.status === "created" ? "Account created — PIN set" : "PIN updated");
         toast.success(json.status === "created" ? "Account created" : "PIN updated");
-        // Update pin in tbl_freelancers too
-        await supabase.from("tbl_freelancers").update({ pin: newPin.trim() }).eq("freelancer_id", pinDialog.id);
-        setCrew((prev) => prev.map((f) => f.freelancer_id === pinDialog.id ? { ...f, pin: newPin.trim() } : f));
       }
     } catch (err) {
       setPinResult("Network error");
@@ -119,7 +120,7 @@ export default function CrewPage() {
   // Add / Edit
   // ============================================================
   const openAdd = () => {
-    setForm({ freelancer_name: "", phone: "", email: "", role: "Freelancer", speciality: "", day_rate: "", standard_day_hours: "10", notes: "", pin: "" });
+    setForm({ freelancer_name: "", phone: "", email: "", role: "Freelancer", speciality: "", day_rate: "", standard_day_hours: "10", notes: "" });
     setEditingId(null);
     setShowAddDialog(true);
   };
@@ -134,7 +135,6 @@ export default function CrewPage() {
       day_rate: f.day_rate ? String(f.day_rate) : "",
       standard_day_hours: f.standard_day_hours ? String(f.standard_day_hours) : "10",
       notes: f.notes || "",
-      pin: "",
     });
     setEditingId(f.freelancer_id);
     setShowAddDialog(true);
@@ -156,41 +156,19 @@ export default function CrewPage() {
 
     if (editingId) {
       await supabase.from("tbl_freelancers").update(data).eq("freelancer_id", editingId);
+      toast.success("Freelancer updated");
     } else {
       data.active = true;
       data.system_access = true;
       data.created_at = new Date().toISOString();
-      const { data: inserted } = await supabase.from("tbl_freelancers").insert(data).select("freelancer_id").single();
-
-      // Auto-create auth account if PIN provided
-      if (inserted && form.pin.trim()) {
-        try {
-          const authH = await getAuthHeaders();
-          const res = await fetch("/api/auth/freelancer-sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...authH },
-            body: JSON.stringify({
-              freelancer_id: inserted.freelancer_id,
-              phone: data.phone,
-              pin: form.pin.trim(),
-              role: (data.role || "Freelancer").toLowerCase().replace(" ", "_").replace("-", "_"),
-              name: data.freelancer_name,
-            }),
-          });
-          const json = await res.json();
-          if (json.error) {
-            toast.error("Freelancer created but PIN failed: " + json.error);
-          } else {
-            toast.success("Freelancer added with mobile login");
-          }
-        } catch { toast.error("Freelancer created but auth sync failed"); }
-      } else {
-        toast.success("Freelancer added" + (form.pin.trim() ? "" : " — no PIN set, they can't log in yet"));
-      }
+      await supabase.from("tbl_freelancers").insert(data).select("freelancer_id").single();
+      // PIN is set separately via the Mobile Access dialog (key icon on the
+      // row). Keeps onboarding as one canonical path and avoids two competing
+      // PIN UIs.
+      toast.success("Freelancer added — click the key icon to set their PIN");
     }
     setShowAddDialog(false);
     loadCrew();
-    if (editingId) toast.success("Freelancer updated");
   };
 
   const toggleActive = async (id: number, current: string | boolean | null) => {
@@ -315,11 +293,11 @@ export default function CrewPage() {
           <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
             <div className="px-5 py-4 border-b border-subtle">
               <h3 className="text-sm font-semibold text-navy">Mobile Access — {pinDialog.name}</h3>
-              <p className="text-xs text-muted mt-0.5">Set a PIN for mobile app login. Share via WhatsApp.</p>
+              <p className="text-xs text-muted mt-0.5">Set a 6-digit PIN for mobile app login. Share via WhatsApp.</p>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-muted mb-1.5">PIN (4–6 digits)</label>
+                <label className="block text-xs font-medium text-muted mb-1.5">PIN (6 digits)</label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
@@ -327,7 +305,7 @@ export default function CrewPage() {
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       className="w-full px-4 py-3 border border-subtle rounded-lg text-center text-xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-starlight-blue"
-                      placeholder="• • • •"
+                      placeholder="• • • • • •"
                       inputMode="numeric"
                       maxLength={6}
                       autoFocus
@@ -343,7 +321,7 @@ export default function CrewPage() {
               </div>
 
               {/* WhatsApp copy block */}
-              {newPin.length >= 4 && showPin && (
+              {newPin.length >= 6 && showPin && (
                 <div className="bg-base rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <p className="text-[10px] font-medium text-muted uppercase tracking-wider">Invitation message</p>
@@ -387,7 +365,7 @@ export default function CrewPage() {
               </button>
               <button
                 onClick={savePin}
-                disabled={newPin.length < 4 || pinSaving}
+                disabled={newPin.length < 6 || pinSaving}
                 className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors disabled:opacity-50"
               >
                 {pinSaving ? "Saving..." : "Set PIN & Create Account"}
@@ -450,14 +428,6 @@ export default function CrewPage() {
                   <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="Skills, availability notes..." />
                 </div>
-                {!editingId && (
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-muted mb-1">PIN (for mobile login)</label>
-                    <input type="text" value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })}
-                      className="w-full px-3 py-2 border border-subtle rounded-lg text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-starlight-blue" placeholder="4-6 digit PIN" inputMode="numeric" maxLength={6} />
-                    <p className="text-[10px] text-muted mt-1">Leave blank to add later. They&apos;ll need this to clock in on their phone.</p>
-                  </div>
-                )}
               </div>
             </div>
             <div className="px-5 py-3 border-t border-subtle flex justify-end gap-3">

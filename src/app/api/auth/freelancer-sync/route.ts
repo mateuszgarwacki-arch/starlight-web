@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await userSupabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = user.app_metadata?.role || user.user_metadata?.role || "freelancer";
+  // SECURITY: Read role only from app_metadata. user_metadata is user-editable
+  // and was a privilege-escalation foothold (see SP-006).
+  const role = user.app_metadata?.role || "freelancer";
   if (role !== "admin" && role !== "production_manager" && role !== "Production-Manager") {
     return NextResponse.json({ error: "Only PMs and admins can manage crew auth" }, { status: 403 });
   }
@@ -23,9 +25,12 @@ export async function POST(request: NextRequest) {
   // Now proceed with admin operations
   const admin = createAdminClient();
   const body = await request.json();
-  const { freelancer_id, phone, pin, role: targetRole, name } = body;
+  // Accept either `password` (new) or `pin` (deprecated, kept for back-compat
+  // until all callers are updated).
+  const { freelancer_id, phone, password, pin, role: targetRole, name } = body;
+  const credential = password ?? pin;
 
-  if (!freelancer_id || !phone || !pin) {
+  if (!freelancer_id || !phone || !credential) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   if (existing) {
     const { error } = await admin.auth.admin.updateUserById(existing.id, {
-      password: pin,
+      password: credential,
       user_metadata: { freelancer_id, role: userRole, name: name || "" },
       app_metadata: { role: userRole },
     });
@@ -47,7 +52,7 @@ export async function POST(request: NextRequest) {
   } else {
     const { data, error } = await admin.auth.admin.createUser({
       email,
-      password: pin,
+      password: credential,
       email_confirm: true,
       user_metadata: { freelancer_id, role: userRole, name: name || "" },
       app_metadata: { role: userRole },
