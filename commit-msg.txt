@@ -1,38 +1,38 @@
-S41 wrap — move docs to repo + session log
+fix: split material cost into Plan vs Actual everywhere
 
-Migrating documentation from project-knowledge uploads to /docs/ in
-the repo. Session-to-session updates now ship in the same commit as
-the code/migration changes they describe; project knowledge holds
-only a 20-line pointer.
+The Complete Job dialog showed Materials = £0 on a job with £305 of
+allocated invoices because it relied on rpc_job_close_report's
+material_cost_reconciled field, which sums BOM rows only — and that
+job has no BOM. Same gap surfaced on the Job Close report.
 
-Files (all under docs/):
+Root cause: the system has two distinct concepts ("plan" via BOM,
+"actual" via invoice allocations) but the close-report RPC was
+collapsing them into a single misleadingly-named "reconciled" number.
+"reconciled_line_cost" was structurally false anyway: it equals planned
+in practice because nothing populates tbl_wo_bom.actual_unit_cost
+automatically.
 
-- 00_README.md          new — index, read order, working principles
-- 01_overview.md        carried — adds Job Complete to Golden Path
-- 02_architecture.md    carried — auth model updated for 6-digit PIN
-                        reality, route map updated for /reports/job-close
-                        and Complete filtering, API auth section
-                        reflects app_metadata-only role read
-- 03_database_schema.md rebuilt from live state queries
-                        (55 tables, 34 views, 14 RPCs, 2 cron jobs).
-                        Old "session N + session N+1 patches" pattern
-                        collapsed to a single current-state document.
-                        Recent additions section covers S40 → S41
-- 04_security_policy.md v2.1 — SP-002 rewritten to match operational
-                        reality (6-digit numeric PIN with documented
-                        tradeoffs), SP-006/SP-008 strengthened on
-                        app_metadata-only reads, SP-014 checklist
-                        item 9 added (denormalisation requires
-                        trigger + watcher or it must not exist —
-                        the S41 tbl_quotes.quote_value drop is
-                        cited as the canonical case)
-- 05_conventions.md     adds §3.6 (quote-total invariant from S41),
-                        §5.1 (single source of truth — promoted from
-                        the Quote drift case), §3.8 manual-time-entry
-                        note, §3.9 Complete in job statuses, §19
-                        (full Job lifecycle conventions)
-- TRACKER.md            full S41 session log (S41a–e) + updated
-                        cleanup backlog. Notes that S1–S40 history
-                        lives in git/old project knowledge
+RPC changes (rpc_job_close_report):
+- Replace material_cost_reconciled with material_cost_planned (BOM),
+  material_cost_actual (invoice allocations), material_cost_committed
+  (max of the two — drives margin per the system-wide rule).
+- scope_cost: planned_material + actual_material per scope, allocations
+  matched via scope_item_id OR via WO under the scope.
+- material_by_category / material_by_supplier: BOM only (drop the bogus
+  reconciled_cost). Actual breakdown by category/supplier deferred —
+  needs invoice-line categorisation.
 
-No code changes. Docs only — no deploy needed.
+Dialog (job-complete-dialog.tsx):
+- "Total Actual" → "Total Committed" (labour + max(plan,actual))
+- Materials cell now shows "Plan £X / Actual £Y", red on overrun
+- Unallocated-invoice warning text fixed: was "not yet allocated to BOM"
+  (which the rollup never measured) — now correctly says "not allocated
+  to a scope or work order"
+
+Job Close report (/reports/job-close/[jobId]):
+- Same Plan/Actual treatment in the commercial summary
+- Material Cost by Scope: Plan / Actual / Variance columns with
+  overrun highlighting
+- Materials by Category / Spend by Supplier: labelled as "Planned",
+  noted that actual-by-category requires invoice-line categorisation
+- Same warning text fix

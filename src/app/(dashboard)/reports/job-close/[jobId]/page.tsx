@@ -48,7 +48,8 @@ interface CloseReport {
     labour_cost: number;
     labour_hours: number;
     material_cost_planned: number;
-    material_cost_reconciled: number;
+    material_cost_actual: number;
+    material_cost_committed: number;
     invoiced_total: number;
     unallocated_invoice_total: number;
   };
@@ -67,13 +68,11 @@ interface CloseReport {
   material_by_category: Array<{
     category: string;
     planned_cost: number;
-    reconciled_cost: number;
     line_count: number;
   }>;
   material_by_supplier: Array<{
     supplier: string;
     planned_cost: number;
-    reconciled_cost: number;
     line_count: number;
   }>;
   wo_variance_top: Array<{
@@ -90,7 +89,7 @@ interface CloseReport {
     scope_item_id: number;
     item_name: string;
     planned_material: number;
-    reconciled_material: number;
+    actual_material: number;
   }>;
   learnings: Array<{
     learning_id: number;
@@ -135,9 +134,10 @@ export default function JobCloseReport() {
 
   const { job, commercial: c, post_complete_edits: edits } = data;
   const isComplete = job.job_status === "Complete";
-  const totalActual = c.labour_cost + c.material_cost_reconciled;
-  const margin = c.quoted > 0 ? c.quoted - totalActual : 0;
+  const totalCommitted = c.labour_cost + c.material_cost_committed;
+  const margin = c.quoted > 0 ? c.quoted - totalCommitted : 0;
   const marginPct = c.quoted > 0 ? (margin / c.quoted) * 100 : 0;
+  const materialOverrun = c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0;
 
   const marginColor =
     marginPct >= 25 ? "text-starlight-green" :
@@ -227,10 +227,18 @@ export default function JobCloseReport() {
           </div>
           <div className="px-3 py-2.5 bg-base rounded-lg">
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Materials</p>
-            <p className="text-lg font-semibold text-navy mt-0.5">{formatCurrency(c.material_cost_reconciled)}</p>
-            {c.material_cost_planned !== c.material_cost_reconciled && (
-              <p className="text-[10px] text-muted mt-0.5">planned {formatCurrency(c.material_cost_planned)}</p>
-            )}
+            <div className="mt-0.5 space-y-0.5">
+              <p className="text-xs">
+                <span className="text-muted">Plan </span>
+                <span className="font-semibold text-navy font-mono">{formatCurrency(c.material_cost_planned)}</span>
+              </p>
+              <p className="text-xs">
+                <span className="text-muted">Actual </span>
+                <span className={"font-semibold font-mono " + (materialOverrun ? "text-starlight-red" : "text-navy")}>
+                  {formatCurrency(c.material_cost_actual)}
+                </span>
+              </p>
+            </div>
           </div>
           <div className={"px-3 py-2.5 rounded-lg border " + marginBg}>
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Margin</p>
@@ -244,7 +252,7 @@ export default function JobCloseReport() {
           <div className="mt-4 flex gap-2 px-3 py-2 bg-starlight-blue/5 border border-starlight-blue/20 rounded-lg text-xs text-muted">
             <AlertTriangle className="h-3.5 w-3.5 text-starlight-blue shrink-0 mt-0.5" />
             <span>
-              <strong className="text-navy">{formatCurrency(c.unallocated_invoice_total)}</strong> in invoices not yet allocated to BOM rows. Materials cost may move once allocated.
+              <strong className="text-navy">{formatCurrency(c.unallocated_invoice_total)}</strong> in invoices not yet allocated to a scope or work order. Until allocated, this spend isn&apos;t reflected in the actual material cost.
             </span>
           </div>
         )}
@@ -323,12 +331,13 @@ export default function JobCloseReport() {
         </div>
       )}
 
-      {/* Material by category */}
+      {/* Material by category (BOM plan) */}
       {data.material_by_category.length > 0 && (
         <div className="card px-6 py-5 print:shadow-none print:border print:px-4 print:py-3 print:break-inside-avoid">
           <h2 className="text-sm font-semibold text-navy uppercase tracking-wider mb-3 inline-flex items-center gap-2">
             <Package className="h-4 w-4 text-muted" /> Materials by Category
           </h2>
+          <p className="text-[10px] text-muted mb-3">Planned spend from the BOM. Actual spend by category will require invoice-line categorisation.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -336,7 +345,6 @@ export default function JobCloseReport() {
                   <th className="text-left py-2 font-medium">Category</th>
                   <th className="text-right py-2 font-medium">Lines</th>
                   <th className="text-right py-2 font-medium">Planned</th>
-                  <th className="text-right py-2 font-medium">Reconciled</th>
                 </tr>
               </thead>
               <tbody>
@@ -344,8 +352,7 @@ export default function JobCloseReport() {
                   <tr key={r.category} className="border-b border-subtle/40">
                     <td className="py-2 text-navy">{r.category}</td>
                     <td className="py-2 text-right text-muted text-xs">{r.line_count}</td>
-                    <td className="py-2 text-right font-mono text-muted">{formatCurrency(r.planned_cost)}</td>
-                    <td className="py-2 text-right font-mono">{formatCurrency(r.reconciled_cost)}</td>
+                    <td className="py-2 text-right font-mono">{formatCurrency(r.planned_cost)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -354,10 +361,11 @@ export default function JobCloseReport() {
         </div>
       )}
 
-      {/* Material by supplier */}
+      {/* Material by supplier (BOM plan) */}
       {data.material_by_supplier.length > 0 && (
         <div className="card px-6 py-5 print:shadow-none print:border print:px-4 print:py-3 print:break-inside-avoid">
-          <h2 className="text-sm font-semibold text-navy uppercase tracking-wider mb-3">Spend by Supplier</h2>
+          <h2 className="text-sm font-semibold text-navy uppercase tracking-wider mb-3">Planned Spend by Supplier</h2>
+          <p className="text-[10px] text-muted mb-3">From the BOM. Actual invoiced spend by supplier lives in the invoices view.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -365,7 +373,6 @@ export default function JobCloseReport() {
                   <th className="text-left py-2 font-medium">Supplier</th>
                   <th className="text-right py-2 font-medium">Lines</th>
                   <th className="text-right py-2 font-medium">Planned</th>
-                  <th className="text-right py-2 font-medium">Reconciled</th>
                 </tr>
               </thead>
               <tbody>
@@ -373,8 +380,7 @@ export default function JobCloseReport() {
                   <tr key={r.supplier} className="border-b border-subtle/40">
                     <td className="py-2 text-navy">{r.supplier}</td>
                     <td className="py-2 text-right text-muted text-xs">{r.line_count}</td>
-                    <td className="py-2 text-right font-mono text-muted">{formatCurrency(r.planned_cost)}</td>
-                    <td className="py-2 text-right font-mono">{formatCurrency(r.reconciled_cost)}</td>
+                    <td className="py-2 text-right font-mono">{formatCurrency(r.planned_cost)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -429,23 +435,34 @@ export default function JobCloseReport() {
       {data.scope_cost.length > 0 && (
         <div className="card px-6 py-5 print:shadow-none print:border print:px-4 print:py-3 print:break-inside-avoid">
           <h2 className="text-sm font-semibold text-navy uppercase tracking-wider mb-3">Material Cost by Scope</h2>
+          <p className="text-[10px] text-muted mb-3">Plan = BOM. Actual = invoice allocations to this scope or its work orders.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-subtle text-xs text-muted uppercase tracking-wider">
                   <th className="text-left py-2 font-medium">Scope</th>
-                  <th className="text-right py-2 font-medium">Planned</th>
-                  <th className="text-right py-2 font-medium">Reconciled</th>
+                  <th className="text-right py-2 font-medium">Plan</th>
+                  <th className="text-right py-2 font-medium">Actual</th>
+                  <th className="text-right py-2 font-medium">Variance</th>
                 </tr>
               </thead>
               <tbody>
-                {data.scope_cost.map((r) => (
-                  <tr key={r.scope_item_id} className="border-b border-subtle/40">
-                    <td className="py-2 text-navy">{r.item_name}</td>
-                    <td className="py-2 text-right font-mono text-muted">{formatCurrency(r.planned_material)}</td>
-                    <td className="py-2 text-right font-mono">{formatCurrency(r.reconciled_material)}</td>
-                  </tr>
-                ))}
+                {data.scope_cost.map((r) => {
+                  const variance = Number(r.actual_material) - Number(r.planned_material);
+                  const overrun = variance > 0 && Number(r.planned_material) > 0;
+                  return (
+                    <tr key={r.scope_item_id} className="border-b border-subtle/40">
+                      <td className="py-2 text-navy">{r.item_name}</td>
+                      <td className="py-2 text-right font-mono text-muted">{formatCurrency(r.planned_material)}</td>
+                      <td className={"py-2 text-right font-mono " + (overrun ? "text-starlight-red" : "")}>
+                        {formatCurrency(r.actual_material)}
+                      </td>
+                      <td className={"py-2 text-right font-mono text-xs " + (overrun ? "text-starlight-red" : variance < 0 ? "text-muted" : "text-faint")}>
+                        {variance === 0 ? "—" : (variance > 0 ? "+" : "") + formatCurrency(variance)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

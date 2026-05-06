@@ -36,7 +36,9 @@ interface ReportSummary {
     quoted: number;
     labour_cost: number;
     labour_hours: number;
-    material_cost_reconciled: number;
+    material_cost_planned: number;   // BOM total — the plan
+    material_cost_actual: number;    // invoice allocations — what's actually been spent
+    material_cost_committed: number; // MAX(planned, actual) — drives margin
     invoiced_total: number;
     unallocated_invoice_total: number;
   };
@@ -85,7 +87,8 @@ export function JobCompleteDialog({
       setSummary({
         commercial: data?.commercial || {
           quoted: 0, labour_cost: 0, labour_hours: 0,
-          material_cost_reconciled: 0, invoiced_total: 0, unallocated_invoice_total: 0,
+          material_cost_planned: 0, material_cost_actual: 0, material_cost_committed: 0,
+          invoiced_total: 0, unallocated_invoice_total: 0,
         },
         active_wo_count: activeWos.length,
       });
@@ -152,8 +155,11 @@ export function JobCompleteDialog({
   };
 
   const c = summary?.commercial;
-  const totalActual = c ? (c.labour_cost + c.material_cost_reconciled) : 0;
-  const margin = c && c.quoted > 0 ? ((c.quoted - totalActual) / c.quoted) * 100 : 0;
+  // Total Committed = labour spent + materials at the worse of (plan, actual).
+  // Matches the system-wide rule that margin is calculated against committed cost.
+  const totalCommitted = c ? (c.labour_cost + c.material_cost_committed) : 0;
+  const margin = c && c.quoted > 0 ? ((c.quoted - totalCommitted) / c.quoted) * 100 : 0;
+  const materialOverrun = c ? (c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0) : false;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -205,8 +211,8 @@ export function JobCompleteDialog({
                     <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
-                    <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Total Actual</p>
-                    <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(totalActual)}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Total Committed</p>
+                    <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(totalCommitted)}</p>
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Labour</p>
@@ -219,7 +225,18 @@ export function JobCompleteDialog({
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Materials</p>
-                    <p className="text-sm font-semibold text-navy mt-0.5">{formatCurrency(c.material_cost_reconciled)}</p>
+                    <div className="mt-0.5 space-y-0.5">
+                      <p className="text-xs">
+                        <span className="text-muted">Plan </span>
+                        <span className="font-semibold text-navy font-mono">{formatCurrency(c.material_cost_planned)}</span>
+                      </p>
+                      <p className="text-xs">
+                        <span className="text-muted">Actual </span>
+                        <span className={"font-semibold font-mono " + (materialOverrun ? "text-starlight-red" : "text-navy")}>
+                          {formatCurrency(c.material_cost_actual)}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                   <div className={
                     "col-span-2 px-3 py-2.5 rounded-lg " +
@@ -234,7 +251,7 @@ export function JobCompleteDialog({
                     }>
                       {margin.toFixed(1)}%
                       <span className="text-xs text-muted font-normal ml-1.5">
-                        ({formatCurrency(c.quoted - totalActual)})
+                        ({formatCurrency(c.quoted - totalCommitted)})
                       </span>
                     </p>
                   </div>
@@ -246,7 +263,7 @@ export function JobCompleteDialog({
                 <div className="flex gap-2.5 px-3 py-2 bg-starlight-blue/5 border border-starlight-blue/20 rounded-lg">
                   <AlertTriangle className="h-3.5 w-3.5 text-starlight-blue shrink-0 mt-0.5" />
                   <div className="text-xs text-muted leading-relaxed">
-                    <strong className="text-navy">{formatCurrency(c.unallocated_invoice_total)}</strong> in invoices not yet allocated to BOM. Consider reconciling before complete.
+                    <strong className="text-navy">{formatCurrency(c.unallocated_invoice_total)}</strong> in invoices not yet allocated to a scope or work order. Allocate them so the cost shows in the right place.
                   </div>
                 </div>
               )}
