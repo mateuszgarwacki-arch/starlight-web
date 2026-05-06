@@ -29,7 +29,7 @@ export interface Quote {
   quote_reference: string | null;
   quote_version: string | null;
   quote_description: string | null;
-  quote_value: number | null;
+  // quote_value column dropped — total is derived from tbl_quote_lines.
   quote_date: string | null;
   status: string | null;
   notes: string | null;
