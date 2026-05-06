@@ -1,43 +1,60 @@
-Tighten freelancer onboarding flow
+Job Complete state — button, dialog, report, filters
 
-Three issues stacked on top of each other:
+Schema (already in DB from prior session):
+- tbl_production_plan: completed_at, completed_by, close_note columns
+- rpc_job_close_report(p_job_id INT) RETURNS json — full close summary
+  with header, commercial, labour by freelancer + activity, materials by
+  category + supplier, WO variance top movers, scope cost, learnings,
+  post-complete edit count
 
-1. Bug: PIN generator hardcoded to 4 digits.
-   `Math.floor(1000 + Math.random() * 9000)` returned 1000-9999.
-   Fixed to 6-digit (100000-999999).
+This commit ships the UI:
 
-2. Bug: Silent dead write on tbl_freelancers.pin column.
-   The `pin` column doesn't exist on tbl_freelancers (verified via
-   information_schema — 12 columns, none named `pin`). The savePin()
-   handler wrote to it after the auth-sync API succeeded, but the
-   error was never checked and the success toast already fired. So
-   "PIN updated" appeared to work because Supabase Auth (the actual
-   credential store) updated correctly. Removed the dead write and
-   the matching phantom local-state spread.
+Job page (src/app/(dashboard)/jobs/[id]/page.tsx):
+- "Complete Job" button in toolbar (Active jobs)
+- "Close Report" + "Reopen" buttons (Complete jobs)
+- handleReopen handler: clears completed_at/by, keeps close_note as
+  context, audit-logged
+- JobCompleteDialog mounted alongside other dialogs
 
-3. Security: privilege-escalation foothold in freelancer-sync API.
-   Role check fell back to user_metadata.role, which is user-editable
-   per Supabase Auth model. SP-006 requires app_metadata only. Removed
-   the fallback. No callable surface today exposed it, but defense in
-   depth.
+Job complete dialog (src/components/job-complete-dialog.tsx):
+- Bug fixes from prior session: getAuditContext takes supabase, and
+  completed_by resolved from JWT user_metadata (NULL for admin without
+  a freelancer row)
+- Loads rpc_job_close_report on open for live commercial summary
+- Soft warning if any non-overhead WOs still active (does not block —
+  soft signals principle)
+- Optional close_note textarea, "Skip & Complete" button when empty
+- Audit-logged update via auditedUpdate, conflict-aware
+- On success: navigates to /reports/job-close/[jobId]
 
-Plus consistency cleanup:
-- Add Freelancer dialog: dropped the redundant PIN field. Onboarding
-  is now one canonical path: Add → row appears → key icon →
-  Mobile Access dialog → set PIN → WhatsApp invite. The Mobile
-  Access dialog has the polish (Generate, eye toggle, validation,
-  invitation message). Two competing PIN UIs collapsed to one.
-- Mobile Access dialog: copy "PIN (4-6 digits)" → "PIN (6 digits)".
-  Save button validation length >= 4 → length >= 6. Existing
-  4-digit PINs continue to work (Supabase Auth has them hashed
-  already); new and changed PINs must be 6 digits. Placeholder dot
-  count updated.
-- Mobile login: placeholder dot count updated to 6 dots.
-- freelancer-sync API: accepts both `password` (new) and `pin`
-  (deprecated, kept for back-compat) in body. crew page now sends
-  `password`.
+Close report (src/app/(dashboard)/reports/job-close/[jobId]/page.tsx):
+- Live data — never a snapshot, always current
+- Renders for any job; "Interim" badge if not yet Complete
+- Post-complete edits warning when audit shows mutations after close
+- Margin colour-coded (green >= 25%, amber >= 10%, red below)
+- Print-friendly via existing report patterns
 
-No schema changes. No RLS changes. Existing freelancer auth records
-unchanged. Documentation gap (SP-002 in project knowledge claims
-freelancer passwords are >= 8 chars; reality is 6-digit numeric PIN)
-flagged separately for policy update.
+Filter Complete jobs from active surfaces:
+- /jobs default list hides Complete; toggle "Show N complete" appears
+  when any exist; pill colour distinguishes Complete (muted) from
+  Active (green)
+- /m mobile task list: fixed legacy filter that referenced "Closed"
+  status (which never existed in this schema, so was a no-op) — now
+  correctly filters Complete; both active and complete WO queries
+  scoped to non-Complete jobs
+- /capacity/add-booking: job picker excludes Complete (you don't book
+  fresh crew onto finished jobs)
+- /workshop and /capacity main pages: already filtered via
+  rpc_workshop_data and rpc_capacity_data (prior session)
+- Dashboard upcoming jobs: already filtered via rpc_dashboard_data
+  (prior session)
+- /m/task and /m/request: already filter to Active-only (existing)
+
+DB views patched to ignore Complete jobs:
+- qry_procurement_needed: had no job-status filter; was surfacing
+  unordered BOM rows from finished jobs
+- qry_stale_travellers: filtered Complete WOs but not Complete jobs;
+  edge case where PM marks job Complete with WOs still Ready
+
+No RLS changes. No tbl_audit_log changes (registry already had
+tbl_production_plan from prior sessions).

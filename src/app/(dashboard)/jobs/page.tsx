@@ -12,6 +12,7 @@ export default function JobsPage() {
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
+  const [showComplete, setShowComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showNewJob, setShowNewJob] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -35,13 +36,22 @@ export default function JobsPage() {
     load();
   }, []);
 
-  const filtered = jobs.filter(
-    (j) =>
+  // Hide Complete jobs by default — toggle shows them. Complete is the
+  // operational signal (workshop done) so completed jobs cluttering the
+  // active list defeats the point. Search still searches across all jobs
+  // when the toggle is on.
+  const filtered = jobs.filter((j) => {
+    const matchesSearch =
       !search ||
       (j.job_name || "").toLowerCase().includes(search.toLowerCase()) ||
       (j.job_number || "").toLowerCase().includes(search.toLowerCase()) ||
-      (j.client_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+      (j.client_name || "").toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (showComplete) return true;
+    return j.job_status !== "Complete";
+  });
+
+  const completeCount = jobs.filter((j) => j.job_status === "Complete").length;
 
   const handleCreateJob = async () => {
     if (!newJob.job_name.trim()) return;
@@ -90,7 +100,7 @@ export default function JobsPage() {
         <div>
           <h1 className="text-xl font-bold text-navy">Jobs</h1>
           <p className="text-sm text-muted mt-0.5">
-            {jobs.length} jobs in system
+            {jobs.length - completeCount} active{completeCount > 0 ? `, ${completeCount} complete` : ""}
           </p>
         </div>
         <button
@@ -102,16 +112,29 @@ export default function JobsPage() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by job name, number, or client..."
-          className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent bg-surface"
-        />
+      {/* Search + filter toggle */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by job name, number, or client..."
+            className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue focus:border-transparent bg-surface"
+          />
+        </div>
+        {completeCount > 0 && (
+          <label className="inline-flex items-center gap-2 px-3 py-2.5 text-xs text-muted cursor-pointer hover:text-navy transition-colors">
+            <input
+              type="checkbox"
+              checked={showComplete}
+              onChange={(e) => setShowComplete(e.target.checked)}
+              className="accent-starlight-blue"
+            />
+            Show {completeCount} complete
+          </label>
+        )}
       </div>
 
       {/* Jobs table */}
@@ -150,7 +173,12 @@ export default function JobsPage() {
                   </td>
                   <td className="px-4 py-3 text-right text-muted">{formatCurrency(job.budget_allowance)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-starlight-green/10 text-starlight-green">
+                    <span className={
+                      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium " +
+                      (job.job_status === "Complete"
+                        ? "bg-surface-mid text-muted"
+                        : "bg-starlight-green/10 text-starlight-green")
+                    }>
                       {job.job_status || "Active"}
                     </span>
                   </td>

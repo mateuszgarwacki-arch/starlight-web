@@ -97,26 +97,31 @@ export default function MobileTaskList() {
       }
     } catch { /* localStorage unavailable */ }
 
-    // Load Ready + In-Progress WOs
-    const { data: activeWos } = await supabase
-      .from("tbl_work_orders")
-      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
-      .in("status", ["Ready", "In-Progress"]);
-    // Load Complete WOs from all active jobs (for Done filter + painting)
+    // Identify non-Complete jobs first; both WO queries below scope to these.
+    // (The legacy filter was against "Closed" — a status that never existed
+    // in this schema, so it was a no-op. Now correctly filters Complete.)
     const { data: activeJobs } = await supabase
       .from("tbl_production_plan")
       .select("job_id")
-      .not("job_status", "eq", "Closed");
+      .neq("job_status", "Complete");
     const activeJobIds = (activeJobs || []).map((j: any) => j.job_id);
-    let completeWos: any[] = [];
-    if (activeJobIds.length > 0) {
-      const { data } = await supabase
-        .from("tbl_work_orders")
-        .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
-        .eq("status", "Complete")
-        .in("job_id", activeJobIds);
-      completeWos = data || [];
-    }
+
+    // No active jobs at all -> empty task list
+    if (activeJobIds.length === 0) { setTasks([]); setLoading(false); return; }
+
+    // Load Ready + In-Progress WOs scoped to non-Complete jobs
+    const { data: activeWos } = await supabase
+      .from("tbl_work_orders")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+      .in("status", ["Ready", "In-Progress"])
+      .in("job_id", activeJobIds);
+    // Load Complete WOs from non-Complete jobs (for Done filter + painting)
+    const { data: completeWosData } = await supabase
+      .from("tbl_work_orders")
+      .select("work_order_id, scope_item_id, job_id, description, estimated_duration_hrs, status, activity_verb, paint_notes")
+      .eq("status", "Complete")
+      .in("job_id", activeJobIds);
+    const completeWos = completeWosData || [];
     const wos = [...(activeWos || []), ...completeWos];
 
     if (!wos || wos.length === 0) { setTasks([]); setLoading(false); return; }

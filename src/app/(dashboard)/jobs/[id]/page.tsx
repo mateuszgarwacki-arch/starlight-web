@@ -9,7 +9,7 @@ import { LookupCombo } from "@/components/ui/lookup-combo";
 import { CreateScopeDialog } from "@/components/create-scope-dialog";
 import { ContractorPicker } from "@/components/contractor-picker";
 import { CostBreakdown } from "@/components/cost-breakdown";
-import { ArrowLeft, Plus, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle, Printer } from "lucide-react";
+import { ArrowLeft, Plus, FileText, ChevronRight, ChevronDown, Package, Filter, Hammer, Trash2, Pencil, X, Truck, MessageCircleQuestion, ShoppingCart, FolderOpen, BookOpen, AlertCircle, Printer, CheckCircle2, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -23,6 +23,7 @@ import { JobOrdersPanel } from "@/components/job-orders-panel";
 import { WODocumentsPanel } from "@/components/wo-documents-panel";
 import { LearningsSection } from "@/components/learnings-section";
 import { LearningTrigger } from "@/components/learning-trigger";
+import { JobCompleteDialog } from "@/components/job-complete-dialog";
 import type { Job, QuoteLine, ScopeItem, Quote } from "@/lib/types";
 import { isTruthy } from "@/lib/types";
 
@@ -127,6 +128,7 @@ export default function JobDetailPage() {
   const [scopes, setScopes] = useState<ScopeItem[]>([]);
   const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
   const [woData, setWoData] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(() => {
@@ -363,6 +365,33 @@ export default function JobDetailPage() {
   };
 
   const cancelEdit = () => { setEditingField(null); setEditValue(""); presenceSetEditing(null); };
+
+  // Reopen a Complete job back to Active. One click, audit-logged. completed_at /
+  // completed_by / close_note are NOT cleared — the original close is preserved
+  // in the audit log as a useful "this was reopened" trail.
+  const handleReopen = async () => {
+    if (!job) return;
+    if (!confirm("Reopen this job? It'll go back to Active. Original completion data is kept in the audit log.")) return;
+    const expectedAt = (job as any).updated_at ?? null;
+    const ctx = await getAuditContext(supabase);
+    const result = await auditedUpdate(
+      ctx,
+      "tbl_production_plan",
+      job.job_id,
+      {
+        job_status: "Active",
+        completed_at: null,
+        completed_by: null,
+        // Keep close_note — it's still useful context if reopened.
+      },
+      job.job_id,
+      expectedAt,
+    );
+    if (result.error) { toast.error("Reopen failed: " + result.error.message); return; }
+    if (result.conflict) { toast.warning("Job modified elsewhere — reloading"); await loadData(); return; }
+    toast.success("Job reopened");
+    setJob({ ...job, job_status: "Active", completed_at: null, completed_by: null } as Job);
+  };
 
   // ================================================================
   // UPDATE HANDLERS
@@ -1039,6 +1068,35 @@ export default function JobDetailPage() {
             <Truck className="h-3.5 w-3.5" />
             Load List
           </Link>
+          {job?.job_status === "Complete" ? (
+            <>
+              <Link
+                href={`/reports/job-close/${jobId}`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-starlight-green/10 text-starlight-green hover:bg-starlight-green/20 rounded-lg transition-colors"
+                title="Close report — full job summary"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Close Report
+              </Link>
+              <button
+                onClick={handleReopen}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-surface-mid text-muted hover:text-navy hover:bg-surface-hi rounded-lg transition-colors"
+                title="Reopen job — sets back to Active"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reopen
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowCompleteDialog(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 bg-starlight-green/10 text-starlight-green hover:bg-starlight-green/20 rounded-lg transition-colors"
+              title="Mark this job Complete"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Complete Job
+            </button>
+          )}
           <PresenceAvatars others={presenceOthers} />
         </div>
       </div>
@@ -1637,6 +1695,22 @@ export default function JobDetailPage() {
           onUseMine={conflictResolve.onMine}
           onUseTheirs={conflictResolve.onTheirs}
           onCancel={() => { setConflictInfo(null); setConflictResolve(null); }}
+        />
+      )}
+
+      {/* Complete-job dialog */}
+      {showCompleteDialog && job && (
+        <JobCompleteDialog
+          jobId={job.job_id}
+          jobNumber={job.job_number || ""}
+          jobName={job.job_name || ""}
+          onClose={() => setShowCompleteDialog(false)}
+          onCompleted={() => {
+            setShowCompleteDialog(false);
+            // The dialog navigates to the report; reload here ensures the job
+            // page reflects Complete state if the user navigates back.
+            loadData();
+          }}
         />
       )}
     </div>

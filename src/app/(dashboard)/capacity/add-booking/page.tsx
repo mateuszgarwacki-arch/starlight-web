@@ -65,7 +65,8 @@ export default function AddBookingPage() {
     (async () => {
       const [fRes, jRes] = await Promise.all([
         supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name, speciality, day_rate, standard_day_hours, phone").eq("active", true).order("freelancer_name"),
-        supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").order("event_date"),
+        // Exclude Complete jobs — you don't book new freelancers onto a finished job.
+        supabase.from("tbl_production_plan").select("job_id, job_name, job_number, event_date").neq("job_status", "Complete").order("event_date"),
       ]);
       setFreelancers((fRes.data || []) as FreelancerOption[]);
       setJobs((jRes.data || []) as JobOption[]);

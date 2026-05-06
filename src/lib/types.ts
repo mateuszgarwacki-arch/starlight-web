@@ -18,6 +18,9 @@ export interface Job {
   created_at: string | null;
   job_status: string | null;
   updated_at?: string | null;
+  completed_at?: string | null;
+  completed_by?: number | null;
+  close_note?: string | null;
 }
 
 export interface Quote {
