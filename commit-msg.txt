@@ -1,35 +1,38 @@
-Drop tbl_quotes.quote_value artefact + fix quoted total drift
+S41 wrap — move docs to repo + session log
 
-Two related changes:
+Migrating documentation from project-knowledge uploads to /docs/ in
+the repo. Session-to-session updates now ship in the same commit as
+the code/migration changes they describe; project knowledge holds
+only a 20-line pointer.
 
-1. qry_job_accepted_quote was reading tbl_quotes.quote_value (header
-   field) which is supposed to mirror SUM(tbl_quote_lines.line_value)
-   but had no system maintaining the link. Result: 3 of 9 jobs had
-   NULL headers despite having real line values, and the close report
-   showed £0 quoted for those (Tramp, Projector). Tramp is what
-   surfaced the bug — close dialog showed Quoted £0.00 instead of £600.
+Files (all under docs/):
 
-   View now sums directly from tbl_quote_lines for accepted quotes.
-   Excludes auto-overhead lines (line_sub_group = 'Overhead') for
-   consistency with the rest of the close report.
+- 00_README.md          new — index, read order, working principles
+- 01_overview.md        carried — adds Job Complete to Golden Path
+- 02_architecture.md    carried — auth model updated for 6-digit PIN
+                        reality, route map updated for /reports/job-close
+                        and Complete filtering, API auth section
+                        reflects app_metadata-only role read
+- 03_database_schema.md rebuilt from live state queries
+                        (55 tables, 34 views, 14 RPCs, 2 cron jobs).
+                        Old "session N + session N+1 patches" pattern
+                        collapsed to a single current-state document.
+                        Recent additions section covers S40 → S41
+- 04_security_policy.md v2.1 — SP-002 rewritten to match operational
+                        reality (6-digit numeric PIN with documented
+                        tradeoffs), SP-006/SP-008 strengthened on
+                        app_metadata-only reads, SP-014 checklist
+                        item 9 added (denormalisation requires
+                        trigger + watcher or it must not exist —
+                        the S41 tbl_quotes.quote_value drop is
+                        cited as the canonical case)
+- 05_conventions.md     adds §3.6 (quote-total invariant from S41),
+                        §5.1 (single source of truth — promoted from
+                        the Quote drift case), §3.8 manual-time-entry
+                        note, §3.9 Complete in job statuses, §19
+                        (full Job lifecycle conventions)
+- TRACKER.md            full S41 session log (S41a–e) + updated
+                        cleanup backlog. Notes that S1–S40 history
+                        lives in git/old project knowledge
 
-2. Dropped tbl_quotes.quote_value column entirely. Confirmed pure
-   artefact via thorough sweep:
-   - 0 app reads (no `.quote_value` accessor anywhere in src/)
-   - 0 app writes (both INSERT paths into tbl_quotes — jobs/page.tsx
-     and jobs/[id]/page.tsx — explicitly omit it)
-   - 0 functions/triggers/constraints/RLS policies reference it
-   - The only view consumer (qry_job_accepted_quote) was migrated to
-     sum from lines
-
-   Aligns with the S37 invariants discipline: single source of truth,
-   no clever normalisation. Quote total is now derived from
-   tbl_quote_lines always, with no parallel store to drift.
-
-   Also dropped the qry_quote_value_drift watcher that was added in
-   the prior migration — once the column is gone, the watcher has
-   nothing to watch.
-
-   Removed quote_value from the Quote TypeScript interface.
-
-No app code changes beyond the one type-definition tweak.
+No code changes. Docs only — no deploy needed.
