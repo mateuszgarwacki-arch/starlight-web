@@ -26,11 +26,23 @@ export default function JobsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from("tbl_production_plan")
-        .select("*")
-        .order("event_date", { ascending: true });
-      if (data) setJobs(data);
+      // Pull jobs + their accepted-quote totals in parallel; merge by job_id.
+      // Jobs list shows the live "Quoted" number (sum of accepted quote
+      // lines via qry_job_accepted_quote) rather than the legacy
+      // budget_allowance field, which never auto-updates.
+      const [jobsRes, quoteTotalsRes] = await Promise.all([
+        supabase.from("tbl_production_plan").select("*").order("event_date", { ascending: true }),
+        supabase.from("qry_job_accepted_quote").select("job_id, accepted_quote_value"),
+      ]);
+      const totalsByJob: Record<number, number> = {};
+      (quoteTotalsRes.data || []).forEach((r: any) => {
+        totalsByJob[r.job_id] = Number(r.accepted_quote_value) || 0;
+      });
+      const merged = (jobsRes.data || []).map((j: any) => ({
+        ...j,
+        accepted_quote_value: totalsByJob[j.job_id] ?? null,
+      }));
+      setJobs(merged as Job[]);
       setLoading(false);
     }
     load();
@@ -151,7 +163,7 @@ export default function JobsPage() {
                 <th className="px-4 py-2.5 font-medium text-muted">Job Name</th>
                 <th className="px-4 py-2.5 font-medium text-muted">Client</th>
                 <th className="px-4 py-2.5 font-medium text-muted">Event Date</th>
-                <th className="px-4 py-2.5 font-medium text-muted text-right">Budget</th>
+                <th className="px-4 py-2.5 font-medium text-muted text-right">Quoted</th>
                 <th className="px-4 py-2.5 font-medium text-muted text-center">Status</th>
               </tr>
             </thead>
@@ -171,7 +183,7 @@ export default function JobsPage() {
                       <DaysRemainingBadge eventDate={job.event_date} />
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right text-muted">{formatCurrency(job.budget_allowance)}</td>
+                  <td className="px-4 py-3 text-right text-muted">{formatCurrency((job as any).accepted_quote_value)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={
                       "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium " +

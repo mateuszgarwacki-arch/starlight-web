@@ -1,38 +1,16 @@
-fix: split material cost into Plan vs Actual everywhere
+fix(jobs): show live accepted-quote total as "Quoted" instead of dead budget_allowance
 
-The Complete Job dialog showed Materials = £0 on a job with £305 of
-allocated invoices because it relied on rpc_job_close_report's
-material_cost_reconciled field, which sums BOM rows only — and that
-job has no BOM. Same gap surfaced on the Job Close report.
+The Jobs list "Budget" column was reading tbl_production_plan.budget_allowance,
+which is a fossil field — the app reads it in 5 places but never writes it.
+Values were populated once during the original Access migration and have been
+stale ever since. After updating job 13757's quote from £157,515 to £180,265,
+the list still showed £157,515 because budget_allowance never got the memo.
 
-Root cause: the system has two distinct concepts ("plan" via BOM,
-"actual" via invoice allocations) but the close-report RPC was
-collapsing them into a single misleadingly-named "reconciled" number.
-"reconciled_line_cost" was structurally false anyway: it equals planned
-in practice because nothing populates tbl_wo_bom.actual_unit_cost
-automatically.
+Fix: column header "Budget" → "Quoted". Loader now joins
+qry_job_accepted_quote and shows accepted_quote_value, so the list always
+reflects the live commercial number that's already shown inside each job.
 
-RPC changes (rpc_job_close_report):
-- Replace material_cost_reconciled with material_cost_planned (BOM),
-  material_cost_actual (invoice allocations), material_cost_committed
-  (max of the two — drives margin per the system-wide rule).
-- scope_cost: planned_material + actual_material per scope, allocations
-  matched via scope_item_id OR via WO under the scope.
-- material_by_category / material_by_supplier: BOM only (drop the bogus
-  reconciled_cost). Actual breakdown by category/supplier deferred —
-  needs invoice-line categorisation.
-
-Dialog (job-complete-dialog.tsx):
-- "Total Actual" → "Total Committed" (labour + max(plan,actual))
-- Materials cell now shows "Plan £X / Actual £Y", red on overrun
-- Unallocated-invoice warning text fixed: was "not yet allocated to BOM"
-  (which the rollup never measured) — now correctly says "not allocated
-  to a scope or work order"
-
-Job Close report (/reports/job-close/[jobId]):
-- Same Plan/Actual treatment in the commercial summary
-- Material Cost by Scope: Plan / Actual / Variance columns with
-  overrun highlighting
-- Materials by Category / Spend by Supplier: labelled as "Planned",
-  noted that actual-by-category requires invoice-line categorisation
-- Same warning text fix
+The budget_allowance field is left in place — it can later become a real
+"client-stated budget" concept with proper UI for variance tracking, but
+that's a separate feature. The other 4 read-sites (PM jobs, review,
+handover, job-close) keep using it for now and can be migrated piecemeal.
