@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { uploadToOneDrive, getOneDriveUrl, jobFolder } from "@/lib/onedrive-client";
+import { uploadToOneDrive, getOneDriveUrl, getOneDriveViewUrl, jobFolder } from "@/lib/onedrive-client";
 import { getAuditContext, auditedInsert, auditedDelete } from "@/lib/audit";
 import { CutListExtractor } from "@/components/cutlist-extractor";
 import { ModelViewer } from "@/components/model-viewer";
@@ -148,6 +148,14 @@ export function WODocumentsPanel({
     try { const url = await getOneDriveUrl(doc.onedrive_path); window.open(url, "_blank"); } catch { alert("Failed to get download link"); }
   };
 
+  // Open the file inline in a new tab (PDF/image render in-browser, others
+  // fall back to download). Auth is via short-lived token in the URL — see
+  // /api/onedrive/view for trust details.
+  const viewDoc = async (doc: WODoc) => {
+    if (!doc.onedrive_path) return;
+    try { const url = await getOneDriveViewUrl(doc.onedrive_path); window.open(url, "_blank"); } catch { alert("Failed to open file"); }
+  };
+
   const handleDragStart = (docId: number) => { setDragDocId(docId); };
   const handleDragOver = (e: React.DragEvent, docId: number) => { e.preventDefault(); setDragOverDocId(docId); };
   const handleDragEnd = () => { setDragDocId(null); setDragOverDocId(null); };
@@ -270,6 +278,7 @@ export function WODocumentsPanel({
                                   )}
                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {doc.doc_type === "model" && <button onClick={() => openPreview(doc)} className="p-1 text-muted hover:text-navy" title="View 3D model"><Eye className="h-3.5 w-3.5" /></button>}
+                                    {doc.doc_type === "cut_list" && <button onClick={() => viewDoc(doc)} className="p-1 text-muted hover:text-navy" title="View"><Eye className="h-3.5 w-3.5" /></button>}
                                     <button onClick={() => downloadDoc(doc)} className="p-1 text-muted hover:text-navy" title="Download"><Download className="h-3.5 w-3.5" /></button>
                                     {!readOnly && <button onClick={() => deleteDoc(doc.doc_id)} className="p-1 text-muted hover:text-starlight-red" title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>}
                                   </div>

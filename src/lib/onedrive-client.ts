@@ -145,3 +145,18 @@ export async function getOneDriveUrl(filePath: string): Promise<string> {
   const data = await res.json();
   return data.downloadUrl;
 }
+
+// Returns a URL that streams the file inline (PDFs/images render in-browser
+// rather than downloading). Auth travels via ?token= query param so the URL
+// can be passed to window.open() in a fresh tab. Token is the user's own
+// short-lived Supabase session — same trust as /api/onedrive/download.
+export async function getOneDriveViewUrl(filePath: string): Promise<string> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not authenticated");
+  const params = new URLSearchParams({
+    path: filePath,
+    token: session.access_token,
+  });
+  return `/api/onedrive/view?${params.toString()}`;
+}

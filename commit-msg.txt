@@ -1,16 +1,28 @@
-fix(jobs): show live accepted-quote total as "Quoted" instead of dead budget_allowance
+feat(wo-docs): view cutlists inline instead of forcing download
 
-The Jobs list "Budget" column was reading tbl_production_plan.budget_allowance,
-which is a fossil field — the app reads it in 5 places but never writes it.
-Values were populated once during the original Access migration and have been
-stale ever since. After updating job 13757's quote from £157,515 to £180,265,
-the list still showed £157,515 because budget_allowance never got the memo.
+Cutlists in the work order docs panel previously only had Download and
+Remove. Mateusz wanted to view them in-browser. Adds an Eye button on
+desktop and makes tapping the cutlist name open inline on mobile.
 
-Fix: column header "Budget" → "Quoted". Loader now joins
-qry_job_accepted_quote and shows accepted_quote_value, so the list always
-reflects the live commercial number that's already shown inside each job.
+Why a new API route rather than reusing /api/onedrive/download:
+- /api/onedrive/download returns Microsoft's signed CDN URL, which has
+  Content-Disposition: attachment baked in by OneDrive — the browser
+  forces download regardless of mime type.
+- New /api/onedrive/view fetches the file server-side and re-streams it
+  with Content-Disposition: inline + the original mime type. PDFs and
+  images render in the new tab; unsupported types fall back to download
+  via browser default behaviour.
 
-The budget_allowance field is left in place — it can later become a real
-"client-stated budget" concept with proper UI for variance tracking, but
-that's a separate feature. The other 4 read-sites (PM jobs, review,
-handover, job-close) keep using it for now and can be migrated piecemeal.
+Auth and security:
+- Same Supabase-session trust boundary as /api/onedrive/download.
+- Accepts auth via Authorization header OR ?token= query param. Query
+  param is needed because window.open() opens a fresh tab and can't set
+  request headers. The token is the user's own short-lived (1h) Supabase
+  access token — leakage risk is bounded to that window, and it's the
+  same trust as any logged-in API call.
+- Body is streamed (Response(fetchRes.body)) so files of any size work
+  inside Vercel's function limits without buffering.
+
+Mobile UX: tap on the cutlist name now opens View; Share and Download
+icons retained on the right. This matches the natural mobile gesture
+(tap-to-open) that workshop staff expect.

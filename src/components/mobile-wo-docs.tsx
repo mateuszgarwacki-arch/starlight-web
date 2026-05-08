@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { getOneDriveUrl } from "@/lib/onedrive-client";
+import { getOneDriveUrl, getOneDriveViewUrl } from "@/lib/onedrive-client";
 import { FileText, Image, Box, Download, Eye, ChevronDown, ChevronRight, X, Wrench, Share2, Loader2 } from "lucide-react";
 
 interface MobileDoc {
@@ -90,6 +90,16 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
       const url = await getOneDriveUrl(doc.onedrive_path);
       window.open(url, "_blank");
     } catch { alert("Failed to get download link"); }
+  };
+
+  // Open inline (PDF/image render in the browser, others fall back to
+  // download). See /api/onedrive/view for trust details.
+  const viewFile = async (doc: MobileDoc) => {
+    if (!doc.onedrive_path) return;
+    try {
+      const url = await getOneDriveViewUrl(doc.onedrive_path);
+      window.open(url, "_blank");
+    } catch { alert("Failed to open file"); }
   };
 
   // Share via the OS share sheet with the actual file blob attached.
@@ -203,14 +213,14 @@ export function MobileWODocs({ workOrderId }: MobileWODocsProps) {
                     </div>
                   )}
 
-                  {/* Cut lists: download + share */}
+                  {/* Cut lists: tap name to view inline; share + download icons on the right */}
                   {type === "cut_list" && (
                     <div className="space-y-1.5">
                       {typeDocs.map(doc => (
                         <div key={doc.doc_id} className="flex items-center gap-2 py-2 px-3 bg-surface-dim rounded-lg">
                           <FileText className="h-4 w-4 text-starlight-green shrink-0" />
                           <button
-                            onClick={() => downloadFile(doc)}
+                            onClick={() => viewFile(doc)}
                             className="text-sm text-navy flex-1 truncate text-left active:text-starlight-blue"
                           >
                             {doc.caption || doc.file_name}
