@@ -37,6 +37,13 @@ interface LogSheetProps {
       pick one to attribute this log to a work order instead of filing it
       as a pending ad-hoc task. Omit to hide the section entirely. */
   woOptions?: WoOption[];
+  /** Pre-select a WO (used for edit flows where the entry already has one).
+      Useful when the section label should also say "Work order" rather than
+      "Route to WO" — that's controlled separately via woPickerLabel. */
+  defaultRoutedWo?: WoOption | null;
+  /** Optional override for the WO picker section label. Defaults to
+      "Route to Work Order (optional)". */
+  woPickerLabel?: string;
 }
 
 function localDateStr(): string {
@@ -48,13 +55,13 @@ export function LogSheet({
   open, onClose, onSubmit, contextLabel, contextSublabel,
   defaultHours = 0, defaultDate, showDatePicker = false,
   notesPlaceholder = "Any notes...", submitLabel, submitting = false,
-  woOptions,
+  woOptions, defaultRoutedWo, woPickerLabel,
 }: LogSheetProps) {
   const [hours, setHours] = useState(defaultHours);
   const [date, setDate] = useState(defaultDate || localDateStr());
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
-  const [routedWo, setRoutedWo] = useState<WoOption | null>(null);
+  const [routedWo, setRoutedWo] = useState<WoOption | null>(defaultRoutedWo || null);
   const [woSearch, setWoSearch] = useState("");
   const [showWoPicker, setShowWoPicker] = useState(false);
 
@@ -65,11 +72,11 @@ export function LogSheet({
       setDate(defaultDate || localDateStr());
       setNotes("");
       setPhotos([]);
-      setRoutedWo(null);
+      setRoutedWo(defaultRoutedWo || null);
       setWoSearch("");
       setShowWoPicker(false);
     }
-  }, [open, defaultHours, defaultDate]);
+  }, [open, defaultHours, defaultDate, defaultRoutedWo]);
 
   if (!open) return null;
 
@@ -134,7 +141,7 @@ export function LogSheet({
         {/* Route to WO — optional. Shown only when woOptions prop is provided. */}
         {woOptions && woOptions.length > 0 && (
           <div>
-            <label className="text-xs font-medium text-muted mb-1.5 block">Route to Work Order (optional)</label>
+            <label className="text-xs font-medium text-muted mb-1.5 block">{woPickerLabel || "Route to Work Order (optional)"}</label>
             {routedWo ? (
               <div className="flex items-center justify-between bg-starlight-blue/10 border border-starlight-blue/30 rounded-xl px-4 py-2.5">
                 <div className="min-w-0 flex-1">

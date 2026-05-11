@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatHours } from "@/lib/format-hours";
-import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save, Minus, Plus, Camera } from "lucide-react";
+import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save, Minus, Plus, Camera, ChevronDown, ChevronRight } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { LogSheet, type LogSheetData, type WoOption } from "@/components/log-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
-import { auditedUpdate, getAuditContext } from "@/lib/audit";
+import { auditedUpdate, auditedInsert, getAuditContext } from "@/lib/audit";
 import { TimesheetFlagsPanel } from "@/components/timesheet-flags";
 
 interface HoursSummary { hours_this_week: number; hours_this_month: number; }
@@ -17,6 +17,26 @@ interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: n
 interface MyRequest { request_id: number; category: string; title: string; urgency: string; status: string; resolution_note: string | null; created_at: string; }
 interface MyTask { task_id: number; title: string; hours: number | null; status: string; review_note: string | null; started_at: string | null; created_at: string; }
 interface ActiveTimer { task_id: number; title: string; started_at: string; }
+
+// 10-day overview: one row per calendar day, expandable to show entries.
+// Day-total < 9h with entries → red flag; missing day with zero entries stays
+// neutral (could be a weekend, day off, etc.).
+interface DayEntry {
+  kind: "wo" | "task";
+  id: number;
+  hours: number;
+  description: string;       // WO description or task title
+  job_number: string | null;
+  scope_name?: string;
+  flag_note: string | null;
+  work_order_id?: number;    // present for WO entries (needed for edit)
+  status?: string;           // task status; for badging
+}
+interface DayView {
+  date: string;              // YYYY-MM-DD
+  totalHours: number;
+  entries: DayEntry[];
+}
 
 const REQUEST_ICONS: Record<string, any> = { order_material: Package, repair_equipment: Wrench, restock: Archive, safety: AlertTriangle, general: MessageSquare };
 const TASK_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -44,6 +64,27 @@ function formatDateShort(d: string): string {
 }
 function elapsedSince(iso: string): string { const ms = Date.now() - new Date(iso).getTime(); const mins = Math.floor(ms / 60000); const hrs = Math.floor(mins / 60); const m = mins % 60; if (hrs > 0) return `${hrs}h ${m}m`; return `${m}m`; }
 
+// What counts as a "full day" of logged hours. Below this with at least one
+// entry → row turns red, prompting the freelancer to check what's missing.
+// Pulled from Mateusz's stated workshop norm.
+const FULL_DAY_THRESHOLD = 9;
+const TEN_DAY_WINDOW = 10;
+
+// Day-of-week label for the day-row header (no special-cased today/yesterday).
+function weekdayShort(d: string): string {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
+}
+// Build the last N calendar days as YYYY-MM-DD strings, newest first.
+function lastNDates(n: number): string[] {
+  const out: string[] = [];
+  const base = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(base); d.setDate(base.getDate() - i);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  return out;
+}
+
 export default function MobileProfilePage() {
   const supabase = createClient();
   const router = useRouter();
@@ -64,6 +105,17 @@ export default function MobileProfilePage() {
   const [editingNote, setEditingNote] = useState<{ entryId: number; note: string } | null>(null);
   const [savingNote, setSavingNote] = useState(false);
 
+  // Last-10-days view state. expandedDay = which date row is currently open.
+  // backfillTarget = which date/entry the LogSheet is editing or adding for.
+  const [tenDayView, setTenDayView] = useState<DayView[]>([]);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [backfillTarget, setBackfillTarget] = useState<
+    | { mode: "add"; date: string }
+    | { mode: "edit"; date: string; entry: DayEntry }
+    | null
+  >(null);
+  const [backfillSubmitting, setBackfillSubmitting] = useState(false);
+
   // Live updates when tasks/requests change
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], () => setRefreshKey((k) => k + 1));
 
@@ -76,38 +128,167 @@ export default function MobileProfilePage() {
     toast.success("Note saved");
   };
 
+  // Backfill a time entry for a past day. Always pending PM approval — the
+  // [Backfill] flag prefix surfaces it in /review/timesheets. Timestamps
+  // are synthetic (start at 09:00 local on the chosen date) since the
+  // freelancer didn't run a timer; PM can see and adjust if needed.
+  const handleBackfillSubmit = async (data: LogSheetData) => {
+    if (!backfillTarget || backfillTarget.mode !== "add") return;
+    if (!data.routedWoId) { toast.error("Pick a Work Order"); return; }
+    if (data.hours <= 0) { toast.error("Enter hours"); return; }
+    const targetDate = backfillTarget.date;
+
+    setBackfillSubmitting(true);
+    try {
+      // Hourly rate snapshot (matches existing pattern in handleLogTimer).
+      const { data: me } = await supabase.from("tbl_freelancers")
+        .select("day_rate, standard_day_hours").eq("freelancer_id", myId).maybeSingle();
+      const rate = me?.day_rate && me?.standard_day_hours && me.standard_day_hours > 0
+        ? Number(me.day_rate) / Number(me.standard_day_hours) : 0;
+
+      // Synthetic timestamps in local time. The no-Z format avoids the
+      // BST-shift trap (per memory's timestamp rule).
+      const startIso = `${targetDate}T09:00:00`;
+      const endMs = new Date(startIso).getTime() + data.hours * 3600 * 1000;
+      const endDate = new Date(endMs);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const endIso = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+
+      const flagNote = `[Backfill] ${data.notes || "Missing entry added by freelancer"}`;
+      const wo = woOptions.find((w) => w.work_order_id === data.routedWoId);
+      const ctx = await getAuditContext(supabase);
+
+      const result = await auditedInsert(ctx, "tbl_wo_time_entries", {
+        work_order_id: data.routedWoId,
+        freelancer_id: myId,
+        system_start_timestamp: startIso,
+        actual_start_timestamp: startIso,
+        system_end_timestamp: endIso,
+        actual_end_timestamp: endIso,
+        actual_hours: data.hours,
+        applied_hourly_rate: rate,
+        entry_cost: Math.round(data.hours * rate * 100) / 100,
+        flag_note: flagNote,
+      });
+      if (result.error) { toast.error("Failed to add: " + result.error.message); setBackfillSubmitting(false); return; }
+
+      await notify({
+        supabase,
+        type: "wo_flagged",
+        severity: "warning",
+        title: `Backfill: ${formatHours(data.hours)} on ${formatDateShort(targetDate)}`,
+        detail: wo ? `${wo.job_number} · ${wo.description || wo.scope_name}` : "",
+        freelancerId: myId,
+        actionUrl: "/review/timesheets",
+      });
+      toast.success("Added — pending review");
+      setBackfillTarget(null);
+      setBackfillSubmitting(false);
+      setRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      toast.error("Failed: " + (err.message || "unknown"));
+      setBackfillSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/m/login"); return; }
       const fId = user.user_metadata?.freelancer_id || 0;
       setMyId(fId); setName(user.user_metadata?.name || "Unknown");
-      const [hoursRes, woEntriesRes, tasksRes, requestsRes, activeTaskRes] = await Promise.all([
+
+      // Date floor for the 10-day overview. Querying via gte on the
+      // timestamp column needs a YYYY-MM-DD string; Postgres will compare
+      // lexicographically against the start of the column's day.
+      const tenAgoBase = new Date(); tenAgoBase.setDate(tenAgoBase.getDate() - (TEN_DAY_WINDOW - 1));
+      const tenDaysAgoStr = `${tenAgoBase.getFullYear()}-${String(tenAgoBase.getMonth() + 1).padStart(2, "0")}-${String(tenAgoBase.getDate()).padStart(2, "0")}`;
+
+      const [hoursRes, woEntriesRes, tasksRes, requestsRes, activeTaskRes, tenDayWoRes, tenDayTasksRes] = await Promise.all([
         supabase.from("qry_freelancer_hours_summary").select("*").eq("freelancer_id", fId).maybeSingle(),
         supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, actual_hours, system_start_timestamp, actual_start_timestamp, flag_note").eq("freelancer_id", fId).is("archived_at", null).not("actual_hours", "is", null).order("system_start_timestamp", { ascending: false }).limit(20),
         supabase.from("tbl_tasks").select("task_id, title, hours, status, review_note, started_at, created_at, job_id").eq("freelancer_id", fId).neq("status", "in_progress").order("created_at", { ascending: false }).limit(20),
         supabase.from("tbl_workshop_requests").select("request_id, category, title, urgency, status, resolution_note, created_at").eq("freelancer_id", fId).order("created_at", { ascending: false }).limit(15),
         supabase.from("tbl_tasks").select("task_id, title, started_at").eq("freelancer_id", fId).eq("status", "in_progress").maybeSingle(),
+        // 10-day window: WO time entries the freelancer has logged. Skipped
+        // if archived or still open (no actual_hours).
+        supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, actual_hours, system_start_timestamp, actual_start_timestamp, flag_note").eq("freelancer_id", fId).is("archived_at", null).not("actual_hours", "is", null).gte("actual_start_timestamp", tenDaysAgoStr),
+        // 10-day window: ad-hoc tasks. Routed tasks are excluded because
+        // each routing creates a parallel tbl_wo_time_entries row that
+        // would double-count toward the day's total.
+        supabase.from("tbl_tasks").select("task_id, title, hours, status, worked_date").eq("freelancer_id", fId).in("status", ["pending", "approved_overhead"]).not("hours", "is", null).gte("worked_date", tenDaysAgoStr),
       ]);
       if (hoursRes.data) { setHoursSummary({ hours_this_week: Number(hoursRes.data.hours_this_week) || 0, hours_this_month: Number(hoursRes.data.hours_this_month) || 0 }); }
-      const woEntries: RecentEntry[] = [];
-      if (woEntriesRes.data && woEntriesRes.data.length > 0) {
-        const woIds = [...new Set(woEntriesRes.data.map((e: any) => e.work_order_id))];
-        const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, job_id").in("work_order_id", woIds);
-        const woMap: Record<number, { desc: string; jobId: number }> = {};
+
+      // Build a single WO/job lookup spanning BOTH datasets (recent entries
+      // and 10-day window) so we don't double-fetch and so the 10-day view
+      // gets WO descriptions for entries outside the recent-20.
+      const allWoIds = [
+        ...new Set([
+          ...(woEntriesRes.data || []).map((e: any) => e.work_order_id),
+          ...(tenDayWoRes.data || []).map((e: any) => e.work_order_id),
+        ]),
+      ].filter(Boolean);
+      const woMap: Record<number, { desc: string; jobId: number }> = {};
+      const jobNumMap: Record<number, string> = {};
+      if (allWoIds.length > 0) {
+        const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, job_id").in("work_order_id", allWoIds);
         (wos || []).forEach((w: any) => { woMap[w.work_order_id] = { desc: w.description || "Work Order", jobId: w.job_id }; });
         const jobIds = [...new Set(Object.values(woMap).map((w) => w.jobId).filter(Boolean))];
-        const { data: jobData } = jobIds.length > 0 ? await supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] };
-        const jobNumMap: Record<number, string> = {};
-        (jobData || []).forEach((j: any) => { jobNumMap[j.job_id] = j.job_number; });
-        woEntriesRes.data.forEach((e: any) => {
-          const wo = woMap[e.work_order_id];
-          woEntries.push({ type: "wo", id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null, flag_note: e.flag_note || null });
-        });
+        if (jobIds.length > 0) {
+          const { data: jobData } = await supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds);
+          (jobData || []).forEach((j: any) => { jobNumMap[j.job_id] = j.job_number; });
+        }
       }
+
+      // Recent entries list (unchanged behaviour — last 20 WO entries +
+      // last 20 tasks, merged and trimmed to 15).
+      const woEntries: RecentEntry[] = (woEntriesRes.data || []).map((e: any) => {
+        const wo = woMap[e.work_order_id];
+        return { type: "wo" as const, id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null, flag_note: e.flag_note || null };
+      });
       const taskEntries: RecentEntry[] = (tasksRes.data || []).map((t: any) => ({ type: "task" as const, id: t.task_id, title: t.title, hours: t.hours, date: (t.created_at || "").split("T")[0], job_number: null, status: t.status, review_note: t.review_note }));
       const merged = [...woEntries, ...taskEntries].sort((a, b) => b.date.localeCompare(a.date));
       setRecentEntries(merged.slice(0, 15));
+
+      // Group last-10-days entries by date. Pre-seed each of the 10 dates so
+      // empty days still render as a row (freelancer can tap to add).
+      const dayMap: Record<string, DayEntry[]> = {};
+      lastNDates(TEN_DAY_WINDOW).forEach((d) => { dayMap[d] = []; });
+      (tenDayWoRes.data || []).forEach((e: any) => {
+        const date = (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0];
+        if (!dayMap[date]) return;
+        const wo = woMap[e.work_order_id];
+        dayMap[date].push({
+          kind: "wo",
+          id: e.entry_id,
+          hours: Number(e.actual_hours) || 0,
+          description: wo?.desc || "WO #" + e.work_order_id,
+          job_number: wo ? jobNumMap[wo.jobId] || null : null,
+          flag_note: e.flag_note || null,
+          work_order_id: e.work_order_id,
+        });
+      });
+      (tenDayTasksRes.data || []).forEach((t: any) => {
+        const date = t.worked_date;  // schema stores YYYY-MM-DD directly
+        if (!date || !dayMap[date]) return;
+        dayMap[date].push({
+          kind: "task",
+          id: t.task_id,
+          hours: Number(t.hours) || 0,
+          description: t.title,
+          job_number: null,
+          flag_note: null,
+          status: t.status,
+        });
+      });
+      setTenDayView(
+        lastNDates(TEN_DAY_WINDOW).map((date) => ({
+          date,
+          totalHours: dayMap[date].reduce((s, e) => s + e.hours, 0),
+          entries: dayMap[date].sort((a, b) => b.hours - a.hours),
+        }))
+      );
       const openReqs = (requestsRes.data || []).filter((r: any) => ["open", "acknowledged", "in_progress"].includes(r.status));
       const closedReqs = (requestsRes.data || []).filter((r: any) => ["resolved", "dismissed"].includes(r.status)).slice(0, 5);
       setMyRequests([...openReqs, ...closedReqs]);
@@ -286,6 +467,73 @@ export default function MobileProfilePage() {
       </div>
 
       <div>
+        <h2 className="text-sm font-semibold text-navy mb-2">Last 10 Days</h2>
+        <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle overflow-hidden">
+          {tenDayView.map((day) => {
+            const isOpen = expandedDay === day.date;
+            const hasEntries = day.entries.length > 0;
+            // Red flag: had entries but day didn't reach a full day. No
+            // flag on zero-entry days (might be weekend, day off, etc.).
+            const isShort = hasEntries && day.totalHours < FULL_DAY_THRESHOLD;
+            return (
+              <div key={day.date}>
+                <button
+                  onClick={() => setExpandedDay(isOpen ? null : day.date)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-surface-dim"
+                >
+                  {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-navy">{formatDateShort(day.date)}</p>
+                    <p className="text-[10px] text-muted">{weekdayShort(day.date)} · {day.date}</p>
+                  </div>
+                  <span
+                    className={
+                      "text-sm font-semibold tabular-nums shrink-0 " +
+                      (isShort ? "text-starlight-red" : hasEntries ? "text-navy" : "text-faint")
+                    }
+                  >
+                    {hasEntries ? formatHours(day.totalHours) : "—"}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="px-4 py-3 bg-surface-dim/50 space-y-2">
+                    {day.entries.length === 0 ? (
+                      <p className="text-xs text-muted text-center py-1">No entries</p>
+                    ) : (
+                      day.entries.map((e) => (
+                        <div key={`${e.kind}-${e.id}`} className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs text-navy truncate">{e.description}</p>
+                              {e.kind === "task" && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>
+                              )}
+                              {e.flag_note?.startsWith("[Backfill]") && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-amber/10 text-starlight-amber font-medium shrink-0">Pending</span>
+                              )}
+                            </div>
+                            {e.job_number && <p className="text-[10px] text-muted font-mono">{e.job_number}</p>}
+                          </div>
+                          <span className="text-xs font-semibold text-navy tabular-nums shrink-0">{formatHours(e.hours)}</span>
+                        </div>
+                      ))
+                    )}
+                    <button
+                      onClick={() => setBackfillTarget({ mode: "add", date: day.date })}
+                      className="w-full mt-2 py-2 bg-surface border border-subtle rounded-lg text-xs font-medium text-navy active:bg-surface-dim flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add entry for {formatDateShort(day.date)}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         <h2 className="text-sm font-semibold text-navy mb-2">Recent Entries</h2>
         {recentEntries.length === 0 ? (<p className="text-xs text-muted bg-surface rounded-xl border border-subtle p-4 text-center">No entries yet</p>) : (
           <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
@@ -362,6 +610,23 @@ export default function MobileProfilePage() {
         notesPlaceholder="What did you work on..."
         submitting={logSubmitting}
         woOptions={woOptions}
+      />
+
+      {/* Backfill sheet — adds a flagged time entry for a past day. Reuses
+          LogSheet but forces WO selection (handler rejects without it) and
+          relabels the picker so the freelancer knows it's required. */}
+      <LogSheet
+        open={!!backfillTarget && backfillTarget.mode === "add"}
+        onClose={() => setBackfillTarget(null)}
+        onSubmit={handleBackfillSubmit}
+        contextLabel={backfillTarget ? `Add entry for ${formatDateShort(backfillTarget.date)}` : ""}
+        contextSublabel="Pending PM approval"
+        defaultHours={0}
+        notesPlaceholder="What did you work on..."
+        submitLabel="Add entry"
+        submitting={backfillSubmitting}
+        woOptions={woOptions}
+        woPickerLabel="Work Order (required)"
       />
     </div>
   );

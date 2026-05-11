@@ -1,28 +1,42 @@
-feat(wo-docs): view cutlists inline instead of forcing download
+feat(m/me): 10-day overview with backfill of missing time entries
 
-Cutlists in the work order docs panel previously only had Download and
-Remove. Mateusz wanted to view them in-browser. Adds an Eye button on
-desktop and makes tapping the cutlist name open inline on mobile.
+Freelancers can now see their last 10 calendar days (including weekends)
+as collapsible day rows above "Recent Entries". Each row shows the date,
+weekday, and total hours for that day. Days that have entries but total
+under 9h get a red total — the visual signal that something's missing.
+Days with zero entries stay neutral (could be a weekend or day off).
 
-Why a new API route rather than reusing /api/onedrive/download:
-- /api/onedrive/download returns Microsoft's signed CDN URL, which has
-  Content-Disposition: attachment baked in by OneDrive — the browser
-  forces download regardless of mime type.
-- New /api/onedrive/view fetches the file server-side and re-streams it
-  with Content-Disposition: inline + the original mime type. PDFs and
-  images render in the new tab; unsupported types fall back to download
-  via browser default behaviour.
+Tapping a row expands to show the individual entries (WO time entries +
+ad-hoc tasks merged). Each shows description, job number, hours, and a
+"Pending" badge if it's a backfill awaiting PM review. At the bottom of
+the expanded row, an "Add entry for [date]" button opens a LogSheet
+pre-set to that date.
 
-Auth and security:
-- Same Supabase-session trust boundary as /api/onedrive/download.
-- Accepts auth via Authorization header OR ?token= query param. Query
-  param is needed because window.open() opens a fresh tab and can't set
-  request headers. The token is the user's own short-lived (1h) Supabase
-  access token — leakage risk is bounded to that window, and it's the
-  same trust as any logged-in API call.
-- Body is streamed (Response(fetchRes.body)) so files of any size work
-  inside Vercel's function limits without buffering.
+Backfill flow:
+- Reuses the existing LogSheet component with a new `defaultRoutedWo`
+  prop (for future edit support) and a `woPickerLabel` override so the
+  picker reads "Work Order (required)" rather than "Route to WO
+  (optional)".
+- Handler rejects submit without a WO chosen.
+- Synthetic timestamps: start at 09:00 local on the target date, end at
+  start + hours. PM can adjust if needed.
+- Hourly rate snapshot pulled from tbl_freelancers (matches the existing
+  timer-log pattern).
+- Inserted via auditedInsert so the change is tracked.
+- flag_note prefix "[Backfill]" makes the entry surface in
+  /review/timesheets for PM approval.
+- notify() fires wo_flagged severity warning so the PM gets a
+  real-time bump.
 
-Mobile UX: tap on the cutlist name now opens View; Share and Download
-icons retained on the right. This matches the natural mobile gesture
-(tap-to-open) that workshop staff expect.
+Routed tasks are excluded from the 10-day count because each routing
+also creates a tbl_wo_time_entries row — counting both would double up
+the day's total.
+
+Data fetch: added two new queries to the existing Promise.all (one for
+WO entries in the window, one for non-routed tasks in the window). The
+WO/job lookup was refactored to span both the existing recent-20 list
+and the new 10-day window in a single fetch — no extra round trips for
+the common case.
+
+Edit-existing-entry is deferred. The state machine has a placeholder
+"edit" mode (typed in `backfillTarget`) for the follow-up.
