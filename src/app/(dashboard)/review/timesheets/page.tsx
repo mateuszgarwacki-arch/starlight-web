@@ -35,6 +35,7 @@ interface EditRow {
   created_at: string;
   proposed_actual_hours: number | null;
   proposed_work_order_id: number | null;
+  proposed_date: string | null;
   // Original entry values
   current_actual_hours: number;
   current_work_order_id: number;
@@ -100,7 +101,7 @@ export default function TimesheetsReviewPage() {
         .limit(200),
       supabase
         .from("tbl_wo_time_entry_edits")
-        .select("edit_id, entry_id, freelancer_id, reason, created_at, proposed_actual_hours, proposed_work_order_id")
+        .select("edit_id, entry_id, freelancer_id, reason, created_at, proposed_actual_hours, proposed_work_order_id, proposed_date")
         .eq("status", "pending")
         .order("created_at", { ascending: true }),
     ]);
@@ -158,6 +159,7 @@ export default function TimesheetsReviewPage() {
           created_at: e.created_at,
           proposed_actual_hours: e.proposed_actual_hours,
           proposed_work_order_id: e.proposed_work_order_id,
+          proposed_date: e.proposed_date,
           current_actual_hours: Number(entry.actual_hours) || 0,
           current_work_order_id: entry.work_order_id,
           entry_date: (entry.actual_start_timestamp || "").split("T")[0],
@@ -254,6 +256,7 @@ export default function TimesheetsReviewPage() {
             {edits.map((e) => {
               const hoursChanged = e.proposed_actual_hours != null;
               const woChanged = e.proposed_work_order_id != null;
+              const dateChanged = e.proposed_date != null && e.proposed_date !== e.entry_date;
               const reviewing = reviewingEditId === e.edit_id;
               return (
                 <div key={e.edit_id} className="px-4 py-3">
@@ -265,9 +268,12 @@ export default function TimesheetsReviewPage() {
                         <span className="text-[10px] text-faint">· proposed {new Date(e.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
                       </div>
 
-                      {/* Diff line: current → proposed */}
+                      {/* Diff line: current → proposed. Date is shown only
+                          when changed (keeps the line compact in the
+                          common case where only hours change). */}
                       <div className="mt-1.5 flex items-center gap-2 text-xs flex-wrap">
                         <span className="font-mono text-muted">
+                          {dateChanged && <span className="text-navy">{formatDate(e.entry_date)} · </span>}
                           {formatHours(e.current_actual_hours)}
                           {" · "}
                           <span className="text-navy">{e.current_wo_label}</span>
@@ -275,6 +281,9 @@ export default function TimesheetsReviewPage() {
                         </span>
                         <ArrowRight className="h-3 w-3 text-muted shrink-0" />
                         <span className="font-mono">
+                          {dateChanged && (
+                            <span className="text-starlight-blue font-semibold">{formatDate(e.proposed_date!)} · </span>
+                          )}
                           {hoursChanged ? (
                             <span className="text-starlight-blue font-semibold">{formatHours(e.proposed_actual_hours!)}</span>
                           ) : (

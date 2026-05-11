@@ -1,12 +1,16 @@
-fix(m/me): ad-hoc tasks now tappable in Last 10 Days and Recent Entries
+feat: editable dates on time entries and ad-hoc tasks
 
-Ad-hoc tasks were excluded from the click-to-edit flow - only WO time entries
-opened the edit sheet. The Fuckin test entry from Mateusz Garwacki is exactly
-this case: a logged ad-hoc task with status approved_overhead.
+WO time entries: date now part of the pending-edit flow. Schema gets
+proposed_date column on tbl_wo_time_entry_edits, and the approve RPC
+rebuilds timestamps using new date + existing time-of-day so a 09:00
+entry stays 09:00 on the new day. EditTimeEntrySheet enables LogSheet's
+date picker pre-populated with the entry date. PM review row shows
+a date diff inline when changed.
 
-Adds EditTaskSheet with task-appropriate semantics:
-- pending: direct update
-- approved_overhead: update values, revert status to pending, clear review_note
-- routed/rejected: not editable, informational message
+Ad-hoc tasks: date edits update worked_date directly, same approved->
+pending revert when PM had already approved. EditableTask gains a
+worked_date field; both /m/me call sites pass it through.
 
-Wired into /m/me Last 10 Days and Recent Entries.
+Nothing-broken invariant preserved: WO entry timestamps don't move
+until you approve. Cost-by-day, margin-by-day, daily timesheet flags
+all stay on the canonical date.

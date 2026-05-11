@@ -567,6 +567,7 @@ export default function MobileProfilePage() {
                                     description: null,
                                     hours: e.hours,
                                     status: e.status || "pending",
+                                    worked_date: day.date,
                                   });
                                 }
                               }}
@@ -660,6 +661,7 @@ export default function MobileProfilePage() {
                           description: null,
                           hours: entry.hours,
                           status: entry.status || "pending",
+                          worked_date: entry.date,
                         });
                       }
                     }}

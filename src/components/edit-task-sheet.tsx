@@ -28,6 +28,8 @@ export interface EditableTask {
   description: string | null;
   hours: number;
   status: string;
+  /** YYYY-MM-DD — used to pre-populate the date picker. */
+  worked_date: string;
 }
 
 interface Props {
@@ -41,12 +43,14 @@ export function EditTaskSheet({ open, onClose, task, onSubmitted }: Props) {
   const supabase = createClient();
   const [title, setTitle] = useState("");
   const [hours, setHours] = useState(0);
+  const [workedDate, setWorkedDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open && task) {
       setTitle(task.title || "");
       setHours(task.hours || 0);
+      setWorkedDate(task.worked_date || "");
     }
   }, [open, task]);
 
@@ -61,11 +65,16 @@ export function EditTaskSheet({ open, onClose, task, onSubmitted }: Props) {
   const handleSave = async () => {
     if (!title.trim()) { toast.error("Title required"); return; }
     if (hours <= 0) { toast.error("Enter hours"); return; }
+    if (!workedDate) { toast.error("Pick a date"); return; }
 
     setSubmitting(true);
     try {
       const ctx = await getAuditContext(supabase);
-      const update: Record<string, any> = { title: title.trim(), hours };
+      const update: Record<string, any> = {
+        title: title.trim(),
+        hours,
+        worked_date: workedDate,
+      };
       if (needsReReview) {
         update.status = "pending";
         update.review_note = null;
@@ -120,6 +129,15 @@ export function EditTaskSheet({ open, onClose, task, onSubmitted }: Props) {
               <input
                 type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120}
                 className="w-full px-4 py-3 bg-surface-dim border border-subtle rounded-xl text-sm text-navy placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-starlight-blue/30"
+              />
+            </div>
+
+            {/* Date */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-muted shrink-0 w-12">Date</label>
+              <input
+                type="date" value={workedDate} onChange={(e) => setWorkedDate(e.target.value)}
+                className="flex-1 px-3 py-2.5 bg-surface-dim border border-subtle rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-starlight-blue/30"
               />
             </div>
 

@@ -45,7 +45,7 @@ interface Props {
 export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitted }: Props) {
   const supabase = createClient();
   const [submitting, setSubmitting] = useState(false);
-  const [existingPending, setExistingPending] = useState<{ edit_id: number; proposed_actual_hours: number | null; proposed_work_order_id: number | null; reason: string } | null>(null);
+  const [existingPending, setExistingPending] = useState<{ edit_id: number; proposed_actual_hours: number | null; proposed_work_order_id: number | null; proposed_date: string | null; reason: string } | null>(null);
 
   // When the sheet opens for a specific entry, check whether there's already
   // a pending edit on that entry (e.g. freelancer is revising their proposal).
@@ -56,7 +56,7 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
     (async () => {
       const { data } = await supabase
         .from("tbl_wo_time_entry_edits")
-        .select("edit_id, proposed_actual_hours, proposed_work_order_id, reason")
+        .select("edit_id, proposed_actual_hours, proposed_work_order_id, proposed_date, reason")
         .eq("entry_id", entry.entry_id)
         .eq("status", "pending")
         .maybeSingle();
@@ -69,6 +69,7 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
   // Pre-fill: prefer existing-pending values (revision), else current entry.
   const initialHours = existingPending?.proposed_actual_hours ?? entry.actual_hours;
   const initialWoId = existingPending?.proposed_work_order_id ?? entry.work_order_id;
+  const initialDate = existingPending?.proposed_date ?? entry.date ?? "";
   const currentWo = woOptions.find((w) => w.work_order_id === initialWoId) || null;
 
   const handleSubmit = async (data: LogSheetData) => {
@@ -86,8 +87,9 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
     // current entry. This keeps the diff in the PM review UI clean.
     const proposedHours = data.hours !== entry.actual_hours ? data.hours : null;
     const proposedWoId = targetWoId !== entry.work_order_id ? targetWoId : null;
+    const proposedDate = (data.date && entry.date && data.date !== entry.date) ? data.date : null;
 
-    if (proposedHours === null && proposedWoId === null) {
+    if (proposedHours === null && proposedWoId === null && proposedDate === null) {
       toast.error("Nothing changed");
       return;
     }
@@ -102,6 +104,7 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
           .update({
             proposed_actual_hours: proposedHours,
             proposed_work_order_id: proposedWoId,
+            proposed_date: proposedDate,
             reason: data.notes.trim(),
           })
           .eq("edit_id", existingPending.edit_id);
@@ -113,6 +116,7 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
           freelancer_id: entry.freelancer_id,
           proposed_actual_hours: proposedHours,
           proposed_work_order_id: proposedWoId,
+          proposed_date: proposedDate,
           reason: data.notes.trim(),
           status: "pending",
         });
@@ -175,6 +179,8 @@ export function EditTimeEntrySheet({ open, onClose, entry, woOptions, onSubmitte
             : `Was ${formatHours(entry.actual_hours)}`
         }
         defaultHours={initialHours}
+        defaultDate={initialDate}
+        showDatePicker
         defaultRoutedWo={currentWo}
         notesPlaceholder="Why does this need changing..."
         submitLabel={existingPending ? "Update request" : "Submit for review"}
