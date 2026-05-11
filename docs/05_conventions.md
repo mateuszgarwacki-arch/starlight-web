@@ -103,6 +103,8 @@ Never JOIN labour + material in the same CTE — hours multiply by BOM row count
 - **Manual time entries must set all 4 timestamps** (`system_start`, `actual_start`, `system_end`, `actual_end`). NULL `system_end` creates a phantom active timer.
 - **Timestamp format:** use `"YYYY-MM-DDT09:00:00"` with **no `Z` suffix** to prevent BST date shifts.
 - Manual time entry on a Not-Started WO does NOT advance the WO status. The WO will sit in Not-Started until someone manually marks it Complete (or starts it via QR/mobile). For small jobs where PM logs hours after the fact, expect WOs to remain in Not-Started even when work is done — the close report's "WOs still active" warning will fire (correctly).
+- **Freelancer-edits on WO time entries are proposals, never direct writes (S42).** `tbl_wo_time_entry_edits` holds pending changes; the canonical `tbl_wo_time_entries` row is untouched until a PM calls `rpc_approve_time_entry_edit`. Reports continue to use the canonical value throughout. **The same does NOT apply to ad-hoc tasks** — `tbl_tasks` is edited in place (with status reverted to `pending` if the PM had previously approved it as overhead). Tasks don't carry cost into reports until approval; entries do. Different invariants → different patterns.
+- **Date edits preserve time-of-day** in the approve RPC: `proposed_date::timestamp + actual_start_timestamp::time`. A 09:00 entry moved to a new day stays at 09:00.
 
 ### 3.9 Complexity / status encoding
 
@@ -113,14 +115,14 @@ Never JOIN labour + material in the same CTE — hours multiply by BOM row count
 ## 4. Auditing
 
 **Audited tables registry** (`src/lib/audit.ts` `AUDITED_TABLES`):
-`tbl_quote_lines`, `tbl_scope_items`, `tbl_work_orders`, `tbl_wo_bom`, `tbl_production_plan`, `tbl_quotes`, `tbl_wo_time_entries`, `tbl_freelancers`, `tbl_scope_options`, `tbl_wo_documents`, `tbl_wo_steps`, `tbl_timesheet_flags`.
+`tbl_quote_lines`, `tbl_scope_items`, `tbl_work_orders`, `tbl_wo_bom`, `tbl_production_plan`, `tbl_quotes`, `tbl_wo_time_entries`, `tbl_freelancers`, `tbl_scope_options`, `tbl_wo_documents`, `tbl_wo_steps`, `tbl_timesheet_flags`, `tbl_tasks`.
 
 **Mandatory rules:**
 - `auditedUpdate(ctx, table, recordId, changes)` for all writes on registered tables. **Never raw `supabase.update()`.**
 - `auditedInsert()` for creation. `auditedDelete()` for deletion.
 - Signature catch: 3rd param is the ID, 4th is changes. Not the other way round.
 - `getAuditContext(supabase)` takes the supabase client as an arg. Returns `{ supabase, userId, userName, userRole }`. **Not** an `actor_freelancer_id` field — if you need the freelancer_id, read it from `user.user_metadata.freelancer_id` (NULL for admin without a row).
-- Registration in `AUDITED_TABLES` is **prerequisite** — functions gate log-write on registry.
+- Registration in `AUDITED_TABLES` is **prerequisite** — the helpers look up the PK column from this map. **If a table is missing from the map, the helpers fall back to `.eq("id", recordId)` and the mutation fails with `column tbl_X.id does not exist`** — a misleading error that hides the real cause (registration miss, not a missing column). Always register a table the first time you reach for `auditedUpdate` against it. *Case study: tbl_tasks (S42).*
 - **Cosmetic updates** (sort_order drag-reorder) stay raw.
 - **Don't manually write `modified_at`** — spawns an audit entry per timestamp change.
 
@@ -143,6 +145,16 @@ If you find yourself with a denormalised mirror of data that already lives elsew
 3. **Read directly from the source.** Update the views/RPCs to compute on demand. Modern Postgres handles `SUM(child_value) GROUP BY parent_id` very fast with an index on `parent_id`.
 
 What you must NOT do: leave the mirror unmaintained and hope. It will drift, and the bug will only surface when it's awkward.
+
+### 5.2 Planned vs Actual is two fields, never one (S42)
+
+When tracking a value with a forecast and a settled number — BOM cost vs allocated invoice cost, estimate hours vs actual hours, anything that has a "what we expect" and a "what we got" — surface **both** in the data layer, even if early UI shows only one. Collapsing to a single field (whichever happens to be non-null) buries the variance signal at the source.
+
+S42 case study: `rpc_job_close_report` originally returned a single `materials_cost` that took BOM if invoices weren't allocated yet, and invoice allocations if they were. The Job Complete dialog read `£0` whenever neither was populated, which happened on jobs where the PM had BOM'd but not allocated. Worse, when both existed, there was no way to tell which one you were looking at — the report silently switched semantics by row.
+
+Rewrite: three explicit fields — `material_cost_planned` (BOM), `material_cost_actual` (allocations), `material_cost_committed` (`MAX(planned, actual)`, the prudent forecast). UI surfaces "Plan £X / Actual £Y" with red on overrun. Variance becomes visible at every layer.
+
+Generalisation: in this codebase any new field of the form "X cost" or "Y hours" should pause and ask: is this a forecast, a settled value, or the conservative-projection? If two of those are meaningful, the schema should reflect two fields. The mistake to avoid is over-aggregation in the database layer for the sake of UI brevity — the UI can always re-aggregate.
 
 ## 6. Cross-table consistency (S38c)
 

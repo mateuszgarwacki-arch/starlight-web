@@ -1,18 +1,18 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 6 May 2026 (S41)
-**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S41 close.
+**Last updated:** 11 May 2026 (S42)
+**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S42 close.
 
 ## Counts
 
 | Category | Count |
 |---|---|
-| Tables (`tbl_*`) | 55 |
+| Tables (`tbl_*`) | 56 |
 | Views (`qry_*`) | 34 |
-| RPC functions (`rpc_*`) | 14 |
+| RPC functions (`rpc_*`) | 16 |
 | pg_cron jobs | 2 |
 
-## Tables (55)
+## Tables (56)
 
 ```
 tbl_audit_log                   tbl_business_settings           tbl_category_prompts
@@ -32,8 +32,8 @@ tbl_rate_card                   tbl_scope_item_categories       tbl_scope_items
 tbl_scope_options               tbl_stock_items                 tbl_suppliers
 tbl_tasks                       tbl_timesheet_flags             tbl_wo_activities
 tbl_wo_assignees                tbl_wo_bom                      tbl_wo_documents
-tbl_wo_steps                    tbl_wo_time_entries             tbl_work_orders
-tbl_workshop_requests
+tbl_wo_steps                    tbl_wo_time_entries             tbl_wo_time_entry_edits
+tbl_work_orders                 tbl_workshop_requests
 ```
 
 ## Views (34)
@@ -53,21 +53,23 @@ qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ord
 qry_wo_with_activities
 ```
 
-## RPC functions (14)
+## RPC functions (16)
 
 | Function | Args | Purpose |
 |---|---|---|
 | `rpc_active_workers` | — | SECURITY DEFINER. Cross-user view of who's currently clocked-in (non-sensitive fields only) |
+| `rpc_approve_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Atomic apply of a freelancer-proposed time-entry edit. Rebuilds timestamps from `proposed_date + actual_start_timestamp::time`, recalculates `entry_cost` from current `applied_hourly_rate`. Role check: `admin/pm/production_manager` only |
 | `rpc_capacity_data` | `p_date_from text, p_date_to text` | Capacity page data; filters Complete jobs |
 | `rpc_dashboard_data` | — | Dashboard data (16+ queries collapsed); upcoming jobs filters Complete |
 | `rpc_detect_timesheet_gaps` | `p_flag_date date` | Idempotent flag detector for sub-90% logged hours; cron-driven daily |
-| `rpc_job_close_report` | `p_job_id integer` | Close report data — header, commercial, labour, materials, WO variance, scope cost, learnings, post-complete edit count. Live data, never a snapshot |
+| `rpc_job_close_report` | `p_job_id integer` | Close report data — header, commercial summary (with `material_cost_planned`/`actual`/`committed` split), labour, materials by category/supplier, WO variance, scope cost, learnings, post-complete edit count. Live data, never a snapshot |
 | `rpc_job_detail_data` | `p_job_id integer` | Job page main data |
 | `rpc_job_handover_data` | `p_job_id integer` | Handover summary data — zones, exclusions, drawings |
 | `rpc_job_header_counts` | `p_job_id integer` | Lightweight counters for the job page toolbar (PM queries, learnings, invoices, orders, documents) |
 | `rpc_learnings_similar` | `p_query_embedding vector, p_limit int, p_category` | Voyage AI similarity search over institutional knowledge |
 | `rpc_load_list` | `p_job_id integer` | Load list data |
 | `rpc_pm_job_overview` | `p_job_id integer` | PM 100m view |
+| `rpc_reject_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Marks an edit row rejected with PM's note. Note travels back to freelancer so they understand why and can revise |
 | `rpc_report_job_financial` | `p_job_id integer` | Financial report data |
 | `rpc_review_data` | — | Review page data |
 | `rpc_workshop_data` | — | Workshop page data; filters Complete jobs |
@@ -95,6 +97,7 @@ qry_wo_with_activities
   tbl_wo_documents:     "doc_id",
   tbl_wo_steps:         "step_id",
   tbl_timesheet_flags:  "flag_id",
+  tbl_tasks:            "task_id",
 }
 ```
 
@@ -122,7 +125,37 @@ The total value of a quote is **always** `SUM(tbl_quote_lines.line_value)` for t
 
 Reflects hours as of last detector run for that `(freelancer_id, flag_date)`. Trigger ensures real-time consistency on time-entry writes. 14-day page-load re-run on `/review/timesheets` and `/m/me` panel ensures eventual consistency for everything else. UNIQUE constraint on `(freelancer_id, flag_date)` makes detector idempotent.
 
-## Recent additions (S40 → S41)
+## Recent additions (S40 → S42)
+
+### S42 — Material cost reporting, time-entry pending-edit workflow
+
+**New table:**
+- `tbl_wo_time_entry_edits` — freelancer-proposed edits to their own WO time entries. Columns: `edit_id` (PK), `entry_id` (FK → `tbl_wo_time_entries` ON DELETE CASCADE), `freelancer_id`, `proposed_actual_hours`, `proposed_work_order_id`, `proposed_date`, `reason` (NOT NULL), `status` (`pending|approved|rejected|withdrawn`, default `pending`), `reviewed_at`, `reviewed_by` (uuid), `review_note`, `created_at`, `updated_at`.
+- Partial unique index `uq_one_pending_per_entry WHERE status='pending'` — one in-flight proposal per entry. Freelancer revises in place.
+- RLS: freelancer can read/insert/update own pending. PM/admin can update any. **No DELETE policy for anyone** — withdrawals are status changes, audit trail survives.
+
+**RPCs added:**
+- `rpc_approve_time_entry_edit(p_edit_id integer, p_review_note text DEFAULT NULL)` — atomic single-transaction apply. Rebuilds timestamps from `proposed_date + actual_start_timestamp::time` (preserves time-of-day on date moves). Recalculates `entry_cost` from current `applied_hourly_rate`. Role check accepts `admin | pm | production_manager`.
+- `rpc_reject_time_entry_edit(p_edit_id integer, p_review_note text DEFAULT NULL)` — marks rejected with the PM's note. Note surfaces back to the freelancer on `/m/me` so they understand why and can revise.
+
+**RPC updated:**
+- `rpc_job_close_report` now returns three distinct material-cost fields instead of a single collapsed value:
+  - `material_cost_planned` (BOM — `SUM(quantity × unit_cost)`)
+  - `material_cost_actual` (invoice allocations via `qry_invoice_job_rollup`)
+  - `material_cost_committed` (`MAX(planned, actual)` — the prudent forecast)
+  - `unallocated_invoice_total` warning compares against `material_cost_actual` not the old collapsed value (fixes false-positive when planned > actual)
+
+**Audited table added:**
+- `tbl_tasks` registered with PK `task_id`. Previous omission caused `auditedUpdate` to fall back to `.eq("id", ...)` and fail with `column tbl_tasks.id does not exist` whenever the helpers were used (e.g. when EditTaskSheet shipped). Any audited mutation against an unregistered table fails this way — worth remembering for future tables.
+
+**Data fix (Job 13757 Suneil Birthday Tite Street):**
+- Quotes 12 (£124,480) and 13 (£33,035) consolidated into new quote 14 "40922 v16" — 60 lines, £180,265. Scope 54 relinked from old quote_line 382 → new quote_line 442. Old quotes/lines hard-deleted. Quote 14 is now the only Accepted quote on the job.
+
+**No schema changes from this session for:**
+- Mobile 10-day overview (pure UI in `/m/me`)
+- Jobs page Budget→Quoted (column rename + query join change; `budget_allowance` field retained for potential future client-stated-budget concept)
+- Cutlist inline viewing (new API route `/api/onedrive/view`, no DB)
+- WO-optional backfill (pure routing logic in `handleBackfillSubmit`; no WO → inserts to `tbl_tasks` as pending, with WO → inserts to `tbl_wo_time_entries` as before)
 
 ### S41 — Job Complete state, drift fix, freelancer onboarding tightening
 

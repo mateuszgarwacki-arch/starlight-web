@@ -165,6 +165,7 @@ Four tables publish to Supabase Realtime:
 - **Folder structure:** `Workshop/{jobNumber} - {jobName}/{docType}/` — sanitise names, no special chars.
 - **Large uploads:** browser → `/api/onedrive/upload-session` → direct to OneDrive in chunks. Bypasses the Vercel 4.5 MB function body cap. Any SketchUp/DWG file over 3.5 MB uses this path automatically.
 - **Buffer typing:** use `new Uint8Array(arrayBuffer)` for fetch body; `Buffer` type fails TypeScript.
+- **Inline viewing:** `/api/onedrive/view` re-streams a file with `Content-Disposition: inline` (vs `/api/onedrive/download` which forces `attachment`). Auth via standard Authorization header OR `?token=` query param (HMAC-signed, 72h, reuses SP-013 calendar token scheme) so `window.open(url, '_blank')` works without losing auth context. Used for cutlists, images, drawings — anything where landing the file in the browser's native viewer beats forcing a download.
 
 ### Claude API (Anthropic)
 

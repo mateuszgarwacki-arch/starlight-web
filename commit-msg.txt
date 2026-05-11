@@ -1,16 +1,39 @@
-feat(m/me): WO optional on backfill - no-WO files as ad-hoc task
+docs: S42 wrap - TRACKER session entry, schema snapshot, conventions
 
-Backfill flow Add entry for [date] no longer forces a WO. If the
-freelancer picks one, behaviour is unchanged: [Backfill] WO time
-entry, PM sees in /review/timesheets. If they leave it blank, the
-entry files as a pending ad-hoc task in tbl_tasks - same model as
-the Log Task button, PM routes/approves in /review/inbox.
+TRACKER.md
+- New S42 entry covering all 10 deploys this session: material cost
+  Plan/Actual split, Job 13757 quote consolidation, Jobs page Quoted
+  column, cutlist inline viewing, mobile 10-day overview + backfill,
+  pending-edit workflow for WO time entries, click-to-edit ad-hoc tasks,
+  date editing both paths, audit map fix for tbl_tasks, and WO-optional
+  backfill that unifies the WO/task dichotomy.
+- Cleanup backlog: 5 new deferred items (extending click-to-edit to
+  /m/wo and /m/schedule, retiring reconciled_line_cost, invoiceBOM
+  linkage, actual material breakdown on close, delete proposals,
+  budget_allowance read-site sweep).
 
-Validation: hours always required; description required only when
-no WO is selected (it becomes the task title, and an untitled task
-is useless to the PM).
+03_database_schema.md
+- Counts: 5556 tables, 1416 RPCs (34 views unchanged).
+- New table tbl_wo_time_entry_edits with full column list and the
+  one-pending-per-entry partial unique index documented.
+- New RPCs rpc_approve_time_entry_edit, rpc_reject_time_entry_edit
+  added to the function table with arg signatures.
+- rpc_job_close_report description updated to reflect the three-way
+  Plan/Actual/Committed material cost split.
+- tbl_tasks added to the AUDITED_TABLES block (PK: task_id).
+- Recent additions section retitled S40S42 with full S42 block.
 
-Picker label and sheet sublabel updated to reflect that WO is now
-optional. The dichotomy WO entry vs ad-hoc task is now a single
-decision the freelancer makes implicitly by whether they pick a WO,
-rather than being stuck behind a required field.
+05_conventions.md
+- Audit section: tbl_tasks added to registry, plus a new bullet on
+  the silent-fail mode when a table is missing from AUDITED_TABLES
+  (misleading \"column tbl_X.id does not exist\" error).
+- New õ5.2: Planned vs Actual is two fields, never one (S42 case study
+  on rpc_job_close_report material cost split).
+- õ3.8 Time entries: two new bullets on freelancer-edit-as-proposal
+  workflow (WO entries) vs direct-edit-with-revert (ad-hoc tasks),
+  and the time-of-day preservation rule on date edits.
+
+02_architecture.md
+- OneDrive section: /api/onedrive/view documented next to /download
+  and /upload-session, with the token-via-query-param mechanism that
+  makes inline viewing work through window.open.
