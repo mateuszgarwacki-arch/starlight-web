@@ -7,13 +7,14 @@ import { formatHours } from "@/lib/format-hours";
 import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw, X, AlertTriangle, Package, Wrench, Archive, MessageSquare, Save, Minus, Plus, Camera, ChevronDown, ChevronRight } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { LogSheet, type LogSheetData, type WoOption } from "@/components/log-sheet";
+import { EditTimeEntrySheet, type EditableEntry } from "@/components/edit-time-entry-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { auditedUpdate, auditedInsert, getAuditContext } from "@/lib/audit";
 import { TimesheetFlagsPanel } from "@/components/timesheet-flags";
 
 interface HoursSummary { hours_this_week: number; hours_this_month: number; }
-interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: number | null; date: string; job_number: string | null; status?: string; review_note?: string | null; flag_note?: string | null; }
+interface RecentEntry { type: "wo" | "task"; id: number; title: string; hours: number | null; date: string; job_number: string | null; status?: string; review_note?: string | null; flag_note?: string | null; work_order_id?: number; }
 interface MyRequest { request_id: number; category: string; title: string; urgency: string; status: string; resolution_note: string | null; created_at: string; }
 interface MyTask { task_id: number; title: string; hours: number | null; status: string; review_note: string | null; started_at: string | null; created_at: string; }
 interface ActiveTimer { task_id: number; title: string; started_at: string; }
@@ -116,6 +117,12 @@ export default function MobileProfilePage() {
   >(null);
   const [backfillSubmitting, setBackfillSubmitting] = useState(false);
 
+  // Edit-request state. editTarget = the entry whose hours/WO the freelancer
+  // wants to change. editsByEntry maps an entry_id → its pending or
+  // most-recent-rejected edit so the UI can show the appropriate badge.
+  const [editTarget, setEditTarget] = useState<EditableEntry | null>(null);
+  const [editsByEntry, setEditsByEntry] = useState<Record<number, { pending?: any; lastRejected?: any }>>({});
+
   // Live updates when tasks/requests change
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], () => setRefreshKey((k) => k + 1));
 
@@ -204,7 +211,7 @@ export default function MobileProfilePage() {
       const tenAgoBase = new Date(); tenAgoBase.setDate(tenAgoBase.getDate() - (TEN_DAY_WINDOW - 1));
       const tenDaysAgoStr = `${tenAgoBase.getFullYear()}-${String(tenAgoBase.getMonth() + 1).padStart(2, "0")}-${String(tenAgoBase.getDate()).padStart(2, "0")}`;
 
-      const [hoursRes, woEntriesRes, tasksRes, requestsRes, activeTaskRes, tenDayWoRes, tenDayTasksRes] = await Promise.all([
+      const [hoursRes, woEntriesRes, tasksRes, requestsRes, activeTaskRes, tenDayWoRes, tenDayTasksRes, editsRes] = await Promise.all([
         supabase.from("qry_freelancer_hours_summary").select("*").eq("freelancer_id", fId).maybeSingle(),
         supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, actual_hours, system_start_timestamp, actual_start_timestamp, flag_note").eq("freelancer_id", fId).is("archived_at", null).not("actual_hours", "is", null).order("system_start_timestamp", { ascending: false }).limit(20),
         supabase.from("tbl_tasks").select("task_id, title, hours, status, review_note, started_at, created_at, job_id").eq("freelancer_id", fId).neq("status", "in_progress").order("created_at", { ascending: false }).limit(20),
@@ -217,6 +224,11 @@ export default function MobileProfilePage() {
         // each routing creates a parallel tbl_wo_time_entries row that
         // would double-count toward the day's total.
         supabase.from("tbl_tasks").select("task_id, title, hours, status, worked_date").eq("freelancer_id", fId).in("status", ["pending", "approved_overhead"]).not("hours", "is", null).gte("worked_date", tenDaysAgoStr),
+        // Pending and most-recent-rejected edits for this freelancer. Used
+        // to badge entries in the UI. Approved/withdrawn ones not needed
+        // here (approved → entry already reflects change; withdrawn → user
+        // cancelled, no signal to show).
+        supabase.from("tbl_wo_time_entry_edits").select("edit_id, entry_id, status, proposed_actual_hours, proposed_work_order_id, reason, review_note, created_at, reviewed_at").eq("freelancer_id", fId).in("status", ["pending", "rejected"]).order("created_at", { ascending: false }),
       ]);
       if (hoursRes.data) { setHoursSummary({ hours_this_week: Number(hoursRes.data.hours_this_week) || 0, hours_this_month: Number(hoursRes.data.hours_this_month) || 0 }); }
 
@@ -245,7 +257,7 @@ export default function MobileProfilePage() {
       // last 20 tasks, merged and trimmed to 15).
       const woEntries: RecentEntry[] = (woEntriesRes.data || []).map((e: any) => {
         const wo = woMap[e.work_order_id];
-        return { type: "wo" as const, id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null, flag_note: e.flag_note || null };
+        return { type: "wo" as const, id: e.entry_id, title: wo?.desc || "WO #" + e.work_order_id, hours: e.actual_hours, date: (e.actual_start_timestamp || e.system_start_timestamp || "").split("T")[0], job_number: wo ? jobNumMap[wo.jobId] || null : null, flag_note: e.flag_note || null, work_order_id: e.work_order_id };
       });
       const taskEntries: RecentEntry[] = (tasksRes.data || []).map((t: any) => ({ type: "task" as const, id: t.task_id, title: t.title, hours: t.hours, date: (t.created_at || "").split("T")[0], job_number: null, status: t.status, review_note: t.review_note }));
       const merged = [...woEntries, ...taskEntries].sort((a, b) => b.date.localeCompare(a.date));
@@ -289,6 +301,20 @@ export default function MobileProfilePage() {
           entries: dayMap[date].sort((a, b) => b.hours - a.hours),
         }))
       );
+
+      // editsByEntry: pending winner first; lastRejected is the most-recent
+      // rejected (only set if there's no pending). Ordering relies on the
+      // .order("created_at", desc) on the editsRes query above.
+      const eMap: Record<number, { pending?: any; lastRejected?: any }> = {};
+      (editsRes.data || []).forEach((e: any) => {
+        if (!eMap[e.entry_id]) eMap[e.entry_id] = {};
+        if (e.status === "pending" && !eMap[e.entry_id].pending) {
+          eMap[e.entry_id].pending = e;
+        } else if (e.status === "rejected" && !eMap[e.entry_id].pending && !eMap[e.entry_id].lastRejected) {
+          eMap[e.entry_id].lastRejected = e;
+        }
+      });
+      setEditsByEntry(eMap);
       const openReqs = (requestsRes.data || []).filter((r: any) => ["open", "acknowledged", "in_progress"].includes(r.status));
       const closedReqs = (requestsRes.data || []).filter((r: any) => ["resolved", "dismissed"].includes(r.status)).slice(0, 5);
       setMyRequests([...openReqs, ...closedReqs]);
@@ -500,23 +526,66 @@ export default function MobileProfilePage() {
                     {day.entries.length === 0 ? (
                       <p className="text-xs text-muted text-center py-1">No entries</p>
                     ) : (
-                      day.entries.map((e) => (
-                        <div key={`${e.kind}-${e.id}`} className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs text-navy truncate">{e.description}</p>
-                              {e.kind === "task" && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>
-                              )}
-                              {e.flag_note?.startsWith("[Backfill]") && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-amber/10 text-starlight-amber font-medium shrink-0">Pending</span>
-                              )}
-                            </div>
-                            {e.job_number && <p className="text-[10px] text-muted font-mono">{e.job_number}</p>}
+                      day.entries.map((e) => {
+                        const editState = e.kind === "wo" ? editsByEntry[e.id] : undefined;
+                        const hasPending = !!editState?.pending;
+                        const hasRejected = !!editState?.lastRejected;
+                        const isClickable = e.kind === "wo";
+                        // Optimistic preview: when pending, show the proposed
+                        // hours next to the original so the freelancer sees
+                        // what they asked for.
+                        const proposedHours = editState?.pending?.proposed_actual_hours;
+                        return (
+                          <div key={`${e.kind}-${e.id}`}>
+                            <button
+                              type="button"
+                              disabled={!isClickable}
+                              onClick={() => {
+                                if (e.kind !== "wo" || !e.work_order_id) return;
+                                setEditTarget({
+                                  entry_id: e.id,
+                                  freelancer_id: myId,
+                                  actual_hours: e.hours,
+                                  work_order_id: e.work_order_id,
+                                  description: e.description,
+                                  date: day.date,
+                                });
+                              }}
+                              className={"w-full flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 rounded text-left " + (isClickable ? "active:bg-surface-mid" : "")}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-xs text-navy truncate">{e.description}</p>
+                                  {e.kind === "task" && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>
+                                  )}
+                                  {e.flag_note?.startsWith("[Backfill]") && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-amber/10 text-starlight-amber font-medium shrink-0">Backfill</span>
+                                  )}
+                                  {hasPending && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-blue/10 text-starlight-blue font-medium shrink-0">Edit pending</span>
+                                  )}
+                                  {hasRejected && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-red/10 text-starlight-red font-medium shrink-0">Edit rejected</span>
+                                  )}
+                                </div>
+                                {e.job_number && <p className="text-[10px] text-muted font-mono">{e.job_number}</p>}
+                                {hasPending && proposedHours != null && (
+                                  <p className="text-[10px] text-starlight-blue mt-0.5">
+                                    Proposed: {formatHours(proposedHours)}
+                                  </p>
+                                )}
+                                {hasRejected && editState?.lastRejected?.review_note && (
+                                  <p className="text-[10px] text-starlight-red mt-0.5 italic">
+                                    PM: {editState.lastRejected.review_note}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-xs font-semibold text-navy tabular-nums shrink-0">{formatHours(e.hours)}</span>
+                            </button>
                           </div>
-                          <span className="text-xs font-semibold text-navy tabular-nums shrink-0">{formatHours(e.hours)}</span>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                     <button
                       onClick={() => setBackfillTarget({ mode: "add", date: day.date })}
@@ -537,37 +606,70 @@ export default function MobileProfilePage() {
         <h2 className="text-sm font-semibold text-navy mb-2">Recent Entries</h2>
         {recentEntries.length === 0 ? (<p className="text-xs text-muted bg-surface rounded-xl border border-subtle p-4 text-center">No entries yet</p>) : (
           <div className="bg-surface rounded-xl border border-subtle divide-y divide-subtle">
-            {recentEntries.map((entry) => (
-              <div key={`${entry.type}-${entry.id}`} className="px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2"><p className="text-sm text-navy truncate">{entry.title}</p>{entry.type === "task" && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>)}</div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
-                      <span>{formatDateShort(entry.date)}</span>{entry.job_number && <span className="font-mono">{entry.job_number}</span>}
-                      {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
+            {recentEntries.map((entry) => {
+              const editState = entry.type === "wo" ? editsByEntry[entry.id] : undefined;
+              const hasPending = !!editState?.pending;
+              const hasRejected = !!editState?.lastRejected;
+              const proposedHours = editState?.pending?.proposed_actual_hours;
+              const isEditable = entry.type === "wo" && !!entry.work_order_id;
+              return (
+                <div key={`${entry.type}-${entry.id}`} className="px-4 py-3">
+                  <button
+                    type="button"
+                    disabled={!isEditable}
+                    onClick={() => {
+                      if (!isEditable || !entry.work_order_id || entry.hours == null) return;
+                      setEditTarget({
+                        entry_id: entry.id,
+                        freelancer_id: myId,
+                        actual_hours: entry.hours,
+                        work_order_id: entry.work_order_id,
+                        description: entry.title,
+                        date: entry.date,
+                      });
+                    }}
+                    className={"w-full flex items-center justify-between text-left " + (isEditable ? "active:bg-surface-dim -mx-2 px-2 py-1 rounded" : "")}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm text-navy truncate">{entry.title}</p>
+                        {entry.type === "task" && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-navy/5 text-navy/60 font-medium shrink-0">Ad-hoc</span>)}
+                        {hasPending && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-blue/10 text-starlight-blue font-medium shrink-0">Edit pending</span>)}
+                        {hasRejected && (<span className="text-[9px] px-1.5 py-0.5 rounded bg-starlight-red/10 text-starlight-red font-medium shrink-0">Edit rejected</span>)}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
+                        <span>{formatDateShort(entry.date)}</span>{entry.job_number && <span className="font-mono">{entry.job_number}</span>}
+                        {entry.type === "task" && entry.status && (<span className={"px-1.5 py-0.5 rounded-full text-[9px] font-medium " + (TASK_STATUS_BADGE[entry.status]?.cls || "")}>{TASK_STATUS_BADGE[entry.status]?.label}</span>)}
+                      </div>
+                      {hasPending && proposedHours != null && (
+                        <p className="text-[10px] text-starlight-blue mt-0.5">Proposed: {formatHours(proposedHours)}</p>
+                      )}
+                      {hasRejected && editState?.lastRejected?.review_note && (
+                        <p className="text-[10px] text-starlight-red mt-0.5 italic">PM: {editState.lastRejected.review_note}</p>
+                      )}
                     </div>
-                  </div>
-                  <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? formatHours(entry.hours) : "—"}</span>
+                    <span className="text-sm font-semibold text-navy tabular-nums shrink-0 ml-3">{entry.hours != null ? formatHours(entry.hours) : "—"}</span>
+                  </button>
+                  {entry.type === "wo" && (
+                    editingNote?.entryId === entry.id ? (
+                      <div className="mt-2 flex gap-2">
+                        <input type="text" value={editingNote.note} onChange={(ev) => setEditingNote({ ...editingNote, note: ev.target.value })}
+                          placeholder="Add a note..." autoFocus
+                          className="flex-1 px-2.5 py-1.5 border border-subtle rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
+                        <button onClick={() => saveEntryNote(entry.id, editingNote.note)} disabled={savingNote}
+                          className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs rounded disabled:opacity-50"><Save className="h-3 w-3" /></button>
+                        <button onClick={() => setEditingNote(null)} className="px-2 py-1.5 text-muted text-xs"><X className="h-3 w-3" /></button>
+                      </div>
+                    ) : (
+                      <button onClick={(ev) => { ev.stopPropagation(); setEditingNote({ entryId: entry.id, note: entry.flag_note || "" }); }}
+                        className="mt-1 text-[11px] text-muted hover:text-navy transition-colors text-left">
+                        {entry.flag_note ? `📝 ${entry.flag_note}` : "+ Add note"}
+                      </button>
+                    )
+                  )}
                 </div>
-                {entry.type === "wo" && (
-                  editingNote?.entryId === entry.id ? (
-                    <div className="mt-2 flex gap-2">
-                      <input type="text" value={editingNote.note} onChange={(ev) => setEditingNote({ ...editingNote, note: ev.target.value })}
-                        placeholder="Add a note..." autoFocus
-                        className="flex-1 px-2.5 py-1.5 border border-subtle rounded text-xs focus:outline-none focus:ring-1 focus:ring-starlight-blue" />
-                      <button onClick={() => saveEntryNote(entry.id, editingNote.note)} disabled={savingNote}
-                        className="px-2.5 py-1.5 bg-starlight-blue text-white text-xs rounded disabled:opacity-50"><Save className="h-3 w-3" /></button>
-                      <button onClick={() => setEditingNote(null)} className="px-2 py-1.5 text-muted text-xs"><X className="h-3 w-3" /></button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setEditingNote({ entryId: entry.id, note: entry.flag_note || "" })}
-                      className="mt-1 text-[11px] text-muted hover:text-navy transition-colors text-left">
-                      {entry.flag_note ? `📝 ${entry.flag_note}` : "+ Add note"}
-                    </button>
-                  )
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -627,6 +729,17 @@ export default function MobileProfilePage() {
         submitting={backfillSubmitting}
         woOptions={woOptions}
         woPickerLabel="Work Order (required)"
+      />
+
+      {/* Edit-request sheet — opens when any time entry in this page is
+          tapped. Submits a pending row to tbl_wo_time_entry_edits without
+          touching the entry. PM approves/rejects in /review/timesheets. */}
+      <EditTimeEntrySheet
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        entry={editTarget}
+        woOptions={woOptions}
+        onSubmitted={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );

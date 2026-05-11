@@ -44,6 +44,9 @@ interface LogSheetProps {
   /** Optional override for the WO picker section label. Defaults to
       "Route to Work Order (optional)". */
   woPickerLabel?: string;
+  /** Hide the photo upload control. Used for edit flows where photos
+      aren't meaningful (the proposed change is just hours / WO). */
+  hidePhotos?: boolean;
 }
 
 function localDateStr(): string {
@@ -55,7 +58,7 @@ export function LogSheet({
   open, onClose, onSubmit, contextLabel, contextSublabel,
   defaultHours = 0, defaultDate, showDatePicker = false,
   notesPlaceholder = "Any notes...", submitLabel, submitting = false,
-  woOptions, defaultRoutedWo, woPickerLabel,
+  woOptions, defaultRoutedWo, woPickerLabel, hidePhotos = false,
 }: LogSheetProps) {
   const [hours, setHours] = useState(defaultHours);
   const [date, setDate] = useState(defaultDate || localDateStr());
@@ -206,6 +209,7 @@ export function LogSheet({
         </div>
 
         {/* Photos */}
+        {!hidePhotos && (
         <div>
           <label className="text-xs font-medium text-muted mb-1.5 block">Photos</label>
           <div className="flex gap-2 flex-wrap">
@@ -228,6 +232,7 @@ export function LogSheet({
             )}
           </div>
         </div>
+        )}
 
         {/* Submit */}
         <button onClick={handleSubmit} disabled={submitting || hours <= 0}

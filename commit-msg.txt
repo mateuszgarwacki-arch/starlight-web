@@ -1,42 +1,43 @@
-feat(m/me): 10-day overview with backfill of missing time entries
+feat: pending-edit workflow for freelancer time entries
 
-Freelancers can now see their last 10 calendar days (including weekends)
-as collapsible day rows above "Recent Entries". Each row shows the date,
-weekday, and total hours for that day. Days that have entries but total
-under 9h get a red total — the visual signal that something's missing.
-Days with zero entries stay neutral (could be a weekend or day off).
+Freelancers can now tap any of their WO time entries in /m/me (Last 10
+Days expanded view + Recent Entries) to propose changes. The original
+tbl_wo_time_entries row is NEVER touched until the PM approves — so all
+cost/margin reports continue to use the canonical value while a proposal
+is in flight. "Nothing is broken" is the explicit design constraint.
 
-Tapping a row expands to show the individual entries (WO time entries +
-ad-hoc tasks merged). Each shows description, job number, hours, and a
-"Pending" badge if it's a backfill awaiting PM review. At the bottom of
-the expanded row, an "Add entry for [date]" button opens a LogSheet
-pre-set to that date.
+Schema (new):
+- tbl_wo_time_entry_edits: edit_id, entry_id, freelancer_id,
+  proposed_actual_hours, proposed_work_order_id, reason, status
+  (pending/approved/rejected/withdrawn), reviewed_at, reviewed_by,
+  review_note.
+- Partial unique index uq_one_pending_per_entry: only one pending edit
+  per entry at a time (forces revise-or-wait behaviour).
+- RLS: freelancer can read/insert own pending; can update own pending
+  (revise or withdraw); PM/admin can update any. No DELETE for anyone
+  — audit trail survives.
+- rpc_approve_time_entry_edit: atomic — applies proposed values to the
+  entry, recalculates entry_cost from current applied_hourly_rate,
+  marks edit row approved. Original audit log gets the change.
+- rpc_reject_time_entry_edit: just updates the edit row.
 
-Backfill flow:
-- Reuses the existing LogSheet component with a new `defaultRoutedWo`
-  prop (for future edit support) and a `woPickerLabel` override so the
-  picker reads "Work Order (required)" rather than "Route to WO
-  (optional)".
-- Handler rejects submit without a WO chosen.
-- Synthetic timestamps: start at 09:00 local on the target date, end at
-  start + hours. PM can adjust if needed.
-- Hourly rate snapshot pulled from tbl_freelancers (matches the existing
-  timer-log pattern).
-- Inserted via auditedInsert so the change is tracked.
-- flag_note prefix "[Backfill]" makes the entry surface in
-  /review/timesheets for PM approval.
-- notify() fires wo_flagged severity warning so the PM gets a
-  real-time bump.
+Frontend:
+- New EditTimeEntrySheet component wraps LogSheet (with new hidePhotos
+  and defaultRoutedWo props) for the edit flow. Reason field is
+  required. Detects existing-pending edit and UPDATEs it instead of
+  inserting, so freelancer can revise.
+- /m/me: each WO entry in Last 10 Days and Recent Entries is now a
+  tappable row. Pending/Rejected badges shown inline. Rejected entries
+  show the PM's note so the freelancer understands why and can re-try.
+  Note-editing flow on Recent Entries unchanged (stopPropagation on
+  the note button so it doesn't trigger the edit sheet).
+- /review/timesheets: new "Edit requests" section at the top. Each row
+  shows the freelancer name, entry date, an old → new diff (hours and
+  WO), the reason, and Approve / Reject buttons. Reject prompts for an
+  optional note that travels back to the freelancer.
 
-Routed tasks are excluded from the 10-day count because each routing
-also creates a tbl_wo_time_entries row — counting both would double up
-the day's total.
-
-Data fetch: added two new queries to the existing Promise.all (one for
-WO entries in the window, one for non-routed tasks in the window). The
-WO/job lookup was refactored to span both the existing recent-20 list
-and the new 10-day window in a single fetch — no extra round trips for
-the common case.
-
-Edit-existing-entry is deferred. The state machine has a placeholder
-"edit" mode (typed in `backfillTarget`) for the follow-up.
+Deferred (next pass):
+- Same clickability on /m/wo/[woId] and /m/schedule. Easy add now that
+  the shared EditTimeEntrySheet exists.
+- Delete proposals. Same table can carry proposed_action='delete' when
+  needed.
