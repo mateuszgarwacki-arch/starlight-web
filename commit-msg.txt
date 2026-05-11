@@ -1,1 +1,16 @@
-chore: remove accidentally-committed audit.ts.bak
+feat(m/me): WO optional on backfill - no-WO files as ad-hoc task
+
+Backfill flow Add entry for [date] no longer forces a WO. If the
+freelancer picks one, behaviour is unchanged: [Backfill] WO time
+entry, PM sees in /review/timesheets. If they leave it blank, the
+entry files as a pending ad-hoc task in tbl_tasks - same model as
+the Log Task button, PM routes/approves in /review/inbox.
+
+Validation: hours always required; description required only when
+no WO is selected (it becomes the task title, and an untitled task
+is useless to the PM).
+
+Picker label and sheet sublabel updated to reflect that WO is now
+optional. The dichotomy WO entry vs ad-hoc task is now a single
+decision the freelancer makes implicitly by whether they pick a WO,
+rather than being stuck behind a required field.

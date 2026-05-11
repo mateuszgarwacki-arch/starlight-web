@@ -144,54 +144,89 @@ export default function MobileProfilePage() {
   // freelancer didn't run a timer; PM can see and adjust if needed.
   const handleBackfillSubmit = async (data: LogSheetData) => {
     if (!backfillTarget || backfillTarget.mode !== "add") return;
-    if (!data.routedWoId) { toast.error("Pick a Work Order"); return; }
     if (data.hours <= 0) { toast.error("Enter hours"); return; }
     const targetDate = backfillTarget.date;
 
     setBackfillSubmitting(true);
     try {
-      // Hourly rate snapshot (matches existing pattern in handleLogTimer).
-      const { data: me } = await supabase.from("tbl_freelancers")
-        .select("day_rate, standard_day_hours").eq("freelancer_id", myId).maybeSingle();
-      const rate = me?.day_rate && me?.standard_day_hours && me.standard_day_hours > 0
-        ? Number(me.day_rate) / Number(me.standard_day_hours) : 0;
-
-      // Synthetic timestamps in local time. The no-Z format avoids the
-      // BST-shift trap (per memory's timestamp rule).
-      const startIso = `${targetDate}T09:00:00`;
-      const endMs = new Date(startIso).getTime() + data.hours * 3600 * 1000;
-      const endDate = new Date(endMs);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const endIso = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
-
-      const flagNote = `[Backfill] ${data.notes || "Missing entry added by freelancer"}`;
-      const wo = woOptions.find((w) => w.work_order_id === data.routedWoId);
       const ctx = await getAuditContext(supabase);
 
-      const result = await auditedInsert(ctx, "tbl_wo_time_entries", {
-        work_order_id: data.routedWoId,
-        freelancer_id: myId,
-        system_start_timestamp: startIso,
-        actual_start_timestamp: startIso,
-        system_end_timestamp: endIso,
-        actual_end_timestamp: endIso,
-        actual_hours: data.hours,
-        applied_hourly_rate: rate,
-        entry_cost: Math.round(data.hours * rate * 100) / 100,
-        flag_note: flagNote,
-      });
-      if (result.error) { toast.error("Failed to add: " + result.error.message); setBackfillSubmitting(false); return; }
+      // Path A: freelancer picked a WO. Goes straight to the WO time entries
+      // table with the [Backfill] flag so the PM sees it in /review/timesheets.
+      if (data.routedWoId) {
+        // Hourly rate snapshot (matches existing pattern in handleLogTimer).
+        const { data: me } = await supabase.from("tbl_freelancers")
+          .select("day_rate, standard_day_hours").eq("freelancer_id", myId).maybeSingle();
+        const rate = me?.day_rate && me?.standard_day_hours && me.standard_day_hours > 0
+          ? Number(me.day_rate) / Number(me.standard_day_hours) : 0;
 
-      await notify({
-        supabase,
-        type: "wo_flagged",
-        severity: "warning",
-        title: `Backfill: ${formatHours(data.hours)} on ${formatDateShort(targetDate)}`,
-        detail: wo ? `${wo.job_number} · ${wo.description || wo.scope_name}` : "",
-        freelancerId: myId,
-        actionUrl: "/review/timesheets",
-      });
-      toast.success("Added — pending review");
+        // Synthetic timestamps in local time. The no-Z format avoids the
+        // BST-shift trap (per memory's timestamp rule).
+        const startIso = `${targetDate}T09:00:00`;
+        const endMs = new Date(startIso).getTime() + data.hours * 3600 * 1000;
+        const endDate = new Date(endMs);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const endIso = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+
+        const flagNote = `[Backfill] ${data.notes || "Missing entry added by freelancer"}`;
+        const wo = woOptions.find((w) => w.work_order_id === data.routedWoId);
+
+        const result = await auditedInsert(ctx, "tbl_wo_time_entries", {
+          work_order_id: data.routedWoId,
+          freelancer_id: myId,
+          system_start_timestamp: startIso,
+          actual_start_timestamp: startIso,
+          system_end_timestamp: endIso,
+          actual_end_timestamp: endIso,
+          actual_hours: data.hours,
+          applied_hourly_rate: rate,
+          entry_cost: Math.round(data.hours * rate * 100) / 100,
+          flag_note: flagNote,
+        });
+        if (result.error) { toast.error("Failed to add: " + result.error.message); setBackfillSubmitting(false); return; }
+
+        await notify({
+          supabase,
+          type: "wo_flagged",
+          severity: "warning",
+          title: `Backfill: ${formatHours(data.hours)} on ${formatDateShort(targetDate)}`,
+          detail: wo ? `${wo.job_number} · ${wo.description || wo.scope_name}` : "",
+          freelancerId: myId,
+          actionUrl: "/review/timesheets",
+        });
+        toast.success("Added — pending review");
+      } else {
+        // Path B: no WO chosen. Files as an ad-hoc task so the PM can decide
+        // whether it routes to a WO, counts as overhead, or gets rejected.
+        // The freelancer's notes become the task title â€” required, since a
+        // PM looking at an empty-titled task is useless. matches /m/task UX.
+        if (!data.notes || !data.notes.trim()) {
+          toast.error("Add a short description so the PM knows what it was for");
+          setBackfillSubmitting(false);
+          return;
+        }
+        const result = await auditedInsert(ctx, "tbl_tasks", {
+          freelancer_id: myId,
+          title: data.notes.trim(),
+          hours: data.hours,
+          worked_date: targetDate,
+          status: "pending",
+          logged_at: new Date().toISOString(),
+        });
+        if (result.error) { toast.error("Failed to add: " + result.error.message); setBackfillSubmitting(false); return; }
+
+        await notify({
+          supabase,
+          type: "task_submitted",
+          severity: "info",
+          title: `Ad-hoc backfill: ${data.notes.trim()}`,
+          detail: `${formatHours(data.hours)} on ${formatDateShort(targetDate)}`,
+          freelancerId: myId,
+          actionUrl: "/review/inbox",
+        });
+        toast.success("Logged — PM will review");
+      }
+
       setBackfillTarget(null);
       setBackfillSubmitting(false);
       setRefreshKey((k) => k + 1);
@@ -759,13 +794,13 @@ export default function MobileProfilePage() {
         onClose={() => setBackfillTarget(null)}
         onSubmit={handleBackfillSubmit}
         contextLabel={backfillTarget ? `Add entry for ${formatDateShort(backfillTarget.date)}` : ""}
-        contextSublabel="Pending PM approval"
+        contextSublabel="Pick a WO if you know it, or just describe the work"
         defaultHours={0}
         notesPlaceholder="What did you work on..."
         submitLabel="Add entry"
         submitting={backfillSubmitting}
         woOptions={woOptions}
-        woPickerLabel="Work Order (required)"
+        woPickerLabel="Work Order (optional)"
       />
 
       {/* Edit-request sheet — opens when any time entry in this page is
