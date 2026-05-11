@@ -1,16 +1,9 @@
-feat: editable dates on time entries and ad-hoc tasks
+fix(audit): register tbl_tasks PK so EditTaskSheet save works
 
-WO time entries: date now part of the pending-edit flow. Schema gets
-proposed_date column on tbl_wo_time_entry_edits, and the approve RPC
-rebuilds timestamps using new date + existing time-of-day so a 09:00
-entry stays 09:00 on the new day. EditTimeEntrySheet enables LogSheet's
-date picker pre-populated with the entry date. PM review row shows
-a date diff inline when changed.
+The \"Fuckin\" save attempt errored with \"column tbl_tasks.id does not& echo exist\" because auditedUpdate looked up the PK column in AUDITED_TABLES,
+found nothing, and fell back to .eq(\"id\", ...). tbl_tasks's PK is
+task_id. Adding it to the map fixes it for update + insert + delete
+via the helpers.
 
-Ad-hoc tasks: date edits update worked_date directly, same approved->
-pending revert when PM had already approved. EditableTask gains a
-worked_date field; both /m/me call sites pass it through.
-
-Nothing-broken invariant preserved: WO entry timestamps don't move
-until you approve. Cost-by-day, margin-by-day, daily timesheet flags
-all stay on the canonical date.
+Also unblocks date editing of ad-hoc tasks, which was the original
+trigger Mateusz hit.
