@@ -1,9 +1,1 @@
-fix(audit): register tbl_tasks PK so EditTaskSheet save works
-
-The \"Fuckin\" save attempt errored with \"column tbl_tasks.id does not& echo exist\" because auditedUpdate looked up the PK column in AUDITED_TABLES,
-found nothing, and fell back to .eq(\"id\", ...). tbl_tasks's PK is
-task_id. Adding it to the map fixes it for update + insert + delete
-via the helpers.
-
-Also unblocks date editing of ad-hoc tasks, which was the original
-trigger Mateusz hit.
+chore: remove accidentally-committed audit.ts.bak
