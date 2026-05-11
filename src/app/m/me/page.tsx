@@ -8,6 +8,7 @@ import { LogOut, User, Clock, ClipboardList, Timer, ArrowRight, Check, RotateCcw
 import { notify } from "@/lib/notifications";
 import { LogSheet, type LogSheetData, type WoOption } from "@/components/log-sheet";
 import { EditTimeEntrySheet, type EditableEntry } from "@/components/edit-time-entry-sheet";
+import { EditTaskSheet, type EditableTask } from "@/components/edit-task-sheet";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { auditedUpdate, auditedInsert, getAuditContext } from "@/lib/audit";
@@ -122,6 +123,8 @@ export default function MobileProfilePage() {
   // most-recent-rejected edit so the UI can show the appropriate badge.
   const [editTarget, setEditTarget] = useState<EditableEntry | null>(null);
   const [editsByEntry, setEditsByEntry] = useState<Record<number, { pending?: any; lastRejected?: any }>>({});
+  // Ad-hoc task edits use a separate sheet (different lifecycle than WO entries).
+  const [editTaskTarget, setEditTaskTarget] = useState<EditableTask | null>(null);
 
   // Live updates when tasks/requests change
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], () => setRefreshKey((k) => k + 1));
@@ -530,7 +533,12 @@ export default function MobileProfilePage() {
                         const editState = e.kind === "wo" ? editsByEntry[e.id] : undefined;
                         const hasPending = !!editState?.pending;
                         const hasRejected = !!editState?.lastRejected;
-                        const isClickable = e.kind === "wo";
+                        // Both kinds are now tappable. WO entries open the
+                        // pending-edit flow; tasks open the direct-edit flow
+                        // (which still pushes back to pending if PM had
+                        // already approved). Routed/rejected tasks aren't
+                        // in this list (filtered out at fetch).
+                        const isClickable = e.kind === "wo" || e.kind === "task";
                         // Optimistic preview: when pending, show the proposed
                         // hours next to the original so the freelancer sees
                         // what they asked for.
@@ -541,15 +549,26 @@ export default function MobileProfilePage() {
                               type="button"
                               disabled={!isClickable}
                               onClick={() => {
-                                if (e.kind !== "wo" || !e.work_order_id) return;
-                                setEditTarget({
-                                  entry_id: e.id,
-                                  freelancer_id: myId,
-                                  actual_hours: e.hours,
-                                  work_order_id: e.work_order_id,
-                                  description: e.description,
-                                  date: day.date,
-                                });
+                                if (e.kind === "wo") {
+                                  if (!e.work_order_id) return;
+                                  setEditTarget({
+                                    entry_id: e.id,
+                                    freelancer_id: myId,
+                                    actual_hours: e.hours,
+                                    work_order_id: e.work_order_id,
+                                    description: e.description,
+                                    date: day.date,
+                                  });
+                                } else if (e.kind === "task") {
+                                  setEditTaskTarget({
+                                    task_id: e.id,
+                                    freelancer_id: myId,
+                                    title: e.description,
+                                    description: null,
+                                    hours: e.hours,
+                                    status: e.status || "pending",
+                                  });
+                                }
                               }}
                               className={"w-full flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 rounded text-left " + (isClickable ? "active:bg-surface-mid" : "")}
                             >
@@ -611,22 +630,38 @@ export default function MobileProfilePage() {
               const hasPending = !!editState?.pending;
               const hasRejected = !!editState?.lastRejected;
               const proposedHours = editState?.pending?.proposed_actual_hours;
-              const isEditable = entry.type === "wo" && !!entry.work_order_id;
+              // Editable: WO entries with a work_order_id, OR ad-hoc tasks
+              // in editable statuses. EditTaskSheet handles the gating for
+              // routed/rejected internally with a friendly message.
+              const taskEditable = entry.type === "task" && (entry.status === "pending" || entry.status === "approved_overhead");
+              const isEditable = (entry.type === "wo" && !!entry.work_order_id) || taskEditable;
               return (
                 <div key={`${entry.type}-${entry.id}`} className="px-4 py-3">
                   <button
                     type="button"
                     disabled={!isEditable}
                     onClick={() => {
-                      if (!isEditable || !entry.work_order_id || entry.hours == null) return;
-                      setEditTarget({
-                        entry_id: entry.id,
-                        freelancer_id: myId,
-                        actual_hours: entry.hours,
-                        work_order_id: entry.work_order_id,
-                        description: entry.title,
-                        date: entry.date,
-                      });
+                      if (entry.type === "wo") {
+                        if (!entry.work_order_id || entry.hours == null) return;
+                        setEditTarget({
+                          entry_id: entry.id,
+                          freelancer_id: myId,
+                          actual_hours: entry.hours,
+                          work_order_id: entry.work_order_id,
+                          description: entry.title,
+                          date: entry.date,
+                        });
+                      } else if (entry.type === "task") {
+                        if (entry.hours == null) return;
+                        setEditTaskTarget({
+                          task_id: entry.id,
+                          freelancer_id: myId,
+                          title: entry.title,
+                          description: null,
+                          hours: entry.hours,
+                          status: entry.status || "pending",
+                        });
+                      }
                     }}
                     className={"w-full flex items-center justify-between text-left " + (isEditable ? "active:bg-surface-dim -mx-2 px-2 py-1 rounded" : "")}
                   >
@@ -739,6 +774,15 @@ export default function MobileProfilePage() {
         onClose={() => setEditTarget(null)}
         entry={editTarget}
         woOptions={woOptions}
+        onSubmitted={() => setRefreshKey((k) => k + 1)}
+      />
+
+      {/* Edit-task sheet — for ad-hoc tasks. Direct update for pending;
+          revert to pending if PM had approved (forces re-review). */}
+      <EditTaskSheet
+        open={!!editTaskTarget}
+        onClose={() => setEditTaskTarget(null)}
+        task={editTaskTarget}
         onSubmitted={() => setRefreshKey((k) => k + 1)}
       />
     </div>

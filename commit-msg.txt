@@ -1,43 +1,12 @@
-feat: pending-edit workflow for freelancer time entries
+fix(m/me): ad-hoc tasks now tappable in Last 10 Days and Recent Entries
 
-Freelancers can now tap any of their WO time entries in /m/me (Last 10
-Days expanded view + Recent Entries) to propose changes. The original
-tbl_wo_time_entries row is NEVER touched until the PM approves — so all
-cost/margin reports continue to use the canonical value while a proposal
-is in flight. "Nothing is broken" is the explicit design constraint.
+Ad-hoc tasks were excluded from the click-to-edit flow - only WO time entries
+opened the edit sheet. The Fuckin test entry from Mateusz Garwacki is exactly
+this case: a logged ad-hoc task with status approved_overhead.
 
-Schema (new):
-- tbl_wo_time_entry_edits: edit_id, entry_id, freelancer_id,
-  proposed_actual_hours, proposed_work_order_id, reason, status
-  (pending/approved/rejected/withdrawn), reviewed_at, reviewed_by,
-  review_note.
-- Partial unique index uq_one_pending_per_entry: only one pending edit
-  per entry at a time (forces revise-or-wait behaviour).
-- RLS: freelancer can read/insert own pending; can update own pending
-  (revise or withdraw); PM/admin can update any. No DELETE for anyone
-  — audit trail survives.
-- rpc_approve_time_entry_edit: atomic — applies proposed values to the
-  entry, recalculates entry_cost from current applied_hourly_rate,
-  marks edit row approved. Original audit log gets the change.
-- rpc_reject_time_entry_edit: just updates the edit row.
+Adds EditTaskSheet with task-appropriate semantics:
+- pending: direct update
+- approved_overhead: update values, revert status to pending, clear review_note
+- routed/rejected: not editable, informational message
 
-Frontend:
-- New EditTimeEntrySheet component wraps LogSheet (with new hidePhotos
-  and defaultRoutedWo props) for the edit flow. Reason field is
-  required. Detects existing-pending edit and UPDATEs it instead of
-  inserting, so freelancer can revise.
-- /m/me: each WO entry in Last 10 Days and Recent Entries is now a
-  tappable row. Pending/Rejected badges shown inline. Rejected entries
-  show the PM's note so the freelancer understands why and can re-try.
-  Note-editing flow on Recent Entries unchanged (stopPropagation on
-  the note button so it doesn't trigger the edit sheet).
-- /review/timesheets: new "Edit requests" section at the top. Each row
-  shows the freelancer name, entry date, an old → new diff (hours and
-  WO), the reason, and Approve / Reject buttons. Reject prompts for an
-  optional note that travels back to the freelancer.
-
-Deferred (next pass):
-- Same clickability on /m/wo/[woId] and /m/schedule. Easy add now that
-  the shared EditTimeEntrySheet exists.
-- Delete proposals. Same table can carry proposed_action='delete' when
-  needed.
+Wired into /m/me Last 10 Days and Recent Entries.
