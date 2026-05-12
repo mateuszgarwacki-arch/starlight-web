@@ -1,18 +1,18 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 11 May 2026 (S42)
-**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S42 close.
+**Last updated:** 12 May 2026 (S43)
+**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S43 close.
 
 ## Counts
 
 | Category | Count |
 |---|---|
-| Tables (`tbl_*`) | 56 |
+| Tables (`tbl_*`) | 57 |
 | Views (`qry_*`) | 34 |
-| RPC functions (`rpc_*`) | 16 |
+| RPC functions (`rpc_*`) | 18 |
 | pg_cron jobs | 2 |
 
-## Tables (56)
+## Tables (57)
 
 ```
 tbl_audit_log                   tbl_business_settings           tbl_category_prompts
@@ -31,9 +31,9 @@ tbl_quote_line_contractors      tbl_quote_lines                 tbl_quotes
 tbl_rate_card                   tbl_scope_item_categories       tbl_scope_items
 tbl_scope_options               tbl_stock_items                 tbl_suppliers
 tbl_tasks                       tbl_timesheet_flags             tbl_wo_activities
-tbl_wo_assignees                tbl_wo_bom                      tbl_wo_documents
-tbl_wo_steps                    tbl_wo_time_entries             tbl_wo_time_entry_edits
-tbl_work_orders                 tbl_workshop_requests
+tbl_wo_assignees                tbl_wo_bom                      tbl_wo_completion_proposals
+tbl_wo_documents                tbl_wo_steps                    tbl_wo_time_entries
+tbl_wo_time_entry_edits         tbl_work_orders                 tbl_workshop_requests
 ```
 
 ## Views (34)
@@ -53,13 +53,14 @@ qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ord
 qry_wo_with_activities
 ```
 
-## RPC functions (16)
+## RPC functions (18)
 
 | Function | Args | Purpose |
 |---|---|---|
 | `rpc_active_workers` | — | SECURITY DEFINER. Cross-user view of who's currently clocked-in (non-sensitive fields only) |
 | `rpc_approve_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Atomic apply of a freelancer-proposed time-entry edit. Rebuilds timestamps from `proposed_date + actual_start_timestamp::time`, recalculates `entry_cost` from current `applied_hourly_rate`. Role check: `admin/pm/production_manager` only |
 | `rpc_capacity_data` | `p_date_from text, p_date_to text` | Capacity page data; filters Complete jobs |
+| `rpc_confirm_wo_completion` | `p_proposal_id integer, p_review_note text DEFAULT NULL` | SECURITY DEFINER. Locks a freelancer-marked WO completion. Marks proposal `confirmed`; idempotently re-asserts WO `Complete` state (heals partial-failure orphans). Role check: `admin/pm/production_manager` |
 | `rpc_dashboard_data` | — | Dashboard data (16+ queries collapsed); upcoming jobs filters Complete |
 | `rpc_detect_timesheet_gaps` | `p_flag_date date` | Idempotent flag detector for sub-90% logged hours; cron-driven daily |
 | `rpc_job_close_report` | `p_job_id integer` | Close report data — header, commercial summary (with `material_cost_planned`/`actual`/`committed` split), labour, materials by category/supplier, WO variance, scope cost, learnings, post-complete edit count. Live data, never a snapshot |
@@ -72,6 +73,7 @@ qry_wo_with_activities
 | `rpc_reject_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Marks an edit row rejected with PM's note. Note travels back to freelancer so they understand why and can revise |
 | `rpc_report_job_financial` | `p_job_id integer` | Financial report data |
 | `rpc_review_data` | — | Review page data |
+| `rpc_undo_wo_completion` | `p_proposal_id integer, p_review_note text DEFAULT NULL` | SECURITY DEFINER. Reverts a PM-undone WO completion. Marks proposal `undone`; restores WO's `previous_wo_status` from the proposal snapshot, clears `completion_photo_path` and completion timestamps. Role check: `admin/pm/production_manager` |
 | `rpc_workshop_data` | — | Workshop page data; filters Complete jobs |
 
 ## pg_cron jobs (2)
@@ -98,6 +100,7 @@ qry_wo_with_activities
   tbl_wo_steps:         "step_id",
   tbl_timesheet_flags:  "flag_id",
   tbl_tasks:            "task_id",
+  tbl_wo_completion_proposals: "proposal_id",
 }
 ```
 
@@ -125,7 +128,42 @@ The total value of a quote is **always** `SUM(tbl_quote_lines.line_value)` for t
 
 Reflects hours as of last detector run for that `(freelancer_id, flag_date)`. Trigger ensures real-time consistency on time-entry writes. 14-day page-load re-run on `/review/timesheets` and `/m/me` panel ensures eventual consistency for everything else. UNIQUE constraint on `(freelancer_id, flag_date)` makes detector idempotent.
 
-## Recent additions (S40 → S42)
+### `tbl_wo_completion_proposals` — one in-flight proposal per WO (S43)
+
+Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation'`. A WO can only have one awaiting-confirmation proposal at a time. After undo, the previous proposal flips to `undone` (no longer counted by the partial index) and a fresh proposal can be created.
+
+`previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
+
+## Recent additions (S40 → S43)
+
+### S43 — WO completion confirmation workflow + Job 13809 backfill
+
+**New table:**
+- `tbl_wo_completion_proposals` — freelancer-marked WO completions awaiting PM sanity-check. Columns: `proposal_id` (PK), `work_order_id` (FK → `tbl_work_orders` ON DELETE CASCADE), `freelancer_id`, `previous_wo_status` (NOT NULL — snapshot for undo), `completion_photo_path`, `proposed_note`, `status` (`awaiting_confirmation|confirmed|undone|withdrawn`, default `awaiting_confirmation`), `reviewed_at`, `reviewed_by` (uuid), `review_note`, `created_at`, `updated_at`.
+- Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation'`. Secondary indexes on `status` and `freelancer_id`.
+- RLS: same shape as `tbl_wo_time_entry_edits` — freelancer R/W own awaiting; PM/admin updates any; no DELETE for anyone (`withdrawn` is a status change).
+
+**RPCs added:**
+- `rpc_confirm_wo_completion(p_proposal_id, p_review_note)` — SECURITY DEFINER. Marks proposal `confirmed`. **Idempotently re-asserts WO `Complete` state** using `COALESCE(existing, proposal_value)` for `completion_photo_path` and timestamps — heals the partial-failure case where the app-side INSERT succeeded but UPDATE failed.
+- `rpc_undo_wo_completion(p_proposal_id, p_review_note)` — SECURITY DEFINER. Marks proposal `undone`; restores `previous_wo_status`; clears `completion_photo_path`, `system_complete_timestamp`, `actual_complete_timestamp`. PM's `review_note` flows back to the freelancer via `wo_completion_undone` notification.
+
+**Design distinction from `tbl_wo_time_entry_edits` (S42):**
+- Time-entry edits: canonical row is **untouched** until PM approves. Reports use the canonical value throughout the pending state. The proposal IS the gate.
+- WO completion: WO status flips to `Complete` **immediately** on freelancer mark. PM's confirmation is a sanity-stamp, not a gate. The proposal is a reversibility record, not an approval queue.
+- Mental model from Mateusz: "just sanity check, mark as complete". Different invariants → different patterns. Codified in `05_conventions.md` §3.8.
+
+**Audited table added:**
+- `tbl_wo_completion_proposals` registered with PK `proposal_id`.
+
+**Notification type added:**
+- `wo_completion_undone` (severity `warning`) — fired from `/review` when a PM taps Undo. `actionUrl` deep-links the freelancer to `/m/wo/[woId]` where the "PM undid the completion" warning + review_note is surfaced.
+
+**UI surfaces:**
+- `/m/wo/[woId]` — relaxed `MARK COMPLETE` gating from `allEntriesClosed && status === "In-Progress"` to `status !== "Complete" && !myOpenEntry`. The old gate hid the button on ~98% of active WOs. Photo block in the WO header is now state-aware ("Awaiting PM confirmation" amber / "Confirmed by PM" green). Undone state surfaces a red warning above the action buttons with the PM's review_note.
+- `/review` — new `ConfirmCompletionsPanel` component near the top. Lists every `awaiting_confirmation` proposal with photo thumbnail, freelancer name, scope/job, optional note, Confirm/Undo buttons. Undo opens a modal accepting an optional reason note.
+
+**Data fix (Job 13809 Oscars Academy Spring Event — retrospective entry):**
+- Created job 13809, "Oscars Academy Spring Event", event date 9 May 2026, location "45 Park Lane", `client_name` deliberately NULL (privacy), status `Active`. Created quote 15 "41058 v4" Accepted. 17 lines spanning Design and Décor (£5,230), Lighting (£1,570), Sound (£1,375), Crew (£2,700), Transportation (£1,135) — all categorised `Provisional` for PM to redistribute. `qry_job_accepted_quote` returns £12,010.00 matching the PDF nett total. Overhead bucket auto-created via existing trigger. Direct-SQL backfill — no audit trail (same precedent as S42 quote consolidation).
 
 ### S42 — Material cost reporting, time-entry pending-edit workflow
 

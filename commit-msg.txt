@@ -1,26 +1,10 @@
-feat(wo-completion): freelancer marks complete, PM sanity-confirms
+docs(S43): TRACKER + schema + conventions
 
-Restores the disappeared MARK COMPLETE button on /m/wo/[woId] with a
-lighter gate (any WO not already Complete + no open timer for me).
-Adds a proposal layer so PM can sanity-check after the fact.
-
-Flow:
-- Freelancer taps MARK COMPLETE -> photo + optional note
-- WO flips to Complete immediately (no review limbo)
-- Proposal row created with status awaiting_confirmation
-  + snapshots WO's previous status for Undo
-- PM sees "Confirm completions" panel at top of /review
-- Confirm locks it in; Undo reverts WO status + clears photo + notifies
-
-Schema:
-- tbl_wo_completion_proposals (12 cols, RLS, partial unique idx)
-- rpc_confirm_wo_completion (idempotent re: WO state)
-- rpc_undo_wo_completion (restores previous_wo_status)
-
-Audit:
-- tbl_wo_completion_proposals registered in AUDITED_TABLES (proposal_id)
-- New notification type wo_completion_undone
-
-No blast radius on existing surfaces: WO status semantics unchanged,
-the only filter site that could care is the existing JOIN button which
-already handles "log time on Complete WO" as a legit case.
+Wrap-up for S43:
+- 03_database_schema.md: counts 57/34/18, tables list, RPCs table,
+  audited tables, S43 invariant, S43 section in Recent additions
+- 05_conventions.md: header date, audited tables list, notification
+  types, S43 §3.8 extension noting immediate-apply pattern as
+  deliberate inverse of S42 deferred-apply pattern
+- TRACKER.md: cleanup backlog adds Job 13809 actuals + legacy WO
+  proposal backfill; S43 session entry covering both threads

@@ -1,6 +1,6 @@
 # Starlight Production System — Conventions & Patterns
 
-**Last updated:** 6 May 2026 (S41)
+**Last updated:** 12 May 2026 (S43)
 
 This is the "how we do things here" document. Patterns that have been promoted from single-session lessons to permanent convention. When in doubt, this file wins.
 
@@ -104,6 +104,7 @@ Never JOIN labour + material in the same CTE — hours multiply by BOM row count
 - **Timestamp format:** use `"YYYY-MM-DDT09:00:00"` with **no `Z` suffix** to prevent BST date shifts.
 - Manual time entry on a Not-Started WO does NOT advance the WO status. The WO will sit in Not-Started until someone manually marks it Complete (or starts it via QR/mobile). For small jobs where PM logs hours after the fact, expect WOs to remain in Not-Started even when work is done — the close report's "WOs still active" warning will fire (correctly).
 - **Freelancer-edits on WO time entries are proposals, never direct writes (S42).** `tbl_wo_time_entry_edits` holds pending changes; the canonical `tbl_wo_time_entries` row is untouched until a PM calls `rpc_approve_time_entry_edit`. Reports continue to use the canonical value throughout. **The same does NOT apply to ad-hoc tasks** — `tbl_tasks` is edited in place (with status reverted to `pending` if the PM had previously approved it as overhead). Tasks don't carry cost into reports until approval; entries do. Different invariants → different patterns.
+- **Freelancer WO completions are immediate-apply + reversible, NOT deferred-apply (S43).** `tbl_wo_completion_proposals` holds the record, but the canonical `tbl_work_orders.status` flips to `Complete` immediately on freelancer mark — the PM's `rpc_confirm_wo_completion` is a sanity-stamp, not a gate. `rpc_undo_wo_completion` exists as the reversal path: it restores the snapshotted `previous_wo_status` and clears completion fields. This is the deliberate inverse of the time-entry edit pattern above. The choice is driven by what flows into reports: a WO's Complete status affects almost nothing in reporting (the time entries and BOM carry the costs); a time-entry edit moves real money. Cost-bearing changes get gated; status-only changes flow through immediately and get a reversal path.
 - **Date edits preserve time-of-day** in the approve RPC: `proposed_date::timestamp + actual_start_timestamp::time`. A 09:00 entry moved to a new day stays at 09:00.
 
 ### 3.9 Complexity / status encoding
@@ -115,7 +116,7 @@ Never JOIN labour + material in the same CTE — hours multiply by BOM row count
 ## 4. Auditing
 
 **Audited tables registry** (`src/lib/audit.ts` `AUDITED_TABLES`):
-`tbl_quote_lines`, `tbl_scope_items`, `tbl_work_orders`, `tbl_wo_bom`, `tbl_production_plan`, `tbl_quotes`, `tbl_wo_time_entries`, `tbl_freelancers`, `tbl_scope_options`, `tbl_wo_documents`, `tbl_wo_steps`, `tbl_timesheet_flags`, `tbl_tasks`.
+`tbl_quote_lines`, `tbl_scope_items`, `tbl_work_orders`, `tbl_wo_bom`, `tbl_production_plan`, `tbl_quotes`, `tbl_wo_time_entries`, `tbl_freelancers`, `tbl_scope_options`, `tbl_wo_documents`, `tbl_wo_steps`, `tbl_timesheet_flags`, `tbl_tasks`, `tbl_wo_completion_proposals`.
 
 **Mandatory rules:**
 - `auditedUpdate(ctx, table, recordId, changes)` for all writes on registered tables. **Never raw `supabase.update()`.**
@@ -169,7 +170,7 @@ Two layers: the trigger for correctness, the page-load for safety net against un
 
 **Every state-changing action** needs `notify()` from `lib/notifications.ts` + a toast from `sonner`.
 
-**Types:** `booking_confirmed/declined/withdrawal`, `wo_started/hours_logged/wo_flagged/wo_completed`, `scope_change`, `wo_overrun`, `material_needed`, `task_submitted`, `task_reviewed`, `workshop_request`, `request_resolved`.
+**Types:** `booking_confirmed/declined/withdrawal`, `wo_started/hours_logged/wo_flagged/wo_completed`, `scope_change`, `wo_overrun`, `material_needed`, `task_submitted`, `task_reviewed`, `workshop_request`, `request_resolved`, `wo_completion_undone`.
 
 **Severities:** `info` / `warning` / `urgent`. **Always include `actionUrl`** for deep-link.
 

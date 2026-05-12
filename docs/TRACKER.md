@@ -15,6 +15,10 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Job 13809 actual costs** *(S43, in-flight)* — quote backfilled, but the £12,010 has no actuals against it yet. Mateusz to add invoices and any retrospective time entries. Once complete he'll close the job via the existing Job Complete flow.
+
+- [ ] **Backfill proposal rows for legacy Complete WOs** *(S43, low-urgency)* — the 21 WOs already in `Complete` status pre-date the proposal table, so they have no row in `tbl_wo_completion_proposals` and won't appear in the `/review` Confirm panel. Correct behaviour today (they were closed via the old direct-update path). Worth a one-off backfill only if record-keeping consistency becomes a felt need.
+
 - [ ] **Click-to-edit extension to `/m/wo/[woId]` and `/m/schedule`** *(S42e)* — `EditTimeEntrySheet` and `EditTaskSheet` are already shared components; wiring them into the two remaining mobile surfaces is ~20 min each. Defer until a freelancer actually surfaces a request to edit from those screens (current dominant path is `/m/me`).
 
 - [ ] **`reconciled_line_cost` field cleanup** *(S42a)* — the old single-value material cost field is still read by `cost-breakdown.tsx` (and possibly elsewhere). Now redundant given Plan/Actual/Committed split. Sweep all reads, kill the field's view-side source, retire from UI.
@@ -50,6 +54,54 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S43 — 12 May 2026
+
+Two threads: a retrospective job entry to capture an event that already happened, and the restore of the freelancer-side MARK COMPLETE flow with a PM sanity-check layer on top. One deploy, one schema migration, one direct-SQL data backfill.
+
+#### S43a — Job 13809 Oscars Academy Spring Event — retrospective entry
+
+**Trigger:** Event already happened (9 May 2026, 45 Park Lane). Mateusz wanted the quote in the system so he could attach actuals (invoices, retrospective time) and eventually close the job through the standard Job Complete flow rather than have it live outside the system.
+
+**What landed:**
+- New job 13809, `client_name` deliberately NULL (privacy), event date 9 May 2026, location "45 Park Lane", `job_status='Active'` (will close once costs added).
+- New quote 15 (`quote_reference='41058'`, `quote_version='v4'`, status `Accepted`), `quote_description='Oscars Academy Spring Event'`.
+- 17 quote lines spanning 5 sub-groups from the source PDF: Design and Décor (£5,230), Lighting (£1,570), Sound (£1,375), Crew (£2,700), Transportation (£1,135). Sums to £12,010.00 nett, matches PDF exactly.
+- All 17 lines categorised `Provisional` per Mateusz's instruction — he'll distribute Workshop/Provisional/Stock Pick/Subcontracted manually rather than have me guess from the line text.
+- Tech-spec notes ("8x E8 on round bases in restaurant D40, QL1", "Additional 3x E8 + D12", "2 x vans each way") routed to `pm_note`, not the public-facing `line_text`.
+- The existing `trg_create_job_overhead` AFTER INSERT trigger on `tbl_production_plan` fired automatically — overhead quote line + general scope item + `ACTIVITY.OVERHEAD` work order all auto-created. `qry_job_accepted_quote` correctly excludes the overhead line via its existing `<> 'Overhead'` filter, returning the £12,010 cleanly.
+
+**Workflow learning surfaced and codified:** when a quote PDF says things like "Allowing for 24 units" with a total, model as `quantity=24, unit_price=40, line_value=960` rather than `quantity=1, unit_price=960`. Pattern was already in Job 13757 (terracotta candles), worth keeping consistent.
+
+**Audit:** direct-SQL backfill via Supabase MCP, no audit log entry. Same precedent as S42 Job 13757 quote consolidation.
+
+#### S43b — WO completion confirmation workflow
+
+**Trigger:** Mateusz reported the MARK COMPLETE button on `/m/wo/[woId]` had "disappeared." Diagnosis: the button was still in the code but gated `allEntriesClosed && wo.status === "In-Progress"`. Out of 88 active WOs, exactly 1 was `In-Progress` at the moment of check — the gate was so narrow it hid the button on 98%+ of WOs in practice.
+
+**Design discussion:** considered three shapes before building:
+
+1. **New WO status `"Pending Review"`** — simple (one new enum value, no new table) but pollutes every existing filter site (Workshop view, Done filter, traveller QR, capacity, dashboard). Rejected on blast radius.
+2. **Parallel-row proposal table with deferred apply** — mirrors S42's `tbl_wo_time_entry_edits` pattern; WO stays In-Progress until PM approves. Rejected because Mateusz's framing was "just sanity check, mark as complete" — i.e. he doesn't want to gate completion behind his approval, he wants the WO to LOOK done immediately and his confirm to be a stamp afterward.
+3. **Parallel-row proposal table with immediate apply + undo** — chosen. WO status flips to Complete on freelancer mark; proposal row records who/when/photo/note; PM Confirm marks proposal `confirmed`; PM Undo restores `previous_wo_status` and clears completion fields.
+
+This is the deliberate inverse of S42's edit pattern. Codified in `05_conventions.md` §3.8 — the choice is driven by whether the canonical change moves money. Time-entry edits move money → gate them. WO status changes don't (the time entries + BOM carry the costs) → apply immediately and provide a reversal path.
+
+**Schema:** new table `tbl_wo_completion_proposals` (12 cols, partial unique index `uq_one_awaiting_per_wo` on `status='awaiting_confirmation'`, RLS modelled on `tbl_wo_time_entry_edits`). New RPCs: `rpc_confirm_wo_completion` (idempotent re-assertion of Complete state, heals partial-failure orphans) and `rpc_undo_wo_completion` (restores `previous_wo_status` snapshot, clears `completion_photo_path` + completion timestamps).
+
+**Audit:** `tbl_wo_completion_proposals` registered in `AUDITED_TABLES` with PK `proposal_id`. App-side INSERT and the WO UPDATE both go through audited helpers.
+
+**Notification type added:** `wo_completion_undone` (severity `warning`, `actionUrl` → `/m/wo/[woId]`).
+
+**UI:**
+- `/m/wo/[woId]` — gate relaxed to `status !== "Complete" && !myOpenEntry`. MARK COMPLETE sheet now includes an optional textarea for a "what's done" note that flows into `tbl_wo_completion_proposals.proposed_note`. Photo block in WO header card is state-aware: amber "Awaiting PM confirmation" / green "Confirmed by PM" / unbranded "Completion Photo" (legacy fallback for the 21 pre-existing Complete WOs with no proposal row). Undone state surfaces a red "PM undid the completion" warning above the action buttons, including the PM's `review_note`.
+- `/review` — new `ConfirmCompletionsPanel` component, expanded by default, surfaced above the Workshop Overhead panel. One row per awaiting proposal with photo thumbnail (tap to open), freelancer name, scope/job, optional note, **Confirm** / **Undo** buttons. Undo opens a modal accepting an optional reason note that flows back to the freelancer via the new notification.
+
+**Partial-failure handling:** the app-side mark-complete does two writes (proposal INSERT + WO UPDATE). If the second fails, the proposal exists but the WO isn't Complete. Mateusz sees it in the Confirm panel anyway; tapping Confirm runs the RPC which idempotently re-asserts Complete state via `COALESCE(existing, proposal_value)` for photo path and timestamps. Self-healing.
+
+**Verified end-to-end:** migration applied, 12 columns landed, 4 indexes, 3 policies, 2 RPCs. Build clean. Deployed to `workshop-five-gamma.vercel.app` as commit `77e46ec`.
+
+**Schema delta this session:** +1 table, +4 indexes, +3 policies, +2 RPCs, +1 audited table, +1 notification type. Live totals after S43: 57 tables, 34 views, 18 RPCs, 2 cron jobs.
 
 ### S42 â€” 11 May 2026
 
