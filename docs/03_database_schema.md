@@ -1,7 +1,7 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 12 May 2026 (S43)
-**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S43 close.
+**Last updated:** 12 May 2026 (S44)
+**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S44 close.
 
 ## Counts
 
@@ -134,7 +134,34 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S43)
+## Recent additions (S40 → S44)
+
+### S44 — Add-to-existing-WO + Fixings & Consumables (S44a, S44b)
+
+**S44a — Pure code (no schema):** New flow on the scope page Unassigned Items panel. Selecting items now shows two buttons: "Create WO from N" (existing) and "Add to existing WO" (new). The new button picks a live WO (excludes `Voided` / `Complete` / `Cancelled`) and inserts into `tbl_jobitem_workorder`, deduped client-side against existing junctions (the table has no unique constraint on `(job_item_id, work_order_id)` — synthetic `junction_id` PK only, so dedup must be at the app layer). Fires a `scope_change` notification with `actionUrl` deep-linking to the scope page.
+
+**S44b — Fixings & Consumables category:**
+
+**New lookup row (`tbl_master_lookups`):**
+- `lookup_id = 108`, `category = 'MATERIAL_CATEGORY'`, `lookup_value = 'Fixings & Consumables'`, `display_order = 5`. The fifth `MATERIAL_CATEGORY` lookup alongside Timber/Sheet/Fabric/Paint & Finish/Hardware/Steel/Floor Covering.
+
+**New config row (`tbl_material_category_config`):**
+- `category_id = 108`, `pricing_unit = 'Each'`, `buying_unit = 'Each'`, `fixed_dimension = NULL`, `bin_pack_mode = 'none'`. Count-based pricing, no dimension math.
+
+**New column (`tbl_stock_items.item_type`):**
+- `VARCHAR NOT NULL DEFAULT 'stock'`. Distinguishes catalogue subtypes — `'stock'` for production stock, `'fixing'` for fixings & consumables. All 2766 pre-existing rows backfilled to `'stock'`. Drives picker filtering in the new fixings dialog. New rows tagged `'fixing'` are pickable from the WO BOM "Add Fixings" flow.
+
+**New CHECK constraint (`tbl_wo_bom.chk_bom_qty_null_only_fixings`):**
+- `CHECK (quantity IS NOT NULL OR material_category = 108)`. Allows NULL `quantity` **only** when `material_category = 108` (Fixings & Consumables). Other categories must always specify a quantity — preserves the S37 invariant that line total = `qty × unit_cost` for cost-bearing categories.
+- All 191 pre-existing BOM rows verified `quantity IS NOT NULL` before constraint added — no backfill needed.
+
+**Design rationale:** NULL `quantity` on a fixings row means "needed but unquantified" (the provisioned mode — sandpaper, masking tape, drill bits). The BOM line still renders on the WO traveller pick-list as a checkbox-style "needs this", drops the `× qty` prefix, and shows `—` in the cost column instead of `£0.00`. Counted fixings (12 specific brackets) still carry a real qty and roll up normally. Both modes coexist in the same column without a separate flag — `qty IS NULL` is itself the mode marker. Cost rollups already use `COALESCE(quantity, 0) * COALESCE(unit_cost, 0)` (`qry_bom_enriched`) and `quantity || 0` (in-component `bomRowCost`), so NULL qty silently computes as £0 across every cost surface without further changes.
+
+**App-side preservation of NULL:** `WorkOrdersPanel` state setter changed from `b.quantity || 0` → `b.quantity ?? null` so NULL passes through state. The inline qty input on the scope BOM table renders empty on NULL, placeholder `—` for fixings, and the onBlur handler writes NULL back to DB only when the input is cleared on a fixings row; non-fixings rows still coerce empty → 0 (the CHECK constraint blocks NULL there).
+
+**Audit:** `tbl_wo_bom` is already in `AUDITED_TABLES` with PK `bom_id`; fixings inserts go through `auditedInsert` in the picker dialog.
+
+**Notification:** S44a uses existing `scope_change` notification type.
 
 ### S43 — WO completion confirmation workflow + Job 13809 backfill
 

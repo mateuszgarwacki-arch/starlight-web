@@ -1,13 +1,37 @@
-S44a — Add unassigned items to existing WO
+S44b — Fixings & Consumables BOM type
 
-New flow on the scope page Unassigned Items panel: when items are
-selected, a second button "Add to existing WO" appears alongside the
-existing "Create WO from N". Picks a live WO (excludes Voided/Complete/
-Cancelled) showing activity label, status, current item count and hours
-logged. Inserts into tbl_jobitem_workorder, deduped against existing
-junctions client-side (no DB-level UNIQUE on the junction table). Fires
-a scope_change notification to anyone watching the target WO. PM gets a
-toast; panel refreshes and expands the target WO.
+New 4th button on the scope-level Build Plan ("Add Fixings"), opening a
+catalogue picker filtered to stock items tagged item_type='fixing', with
+a freeform custom-entry mode fallback. Qty field defaults blank — blank
+persists as NULL, which is the "needs this, not counted" mode for
+consumables (sandpaper, masking tape, drill bits). Counted fixings carry
+a real qty for the build-time pick-list. Inserts land at scope level
+(work_order_id NULL) with material_category = 108.
 
-New component:  src/components/add-to-wo-dialog.tsx
-Touched:        src/components/work-orders-panel.tsx
+Schema (migration s44b_fixings_and_consumables, single DO block):
+- New tbl_master_lookups row lookup_id 108 "Fixings & Consumables"
+- Matching tbl_material_category_config row (Each/Each, no
+  fixed_dimension, no bin-pack)
+- New tbl_stock_items.item_type column (VARCHAR NOT NULL DEFAULT
+  'stock', 2766 existing rows backfilled)
+- CHECK constraint chk_bom_qty_null_only_fixings on tbl_wo_bom —
+  NULL quantity only permitted when material_category = 108
+
+App-side NULL preservation: scopeBomRows state changed to allow
+quantity: number | null; loader now uses ?? null instead of || 0.
+Scope BOM table renders fixings rows with an amber "Fixings" pill,
+prefixes NULL-qty rows with ☐, empty qty input with — placeholder,
+total column shows — instead of £0.00 on NULL qty. Cost rollups
+unchanged — qry_bom_enriched already COALESCEs to 0.
+
+Existing 191 BOM rows verified all non-NULL quantity before
+constraint added — no backfill required.
+
+Deferred (in TRACKER):
+- Traveller pick-list section with checkbox shopping-list render
+- WO-level fixings routing (currently scope-only)
+- Mobile freelancer pick-list UX
+
+New component: src/components/fixings-picker-dialog.tsx
+Touched:        src/components/work-orders-panel.tsx,
+                docs/03_database_schema.md, docs/TRACKER.md

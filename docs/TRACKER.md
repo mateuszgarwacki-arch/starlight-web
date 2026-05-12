@@ -15,6 +15,12 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Fixings traveller pick-list section** *(S44b)* — fixings currently render inline with the scope BOM table. The WO traveller print should surface them as their own "Fixings & Consumables" section near the front of the packet, formatted as a checkbox shopping list. NULL-qty rows prefix `☐ Item`; counted rows show `☐ 12 × Item`. Group with section header. This is the actual operational deliverable — the data model exists to feed it.
+
+- [ ] **WO-level fixings** *(S44b)* — current flow lands fixings at scope level (`work_order_id IS NULL`). For per-activity fixings (e.g. the FINISH WO needs sandpaper that the BUILD WO doesn't), a follow-up could route to the WO's own BOM. Probably YAGNI until a real case surfaces — scope-level is the common case.
+
+- [ ] **Mobile fixings pick-list UX** *(S44b)* — fixings will render through the existing BOM section on `/m/wo/[woId]`, but a dedicated checkbox-style "shopping list" UX hasn't been built on the freelancer surface yet. Should be a separate panel/card, ticked off as items are gathered. Persistence of the tick state is a separate question (per-freelancer-per-WO checklist state).
+
 - [ ] **Job 13809 actual costs** *(S43, in-flight)* — quote backfilled, but the £12,010 has no actuals against it yet. Mateusz to add invoices and any retrospective time entries. Once complete he'll close the job via the existing Job Complete flow.
 
 - [ ] **Backfill proposal rows for legacy Complete WOs** *(S43, low-urgency)* — the 21 WOs already in `Complete` status pre-date the proposal table, so they have no row in `tbl_wo_completion_proposals` and won't appear in the `/review` Confirm panel. Correct behaviour today (they were closed via the old direct-update path). Worth a one-off backfill only if record-keeping consistency becomes a felt need.
@@ -54,6 +60,48 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S44 — 12 May 2026
+
+Two threads from a design discussion: a workflow gap on the scope page (unassigned items stuck without a way to attach to a WO that already exists) and a new BOM type to support build-time pick-lists rather than cost rollups. Two deploys, one schema migration.
+
+#### S44a — Add unassigned items to existing WO
+
+**Trigger:** Mateusz reported two recurring failure modes — (1) "people working on two work orders but clocking into one" because the WO they clocked into didn't contain all the items they actually built; (2) "I forgot to add items to a WO that already started." Both collapse to a missing flow: scope items that ended up in the Unassigned Items panel had only one route out, "Create new WO." There was no way to add them to a WO that already existed.
+
+**Design discussion:** considered making this a toggle inside `CreateWODialog` ("New WO / Existing WO"). Rejected — the two paths have completely different inputs (new WO needs activities/description/complexity/finish; existing WO just needs a target picker). Kept them as separate buttons in the Unassigned Items panel header, both gated on `selectedItemIds.size > 0`. New button only renders when at least one live WO exists on the scope.
+
+**Three stress tests passed:**
+1. **Filter to live WOs only** — picker excludes `Voided`, `Complete`, and `Cancelled`. Adding scope to a closed/voided WO would break margin reports and the audit story.
+2. **No sub-WO hour reattribution** — the design intentionally accepts that hours stay at WO level. The whole reason to merge items onto a WO is that freelancers don't differentiate within a clocked session.
+3. **One scope item, one WO target per add** — bulk multi-item insert into one WO. No splitting a single item across two WOs (would break cost reconciliation).
+
+**Implementation:** New `AddToExistingWODialog` component. On mount fetches existing `tbl_jobitem_workorder` rows for the selected items × picker WOs to build a deduplication Set (the junction table has no UNIQUE on `(job_item_id, work_order_id)` — synthetic `junction_id` PK only, so app-layer dedup is required). On mount also fetches hours-logged per WO from `tbl_wo_time_entries` to surface as context in the picker. Insert is plain `.insert([...])` on the junction (not in `AUDITED_TABLES` — junction tables stay raw). Fires `notify({ type: 'scope_change', woId, actionUrl: '/jobs/.../scope/...?wo=...' })` so anyone watching the target WO sees the new items have landed. PM gets a `sonner` toast on completion; panel calls `loadAll()` then expands the target WO.
+
+**Verified end-to-end:** build clean, deployed to `workshop-five-gamma.vercel.app` as commit `4e02d93`.
+
+#### S44b — Fixings & Consumables category
+
+**Trigger:** Mateusz wanted a 4th BOM type alongside the existing three (Stock Item / Bespoke Item / Material) at the scope-level Build Plan. After early design framing leaned cost-tracking, he course-corrected: *"the reason for me to add fixings tools to wo is not cost tracking — consumables are very very marginal compared to quote — is more to help with creating a fully fledged packing/needs list."* That changed the whole shape. The category exists for **operational** reasons (don't start a build with half the kit missing), not financial ones. Most cost-side machinery falls away.
+
+**Two-mode design:** counted fixings (12 specific brackets for a build) need a real quantity; provisioned consumables (sandpaper, masking tape, 6mm drill bit) just need a presence flag. Considered a separate boolean column; rejected as overcomplication. Mateusz's call: "qty can be NULL." `NULL quantity` becomes the mode marker — same column, same insert path, mode is implicit in whether qty is set.
+
+**Implementation:**
+- **Schema migration (one DO block):** new `tbl_master_lookups` row (lookup_id = 108, "Fixings & Consumables"), matching `tbl_material_category_config` row (Each/Each, no fixed_dimension, bin_pack_mode='none'), new `tbl_stock_items.item_type` column (VARCHAR NOT NULL DEFAULT 'stock', 2766 existing rows backfilled), CHECK constraint `chk_bom_qty_null_only_fixings` on `tbl_wo_bom` permitting NULL `quantity` only when `material_category = 108`.
+- **Picker dialog (`FixingsPickerDialog`):** two modes — catalogue search (filtered to `tbl_stock_items` where `item_type='fixing'`) and freeform custom entry. Qty field defaults blank with placeholder "leave blank" and clear copy ("Blank qty → renders on the pick-list as 'needs this', no count"). Insert via `auditedInsert` on `tbl_wo_bom` with `work_order_id=null`, `scope_item_id={current}`, `material_category=108`, `from_stock=false`. Dialog stays open between adds (rapid-entry pattern from convention §8.5).
+- **State preservation:** `scopeBomRows` type changed from `quantity: number` to `quantity: number | null`; loader switched from `b.quantity || 0` to `b.quantity ?? null`. Carries `material_category` through state too.
+- **Render polish (scope BOM table):** fixings rows get an amber pill ("Fixings") instead of the grey "Scope" pill; NULL-qty rows prefix the description with `☐`; the qty input renders empty with placeholder `—` for fixings; total column shows `—` instead of `£0.00` on NULL qty. Cost rollups untouched — `qry_bom_enriched` already uses `COALESCE(quantity, 0)` so NULL silently computes as £0 across every cost surface.
+
+**Two stress tests passed:**
+1. **CHECK constraint covers all write paths** — no scope/WO BOM insert can land NULL qty except for category 108. Existing 191 BOM rows verified all non-NULL before constraint added.
+2. **Cost-side invariant intact** — S37 (line total = qty × unit_cost) holds for all cost-bearing categories. Fixings with NULL qty produce £0 line cost, which is the intended outcome ("consumables are very very marginal compared to quote").
+
+**Deferred to v2 (cleanup backlog below):**
+- Traveller print render — currently shows fixings inline with the scope BOM. Should surface as its own "Fixings & Consumables" pick-list section on the WO traveller.
+- WO-level fixings — current flow puts fixings at scope-level only. For WO-specific fixings (per-activity), a follow-up could route to the WO's own BOM. Probably YAGNI until Mateusz hits a real case.
+- Mobile (`/m/wo/[woId]`) view — fixings will render through the existing BOM section, but the checkbox-style "shopping list" UX hasn't been built on the freelancer surface yet.
+
+**Schema delta this session:** +1 master_lookup row, +1 material_category_config row, +1 column on `tbl_stock_items`, +1 CHECK constraint on `tbl_wo_bom`. No new tables, views, or RPCs. Live totals after S44 unchanged: 57 tables, 34 views, 18 RPCs, 2 cron jobs.
 
 ### S43 — 12 May 2026
 

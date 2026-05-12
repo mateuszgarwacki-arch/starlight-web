@@ -21,6 +21,7 @@ import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { CreateWODialog } from "@/components/create-wo-dialog";
 import { AddToExistingWODialog, type WOPickerRow } from "@/components/add-to-wo-dialog";
+import { FixingsPickerDialog } from "@/components/fixings-picker-dialog";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 import { LearningTrigger } from "@/components/learning-trigger";
 import { WOStepsPanel } from "@/components/wo-steps-panel";
@@ -144,7 +145,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
     // All BOM rows across all WOs (for consolidated view)
     const [allBomRows, setAllBomRows] = useState<(BomRow & { wo_label?: string; wo_color_idx?: number })[]>([]);
-    const [scopeBomRows, setScopeBomRows] = useState<{ bom_id: number; item_description: string; quantity: number; unit: string; unit_cost: number; material_id: number | null; from_stock: string | null; needs_ordering: string | null }[]>([]);
+    const [scopeBomRows, setScopeBomRows] = useState<{ bom_id: number; item_description: string; quantity: number | null; unit: string; unit_cost: number; material_id: number | null; material_category: number | null; from_stock: string | null; needs_ordering: string | null }[]>([]);
 
     // Material search for WO BOM
     const [matSearch, setMatSearch] = useState("");
@@ -181,6 +182,9 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
     // Add-to-existing-WO dialog
     const [showAddToWODialog, setShowAddToWODialog] = useState(false);
+
+    // Fixings & Consumables picker (S44b)
+    const [showFixingsPicker, setShowFixingsPicker] = useState(false);
 
     const [costKey, setCostKey] = useState(0);
     const bumpCost = () => { setCostKey(k => k + 1); onCostChange?.(); };
@@ -242,9 +246,11 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
       setJunctions(juncData);
 
       // Split scope BOM
+      // S44b: quantity may be NULL when material_category = Fixings & Consumables (provisioned items).
+      // Preserve NULL through state — coercion to 0 happens at render/cost-calc time only.
       const sBom: typeof scopeBomRows = [];
       for (const b of scopeBomData) {
-        sBom.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity || 0, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
+        sBom.push({ bom_id: b.bom_id, item_description: b.item_description || "", quantity: b.quantity ?? null, unit: b.unit || "Each", unit_cost: b.unit_cost || 0, material_id: b.material_id, material_category: (b as any).material_category ?? null, from_stock: b.from_stock, needs_ordering: b.needs_ordering });
       }
       setScopeBomRows(sBom);
 
@@ -665,6 +671,10 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted bg-surface-mid hover:bg-surface-hi rounded-lg transition-colors">
               <Wrench className="h-3.5 w-3.5" /> Add Material
             </button>
+            <button onClick={() => setShowFixingsPicker(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors">
+              <Wrench className="h-3.5 w-3.5" /> Add Fixings
+            </button>
           </div>
         </div>
 
@@ -1004,16 +1014,44 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         </tr>
                       );
                     })}
-                    {scopeBomRows.map(row => (
+                    {scopeBomRows.map(row => {
+                      const isFixings = row.material_category === 108; // S44b — provisioned consumables
+                      return (
                       <tr key={row.bom_id} className="border-b border-subtle last:border-0">
-                        <td className="py-1.5 pr-3 text-sm text-navy">{row.item_description}</td>
-                        <td className="py-1.5 px-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-mid text-muted">Scope</span></td>
-                        <td className="py-1.5 px-2"><input type="number" step="0.5" defaultValue={row.quantity} onBlur={async e => { const v = parseFloat(e.target.value) || 0; if (v === row.quantity) return; await supabase.from("tbl_wo_bom").update({ quantity: v }).eq("bom_id", row.bom_id); setScopeBomRows(prev => prev.map(r => r.bom_id === row.bom_id ? { ...r, quantity: v } : r)); bumpCost(); }} className="w-14 px-1.5 py-0.5 text-sm text-right font-mono border border-transparent hover:border-subtle focus:border-starlight-blue rounded bg-transparent focus:bg-surface focus:outline-none" /></td>
+                        <td className="py-1.5 pr-3 text-sm text-navy">
+                          {isFixings && row.quantity == null && <span className="mr-1 text-faint">☐</span>}
+                          {row.item_description}
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isFixings ? "bg-amber-500/10 text-amber-500" : "bg-surface-mid text-muted"}`}>
+                            {isFixings ? "Fixings" : "Scope"}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <input
+                            type="number"
+                            step="0.5"
+                            defaultValue={row.quantity ?? ""}
+                            placeholder={isFixings ? "—" : "0"}
+                            onBlur={async e => {
+                              const raw = e.target.value.trim();
+                              const v: number | null = raw === "" ? (isFixings ? null : 0) : (parseFloat(raw) || 0);
+                              if (v === row.quantity) return;
+                              await supabase.from("tbl_wo_bom").update({ quantity: v }).eq("bom_id", row.bom_id);
+                              setScopeBomRows(prev => prev.map(r => r.bom_id === row.bom_id ? { ...r, quantity: v } : r));
+                              bumpCost();
+                            }}
+                            className="w-14 px-1.5 py-0.5 text-sm text-right font-mono border border-transparent hover:border-subtle focus:border-starlight-blue rounded bg-transparent focus:bg-surface focus:outline-none"
+                          />
+                        </td>
                         <td className="py-1.5 px-2 text-xs text-muted">{row.unit}</td>
-                        <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">{formatCurrency(bomRowCost(row))}</td>
+                        <td className="py-1.5 px-2 text-right text-sm font-mono text-navy">
+                          {row.quantity == null ? <span className="text-faint">—</span> : formatCurrency(bomRowCost(row))}
+                        </td>
                         <td className="py-1.5"><button onClick={() => deleteScopeBomRow(row.bom_id)} className="p-1 text-faint hover:text-starlight-red transition-colors"><Trash2 className="h-3 w-3" /></button></td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot><tr className="border-t border-subtle"><td colSpan={4} className="py-2 text-right text-xs font-medium text-muted">Grand Total</td><td className="py-2 px-2 text-right text-sm font-bold text-navy font-mono">{formatCurrency(consolidatedTotal)}</td><td></td></tr></tfoot>
                 </table>
@@ -1224,6 +1262,20 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
               setExpandedWO(woId);
               loadBOM(woId);
               loadLinkedItems(woId);
+              bumpCost();
+            }}
+          />
+        )}
+
+        {/* Fixings & Consumables picker (S44b) */}
+        {showFixingsPicker && (
+          <FixingsPickerDialog
+            jobId={jobId}
+            scopeItemId={scopeId}
+            onClose={() => setShowFixingsPicker(false)}
+            onAdded={async () => {
+              await loadAll();
+              setBomExpanded(true);
               bumpCost();
             }}
           />
