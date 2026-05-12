@@ -20,6 +20,7 @@ import { promoteJobItemToStock } from "@/lib/promote-to-stock";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { usePresence } from "@/lib/use-presence";
 import { CreateWODialog } from "@/components/create-wo-dialog";
+import { AddToExistingWODialog, type WOPickerRow } from "@/components/add-to-wo-dialog";
 import { ConflictDialog, type ConflictInfo } from "@/components/conflict-dialog";
 import { LearningTrigger } from "@/components/learning-trigger";
 import { WOStepsPanel } from "@/components/wo-steps-panel";
@@ -177,6 +178,9 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
 
     // Next Step dialog
     const [nextStepPredecessor, setNextStepPredecessor] = useState<{ work_order_id: number; activity_label: string; phase_number: number | null; description: string | null; job_item_ids: number[] } | null>(null);
+
+    // Add-to-existing-WO dialog
+    const [showAddToWODialog, setShowAddToWODialog] = useState(false);
 
     const [costKey, setCostKey] = useState(0);
     const bumpCost = () => { setCostKey(k => k + 1); onCostChange?.(); };
@@ -602,6 +606,17 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
     const unlinkedItems = jobItems.filter(i => !itemToWOs[i.item_id]);
     const toggleSelect = (id: number) => setSelectedItemIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
+    // Live WOs available as "Add to existing WO" targets — exclude terminal/voided states.
+    // Voided / Complete WOs would break audit and margin reports if items were retro-added.
+    const availableWOs: WOPickerRow[] = sortedWOs
+      .filter(wo => wo.status !== "Voided" && wo.status !== "Complete" && wo.status !== "Cancelled")
+      .map(wo => ({
+        work_order_id: wo.work_order_id,
+        display_label: wo.activity_label || `WO ${wo.wo_sequence ?? wo.work_order_id}`,
+        status: wo.status,
+        current_item_count: (woToItems[wo.work_order_id] || []).length,
+      }));
+
     const stdLengthMap: Record<number, number> = {};
     (materials || []).forEach(m => { if (m.standard_length) stdLengthMap[m.material_id] = m.standard_length; });
 
@@ -663,9 +678,16 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                 <span className="text-[10px] text-muted">— select items and create a Work Order</span>
               </div>
               {selectedItemIds.size > 0 && (
-                <button onClick={() => onRequestCreateWO?.(Array.from(selectedItemIds))} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded-lg hover:bg-starlight-red/90 transition-colors">
-                  <Hammer className="h-3.5 w-3.5" /> Create WO from {selectedItemIds.size}
-                </button>
+                <div className="flex items-center gap-2">
+                  {availableWOs.length > 0 && (
+                    <button onClick={() => setShowAddToWODialog(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface text-starlight-blue border border-starlight-blue/30 text-xs font-medium rounded-lg hover:bg-starlight-blue/10 transition-colors">
+                      <Plus className="h-3.5 w-3.5" /> Add to existing WO
+                    </button>
+                  )}
+                  <button onClick={() => onRequestCreateWO?.(Array.from(selectedItemIds))} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-starlight-red text-white text-xs font-medium rounded-lg hover:bg-starlight-red/90 transition-colors">
+                    <Hammer className="h-3.5 w-3.5" /> Create WO from {selectedItemIds.size}
+                  </button>
+                </div>
               )}
             </div>
             <div className="divide-y divide-subtle">
@@ -1183,6 +1205,26 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
               loadLinkedItems(woId);
               bumpCost();
               toast.success("Next step created");
+            }}
+          />
+        )}
+
+        {/* Add-to-existing-WO dialog */}
+        {showAddToWODialog && (
+          <AddToExistingWODialog
+            jobId={jobId}
+            scopeItemId={scopeId}
+            selectedItemIds={Array.from(selectedItemIds)}
+            availableWOs={availableWOs}
+            onClose={() => setShowAddToWODialog(false)}
+            onAdded={async (woId) => {
+              setShowAddToWODialog(false);
+              setSelectedItemIds(new Set());
+              await loadAll();
+              setExpandedWO(woId);
+              loadBOM(woId);
+              loadLinkedItems(woId);
+              bumpCost();
             }}
           />
         )}

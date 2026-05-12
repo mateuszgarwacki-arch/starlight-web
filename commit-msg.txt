@@ -1,10 +1,13 @@
-docs(S43): TRACKER + schema + conventions
+S44a — Add unassigned items to existing WO
 
-Wrap-up for S43:
-- 03_database_schema.md: counts 57/34/18, tables list, RPCs table,
-  audited tables, S43 invariant, S43 section in Recent additions
-- 05_conventions.md: header date, audited tables list, notification
-  types, S43 §3.8 extension noting immediate-apply pattern as
-  deliberate inverse of S42 deferred-apply pattern
-- TRACKER.md: cleanup backlog adds Job 13809 actuals + legacy WO
-  proposal backfill; S43 session entry covering both threads
+New flow on the scope page Unassigned Items panel: when items are
+selected, a second button "Add to existing WO" appears alongside the
+existing "Create WO from N". Picks a live WO (excludes Voided/Complete/
+Cancelled) showing activity label, status, current item count and hours
+logged. Inserts into tbl_jobitem_workorder, deduped against existing
+junctions client-side (no DB-level UNIQUE on the junction table). Fires
+a scope_change notification to anyone watching the target WO. PM gets a
+toast; panel refreshes and expands the target WO.
+
+New component:  src/components/add-to-wo-dialog.tsx
+Touched:        src/components/work-orders-panel.tsx
