@@ -39,6 +39,18 @@ interface TimeEntryInfo {
   actual_hours: number | null;
 }
 
+interface LatestProposal {
+  proposal_id: number;
+  freelancer_id: number;
+  freelancer_name: string;
+  completion_photo_path: string | null;
+  proposed_note: string | null;
+  status: "awaiting_confirmation" | "confirmed" | "undone" | "withdrawn";
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
 export default function MobileWODetail() {
   const params = useParams();
   const router = useRouter();
@@ -61,7 +73,11 @@ export default function MobileWODetail() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [completionPhotoUrl, setCompletionPhotoUrl] = useState<string | null>(null);
+  const [proposedNote, setProposedNote] = useState("");
   const cameraRef = useRef<HTMLInputElement>(null);
+
+  // Confirmation workflow
+  const [latestProposal, setLatestProposal] = useState<LatestProposal | null>(null);
 
   const loadWO = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -81,11 +97,12 @@ export default function MobileWODetail() {
     if (!woData) { setLoading(false); return; }
 
     // Load context
-    const [scopeRes, jobRes, actRes, timeRes] = await Promise.all([
+    const [scopeRes, jobRes, actRes, timeRes, propRes] = await Promise.all([
       supabase.from("tbl_scope_items").select("item_name").eq("scope_item_id", woData.scope_item_id).single(),
       supabase.from("tbl_production_plan").select("job_name, job_number").eq("job_id", woData.job_id).single(),
       supabase.from("tbl_wo_activities").select("activity_id, sequence").eq("work_order_id", woId).order("sequence"),
       supabase.from("tbl_wo_time_entries").select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours").eq("work_order_id", woId).is("archived_at", null).order("system_start_timestamp"),
+      supabase.from("tbl_wo_completion_proposals").select("proposal_id, freelancer_id, completion_photo_path, proposed_note, status, review_note, reviewed_at, created_at").eq("work_order_id", woId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     // Activity label
@@ -104,8 +121,11 @@ export default function MobileWODetail() {
       label = lk[woData.activity_verb];
     }
 
-    // Freelancer names for time entries
+    // Freelancer names for time entries and proposal
     const fIds = [...new Set((timeRes.data || []).map((t: any) => t.freelancer_id))];
+    if (propRes.data?.freelancer_id && !fIds.includes(propRes.data.freelancer_id)) {
+      fIds.push(propRes.data.freelancer_id);
+    }
     const { data: frs } = fIds.length > 0
       ? await supabase.from("tbl_freelancers").select("freelancer_id, freelancer_name").in("freelancer_id", fIds)
       : { data: [] };
@@ -133,6 +153,15 @@ export default function MobileWODetail() {
       freelancer_name: fMap[t.freelancer_id] || "Unknown",
     })));
 
+    if (propRes.data) {
+      setLatestProposal({
+        ...propRes.data,
+        freelancer_name: fMap[propRes.data.freelancer_id] || "Unknown",
+      } as LatestProposal);
+    } else {
+      setLatestProposal(null);
+    }
+
     setLoading(false);
   }, [woId]);
 
@@ -147,7 +176,6 @@ export default function MobileWODetail() {
 
   // Derived state
   const myOpenEntry = entries.find(e => e.freelancer_id === myId && !e.system_end_timestamp);
-  const allEntriesClosed = entries.length > 0 && entries.every(e => e.system_end_timestamp);
   const openEntries = entries.filter(e => !e.system_end_timestamp);
 
   // ================================================================
@@ -326,11 +354,12 @@ export default function MobileWODetail() {
   };
 
   const handleMarkComplete = async () => {
+    if (!wo) return;
     setActing(true);
     const now = new Date().toISOString();
 
     // Upload photo if taken
-    let photoPath = null;
+    let photoPath: string | null = null;
     if (photoFile) {
       try {
         const ext = photoFile.name.split(".").pop() || "jpg";
@@ -346,23 +375,50 @@ export default function MobileWODetail() {
     }
 
     const ctx = await getAuditContext(supabase);
+    const previousStatus = wo.status;
+    const noteTrimmed = proposedNote.trim();
+
+    // 1. Insert proposal row (snapshots previous status so PM Undo can revert)
+    const { error: propErr } = await auditedInsert(ctx, "tbl_wo_completion_proposals", {
+      work_order_id: woId,
+      freelancer_id: myId,
+      previous_wo_status: previousStatus,
+      completion_photo_path: photoPath,
+      proposed_note: noteTrimmed || null,
+      status: "awaiting_confirmation",
+    }, wo.job_id);
+
+    if (propErr) {
+      alert("Could not mark complete: " + (propErr.message || "unknown error"));
+      setActing(false);
+      return;
+    }
+
+    // 2. Flip WO to Complete (status visible immediately, PM confirms after)
     await auditedUpdate(ctx, "tbl_work_orders", woId, {
       status: "Complete",
       system_complete_timestamp: now,
       actual_complete_timestamp: now,
       completion_photo_path: photoPath,
-    }, wo?.job_id);
+    }, wo.job_id);
 
-    // Notify: WO completed
+    // Notify PM: action goes to /review for the confirmation panel
     await notify({ supabase, type: "wo_completed", severity: "info",
-      title: `${myName || "Someone"} completed ${wo?.activity_label || "a task"}`,
+      title: `${myName || "Someone"} marked ${wo?.activity_label || "a task"} complete`,
       detail: wo?.scope_name || "",
       freelancerId: myId, jobId: wo?.job_id || undefined, woId,
-      actionUrl: `/workshop`,
+      actionUrl: `/review`,
     });
 
-    toast.success("Work order completed");
-    router.push("/m");
+    // Reset sheet
+    setShowComplete(false);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setProposedNote("");
+
+    await loadWO();
+    setActing(false);
+    toast.success("Marked complete — awaiting PM confirmation");
   };
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -423,16 +479,35 @@ export default function MobileWODetail() {
           </div>
         )}
 
-        {/* Completion photo */}
-        {completionPhotoUrl && (
-          <div className="mt-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <ImageIcon className="h-3.5 w-3.5 text-starlight-green" />
-              <span className="text-[10px] font-semibold text-starlight-green uppercase tracking-wider">Completion Photo</span>
+        {/* Completion photo + state */}
+        {completionPhotoUrl && (() => {
+          const propStatus = latestProposal?.status;
+          const isAwaiting = propStatus === "awaiting_confirmation";
+          const isConfirmed = propStatus === "confirmed";
+          const label = isAwaiting
+            ? "Marked complete · Awaiting PM confirmation"
+            : isConfirmed
+              ? "Complete · Confirmed by PM"
+              : "Completion Photo";
+          const colorCls = isAwaiting
+            ? "text-starlight-amber"
+            : "text-starlight-green";
+          return (
+            <div className="mt-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <ImageIcon className={`h-3.5 w-3.5 ${colorCls}`} />
+                <span className={`text-[10px] font-semibold uppercase tracking-wider ${colorCls}`}>{label}</span>
+              </div>
+              {latestProposal && (
+                <p className="text-xs text-muted mb-1.5">
+                  By {latestProposal.freelancer_name}
+                  {latestProposal.proposed_note && <> · "{latestProposal.proposed_note}"</>}
+                </p>
+              )}
+              <img src={completionPhotoUrl} alt="Completion" className="w-full rounded-lg border border-subtle object-contain max-h-64" />
             </div>
-            <img src={completionPhotoUrl} alt="Completion" className="w-full rounded-lg border border-subtle object-contain max-h-64" />
-          </div>
-        )}
+          );
+        })()}
 
         <div className="flex gap-4 mt-3 text-xs text-muted">
           <span className="font-mono">{wo.job_number}</span>
@@ -472,6 +547,23 @@ export default function MobileWODetail() {
         </div>
       )}
 
+      {/* Undone by PM — needs another look */}
+      {latestProposal?.status === "undone" && wo.status !== "Complete" && (
+        <div className="bg-red-500/5 rounded-xl border border-red-500/30 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-red-600">
+            <AlertTriangle className="h-4 w-4" />
+            PM undid the completion
+          </div>
+          <p className="text-xs text-muted mt-1">
+            {latestProposal.freelancer_name} marked this complete, but it needs another look.
+          </p>
+          {latestProposal.review_note && (
+            <p className="text-sm text-foreground mt-2 italic">"{latestProposal.review_note}"</p>
+          )}
+          <p className="text-xs text-muted mt-2">Re-do the work and mark complete again.</p>
+        </div>
+      )}
+
       {/* ACTION BUTTONS */}
       <div className="space-y-3 pt-2">
         {/* START — Ready WO, I'm not on it */}
@@ -507,8 +599,8 @@ export default function MobileWODetail() {
           </button>
         )}
 
-        {/* MARK COMPLETE — all entries closed */}
-        {allEntriesClosed && wo.status === "In-Progress" && (
+        {/* MARK COMPLETE — anything not already Complete, no open timer */}
+        {wo.status !== "Complete" && !myOpenEntry && (
           <button
             onClick={() => setShowComplete(true)}
             className="w-full py-4 bg-starlight-green text-white text-lg font-semibold rounded-xl active:bg-starlight-green transition-colors flex items-center justify-center gap-3"
@@ -582,9 +674,17 @@ export default function MobileWODetail() {
               </button>
             )}
 
+            <textarea
+              value={proposedNote}
+              onChange={(e) => setProposedNote(e.target.value)}
+              placeholder="Optional note for PM (e.g. paint touch-up still needed, used different timber, etc.)"
+              rows={2}
+              className="w-full px-3 py-2 text-sm bg-surface-mid border border-subtle rounded-lg resize-none placeholder:text-muted focus:outline-none focus:border-starlight-blue"
+            />
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => { setShowComplete(false); setPhotoFile(null); setPhotoPreview(null); }}
+                onClick={() => { setShowComplete(false); setPhotoFile(null); setPhotoPreview(null); setProposedNote(""); }}
                 className="flex-1 py-3 text-muted bg-surface-mid rounded-xl font-medium"
               >
                 Cancel

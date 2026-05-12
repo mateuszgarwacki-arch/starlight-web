@@ -18,7 +18,8 @@ export type NotificationType =
   | "task_submitted"
   | "task_reviewed"
   | "workshop_request"
-  | "request_resolved";
+  | "request_resolved"
+  | "wo_completion_undone";
 
 export type NotificationSeverity = "info" | "warning" | "urgent";
 

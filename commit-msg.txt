@@ -1,39 +1,26 @@
-docs: S42 wrap - TRACKER session entry, schema snapshot, conventions
+feat(wo-completion): freelancer marks complete, PM sanity-confirms
 
-TRACKER.md
-- New S42 entry covering all 10 deploys this session: material cost
-  Plan/Actual split, Job 13757 quote consolidation, Jobs page Quoted
-  column, cutlist inline viewing, mobile 10-day overview + backfill,
-  pending-edit workflow for WO time entries, click-to-edit ad-hoc tasks,
-  date editing both paths, audit map fix for tbl_tasks, and WO-optional
-  backfill that unifies the WO/task dichotomy.
-- Cleanup backlog: 5 new deferred items (extending click-to-edit to
-  /m/wo and /m/schedule, retiring reconciled_line_cost, invoiceBOM
-  linkage, actual material breakdown on close, delete proposals,
-  budget_allowance read-site sweep).
+Restores the disappeared MARK COMPLETE button on /m/wo/[woId] with a
+lighter gate (any WO not already Complete + no open timer for me).
+Adds a proposal layer so PM can sanity-check after the fact.
 
-03_database_schema.md
-- Counts: 5556 tables, 1416 RPCs (34 views unchanged).
-- New table tbl_wo_time_entry_edits with full column list and the
-  one-pending-per-entry partial unique index documented.
-- New RPCs rpc_approve_time_entry_edit, rpc_reject_time_entry_edit
-  added to the function table with arg signatures.
-- rpc_job_close_report description updated to reflect the three-way
-  Plan/Actual/Committed material cost split.
-- tbl_tasks added to the AUDITED_TABLES block (PK: task_id).
-- Recent additions section retitled S40S42 with full S42 block.
+Flow:
+- Freelancer taps MARK COMPLETE -> photo + optional note
+- WO flips to Complete immediately (no review limbo)
+- Proposal row created with status awaiting_confirmation
+  + snapshots WO's previous status for Undo
+- PM sees "Confirm completions" panel at top of /review
+- Confirm locks it in; Undo reverts WO status + clears photo + notifies
 
-05_conventions.md
-- Audit section: tbl_tasks added to registry, plus a new bullet on
-  the silent-fail mode when a table is missing from AUDITED_TABLES
-  (misleading \"column tbl_X.id does not exist\" error).
-- New õ5.2: Planned vs Actual is two fields, never one (S42 case study
-  on rpc_job_close_report material cost split).
-- õ3.8 Time entries: two new bullets on freelancer-edit-as-proposal
-  workflow (WO entries) vs direct-edit-with-revert (ad-hoc tasks),
-  and the time-of-day preservation rule on date edits.
+Schema:
+- tbl_wo_completion_proposals (12 cols, RLS, partial unique idx)
+- rpc_confirm_wo_completion (idempotent re: WO state)
+- rpc_undo_wo_completion (restores previous_wo_status)
 
-02_architecture.md
-- OneDrive section: /api/onedrive/view documented next to /download
-  and /upload-session, with the token-via-query-param mechanism that
-  makes inline viewing work through window.open.
+Audit:
+- tbl_wo_completion_proposals registered in AUDITED_TABLES (proposal_id)
+- New notification type wo_completion_undone
+
+No blast radius on existing surfaces: WO status semantics unchanged,
+the only filter site that could care is the existing JOIN button which
+already handles "log time on Complete WO" as a legit case.

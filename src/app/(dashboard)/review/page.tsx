@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { CompletedWorkTab } from "@/components/completed-work-tab";
 import { LearningsTab } from "@/components/learnings-tab";
 import { ReviewNavChips } from "@/components/review-nav-chips";
+import { ConfirmCompletionsPanel } from "@/components/confirm-completions-panel";
 
 interface JobCost {
   job_id: number;
@@ -329,6 +330,9 @@ export default function ReviewPage() {
           </p>
         </div>
       </div>
+
+      {/* Confirm completions — freelancer-marked WOs awaiting PM sanity-check */}
+      <ConfirmCompletionsPanel />
 
       {/* Workshop Overhead panel */}
       {overheadTasks.length > 0 && (
