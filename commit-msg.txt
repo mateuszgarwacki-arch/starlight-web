@@ -1,31 +1,27 @@
-S45 — Close report: workshop-quoted differential
+S45c — Correct quoted_workshop to match cost-breakdown.tsx
 
-The close report showed only the full accepted-quote value and computed
-margin against it. For jobs where the workshop delivers a slice of the
-event (subcontracted production, install, etc.) that margin is
-meaningless — FA Leoube read 98.8% against the whole-event quote.
+S45b shipped quoted_workshop with an invented exclude-list (everything
+except Subcontracted/Provisional) — £112,615 for FA Leoube. That didn't
+match the job page's Cost Analysis panel, which shows £8,850.
 
-rpc_job_close_report: new quote_workshop CTE summing accepted-quote,
-non-overhead lines where category NOT IN ('Subcontracted','Provisional').
-Exposed as commercial.quoted_workshop alongside commercial.quoted. The
-category field on tbl_quote_lines is PM-maintained; exclude-list (not
-include-list) so new categories default to counting as workshop.
+cost-breakdown.tsx already has the canonical definition: an INCLUDE-list
+of bench-work categories — category text contains 'workshop', 'stock
+pick' or 'stock-and-hire'. The close report should have reused it, not
+invented a parallel one.
 
-job-complete-dialog.tsx + /reports/job-close/[jobId]:
-- QUOTED card gains a "Workshop GBPX" sub-line (mirrors the Materials
-  card Plan/Actual pattern)
-- margin recomputes against quoted_workshop, not quoted
-- margin card carries a "vs workshop quoted" caption
-- full quoted figure stays visible — the gap is itself informative
+Fix: rewrote the quote_workshop CTE in rpc_job_close_report to the
+include-list, mirroring cost-breakdown.tsx exactly. UI labels changed
+"Workshop" -> "Workshop + stock" to match job-page terminology. No UI
+logic change — components already read quoted_workshop.
 
-Verified: FA Leoube returns quoted 135,405 / quoted_workshop 112,615.
+Verified: FA Leoube returns quoted 135,405 / quoted_workshop 8,850 /
+margin 81.8% — exact match to the job page Cost Analysis.
 
-Also this session (not in this commit — DB + direct SQL):
-- Job 13775 FA Leoube quote 40815 v15 flipped Issued -> Accepted
-  (close report was showing GBP0 quoted — third distinct cause of that
-  symptom; "no Accepted quote" guard added to TRACKER backlog)
-- Job 13744 Nabihah Iqbal entered from quote PDF 40722 v7
+Debt: the workshop-quote rule now lives in two places (this RPC +
+cost-breakdown.tsx). TRACKER backlog item added to consolidate into a
+shared view if touched again.
 
 Touched: src/components/job-complete-dialog.tsx,
          src/app/(dashboard)/reports/job-close/[jobId]/page.tsx,
          docs/03_database_schema.md, docs/TRACKER.md
+RPC change applied via migration s45c_quoted_workshop_match_costbreakdown.

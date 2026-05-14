@@ -214,7 +214,7 @@ export function JobCompleteDialog({
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
                     <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
                     <p className="text-[10px] text-muted mt-0.5">
-                      Workshop <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+                      Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
                     </p>
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
@@ -261,7 +261,7 @@ export function JobCompleteDialog({
                         ({formatCurrency(marginBase - totalCommitted)})
                       </span>
                     </p>
-                    <p className="text-[10px] text-muted mt-0.5">vs workshop quoted {formatCurrency(c.quoted_workshop)}</p>
+                    <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted {formatCurrency(c.quoted_workshop)}</p>
                   </div>
                 </div>
               )}

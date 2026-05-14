@@ -15,6 +15,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Consolidate workshop-quote definition into a shared view** *(S45c)* — "workshop + stock quoted" (category text contains `workshop` / `stock pick` / `stock-and-hire`) is now computed in two places: the `quote_workshop` CTE in `rpc_job_close_report` and the `workshopCats` filter in `cost-breakdown.tsx`. They must stay in lockstep. If this rule is touched again, pull it into a view (e.g. `qry_job_workshop_quote`) as the single source of truth and have both consumers read it.
+
 - [ ] **"No Accepted quote" guard on Complete** *(S45a)* — three separate "Quoted shows £0 on close report" bugs to date (S41 NULL value, S42b duplicate Accepted, S45a stuck in `Issued`). Add a soft warning in the Job Complete dialog when the job has no `status='Accepted'` quote — and/or a watcher view listing Complete jobs with no Accepted quote. Soft signal only, doesn't block the close.
 
 - [ ] **`/reports/job-financial/[jobId]` — workshop margin** *(S45b)* — the job-close report now computes margin against `quoted_workshop`. The separate job-financial report wasn't checked this session; it may still show margin against the full quote total. Verify and apply the same `quoted_workshop` treatment if so.
@@ -86,6 +88,8 @@ Closing job 13775 FA Léoube surfaced two related problems with the close report
 
 #### S45b — Close report: workshop-quoted differential
 
+> ⚠️ **Superseded by S45c below** — S45b shipped with the wrong definition. Read S45c for the corrected logic. Kept here for the design-discussion record.
+
 **Trigger:** With the quote flipped, the close report showed QUOTED £135,405 and a margin of 98.8%. Mateusz: *"quoted now shows total value which is very misleading. There should be a differential, like in other parts of our financials — quoted vs quoted for build."* The £135,405 is the whole-event quote; the workshop only delivers a slice of it, so margin against the full figure is meaningless.
 
 **Design discussion — definition of "quoted for build":**
@@ -93,19 +97,21 @@ Closing job 13775 FA Léoube surfaced two related problems with the close report
 - Mateusz corrected this: scope-linkage *undercounts*. Workshop-delivered lines that get charged but never need a WO — re-used kit from other events ("sometimes we're smart enough to re-use stuff, still charging good money") — would be missed. The honest signal is the **manually-maintained `category` field**, not WO linkage.
 - I'd wrongly written off the category field as unreliable (saw values like `Install`, `Sound` mixed with `Workshop`, `Subcontracted` and assumed import noise). It's not noise — Mateusz maintains it by hand. Corrected course.
 
-**Final rule (exclude-list, confirmed with Mateusz line by line):**
-- **Excluded:** `Subcontracted` (farmed out), `Provisional` (mostly cancelled/changed, nothing to do with workshop).
-- **Counts as workshop:** Workshop, Install, Install (Materials), Lighting, Sound, Production, Stock Pick, Shared Departments. `Stock Pick` = re-used kit, still ours. `Shared Departments` = cross-department job, Mateusz pulls the other departments' costs in too.
-- Exclude-list rather than include-list so a new category defaults to counting as workshop — fails toward showing revenue, not silently hiding it.
-- Full category vocabulary across all quote lines: Subcontracted £539,599 / Workshop £382,540 / Install £219,885 / Provisional £169,916 / Lighting £169,135 / Sound £92,475 / Production £80,960 / Stock Pick £65,390 / Shared Departments £21,500 / Install (Materials) £8,000.
+**Rule shipped in S45b (WRONG — see S45c):** exclude-list — sum non-overhead lines where `category NOT IN ('Subcontracted','Provisional')`. Produced £112,615 for FA Léoube. Built `quote_workshop` CTE in `rpc_job_close_report`, both UI surfaces showed the QUOTED card with a "Workshop £X" sub-line and computed margin against it.
 
-**Implementation (one RPC + two components, one deploy):**
-- **`rpc_job_close_report`** — new `quote_workshop` CTE summing accepted-quote, non-overhead lines where `COALESCE(category,'') NOT IN ('Subcontracted','Provisional')`. Exposed as `commercial.quoted_workshop` alongside the existing `commercial.quoted`. Verified: FA Léoube returns `quoted` £135,405 / `quoted_workshop` £112,615.
-- **`job-complete-dialog.tsx`** + **`/reports/job-close/[jobId]`** — QUOTED card gains a "Workshop £X" sub-line (mirrors the Materials card Plan/Actual pattern); both compute **margin against `quoted_workshop`, not `quoted`**; margin card carries a "vs workshop quoted" caption. The full quoted figure stays visible — the gap between the two is itself informative.
+#### S45c — Correction: match the established cost-breakdown definition
 
-**Note for Mateusz:** for FA Léoube specifically the two figures land close (£135,405 vs £112,615, margin ~98.6% vs 98.8%) because this job is almost entirely workshop-categorised — only £22,790 sits in Subcontracted/Provisional. The differential still does its job; this particular job just doesn't have much non-workshop in it. On subcontract-heavy jobs the gap will be large (£539k of Subcontracted across three jobs system-wide).
+**Trigger:** Mateusz compared the close report (£112,615 "Workshop") against the job page Cost Analysis panel (£8,850 "Quoted (workshop + stock)") — *"Workshop number is wrong, it should be what it is on job page, why is so badly different?"*
 
-**Not checked this session:** `/reports/job-financial/[jobId]` may show the same full-quote margin issue — worth a look as a separate follow-up (added to backlog).
+**Root cause — my error:** I invented a new definition for the close report instead of reusing the one that already existed. `cost-breakdown.tsx` (the job page Cost Analysis) already computes "workshop + stock" as an **include-list**: category text contains `workshop`, `stock pick`, or `stock-and-hire`. For FA Léoube that's the 4 `Workshop` lines = £8,850. My S45b exclude-list (£112,615) counted `Install` / `Sound` / `Lighting` / `Production` too. The earlier "Install, yes ours" instruction was about a *different axis* — "ours vs subcontracted" — not "bench work vs other Starlight work". The close report's margin is the workshop's margin, so it has to be against the workshop's quoted slice. Should have reused the existing logic from the start; consistency across financials is the whole point of the original ask.
+
+**Fix:** rewrote the `quote_workshop` CTE in `rpc_job_close_report` to the include-list — `LOWER(category) LIKE '%workshop%' OR LIKE '%stock pick%' OR LIKE '%stock-and-hire%'` — mirroring `cost-breakdown.tsx` exactly. UI labels changed "Workshop" → "Workshop + stock" to match the job page's terminology. No UI logic changes — components already read `quoted_workshop`.
+
+**Verified:** FA Léoube now returns `quoted` £135,405 / `quoted_workshop` £8,850 / margin **81.8%** — exact match to the job page's Cost Analysis ("Live margin 81.8% / £7,242.94 profit").
+
+**Debt logged:** the workshop-quote definition now lives in two places — `rpc_job_close_report` (SQL) and `cost-breakdown.tsx` (TS). Both must move together. Backlog item added to consolidate into a shared view if it's touched again.
+
+**Note for Mateusz:** for FA Léoube specifically the headline `quoted` (£135,405) and `quoted_workshop` (£8,850) are very far apart because this job is mostly install/sound/lighting with only a small bench-build slice. The differential is doing exactly its job — margin is now 81.8% against the £8,850 the workshop actually quoted, not a fantasy 98% against the whole event.
 
 #### Backfill — Job 13744 Nabihah Iqbal (carried over from prior turn)
 

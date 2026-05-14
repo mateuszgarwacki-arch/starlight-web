@@ -224,7 +224,7 @@ export default function JobCloseReport() {
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
             <p className="text-lg font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
             <p className="text-[10px] text-muted mt-0.5">
-              Workshop <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+              Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
             </p>
           </div>
           <div className="px-3 py-2.5 bg-base rounded-lg">
@@ -251,7 +251,7 @@ export default function JobCloseReport() {
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Margin</p>
             <p className={"text-lg font-semibold mt-0.5 " + marginColor}>{marginPct.toFixed(1)}%</p>
             <p className={"text-[10px] mt-0.5 " + marginColor}>{formatCurrency(margin)}</p>
-            <p className="text-[10px] text-muted mt-0.5">vs workshop quoted</p>
+            <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted</p>
           </div>
         </div>
 
