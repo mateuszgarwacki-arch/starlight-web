@@ -15,6 +15,10 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **"No Accepted quote" guard on Complete** *(S45a)* — three separate "Quoted shows £0 on close report" bugs to date (S41 NULL value, S42b duplicate Accepted, S45a stuck in `Issued`). Add a soft warning in the Job Complete dialog when the job has no `status='Accepted'` quote — and/or a watcher view listing Complete jobs with no Accepted quote. Soft signal only, doesn't block the close.
+
+- [ ] **`/reports/job-financial/[jobId]` — workshop margin** *(S45b)* — the job-close report now computes margin against `quoted_workshop`. The separate job-financial report wasn't checked this session; it may still show margin against the full quote total. Verify and apply the same `quoted_workshop` treatment if so.
+
 - [ ] **Fixings traveller pick-list section** *(S44b)* — fixings currently render inline with the scope BOM table. The WO traveller print should surface them as their own "Fixings & Consumables" section near the front of the packet, formatted as a checkbox shopping list. NULL-qty rows prefix `☐ Item`; counted rows show `☐ 12 × Item`. Group with section header. This is the actual operational deliverable — the data model exists to feed it.
 
 - [ ] **WO-level fixings** *(S44b)* — current flow lands fixings at scope level (`work_order_id IS NULL`). For per-activity fixings (e.g. the FINISH WO needs sandpaper that the BUILD WO doesn't), a follow-up could route to the WO's own BOM. Probably YAGNI until a real case surfaces — scope-level is the common case.
@@ -60,6 +64,52 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S45 — 12 May 2026
+
+Closing job 13775 FA Léoube surfaced two related problems with the close report's commercial figures — one a data fix, one a genuine design gap. No schema objects added; one RPC body change, two UI surfaces, one direct-SQL data correction.
+
+#### S45a — FA Léoube quote stuck in Issued status
+
+**Trigger:** Mateusz went to close FA Léoube; the close report showed **QUOTED £0.00** despite the job having labour and materials against it. He flagged a hunch we'd seen this before.
+
+**Diagnosis:** Job 13775 had exactly one quote — `40815 v15`, 47 lines, £135,405 of client lines, all present and correct — but its status was `Issued`, never flipped to `Accepted`. `qry_job_accepted_quote` (the close report's Quoted source) sums lines only for `status = 'Accepted'` quotes, so it returned nothing.
+
+**Why it felt familiar — third distinct cause of the same symptom:**
+- S41 — `tbl_quotes.quote_value` was NULL. Fixed by making the view sum from lines.
+- S42b — two `Accepted` quotes on one job. Fixed by consolidating to one.
+- S45a — quote total fine, lines fine, quote just stuck in `Issued`.
+
+**Fix:** `UPDATE tbl_quotes SET status = 'Accepted' WHERE quote_id = 10` via direct SQL (confirmed with Mateusz first — key-table write + commercial-state judgement). The job ran and is being closed, only one quote exists, so `Accepted` is unambiguous. `qry_job_accepted_quote` then resolved £135,405.00.
+
+**Recurring-pattern note:** three "Quoted shows £0 on close" bugs, three different causes. Per conventions §5 (when the same bug is fixed repeatedly, the fix is usually a missing invariant) — a guard is warranted. Added to cleanup backlog: a soft warning in the Job Complete dialog when a job has no `Accepted` quote, and/or a watcher view of Complete jobs with no Accepted quote. Not bundled into this session.
+
+#### S45b — Close report: workshop-quoted differential
+
+**Trigger:** With the quote flipped, the close report showed QUOTED £135,405 and a margin of 98.8%. Mateusz: *"quoted now shows total value which is very misleading. There should be a differential, like in other parts of our financials — quoted vs quoted for build."* The £135,405 is the whole-event quote; the workshop only delivers a slice of it, so margin against the full figure is meaningless.
+
+**Design discussion — definition of "quoted for build":**
+- First considered **scope-linkage** (quote lines with a scope item / WO against them). For FA Léoube that was only 3 lines / £6,850.
+- Mateusz corrected this: scope-linkage *undercounts*. Workshop-delivered lines that get charged but never need a WO — re-used kit from other events ("sometimes we're smart enough to re-use stuff, still charging good money") — would be missed. The honest signal is the **manually-maintained `category` field**, not WO linkage.
+- I'd wrongly written off the category field as unreliable (saw values like `Install`, `Sound` mixed with `Workshop`, `Subcontracted` and assumed import noise). It's not noise — Mateusz maintains it by hand. Corrected course.
+
+**Final rule (exclude-list, confirmed with Mateusz line by line):**
+- **Excluded:** `Subcontracted` (farmed out), `Provisional` (mostly cancelled/changed, nothing to do with workshop).
+- **Counts as workshop:** Workshop, Install, Install (Materials), Lighting, Sound, Production, Stock Pick, Shared Departments. `Stock Pick` = re-used kit, still ours. `Shared Departments` = cross-department job, Mateusz pulls the other departments' costs in too.
+- Exclude-list rather than include-list so a new category defaults to counting as workshop — fails toward showing revenue, not silently hiding it.
+- Full category vocabulary across all quote lines: Subcontracted £539,599 / Workshop £382,540 / Install £219,885 / Provisional £169,916 / Lighting £169,135 / Sound £92,475 / Production £80,960 / Stock Pick £65,390 / Shared Departments £21,500 / Install (Materials) £8,000.
+
+**Implementation (one RPC + two components, one deploy):**
+- **`rpc_job_close_report`** — new `quote_workshop` CTE summing accepted-quote, non-overhead lines where `COALESCE(category,'') NOT IN ('Subcontracted','Provisional')`. Exposed as `commercial.quoted_workshop` alongside the existing `commercial.quoted`. Verified: FA Léoube returns `quoted` £135,405 / `quoted_workshop` £112,615.
+- **`job-complete-dialog.tsx`** + **`/reports/job-close/[jobId]`** — QUOTED card gains a "Workshop £X" sub-line (mirrors the Materials card Plan/Actual pattern); both compute **margin against `quoted_workshop`, not `quoted`**; margin card carries a "vs workshop quoted" caption. The full quoted figure stays visible — the gap between the two is itself informative.
+
+**Note for Mateusz:** for FA Léoube specifically the two figures land close (£135,405 vs £112,615, margin ~98.6% vs 98.8%) because this job is almost entirely workshop-categorised — only £22,790 sits in Subcontracted/Provisional. The differential still does its job; this particular job just doesn't have much non-workshop in it. On subcontract-heavy jobs the gap will be large (£539k of Subcontracted across three jobs system-wide).
+
+**Not checked this session:** `/reports/job-financial/[jobId]` may show the same full-quote margin issue — worth a look as a separate follow-up (added to backlog).
+
+#### Backfill — Job 13744 Nabihah Iqbal (carried over from prior turn)
+
+Job 13744 "Nabihah Iqbal May 2026" entered earlier in the session from quote PDF `40722 v7` — 17 lines, £22,391, all `Provisional` category for Mateusz to redistribute, Goodwood, 23 May 2026. Same retrospective-entry pattern as Job 13809 (S43a). Overhead bucket auto-created via trigger. Direct-SQL backfill, no audit entry.
 
 ### S44 — 12 May 2026
 

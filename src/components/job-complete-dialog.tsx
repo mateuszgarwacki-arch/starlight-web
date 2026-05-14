@@ -33,7 +33,8 @@ interface JobCompleteDialogProps {
 
 interface ReportSummary {
   commercial: {
-    quoted: number;
+    quoted: number;            // full accepted quote — all non-overhead lines
+    quoted_workshop: number;   // workshop slice — excludes Subcontracted / Provisional
     labour_cost: number;
     labour_hours: number;
     material_cost_planned: number;   // BOM total — the plan
@@ -86,7 +87,7 @@ export function JobCompleteDialog({
       const data = reportRes.data as any;
       setSummary({
         commercial: data?.commercial || {
-          quoted: 0, labour_cost: 0, labour_hours: 0,
+          quoted: 0, quoted_workshop: 0, labour_cost: 0, labour_hours: 0,
           material_cost_planned: 0, material_cost_actual: 0, material_cost_committed: 0,
           invoiced_total: 0, unallocated_invoice_total: 0,
         },
@@ -158,7 +159,10 @@ export function JobCompleteDialog({
   // Total Committed = labour spent + materials at the worse of (plan, actual).
   // Matches the system-wide rule that margin is calculated against committed cost.
   const totalCommitted = c ? (c.labour_cost + c.material_cost_committed) : 0;
-  const margin = c && c.quoted > 0 ? ((c.quoted - totalCommitted) / c.quoted) * 100 : 0;
+  // Margin is computed against the WORKSHOP quote, not the full quote — the full
+  // figure includes subcontracted/provisional work that isn't ours to cost.
+  const marginBase = c ? c.quoted_workshop : 0;
+  const margin = marginBase > 0 ? ((marginBase - totalCommitted) / marginBase) * 100 : 0;
   const materialOverrun = c ? (c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0) : false;
 
   return (
@@ -209,6 +213,9 @@ export function JobCompleteDialog({
                   <div className="px-3 py-2.5 bg-base rounded-lg">
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
                     <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
+                    <p className="text-[10px] text-muted mt-0.5">
+                      Workshop <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+                    </p>
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Total Committed</p>
@@ -251,9 +258,10 @@ export function JobCompleteDialog({
                     }>
                       {margin.toFixed(1)}%
                       <span className="text-xs text-muted font-normal ml-1.5">
-                        ({formatCurrency(c.quoted - totalCommitted)})
+                        ({formatCurrency(marginBase - totalCommitted)})
                       </span>
                     </p>
+                    <p className="text-[10px] text-muted mt-0.5">vs workshop quoted {formatCurrency(c.quoted_workshop)}</p>
                   </div>
                 </div>
               )}

@@ -1,7 +1,7 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 12 May 2026 (S44)
-**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S44 close.
+**Last updated:** 12 May 2026 (S45)
+**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S45 close.
 
 ## Counts
 
@@ -134,7 +134,19 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S44)
+## Recent additions (S40 → S45)
+
+### S45 — Close report: workshop-quoted differential (pure RPC change)
+
+**`rpc_job_close_report` — new `commercial.quoted_workshop` field.** The close report previously showed only `quoted` (the full accepted-quote value, all non-overhead lines) and computed margin against it. For jobs where the workshop delivers only a slice of the event — subcontracted production, install, etc. — that produced a meaningless margin (e.g. FA Léoube: 98.8% against £135,405 when the workshop only quoted £112,615 of it).
+
+New `quote_workshop` CTE sums accepted-quote, non-overhead lines where `COALESCE(category,'') NOT IN ('Subcontracted', 'Provisional')`. Exposed as `commercial.quoted_workshop` alongside the existing `commercial.quoted`. The category field on `tbl_quote_lines` is manually maintained by the PM; the vocabulary in use is `Subcontracted`, `Workshop`, `Install`, `Install (Materials)`, `Provisional`, `Lighting`, `Sound`, `Production`, `Stock Pick`, `Shared Departments`. The exclude-list (not include-list) is deliberate — new categories default to counting as workshop, so the figure fails toward showing revenue rather than silently hiding it. `Subcontracted` is farmed out; `Provisional` is mostly cancelled/changed lines unrelated to the workshop. Everything else is Starlight's own work (including `Stock Pick` — re-used kit that's still charged, and `Shared Departments` — cross-department jobs where the PM pulls the other departments' costs in too).
+
+Both UI surfaces (`job-complete-dialog.tsx`, `/reports/job-close/[jobId]`) now show the QUOTED card with a "Workshop £X" sub-line (mirroring the Materials card's Plan/Actual pattern) and compute **margin against `quoted_workshop`, not `quoted`**. The full quoted figure stays visible — the gap between the two is itself informative (how much of the event was quoted but isn't workshop-costed).
+
+No schema objects added — RPC body change only. Counts unchanged: 57 tables, 34 views, 18 RPCs, 2 cron jobs.
+
+**Related data fix (same session):** Job 13775 FA Léoube — quote `40815 v15` was stuck in `Issued` status, so `qry_job_accepted_quote` (filters to `status = 'Accepted'`) returned nothing and the close report showed £0 quoted. Flipped to `Accepted` via direct SQL. Third distinct cause of "Quoted shows £0 on a close report" (S41 was NULL `quote_value`, S42b was duplicate Accepted quotes) — see TRACKER cleanup backlog for the proposed "no Accepted quote on a Complete job" guard.
 
 ### S44 — Add-to-existing-WO + Fixings & Consumables (S44a, S44b)
 

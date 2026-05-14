@@ -1,37 +1,31 @@
-S44b — Fixings & Consumables BOM type
+S45 — Close report: workshop-quoted differential
 
-New 4th button on the scope-level Build Plan ("Add Fixings"), opening a
-catalogue picker filtered to stock items tagged item_type='fixing', with
-a freeform custom-entry mode fallback. Qty field defaults blank — blank
-persists as NULL, which is the "needs this, not counted" mode for
-consumables (sandpaper, masking tape, drill bits). Counted fixings carry
-a real qty for the build-time pick-list. Inserts land at scope level
-(work_order_id NULL) with material_category = 108.
+The close report showed only the full accepted-quote value and computed
+margin against it. For jobs where the workshop delivers a slice of the
+event (subcontracted production, install, etc.) that margin is
+meaningless — FA Leoube read 98.8% against the whole-event quote.
 
-Schema (migration s44b_fixings_and_consumables, single DO block):
-- New tbl_master_lookups row lookup_id 108 "Fixings & Consumables"
-- Matching tbl_material_category_config row (Each/Each, no
-  fixed_dimension, no bin-pack)
-- New tbl_stock_items.item_type column (VARCHAR NOT NULL DEFAULT
-  'stock', 2766 existing rows backfilled)
-- CHECK constraint chk_bom_qty_null_only_fixings on tbl_wo_bom —
-  NULL quantity only permitted when material_category = 108
+rpc_job_close_report: new quote_workshop CTE summing accepted-quote,
+non-overhead lines where category NOT IN ('Subcontracted','Provisional').
+Exposed as commercial.quoted_workshop alongside commercial.quoted. The
+category field on tbl_quote_lines is PM-maintained; exclude-list (not
+include-list) so new categories default to counting as workshop.
 
-App-side NULL preservation: scopeBomRows state changed to allow
-quantity: number | null; loader now uses ?? null instead of || 0.
-Scope BOM table renders fixings rows with an amber "Fixings" pill,
-prefixes NULL-qty rows with ☐, empty qty input with — placeholder,
-total column shows — instead of £0.00 on NULL qty. Cost rollups
-unchanged — qry_bom_enriched already COALESCEs to 0.
+job-complete-dialog.tsx + /reports/job-close/[jobId]:
+- QUOTED card gains a "Workshop GBPX" sub-line (mirrors the Materials
+  card Plan/Actual pattern)
+- margin recomputes against quoted_workshop, not quoted
+- margin card carries a "vs workshop quoted" caption
+- full quoted figure stays visible — the gap is itself informative
 
-Existing 191 BOM rows verified all non-NULL quantity before
-constraint added — no backfill required.
+Verified: FA Leoube returns quoted 135,405 / quoted_workshop 112,615.
 
-Deferred (in TRACKER):
-- Traveller pick-list section with checkbox shopping-list render
-- WO-level fixings routing (currently scope-only)
-- Mobile freelancer pick-list UX
+Also this session (not in this commit — DB + direct SQL):
+- Job 13775 FA Leoube quote 40815 v15 flipped Issued -> Accepted
+  (close report was showing GBP0 quoted — third distinct cause of that
+  symptom; "no Accepted quote" guard added to TRACKER backlog)
+- Job 13744 Nabihah Iqbal entered from quote PDF 40722 v7
 
-New component: src/components/fixings-picker-dialog.tsx
-Touched:        src/components/work-orders-panel.tsx,
-                docs/03_database_schema.md, docs/TRACKER.md
+Touched: src/components/job-complete-dialog.tsx,
+         src/app/(dashboard)/reports/job-close/[jobId]/page.tsx,
+         docs/03_database_schema.md, docs/TRACKER.md

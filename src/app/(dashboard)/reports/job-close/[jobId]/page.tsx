@@ -45,6 +45,7 @@ interface CloseReport {
   };
   commercial: {
     quoted: number;
+    quoted_workshop: number;
     labour_cost: number;
     labour_hours: number;
     material_cost_planned: number;
@@ -135,8 +136,11 @@ export default function JobCloseReport() {
   const { job, commercial: c, post_complete_edits: edits } = data;
   const isComplete = job.job_status === "Complete";
   const totalCommitted = c.labour_cost + c.material_cost_committed;
-  const margin = c.quoted > 0 ? c.quoted - totalCommitted : 0;
-  const marginPct = c.quoted > 0 ? (margin / c.quoted) * 100 : 0;
+  // Margin is computed against the WORKSHOP quote (excludes Subcontracted /
+  // Provisional) — the full quote total includes work that isn't ours to cost.
+  const marginBase = c.quoted_workshop;
+  const margin = marginBase > 0 ? marginBase - totalCommitted : 0;
+  const marginPct = marginBase > 0 ? (margin / marginBase) * 100 : 0;
   const materialOverrun = c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0;
 
   const marginColor =
@@ -219,6 +223,9 @@ export default function JobCloseReport() {
           <div className="px-3 py-2.5 bg-base rounded-lg">
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
             <p className="text-lg font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
+            <p className="text-[10px] text-muted mt-0.5">
+              Workshop <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+            </p>
           </div>
           <div className="px-3 py-2.5 bg-base rounded-lg">
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Labour</p>
@@ -244,6 +251,7 @@ export default function JobCloseReport() {
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Margin</p>
             <p className={"text-lg font-semibold mt-0.5 " + marginColor}>{marginPct.toFixed(1)}%</p>
             <p className={"text-[10px] mt-0.5 " + marginColor}>{formatCurrency(margin)}</p>
+            <p className="text-[10px] text-muted mt-0.5">vs workshop quoted</p>
           </div>
         </div>
 
