@@ -67,9 +67,9 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
-### S45 — 12 May 2026
+### S45 — 14 May 2026
 
-Closing job 13775 FA Léoube surfaced two related problems with the close report's commercial figures — one a data fix, one a genuine design gap. No schema objects added; one RPC body change, two UI surfaces, one direct-SQL data correction.
+Closing job 13775 FA Léoube surfaced two related problems with the close report's commercial figures — one a data fix, one a genuine design gap. No schema objects added; one RPC body change (corrected once — see S45b → S45c), two UI surfaces, one direct-SQL data correction. Session closed: schema counts verified live (57 tables / 34 views / 18 RPCs / 2 cron jobs), all four commits deployed clean.
 
 #### S45a — FA Léoube quote stuck in Issued status
 
@@ -117,7 +117,7 @@ Closing job 13775 FA Léoube surfaced two related problems with the close report
 
 Job 13744 "Nabihah Iqbal May 2026" entered earlier in the session from quote PDF `40722 v7` — 17 lines, £22,391, all `Provisional` category for Mateusz to redistribute, Goodwood, 23 May 2026. Same retrospective-entry pattern as Job 13809 (S43a). Overhead bucket auto-created via trigger. Direct-SQL backfill, no audit entry.
 
-### S44 — 12 May 2026
+### S44 — 14 May 2026
 
 Two threads from a design discussion: a workflow gap on the scope page (unassigned items stuck without a way to attach to a WO that already exists) and a new BOM type to support build-time pick-lists rather than cost rollups. Two deploys, one schema migration.
 
