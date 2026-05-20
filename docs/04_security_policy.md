@@ -1,11 +1,17 @@
 # Starlight Production System — Information Security Policy
 
-**Version:** 2.1
-**Last updated:** 6 May 2026 (S41)
+**Version:** 2.2
+**Last updated:** 20 May 2026 (S46)
 **Classification:** CONFIDENTIAL — Internal Use Only
 **Document owner:** Mateusz Garwacki, Workshop Manager
 
-Supersedes v2.0 (April 2026). Updated to reflect:
+Supersedes v2.1 (May 2026). Updated to reflect:
+- **SP-006:** the SECURITY INVOKER requirement for views was aspirational in v2.1 — 15 views were still inheriting Supabase's SECURITY DEFINER default and bypassing RLS on financial data (`qry_invoice_*`, `qry_dash_quote_stats`, etc.). All migrated in S46. The rule is now CI-enforced via `scripts/db-checks.sql` (`.github/workflows/db-checks.yml`), which also asserts that every public table has RLS enabled and no SECURITY DEFINER function is callable by `PUBLIC`. Postgres footgun documented: `REVOKE EXECUTE FROM anon` is a no-op while `PUBLIC` retains EXECUTE — always REVOKE FROM PUBLIC first, then GRANT explicitly.
+- **SP-013:** the existing "raw `.update()` on audited tables is a policy violation" rule now has a sharper operational rationale. PostgREST returns no error when RLS blocks an UPDATE or DELETE (0 rows affected, `error: null`) — unchecked raw writes therefore silently fail. The S46g and S46h hotfixes were both manifestations of this trap. The `auditedUpdate` helper must be hardened to surface zero-row-no-error and remaining raw `.update()` call sites migrated to it (backlog).
+- **SP-NEW (no separate number):** the GRANT-then-RLS pattern for new tables is now mandatory in advance of the Supabase October 30, 2026 default-deny enforcement. Pattern documented in `docs/05_conventions.md` §20.1.
+- General S46 housekeeping: search_path pinning required on all new functions, REVOKE-FROM-PUBLIC-then-GRANT pattern for SECURITY DEFINER functions documented.
+
+Supersedes v2.0 (April 2026). v2.0 → v2.1 introduced:
 - **SP-002:** freelancer auth is a 6-digit numeric PIN (not ≥ 8 char password) — the prior policy claim was aspirational and never matched reality. PIN length is the deliberate, accepted tradeoff for a mobile-first low-friction freelancer workforce.
 - **SP-006 / SP-008:** `freelancer-sync` API patched in S41 to read role from `app_metadata` only, removing a `user_metadata.role` fallback that constituted a privilege-escalation foothold.
 - General S41 housekeeping (pre-deploy checklist refreshed, Job Complete state acknowledged).
@@ -215,15 +221,23 @@ Before any production deployment involving auth, RLS, or data exposure changes:
 
 | Field | Value |
 |---|---|
-| Version | 2.1 |
-| Date | 6 May 2026 |
+| Version | 2.2 |
+| Date | 20 May 2026 |
 | Author | Mateusz Garwacki |
 | Approved by | [Pending approval] |
-| Next review date | 6 November 2026 |
+| Next review date | 20 November 2026 |
 | Classification | CONFIDENTIAL — Internal Use Only |
-| Supersedes | v2.0 (April 2026), v1.0 (March 2026) |
+| Supersedes | v2.1 (May 2026), v2.0 (April 2026), v1.0 (March 2026) |
 
-## Appendix C — Changes from v2.0 → v2.1
+## Appendix C — Changes from v2.1 → v2.2
+
+- **SP-006 enforcement now CI-checked.** Pre-S46, the policy claim "All views are SECURITY INVOKER" was aspirational — 15 views in `public` were still inheriting the SECURITY DEFINER default, bypassing RLS on financial data. S46 migrated them all and added `scripts/db-checks.sql` + `.github/workflows/db-checks.yml` to enforce the rule on every push.
+- **SP-006 — REVOKE-FROM-PUBLIC pattern documented.** Postgres footgun captured: revoking EXECUTE from `anon` is a no-op while `PUBLIC` retains EXECUTE. The S46 hardening of SECURITY DEFINER functions required revoking from PUBLIC first, then granting back to `authenticated` for app-callable RPCs.
+- **SP-013 — silent UPDATE/DELETE trap documented.** PostgREST returns no error when RLS blocks an UPDATE or DELETE; the row count drops to 0 and `error` stays null. S46g (quick-timer log) and S46h (WO status flip, freelancer schedule INSERT/DELETE) were three manifestations. Hardening `auditedUpdate` to surface zero-row-no-error and migrating remaining raw `.update()` call sites is on the cleanup backlog.
+- **New table boilerplate mandatory** — explicit GRANTs + ENABLE RLS + per-action policies. Pattern documented in `05_conventions.md` §20.1. Required ahead of Supabase's October 30, 2026 enforcement of default-deny for new tables in existing projects.
+- **search_path pinning required** on all new functions (search_path injection mitigation). S46 pinned 9 previously-mutable functions.
+
+## Appendix D — Changes from v2.0 → v2.1
 
 - **SP-002 rewritten** to match operational reality. Freelancer auth is now formally a 6-digit numeric PIN (was: aspirationally ≥ 8 char password, never matched what was deployed). Tradeoffs and mitigations enumerated.
 - **SP-006 / SP-008** strengthened: role reads must use `app_metadata.role` only; `user_metadata.role` is user-editable and was the source of a privilege-escalation foothold patched out of `freelancer-sync` in S41.
@@ -231,7 +245,7 @@ Before any production deployment involving auth, RLS, or data exposure changes:
 - **SP-014** new checklist item 9 — denormalisation requires maintaining trigger + watcher view, or it must not exist (S41 `tbl_quotes.quote_value` case).
 - **§8 checklist** new bullet — role reads from `app_metadata` only.
 
-## Appendix D — Changes from v1.0 → v2.0 (preserved for context)
+## Appendix E — Changes from v1.0 → v2.0 (preserved for context)
 
 - **SP-002:** removed PIN authentication for freelancers; all roles now use Supabase Auth passwords. `tbl_freelancers.pin` column dropped. (v2.0 framing — superseded by v2.1 acknowledgement that PIN auth is the actual mechanism, just stored only in Supabase Auth.)
 - **SP-004:** `src/middleware.ts` renamed to `src/proxy.ts` (Next.js 16 convention, S33).

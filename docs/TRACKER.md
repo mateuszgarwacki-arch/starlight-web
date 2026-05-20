@@ -13,7 +13,6 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 - [ ] **Share-flow size threshold** *(S40c, conditional)* — if 50MB+ PDF shares feel slow in real use, add a size check that falls back to URL-share for files >20MB. Don't ship pre-emptively.
 - [ ] **Close report — completer name for admin users** *(S41)* — `completed_by` is INT FK to `tbl_freelancers` and resolves NULL for admin sessions (Mateusz's primary `@starlightdesign.co.uk` login has no freelancer row). The audit log still captures the actual auth UUID, but the report's "Completed by [name]" line is blank. Server-side enrichment from `auth.users.raw_user_meta_data->>'name'` would close this. ~10 min.
 - [ ] **Enable leaked password protection** *(S46f)* — Supabase Dashboard → Authentication → Policies → toggle on. HaveIBeenPwned integration. 30 seconds, blocks compromised passwords on freelancer signup. Manual step (no migration possible).
-- [ ] **Schema docs catch-up** *(S46)* — `03_database_schema.md` says 55 tables; actual is 57. The four S46 migrations also introduced new policies that should be reflected. Refresh on next session pickup.
 
 ### Features deferred
 

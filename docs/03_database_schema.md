@@ -1,7 +1,7 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 14 May 2026 (S45)
-**Verified live:** Counts and view definitions queried from `information_schema` and `pg_proc` at S45 close — 57 tables, 34 views, 18 RPCs, 2 cron jobs.
+**Last updated:** 20 May 2026 (S46)
+**Verified live:** Counts queried from `information_schema` and `pg_proc` at S46 close — 57 tables, 34 views, 18 RPCs, 2 cron jobs, 217 RLS policies. Unchanged from S45 close (S46 was a security hardening / RLS tightening pass — zero schema objects added).
 
 ## Counts
 
