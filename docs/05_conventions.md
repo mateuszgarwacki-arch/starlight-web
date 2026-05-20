@@ -1,6 +1,6 @@
 # Starlight Production System — Conventions & Patterns
 
-**Last updated:** 12 May 2026 (S43)
+**Last updated:** 20 May 2026 (S46)
 
 This is the "how we do things here" document. Patterns that have been promoted from single-session lessons to permanent convention. When in doubt, this file wins.
 
@@ -355,3 +355,98 @@ Reopen clears `completed_at` and `completed_by` but keeps `close_note` — usefu
 ### 19.5 The report renders for any job
 
 `/reports/job-close/[jobId]` works on Active jobs too (header shows "Interim" instead of "Complete"). Same RPC, same structure, just labelled differently. Useful as a mid-flight cost check without committing to Complete.
+
+
+## 20. Database security and RLS (S46)
+
+S46 audit hardened the database security posture and codified the patterns below. CI enforces a subset via `scripts/db-checks.sql`.
+
+### 20.1 New tables — mandatory boilerplate
+
+Every `CREATE TABLE` must include explicit GRANTs (Supabase **October 30, 2026** enforcement removes implicit grants for new tables) and enable RLS:
+
+```sql
+CREATE TABLE public.tbl_xxx (...);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tbl_xxx TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tbl_xxx TO service_role;
+-- Do NOT grant to anon unless the table is genuinely public-readable.
+
+ALTER TABLE public.tbl_xxx ENABLE ROW LEVEL SECURITY;
+
+-- Then RLS policies — one per (table, action), TO authenticated,
+-- using get_my_role() CASE pattern (see §3).
+```
+
+Every existing table already has explicit grants — the October 30 enforcement is a non-event for the current schema. The pattern is mandatory from now on for every new table.
+
+### 20.2 Views — always SECURITY INVOKER
+
+Supabase defaults views to SECURITY DEFINER, which **bypasses RLS** on every row read through the view. Critical for views over financial data (`qry_invoice_*`, `qry_dash_*`, etc).
+
+```sql
+CREATE VIEW public.qry_xxx AS SELECT ...;
+ALTER VIEW public.qry_xxx SET (security_invoker = on);
+```
+
+Both statements always — the ALTER cannot be skipped. CI catches violations.
+
+### 20.3 Functions — pin search_path, REVOKE PUBLIC
+
+Every new function in `public` must pin `search_path` (prevents search_path injection). For SECURITY DEFINER specifically, the Postgres footgun: `REVOKE EXECUTE FROM anon` is a **no-op** while `PUBLIC` still has EXECUTE (which it does by default). Always REVOKE FROM PUBLIC, then GRANT explicitly to the roles that need it.
+
+```sql
+CREATE FUNCTION public.rpc_xxx(p_arg int)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY INVOKER  -- default; use DEFINER only with explicit reason
+STABLE
+SET search_path = pg_catalog, public
+AS $$ ... $$;
+
+-- For SECURITY DEFINER functions only:
+REVOKE EXECUTE ON FUNCTION public.rpc_xxx(int) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.rpc_xxx(int) TO authenticated;
+-- For internal-only (trigger/cron/admin) funcs: REVOKE FROM PUBLIC, do NOT GRANT to authenticated.
+```
+
+The auth helpers (`get_my_role`, `get_my_freelancer_id`, `user_role`, `user_freelancer_id`) are an intentional exception — they must remain callable by `authenticated` because RLS policies on every table evaluate them at query time. Their `authenticated_security_definer_function_executable` advisor warnings persist forever and are documented in S46f.
+
+### 20.4 RLS policies — no `USING (true)` or `WITH CHECK (true)` on writes
+
+SELECT policies may legitimately be `USING (true)` for genuinely public-read tables. INSERT/UPDATE/DELETE must always restrict — either by role check, by owner-of-row check, or both. The Supabase advisor flags violations; CI does not currently lint this directly (manual review during code review).
+
+**Defensible exceptions** (currently present, documented in S46f):
+- `tbl_audit_log` INSERT — pinned to `user_id = auth.uid()` (literally restricts; not actually "true")
+- 8 append-only "anyone can submit" patterns on attachment/photo/notification tables. These lack `created_by` columns so cannot bind WITH CHECK to the caller. Future work: add author columns and tighten — see Cleanup backlog.
+
+### 20.5 Extension placement
+
+`vector` extension currently lives in `public` (legacy install). **Do not move it** without coordinating role search_path updates AND a PostgREST reconnect — see S46e for the full rationale. For any **new** extension, install into `extensions` schema from day one:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS extensions;
+GRANT USAGE ON SCHEMA extensions TO postgres, authenticated, service_role, anon;
+CREATE EXTENSION foo SCHEMA extensions;
+```
+
+### 20.6 Regression test for cost math
+
+`SELECT public.test_rpc_job_close_report()` validates the close report's commercial numbers. Subtransaction-based — runs against the live DB but rolls back cleanly so zero test data persists. Extend the function as new cost-affecting code lands:
+
+- Add new assertions for new fields in the return JSON.
+- For new scenarios (e.g. partial completion, voided WOs), build separate `test_<scenario>` functions following the same shape — `BEGIN ... seed ... assert ... RAISE 'TEST_OK' ... EXCEPTION WHEN OTHERS ... END`.
+- CI calls these; failures fail the build.
+
+Function is `SECURITY DEFINER`, callable by `service_role` only — CI uses the service-role connection.
+
+### 20.7 CI guard
+
+`.github/workflows/db-checks.yml` runs `scripts/db-checks.sql` against the live database via psql on every push and PR to main. Enforces:
+
+1. All public views are SECURITY INVOKER.
+2. All public tables have RLS enabled.
+3. No SECURITY DEFINER function in public is PUBLIC-callable.
+4. Regression test passes.
+
+The action needs the `SUPABASE_DB_URL` repo secret (direct connection URI from Supabase dashboard, **not the pooler**). Add new checks here as conventions evolve — the SQL is purely DO blocks that RAISE on violation, so additions are mechanical.

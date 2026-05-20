@@ -12,6 +12,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **Share-flow size threshold** *(S40c, conditional)* — if 50MB+ PDF shares feel slow in real use, add a size check that falls back to URL-share for files >20MB. Don't ship pre-emptively.
 - [ ] **Close report — completer name for admin users** *(S41)* — `completed_by` is INT FK to `tbl_freelancers` and resolves NULL for admin sessions (Mateusz's primary `@starlightdesign.co.uk` login has no freelancer row). The audit log still captures the actual auth UUID, but the report's "Completed by [name]" line is blank. Server-side enrichment from `auth.users.raw_user_meta_data->>'name'` would close this. ~10 min.
+- [ ] **Enable leaked password protection** *(S46f)* — Supabase Dashboard → Authentication → Policies → toggle on. HaveIBeenPwned integration. 30 seconds, blocks compromised passwords on freelancer signup. Manual step (no migration possible).
+- [ ] **Schema docs catch-up** *(S46)* — `03_database_schema.md` says 55 tables; actual is 57. The four S46 migrations also introduced new policies that should be reflected. Refresh on next session pickup.
 
 ### Features deferred
 
@@ -57,15 +59,145 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
   - Job page lists both quotes, cost analysis sums across them.
   - `qry_dash_quote_stats` aggregates correctly.
 
+- [ ] **Author columns on append-only tables** *(S46f)* — 8 tables have INSERT policies with `WITH CHECK (true)` because there's no `created_by` column to bind against: `tbl_job_attachments`, `tbl_maintenance_asset_photos`/`_checks`/`_flags`/`_logs`, `tbl_notifications`, `tbl_workshop_requests`. Add `created_by UUID REFERENCES auth.users(id)` (or `INT REFERENCES tbl_freelancers` where appropriate) and tighten INSERT policy to `created_by = auth.uid()` (or `= get_my_freelancer_id()`). Defense in depth — the SELECT policies already restrict reads, so this isn't critical but it would silence 8 advisor warnings and prevent forged authorship.
+
+- [ ] **Harden `auditedUpdate` against silent zero-row writes** *(S46h)* — the helper currently only catches zero-row-no-error when `expectedUpdatedAt` is provided (optimistic concurrency). Without it, an RLS-blocked UPDATE returns `{ data: null, error: null }` and the caller has no signal. Fix: make `auditedUpdate` always assert that data is non-null (or that count > 0), and return `{ error: 'no rows affected — RLS or missing record' }` otherwise. Then migrate the ~90 raw `supabase.from(X).update(Y).eq(Z)` call sites in `src/` to `auditedUpdate` (or a lighter `verifiedUpdate` if they don't need audit logging). Big sweep — defer until there's a quiet session.
+
+- [ ] **Lint rule for raw `.update()` / `.delete()`** *(S46h)* — add an ESLint custom rule (or pre-commit grep in `scripts/db-checks.sql`'s sibling) that fails on `supabase.from(...).update(` or `.delete(` outside of `lib/audit.ts`. Forces all writes through the helper. Pairs with the harden-`auditedUpdate` task — do them together.
+
 ### Long-running / strategic
 
 - [ ] **Supabase Pro upgrade** *(carried)* — prerequisite for multi-PM operation. Enables daily backups + PITR. Currently on hobby tier.
 - [ ] **GitHub repo transfer** *(carried)* — move from personal account to company account. Low urgency.
 - [ ] **AI quoting/estimating agent** *(carried, strategic)* — `tbl_learnings` + Voyage AI embeddings is the foundation. Real build is once close-report data has accumulated across more closed jobs.
+- [ ] **Vector extension to `extensions` schema** *(S46e, fresh-setup-only)* — cosmetic INFO advisor warning. Moving requires ALTERing search_path on 4 API roles (`authenticator`/`authenticated`/`anon`/`service_role`, currently only `postgres` has `extensions`) AND coordinating a PostgREST reconnect. 37+ extension-owned operators + the ivfflat index depend on `vector`. Trade-off not worth the breakage surface for a cosmetic warning. If a fresh Supabase project is ever stood up (e.g. company-org transfer), install `vector` into `extensions` from day one.
 
 ---
 
 ## Session log
+
+### S46 — 20 May 2026
+
+Comprehensive security audit triggered by Supabase's email about GRANT defaults (May 30 / October 30, 2026 deadlines). Audit surfaced a much bigger backlog than the immediate cause: 15 views bypassing RLS on financial data, 12 SECURITY DEFINER functions exposed to anon, 4 RLS policies that effectively negated themselves on writes, and an `audit_log` INSERT path that allowed actor spoofing. Three security migrations, one regression-test migration, plus CI guard and conventions update. No application code changed — all work was DB-side. Vector extension move investigated and **deferred** — rationale in S46e.
+
+#### S46a — P0 security hardening
+
+**Audit findings (Supabase advisor + live database inspection):**
+
+- **15 views ran as SECURITY DEFINER**, bypassing RLS. Half contained financial data — `qry_invoice_job_rollup`, `qry_invoice_scope_costs`, `qry_invoice_wo_costs`, `qry_quote_line_badges`, `qry_dash_quote_stats`, etc. Any authenticated user could read every job's financial position regardless of role.
+- **9 functions had mutable `search_path`** — search_path injection risk if anyone could create objects in a schema they had write access to.
+- **12 SECURITY DEFINER functions had EXECUTE granted to anon and authenticated** via the implicit PUBLIC grant. `fn_create_job_overhead(p_job_id int)` was the worst — an unauthenticated POST to `/rest/v1/rpc/fn_create_job_overhead` would create overhead structures on any job. Trigger functions were exposed too.
+- **4 RLS policies effectively permissive on writes**: `tbl_maintenance_checks` UPDATE was `USING (true)` (anyone could mark anyone's PAT test passed); `tbl_maintenance_logs` UPDATE same; `tbl_tasks` UPDATE was `true` (task board free-for-all); the entire `tbl_handover_*` family (`zone_notes`, `zone_documents`, `wo_notes`, `line_overrides`) was permissive on all four operations.
+- **`tbl_audit_log` INSERT was `WITH CHECK (true)`** — any authenticated user could write any `user_id` they liked, making forged actor entries indistinguishable from real ones.
+
+**Migration: `security_hardening_p0`** — ALTERed all 15 views to `security_invoker = on`, pinned `search_path` on 9 functions, REVOKE EXECUTE on the SECURITY DEFINER funcs from anon/authenticated, tightened the 4 broken RLS policies. Audit_log INSERT now `WITH CHECK (user_id = auth.uid())`. Maintenance UPDATEs now PM/admin OR `completed_by/performed_by = get_my_freelancer_id()`. Tasks UPDATE is PM/admin only; INSERT requires `freelancer_id = get_my_freelancer_id()` for non-PMs. Handover family is PM/admin only for all writes.
+
+**Migration: `security_hardening_p0_revoke_public`** — Postgres footgun discovered mid-flight: `REVOKE EXECUTE FROM anon` is a **no-op** while `PUBLIC` still has EXECUTE. Verified: `has_function_privilege('anon', ...)` returned `true` for every "revoked" function. Fix: REVOKE EXECUTE FROM PUBLIC, then GRANT back to `authenticated` for the 3 app-callable RPCs (`rpc_active_workers`, `rpc_confirm_wo_completion`, `rpc_undo_wo_completion`). Left the 5 internal-only funcs without anon/authenticated EXECUTE. Triggers continue to fire because Postgres invokes trigger bodies internally regardless of caller EXECUTE perms.
+
+#### S46b — P1 cleanup: auth helpers + intent documentation
+
+**Migration: `security_hardening_p1_helpers_and_docs`**
+
+The auth helpers `get_my_role`, `get_my_freelancer_id`, `user_role`, `user_freelancer_id` are SECURITY DEFINER by design (RLS policies on every table call them). They have to remain callable by `authenticated` or every RLS check breaks. But the advisor flagged them as "callable by anon" — true via the default PUBLIC grant, even though they return NULL for anon (no `auth.uid()`) so no real exposure.
+
+Fix: REVOKE EXECUTE FROM PUBLIC + anon explicitly; keep authenticated. Cleared 4 anon advisor warnings. The 4 `authenticated_security_definer_function_executable` warnings on the same helpers are intentional and permanent — RLS needs them.
+
+Also added `COMMENT ON TABLE public.tbl_material_spec_defs` documenting its intentional service-role-only state (RLS enabled, no policies = nobody but service_role can read). Future-Claude won't have to re-derive the intent.
+
+#### S46c — Regression test fixture for `rpc_job_close_report`
+
+**Migration: `regression_test_rpc_job_close_report`** (plus two iterative fixes for memory-stale column names).
+
+New function `public.test_rpc_job_close_report()` returning TEXT `'OK: ...'` on pass or RAISING with the failing assertion's diagnostic on fail. Pattern: a single PL/pgSQL function seeds a known job/scope/quote/WO/time-entry/BOM fixture, calls `rpc_job_close_report`, asserts six commercial numbers (`quoted`, `labour_hours`, `labour_cost`, `material_cost_planned/actual/committed`), then raises `'TEST_OK'` to roll back the inner subtransaction. Successful runs leave **zero data behind** — the subtransaction rollback handles cleanup regardless of pass/fail.
+
+CI calls `SELECT public.test_rpc_job_close_report()`; the regression test now locks down the cost math the directors will be reading. Extend the function as new cost-affecting code lands (it lives in the DB next to the RPC it tests).
+
+**Two corrections discovered during build** (folded into memory note):
+- `tbl_wo_time_entries` timestamp columns are `*_timestamp` suffixed (`system_start_timestamp` etc), **not** `*_start`/`*_end` as the long-standing memory had them.
+- `tbl_wo_bom.job_id` is a **denormalised** column — `qry_bom_enriched` filters on it directly, so it must be set on INSERT or BOM rows disappear from every cost view that goes through the enrichment view.
+
+#### S46d — CI guard + conventions
+
+`scripts/db-checks.sql` and `.github/workflows/db-checks.yml` shipped to enforce the highest-leverage conventions on every push and PR to main:
+
+1. All public views must be `security_invoker = on`.
+2. All public tables must have RLS enabled.
+3. No SECURITY DEFINER function in public may be callable by PUBLIC.
+4. `rpc_job_close_report` regression test must pass.
+
+Setup: one repo secret needed — `SUPABASE_DB_URL` (direct connection URI from Supabase dashboard, **not the pooler**). Without it, the action fails fast with a clear error. With it, CI catches the regressions that bit this audit before they can ship again.
+
+`05_conventions.md` §20 (new) codifies the GRANT-then-RLS pattern for new tables (the Supabase October 30 enforcement), the SECURITY INVOKER mandate on views, the search_path requirement, the REVOKE-FROM-PUBLIC-then-GRANT pattern for SECURITY DEFINER functions, and the rule against `USING (true)` / `WITH CHECK (true)` on writes.
+
+#### S46e — Deferred: vector extension move
+
+Supabase advisor flagged `vector` extension installed in public schema (recommended pattern: dedicated `extensions` schema). Investigated and **deferred**: only the `postgres` role currently has `extensions` in its `search_path`. Moving `vector` would require ALTERing the `search_path` on four API roles (`authenticator`, `authenticated`, `anon`, `service_role`) **and** coordinating a PostgREST reconnect for the change to take effect for live clients. Dependency surface: 37+ extension-owned operator/function references plus the ivfflat index on `tbl_learnings.embedding`. Trade-off: substantial coordination risk for a cosmetic INFO-level warning with "no operational impact" (advisor's own framing). If a fresh Supabase setup is ever done, install vector into `extensions` from day one — backlog item logged.
+
+#### S46f — Known remaining advisor noise (intentional, documented)
+
+- `authenticated_security_definer_function_executable` on `get_my_role`, `get_my_freelancer_id`, `user_role`, `user_freelancer_id`, `rpc_active_workers`, `rpc_confirm_wo_completion`, `rpc_undo_wo_completion` — load-bearing for RLS or app code. Cannot be changed without breaking core functionality.
+- 8 "always-true" INSERT policies on append-only tables (`tbl_job_attachments`, `tbl_maintenance_asset_photos`/`_checks`/`_flags`/`_logs`, `tbl_notifications`, `tbl_workshop_requests`) — defensible "anyone can submit" pattern; defense-in-depth would require adding `created_by` columns. Backlogged.
+- `extension_in_public` for `vector` — see S46e.
+- `auth_leaked_password_protection` disabled — Supabase Dashboard toggle, not a code change. Backlogged.
+
+#### "If something breaks" — symptom → migration map
+
+| Symptom in app | Likely cause | Where to look / verify |
+|---|---|---|
+| Financial dashboard shows £0 / "no data" for a user who used to see numbers | Views now respect RLS via INVOKER | Check `app_metadata.role` for the user; views like `qry_invoice_*` now respect RLS |
+| Freelancer can't mark maintenance check complete | `tbl_maintenance_checks` UPDATE policy | Verify `completed_by` set to their `freelancer_id` |
+| Freelancer can't save a task | `tbl_tasks` INSERT WITH CHECK | Verify `freelancer_id` = `get_my_freelancer_id()` |
+| PM can't edit handover content | `tbl_handover_*` policies — PM/admin only | Verify role is `production_manager` or `admin` in `app_metadata` |
+| Audit log writes fail | `tbl_audit_log` INSERT requires `user_id = auth.uid()` | Verify `auditedInsert` sets `user_id` from session |
+| `fn_create_job_overhead` not callable from app | Trigger-only now | If app calls it directly, GRANT back to authenticated |
+| `rpc_active_workers` / WO confirm/undo fails for anon | Authenticated-only now | Expected behaviour |
+| Embedding search broken | Not S46 — vector extension untouched | Check separately |
+| CI db-checks failing | New view without `security_invoker = on`, or new SECURITY DEFINER without REVOKE PUBLIC | Read the psql output; the failing check names the violator |
+
+Recovery for any of these: each migration is in `apply_migration` form and individually revertable via Supabase MCP. `git revert` does nothing useful (no code change shipped) — write a reverse migration.
+
+#### S46g — Hotfix: tbl_tasks UPDATE policy broke quick-timer logging
+
+**Symptom Mateusz reported in real use:** "quick timer doesn't log — when i want to log in quick timer, it doesn't stop, but weirdly it shows in my notifications on a dashboard — but nowhere else."
+
+**Root cause:** S46a tightened `tbl_tasks` UPDATE to PM/admin only, based on the documented "freelancer submits via INSERT, PM reviews via UPDATE" pattern. Missed the workflow in `/m/me/page.tsx → handleLogTimer`:
+- **Path A** (route to WO at log time): freelancer UPDATEs their own task `in_progress → routed`.
+- **Path B** (default, file as ad-hoc): freelancer UPDATEs their own task `in_progress → pending`.
+- Plus `EditTaskSheet` lets freelancers edit their own pending/approved tasks.
+
+All three are freelancer-initiated UPDATEs on `tbl_tasks`, all blocked by the new PM-only policy.
+
+**Why it manifested as "shows in notifications but nowhere else":** the failure was **silent**. PostgREST's UPDATE endpoint does NOT return an error when RLS blocks the write — it just returns 0 rows affected with `error: null`. The client's `if (error) { toast.error... }` branch never fires; code proceeds to the `notify()` call, which writes to `tbl_notifications` (different table, INSERT policy still permissive), so the notification appears. UI cleared the activeTimer state locally, but on reload the task is still `status='in_progress'` in the DB and the timer comes back.
+
+**Fix (migration `fix_tbl_tasks_update_policy_freelancer_own`):** PM/admin OR `freelancer_id = get_my_freelancer_id()` for both USING and WITH CHECK. Restores the working freelancer flows while keeping the core security boundary (Freelancer A cannot edit Freelancer B's tasks).
+
+**Generalisable lesson — added to S46 recovery table above:**
+
+> When a freelancer-initiated UPDATE fails silently (no error, no DB change, side-effects like notifications appear): **the RLS UPDATE policy is too restrictive**. PostgREST does not surface RLS denials on UPDATEs the way it does on INSERTs. The same pattern could lurk on `tbl_maintenance_checks` UPDATE (gated on `completed_by = my_freelancer_id`), `tbl_maintenance_logs` UPDATE (gated on `performed_by = my_freelancer_id`), and the `tbl_handover_*` family (PM/admin only). If a freelancer reports a silent failure on any of those, apply the same fix shape: USING `PM/admin OR own_row_owner_column = get_my_freelancer_id()`.
+
+**Why this trap was hidden:** the audit-log helper (`auditedUpdate`) DOES return error info because it explicitly checks `.maybeSingle()` on the update query. But `handleLogTimer` uses a raw `supabase.from(...).update(...)` without checking `.data` is non-null. Defense-in-depth fix would be to check `data` not just `error`, but the simpler answer is "don't write RLS policies that block legitimate workflows".
+
+#### S46h — Sweep: two more silent failures + an unchecked error
+
+**Trigger:** Mateusz, after S46g: *"i hate silent errors — do a sweep now."*
+
+Sweep methodology: Python walk of `src/app/m/**` finding every `supabase.from(X).(update|insert|delete|upsert)(...)`, cross-referenced against the current RLS UPDATE/INSERT/DELETE policy for each table to identify freelancer-blocked writes.
+
+**Three confirmed bugs (one migration `fix_silent_failures_wo_status_and_schedule`):**
+
+1. **`m/task/page.tsx:165` — `tbl_work_orders` UPDATE blocked.** Freelancer starts a WO timer; the flow tries to flip WO status to `In-Progress` if it's `Ready`/`Not-Started`. RLS policy was PM/admin/foreman only. Pre-dates S46 — has been broken silently for freelancer users since whenever the WO status transitions were wired up. PMs (like Mateusz) didn't see it because the policy matches their role.
+
+   Fix: `USING (PM/admin/foreman OR (freelancer AND status IN ('Ready','Not-Started')))`, `WITH CHECK (PM/admin/foreman OR (freelancer AND status = 'In-Progress'))`. Allows the specific transition; doesn't widen further.
+
+2. **`m/schedule/page.tsx:254` — `tbl_freelancer_schedule` DELETE blocked.** Freelancer taps "restore availability" on a day they marked Unavailable; DELETE was PM/admin only. Silent fail (DELETE behaves like UPDATE — 0 rows deleted, no error).
+
+   Fix: USING `PM/admin OR (freelancer AND own row AND status='Unavailable')`. Status restriction prevents a freelancer deleting PM-made bookings.
+
+3. **`m/schedule/page.tsx:249` — `tbl_freelancer_schedule` INSERT blocked.** Freelancer marks day unavailable; INSERT was PM/admin/foreman only. PostgREST DOES surface RLS denials on INSERT (the silent-UPDATE problem doesn't apply to INSERT), but the client code was `await supabase.from(...).insert({...})` without checking `error`, so toast said success while nothing happened.
+
+   Fix: WITH CHECK `PM/admin/foreman OR (freelancer AND own AND status='Unavailable')`. Same status restriction as DELETE.
+
+**The bigger pattern (not fixed in S46h — backlog):** roughly 90 of the 96 `.update()` call sites in `src/` are raw `supabase.from(...).update(...).eq(...)` without inspecting returned data. Most are PM-callable on PM-permissive tables so they work today, but they're all latent silent-fails if RLS ever tightens on those tables. The `auditedUpdate` helper has the same gap unless callers pass `expectedUpdatedAt`. Backlog item logged: harden `auditedUpdate` to surface zero-rows-no-error and migrate raw call sites to it.
 
 ### S45 — 14 May 2026
 

@@ -1,0 +1,31 @@
+name: DB conventions check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  db-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Run DB conventions check
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERROR: SUPABASE_DB_URL secret not set."
+            echo "Add it in: GitHub repo Settings → Secrets and variables → Actions → New repository secret."
+            echo "Value: Supabase Dashboard → Project Settings → Database → Connection string (URI, direct connection — not pooler)."
+            exit 1
+          fi
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db-checks.sql

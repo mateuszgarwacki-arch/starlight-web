@@ -1,8 +1,17 @@
-docs: S45 session close
+S46: security audit + RLS hardening (docs + CI guard + 4 hotfixes)
 
-- Verified live schema counts at session close: 57 tables, 34 views,
-  18 RPCs, 2 cron jobs (unchanged across S44-S45)
-- Corrected S44 / S45 session-entry dates 12 -> 14 May 2026
-- Added session-close summary line to the S45 TRACKER entry
+DB-only changes (applied via Supabase MCP, no app code):
+- security_hardening_p0 (views to security_invoker, search_paths pinned, RLS tightened on handover/maintenance/tasks/audit_log)
+- security_hardening_p0_revoke_public (REVOKE EXECUTE FROM PUBLIC on SECURITY DEFINER funcs)
+- security_hardening_p1_helpers_and_docs (auth-helper anon revoke, tbl_material_spec_defs comment)
+- regression_test_rpc_job_close_report (+ two iterative column-name fixes)
+- fix_tbl_tasks_update_policy_freelancer_own (S46g hotfix: quick-timer log was silently failing)
+- fix_silent_failures_wo_status_and_schedule (S46h: 3 more silent freelancer-side failures fixed)
 
-Docs-only — no code, no deploy.
+Repo additions:
+- docs/TRACKER.md: S46/S46g/S46h session entries + cleanup backlog items
+- docs/05_conventions.md: section 20 (DB security and RLS conventions)
+- scripts/db-checks.sql: CI conventions enforcement (4 checks)
+- .github/workflows/db-checks.yml: GitHub Action (needs SUPABASE_DB_URL secret)
+
+Symptom-to-migration recovery table is in TRACKER S46. The general trap to remember: PostgREST returns no error when RLS blocks an UPDATE or DELETE, so write paths can silently fail. See S46g and S46h for examples.
