@@ -198,8 +198,11 @@ export default function MobileProfilePage() {
       } else {
         // Path B: no WO chosen. Files as an ad-hoc task so the PM can decide
         // whether it routes to a WO, counts as overhead, or gets rejected.
-        // The freelancer's notes become the task title â€” required, since a
+        // The freelancer's notes become the task title — required, since a
         // PM looking at an empty-titled task is useless. matches /m/task UX.
+        // category='other' is the honest signal: freelancer didn't categorise,
+        // PM re-routes in /review/inbox. (NOT_NULL on tbl_tasks.category — see
+        // CHECK constraint: job_work | maintenance | workshop_general | other.)
         if (!data.notes || !data.notes.trim()) {
           toast.error("Add a short description so the PM knows what it was for");
           setBackfillSubmitting(false);
@@ -208,6 +211,7 @@ export default function MobileProfilePage() {
         const result = await auditedInsert(ctx, "tbl_tasks", {
           freelancer_id: myId,
           title: data.notes.trim(),
+          category: "other",
           hours: data.hours,
           worked_date: targetDate,
           status: "pending",
@@ -786,9 +790,10 @@ export default function MobileProfilePage() {
         woOptions={woOptions}
       />
 
-      {/* Backfill sheet — adds a flagged time entry for a past day. Reuses
-          LogSheet but forces WO selection (handler rejects without it) and
-          relabels the picker so the freelancer knows it's required. */}
+      {/* Backfill sheet — adds a flagged entry for a past day. WO is optional:
+          if picked, writes to tbl_wo_time_entries with a [Backfill] flag.
+          If not picked, files as an ad-hoc task (category='other') for the
+          PM to triage in /review/inbox. */}
       <LogSheet
         open={!!backfillTarget && backfillTarget.mode === "add"}
         onClose={() => setBackfillTarget(null)}

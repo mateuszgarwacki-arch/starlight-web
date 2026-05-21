@@ -1,13 +1,17 @@
-docs: S46 session-close — schema date, security policy v2.2, backlog cleanup
+fix(mobile): day-view "Add entry" without WO no longer crashes
 
-- 03_database_schema.md: Last updated bumped to S46; counts re-verified
-  live and unchanged (57/34/18/2 — S46 added zero schema objects).
-- 04_security_policy.md: v2.1 → v2.2. SP-006 enforcement now CI-checked
-  via scripts/db-checks.sql; PostgREST silent UPDATE/DELETE trap
-  documented under SP-013; new-table GRANT+RLS pattern noted for the
-  Oct 30 Supabase enforcement. New Appendix C — changes from v2.1→v2.2.
-  Existing appendices C/D renumbered to D/E.
-- TRACKER.md: removed obsolete "Schema docs catch-up" backlog item
-  (premise was wrong — schema doc already showed 57 tables).
+Path B of handleBackfillSubmit (no WO chosen) was inserting into
+tbl_tasks without `category`, which is NOT NULL with no default —
+Postgres rejected with violates not-null constraint.
 
-No code changes, no Vercel impact.
+Now defaults to category='other'. The freelancer didn't categorise,
+so 'other' is the honest signal: PM triages in /review/inbox (which
+already handles re-routing to job_work / workshop_general / a WO).
+
+Picked 'other' over 'workshop_general' on purpose: workshop_general
+should mean a freelancer actively chose "this was workshop housekeeping",
+not the default for "I didn't tell you what bucket this is".
+
+Also: stale comment above the backfill LogSheet claimed the handler
+rejects without a WO. It hasn't for a while — picker label already
+reads "Work Order (optional)". Comment now matches reality.
