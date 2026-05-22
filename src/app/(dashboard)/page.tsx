@@ -130,7 +130,7 @@ export default function DashboardPage() {
                 const dotCls = isRed ? "bg-starlight-red" : isAmber ? "bg-starlight-amber" : "bg-starlight-blue animate-pulse";
                 const durStr = hrs < 1 ? `${Math.round(hrs * 60)}m` : `${hrs.toFixed(1)}h`;
                 const tooltip = w.kind === "task"
-                  ? `Quick timer · ${w.title || "untitled"} · started ${new Date(w.started_at).toLocaleString("en-GB")}`
+                  ? `Quick timer · ${w.task_title || "untitled"} · started ${new Date(w.started_at).toLocaleString("en-GB")}`
                   : `WO #${w.work_order_id} · started ${new Date(w.started_at).toLocaleString("en-GB")}`;
                 return (
                   <span key={`${w.kind}-${w.id}`} title={tooltip} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${pillCls}`}>

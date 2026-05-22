@@ -1,23 +1,33 @@
-Active-now banner shows quick timers + phantom-timer janitor
+Active workers banner: show both WO timers and quick timers
 
-DB:
-- rpc_dashboard_data.activeWorkers now UNIONs tbl_wo_time_entries and
-  tbl_tasks (status='in_progress'). Quick timers were previously
-  invisible to the dashboard — only the Workshop page saw them.
-- New fields per worker: kind ('wo'|'task'), title, started_at.
-  Existing: id, freelancer_id, work_order_id, name.
-- rpc_auto_close_phantom_timers(threshold_hours numeric DEFAULT 16):
-  closes any clock open beyond threshold. Quick timers go to
-  status='pending' (review inbox); WO timers get system_end_timestamp
-  set + flag_note. Both leave hours NULL — PM must verify hours
-  before payroll. Emits one summary notification.
-- pg_cron 'phantom-timer-cleanup-daily' at 01:00 UTC daily.
+Problem: rpc_dashboard_data.activeWorkers only queried
+tbl_wo_time_entries, so quick timers (tbl_tasks status=in_progress)
+were invisible on the / dashboard banner. Two phantoms (Mateusz Filar
+~81h, Radoslaw Kowalik ~405h) had been running unnoticed.
 
-UI:
-- /(dashboard)/page.tsx active-now banner now shows duration per
-  pill, amber tint >12h, red tint + warning glyph >24h. Whole banner
-  is a Link to /workshop where the stop controls live.
+Fix (3 parts):
 
-Backfill: ran the janitor once. Closed Mateusz Filar (81.5h quick
-timer) and Radoslaw Kowalik (406.1h quick timer). Both visible in
-review inbox, hours pending.
+1. rpc_dashboard_data: activeWorkers now UNIONs WO timers and
+   quick timers. Adds kind ('wo'|'task'), id, started_at,
+   task_title. Sorted oldest-first so phantoms surface first.
+
+2. Dashboard UI: each badge shows duration; colour escalates
+   blue ≤12h, amber 12-24h, red >24h (phantom marker ⚠).
+   Quick timers tagged " QT" so they're distinguishable from
+   WO timers in the pill itself. Whole banner wraps in a Link
+   to /workshop where stop controls live.
+
+3. Phantom-timer patrol (new pg_cron job, daily 04:00 UTC):
+   rpc_close_phantom_timers() auto-closes any timer running
+   >16h. WO entries get system_end_timestamp=NOW(),
+   actual_hours=0, flag_note explaining (surfaces in flags
+   banner). Quick timers get status='pending', hours=0,
+   review_note explaining (surfaces in PM inbox). Caps phantom
+   accrual at ~24h max going forward.
+
+Existing phantoms (Filar 81h, Kowalik 405h) will be caught by
+tonight's run unless stopped manually first from /workshop.
+
+Files: src/app/(dashboard)/page.tsx
+Migrations: dashboard_active_workers_include_quick_timers,
+            phantom_timer_patrol
