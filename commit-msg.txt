@@ -1,13 +1,23 @@
-Fix multi-page cutlist in job traveller — render every PDF page
+Active-now banner shows quick timers + phantom-timer janitor
 
-- tbl_wo_documents cut_list PDFs: read numPages via pdf.js at data-load
-  time so each PDF page becomes its own traveller page.
-- pdfPageUrls[doc_id] now contains one URL per page (was always [url]
-  regardless of page count, so anything past page 1 was silently dropped).
-- ImagePage takes a pdfPage prop and renders that page (was hardcoded
-  to pdf.getPage(1)).
-- Multi-page cutlists labelled "Cut list (n/m)" so it's obvious in print.
-- Falls back to length 1 if pdf.js isn't ready or getDocument fails,
-  preserving the previous behaviour on error.
+DB:
+- rpc_dashboard_data.activeWorkers now UNIONs tbl_wo_time_entries and
+  tbl_tasks (status='in_progress'). Quick timers were previously
+  invisible to the dashboard — only the Workshop page saw them.
+- New fields per worker: kind ('wo'|'task'), title, started_at.
+  Existing: id, freelancer_id, work_order_id, name.
+- rpc_auto_close_phantom_timers(threshold_hours numeric DEFAULT 16):
+  closes any clock open beyond threshold. Quick timers go to
+  status='pending' (review inbox); WO timers get system_end_timestamp
+  set + flag_note. Both leave hours NULL — PM must verify hours
+  before payroll. Emits one summary notification.
+- pg_cron 'phantom-timer-cleanup-daily' at 01:00 UTC daily.
 
-Affects: src/app/traveller/page.tsx
+UI:
+- /(dashboard)/page.tsx active-now banner now shows duration per
+  pill, amber tint >12h, red tint + warning glyph >24h. Whole banner
+  is a Link to /workshop where the stop controls live.
+
+Backfill: ran the janitor once. Closed Mateusz Filar (81.5h quick
+timer) and Radoslaw Kowalik (406.1h quick timer). Both visible in
+review inbox, hours pending.

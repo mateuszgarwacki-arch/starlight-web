@@ -110,18 +110,40 @@ export default function DashboardPage() {
         <StatCard label="Outstanding Hours" value={`${Math.round(totalHrs)}h`} icon={Users} color="text-starlight-green" href="/capacity" />
       </div>
 
-      {/* Active workers banner */}
+      {/* Active workers banner — shows both WO timers and quick timers.
+          Phantom thresholds: amber >12h, red >24h. Click the card to
+          go to /workshop where stop controls live. */}
       {activeWorkers.length > 0 && (
-        <div className="card px-5 py-3 border-l-4 border-l-starlight-blue">
-          <div className="flex items-center gap-2 mb-1"><Zap className="h-4 w-4 text-starlight-blue" /><span className="text-xs font-semibold text-navy">Active Now ({activeWorkers.length})</span></div>
-          <div className="flex flex-wrap gap-2">
-            {activeWorkers.map((w: any) => (
-              <span key={w.entry_id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-starlight-blue/10 text-starlight-blue font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-starlight-blue animate-pulse" />{w.name}
-              </span>
-            ))}
+        <Link href="/workshop" className="block">
+          <div className="card px-5 py-3 border-l-4 border-l-starlight-blue hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-1"><Zap className="h-4 w-4 text-starlight-blue" /><span className="text-xs font-semibold text-navy">Active Now ({activeWorkers.length})</span></div>
+            <div className="flex flex-wrap gap-2">
+              {activeWorkers.map((w: any) => {
+                const hrs = w.started_at ? (Date.now() - new Date(w.started_at).getTime()) / 3600000 : 0;
+                const isRed = hrs > 24;
+                const isAmber = hrs > 12 && !isRed;
+                const pillCls = isRed
+                  ? "bg-starlight-red/15 text-starlight-red"
+                  : isAmber
+                  ? "bg-starlight-amber/15 text-starlight-amber"
+                  : "bg-starlight-blue/10 text-starlight-blue";
+                const dotCls = isRed ? "bg-starlight-red" : isAmber ? "bg-starlight-amber" : "bg-starlight-blue animate-pulse";
+                const durStr = hrs < 1 ? `${Math.round(hrs * 60)}m` : `${hrs.toFixed(1)}h`;
+                const tooltip = w.kind === "task"
+                  ? `Quick timer · ${w.title || "untitled"} · started ${new Date(w.started_at).toLocaleString("en-GB")}`
+                  : `WO #${w.work_order_id} · started ${new Date(w.started_at).toLocaleString("en-GB")}`;
+                return (
+                  <span key={`${w.kind}-${w.id}`} title={tooltip} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${pillCls}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${dotCls}`} />
+                    {w.name}
+                    <span className="opacity-75 text-[10px]">· {durStr}{w.kind === "task" ? " QT" : ""}</span>
+                    {isRed && <span aria-label="phantom timer">⚠</span>}
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </Link>
       )}
 
       {/* Two-column: Procurement + Flags */}
