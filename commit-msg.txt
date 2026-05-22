@@ -1,17 +1,13 @@
-fix(mobile): day-view "Add entry" without WO no longer crashes
+Fix multi-page cutlist in job traveller — render every PDF page
 
-Path B of handleBackfillSubmit (no WO chosen) was inserting into
-tbl_tasks without `category`, which is NOT NULL with no default —
-Postgres rejected with violates not-null constraint.
+- tbl_wo_documents cut_list PDFs: read numPages via pdf.js at data-load
+  time so each PDF page becomes its own traveller page.
+- pdfPageUrls[doc_id] now contains one URL per page (was always [url]
+  regardless of page count, so anything past page 1 was silently dropped).
+- ImagePage takes a pdfPage prop and renders that page (was hardcoded
+  to pdf.getPage(1)).
+- Multi-page cutlists labelled "Cut list (n/m)" so it's obvious in print.
+- Falls back to length 1 if pdf.js isn't ready or getDocument fails,
+  preserving the previous behaviour on error.
 
-Now defaults to category='other'. The freelancer didn't categorise,
-so 'other' is the honest signal: PM triages in /review/inbox (which
-already handles re-routing to job_work / workshop_general / a WO).
-
-Picked 'other' over 'workshop_general' on purpose: workshop_general
-should mean a freelancer actively chose "this was workshop housekeeping",
-not the default for "I didn't tell you what bucket this is".
-
-Also: stale comment above the backfill LogSheet claimed the handler
-rejects without a WO. It hasn't for a while — picker label already
-reads "Work Order (optional)". Comment now matches reality.
+Affects: src/app/traveller/page.tsx

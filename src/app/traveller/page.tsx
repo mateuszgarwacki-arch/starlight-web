@@ -260,8 +260,22 @@ export default function TravellerPage() {
             imageUrls[doc.doc_id] = url;
           }
           if (doc.doc_type === "cut_list") {
-            // For PDFs, we store the download URL and render via pdf.js
-            pdfPageUrls[doc.doc_id] = [url];
+            // For PDFs, fetch page count so each PDF page becomes its own
+            // traveller page. The URL is identical for every page; ImagePage
+            // renders the page passed via the pdfPage prop.
+            let pageCount = 1;
+            try {
+              // @ts-ignore - loaded from CDN in traveller/layout.tsx
+              const pdfjsLib = (window as any).pdfjsLib;
+              if (pdfjsLib) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+                const pdfDoc = await pdfjsLib.getDocument(url).promise;
+                pageCount = pdfDoc.numPages || 1;
+              }
+            } catch (e) {
+              console.error("Cut list page count failed for doc", doc.doc_id, e);
+            }
+            pdfPageUrls[doc.doc_id] = Array(pageCount).fill(url);
           }
         } catch (_e) {
           // Skip unavailable files
@@ -542,16 +556,17 @@ export default function TravellerPage() {
       </Page>
     );
 
-    // Cut list pages (PDF rendered as images)
+    // Cut list pages (PDF rendered as images, one traveller page per PDF page)
     for (const cl of cutLists) {
       const urls = data.pdfPageUrls[cl.doc_id];
       if (urls && urls.length > 0) {
         for (let pi = 0; pi < urls.length; pi++) {
           pageNum++;
           const rKey = `pdf-${cl.doc_id}-${pi}`;
+          const labelText = urls.length > 1 ? `Cut list (${pi + 1}/${urls.length})` : "Cut list";
           pages.push(
             <Page key={rKey} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-              <ImagePage url={urls[pi]} fileName={cl.file_name} label="Cut list" rotationKey={rKey} rotation={rotations[rKey] || 0} onRotate={() => toggleRotation(rKey)} isPdf />
+              <ImagePage url={urls[pi]} fileName={cl.file_name} label={labelText} rotationKey={rKey} rotation={rotations[rKey] || 0} onRotate={() => toggleRotation(rKey)} isPdf pdfPage={pi + 1} />
             </Page>
           );
         }
@@ -1011,10 +1026,11 @@ function ScopeOverview({ scope, jobItems, drawingCount, woCount, daysRemaining }
    Image Page (drawings, references, cut list PDF pages)
    ================================================================ */
 
-function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPdf }: {
+function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPdf, pdfPage }: {
   url: string; fileName: string; label: string;
   rotationKey: string; rotation: number; onRotate: () => void;
   isPdf?: boolean;
+  pdfPage?: number;
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1048,7 +1064,7 @@ function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPd
         if (!pdfjsLib) return;
         pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
         const pdf = await pdfjsLib.getDocument(url).promise;
-        const page = await pdf.getPage(1);
+        const page = await pdf.getPage(pdfPage || 1);
         const viewport = page.getViewport({ scale: 2.0 });
         const canvas = canvasRef.current!;
         canvas.width = viewport.width;
@@ -1065,7 +1081,7 @@ function ImagePage({ url, fileName, label, rotationKey, rotation, onRotate, isPd
       }
     };
     renderPdf();
-  }, [isPdf, url]);
+  }, [isPdf, url, pdfPage]);
 
   const effectiveRotation = rotation;
   const isRotated = effectiveRotation === 90 || effectiveRotation === 270;
