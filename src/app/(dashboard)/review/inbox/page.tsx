@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { getAuditContext } from "@/lib/audit";
+import { getAuditContext, auditedUpdate } from "@/lib/audit";
 import { formatHours } from "@/lib/format-hours";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
@@ -26,6 +26,12 @@ export default function ReviewInboxPage() {
   const [actionType, setActionType] = useState<string>("");
   const [actionNote, setActionNote] = useState("");
   const [actionSubmitting, setActionSubmitting] = useState(false);
+  // Per-task hours edits: PM can override claimed_hours inline before
+  // Approve/Route, so phantoms (auto-closed to 0h) can be corrected
+  // without leaving the inbox.
+  const [editedHours, setEditedHours] = useState<Record<number, number>>({});
+  const effectiveHours = (task: InboxItem) =>
+    editedHours[task.item_id] ?? task.claimed_hours ?? 0;
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -48,20 +54,35 @@ export default function ReviewInboxPage() {
   useRealtimeRefresh(["tbl_tasks", "tbl_workshop_requests"], loadInbox);
 
   const openRouteModal = (task: InboxItem) => {
-    setRoutingTask(task);
+    // If PM has edited hours inline, push the edit into the modal so
+    // routing carries the corrected value through to the WO entry.
+    const edited = editedHours[task.item_id];
+    setRoutingTask(edited != null ? { ...task, claimed_hours: edited } : task);
   };
 
   const handleApproveOverhead = async (task: InboxItem, note: string) => {
     const ctx = await getAuditContext(supabase);
-    await supabase.from("tbl_tasks").update({ status: "approved_overhead", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: note || null }).eq("task_id", task.item_id);
-    await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: note || "Approved as overhead", severity: "info", freelancerId: task.freelancer_id });
-    toast.success("Approved as overhead"); loadInbox();
+    const hrs = effectiveHours(task);
+    await auditedUpdate(ctx, "tbl_tasks", task.item_id, {
+      status: "approved_overhead",
+      hours: hrs,
+      reviewed_by: ctx.userId,
+      reviewed_at: new Date().toISOString(),
+      review_note: note || null,
+    });
+    await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: note || `Approved as overhead (${hrs}h)`, severity: "info", freelancerId: task.freelancer_id });
+    toast.success(`Approved as overhead — ${hrs}h`); loadInbox();
   };
 
   const handleRejectTask = async (task: InboxItem, note: string) => {
     if (!note.trim()) { toast.error("Rejection needs a reason"); return; }
     const ctx = await getAuditContext(supabase);
-    await supabase.from("tbl_tasks").update({ status: "rejected", reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: note }).eq("task_id", task.item_id);
+    await auditedUpdate(ctx, "tbl_tasks", task.item_id, {
+      status: "rejected",
+      reviewed_by: ctx.userId,
+      reviewed_at: new Date().toISOString(),
+      review_note: note,
+    });
     await notify({ supabase, type: "task_reviewed", title: `Task rejected: ${task.title}`, detail: note, severity: "warning", freelancerId: task.freelancer_id });
     toast.success("Task rejected"); loadInbox();
   };
@@ -115,7 +136,34 @@ export default function ReviewInboxPage() {
                     {item.description && <p className="text-xs text-muted mt-0.5">{item.description}</p>}
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
                       <span>{item.freelancer_name}</span>{item.job_number && <span className="font-mono">{item.job_number} — {item.job_name}</span>}
-                      {item.claimed_hours != null && <span className="font-semibold text-navy">{formatHours(item.claimed_hours)}</span>}{item.worked_date && <span>{formatDate(item.worked_date)}</span>}
+                      {isTask ? (
+                        <label className="inline-flex items-center gap-1" title="Edit hours before approving or routing">
+                          <span className="text-muted">Hours:</span>
+                          <input
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={editedHours[item.item_id] ?? item.claimed_hours ?? 0}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              setEditedHours((p) => ({ ...p, [item.item_id]: isNaN(v) ? 0 : v }));
+                            }}
+                            className={
+                              "w-14 px-1.5 py-0.5 border rounded text-xs font-semibold text-navy bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue " +
+                              (editedHours[item.item_id] != null && editedHours[item.item_id] !== (item.claimed_hours ?? 0)
+                                ? "border-starlight-amber"
+                                : "border-subtle")
+                            }
+                            aria-label="Hours"
+                          />
+                          {editedHours[item.item_id] != null && editedHours[item.item_id] !== (item.claimed_hours ?? 0) && (
+                            <span className="text-[9px] text-starlight-amber" title={`Original: ${item.claimed_hours ?? 0}h`}>edited</span>
+                          )}
+                        </label>
+                      ) : (
+                        item.claimed_hours != null && <span className="font-semibold text-navy">{formatHours(item.claimed_hours)}</span>
+                      )}
+                      {item.worked_date && <span>{formatDate(item.worked_date)}</span>}
                       <span>{new Date(item.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                   </div>

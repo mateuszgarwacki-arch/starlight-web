@@ -1,33 +1,26 @@
-Active workers banner: show both WO timers and quick timers
+Workshop Inbox: editable hours before approve/route
 
-Problem: rpc_dashboard_data.activeWorkers only queried
-tbl_wo_time_entries, so quick timers (tbl_tasks status=in_progress)
-were invisible on the / dashboard banner. Two phantoms (Mateusz Filar
-~81h, Radoslaw Kowalik ~405h) had been running unnoticed.
+Problem: PM had to approve a task first, then leave the inbox, hunt
+down the resulting entry, and edit the hours separately. With the
+phantom-timer patrol now auto-closing forgotten timers to 0h, this
+shape became actively painful — every patrolled task arrives in the
+inbox needing an hours correction.
 
-Fix (3 parts):
+Fix:
+- Inline editable hours input on every task row (replaces read-only
+  claimed_hours span). Decimal hours, 0.25 step.
+- Amber border + "edited" tag when value differs from claimed_hours
+  so the override is visible at a glance.
+- Approve Overhead now writes the effective hours into tbl_tasks.hours
+  and reports it in the toast + notification.
+- Route to WO carries the edited value through to RouteTaskModal.
+- Reject ignores hours (task is rejected — hours irrelevant).
 
-1. rpc_dashboard_data: activeWorkers now UNIONs WO timers and
-   quick timers. Adds kind ('wo'|'task'), id, started_at,
-   task_title. Sorted oldest-first so phantoms surface first.
+Audit gap closed at the same time:
+- handleApproveOverhead and handleRejectTask switched from raw
+  supabase.update() to auditedUpdate(). tbl_tasks is in
+  AUDITED_TABLES; the prior raw calls were a violation of the
+  "never raw supabase.update() on key tables" rule. Hours edits
+  in particular are pay-affecting and must be audited.
 
-2. Dashboard UI: each badge shows duration; colour escalates
-   blue ≤12h, amber 12-24h, red >24h (phantom marker ⚠).
-   Quick timers tagged " QT" so they're distinguishable from
-   WO timers in the pill itself. Whole banner wraps in a Link
-   to /workshop where stop controls live.
-
-3. Phantom-timer patrol (new pg_cron job, daily 04:00 UTC):
-   rpc_close_phantom_timers() auto-closes any timer running
-   >16h. WO entries get system_end_timestamp=NOW(),
-   actual_hours=0, flag_note explaining (surfaces in flags
-   banner). Quick timers get status='pending', hours=0,
-   review_note explaining (surfaces in PM inbox). Caps phantom
-   accrual at ~24h max going forward.
-
-Existing phantoms (Filar 81h, Kowalik 405h) will be caught by
-tonight's run unless stopped manually first from /workshop.
-
-Files: src/app/(dashboard)/page.tsx
-Migrations: dashboard_active_workers_include_quick_timers,
-            phantom_timer_patrol
+Files: src/app/(dashboard)/review/inbox/page.tsx
