@@ -1,13 +1,36 @@
-feat(wo-docs): show stripped filename under drawing/reference thumbnails
+feat(pdf-viewer): in-app PDF viewer + first-page PDF thumbnails
 
-When reordering drawings, the meaningful clue is often in the user's
-original filename - but the displayed name was previously only available
-on hover via title attribute, which is awkward during drag-drop reorder.
+Replaces the previous browser-default iframe preview (inconsistent across
+browsers, no zoom control, mobile-hostile) with a proper react-pdf based
+viewer mounted as a fullscreen modal.
 
-Now shows the filename as a caption under each thumbnail, with the
-{activity}-{scope}- prefix stripped (those parts are already implicit
-from the WO context) and the file extension removed. Hyphens converted
-to spaces for readability. Caption respects doc.caption if explicitly
-set, otherwise computes from file_name.
+Components added (both reusable across the system, not WO-specific):
 
-Layout: 2-line clamp, 12px muted text, centred under 176px-wide thumb.
+src/components/pdf-viewer.tsx
+  Fullscreen modal. Page nav (prev/next + page input), zoom (in/out +
+  fit-to-width), keyboard shortcuts (Esc, arrows, +/-/0). Optional
+  onDownload callback for caller-provided download action.
+
+src/components/pdf-thumb.tsx
+  Small first-page render for use inside fixed-size containers (e.g.
+  the drawings grid 176x128 slot). Falls back to FileText icon on load
+  error.
+
+Wiring in wo-documents-panel:
+  - PDFs in drawings/references grid now render real first-page thumbs
+    via PdfDocThumb (was: generic FileText icon)
+  - Clicking a PDF opens PdfViewer modal in-app (was: iframe inside
+    image lightbox, browser-dependent rendering)
+  - PDF data is sourced via getOneDriveViewUrl (same-origin proxy) to
+    avoid Graph CDN CORS surprises when pdf.js fetches the bytes
+
+Performance:
+  - Both components lazy-loaded via next/dynamic. pdf.js (~600KB
+    gzipped) only ships when a page actually has a PDF to render or
+    view. Zero impact on PDF-free pages.
+  - pdf.js worker self-hosted at public/pdf.worker.min.mjs (copied
+    from node_modules/pdfjs-dist/build at install time). No external
+    CDN dependency, no CORS.
+
+Out of v1 scope (easy adds later): text selection, search, annotation
+layer, multi-page sidebar.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase-browser";
 import { uploadToOneDrive, getOneDriveUrl, getOneDriveViewUrl, jobFolder } from "@/lib/onedrive-client";
 import { getAuditContext, auditedInsert, auditedDelete } from "@/lib/audit";
@@ -10,6 +11,11 @@ import {
   FileText, Image, Box, Upload, Trash2, Download,
   ChevronDown, ChevronRight, Eye, Plus, Loader2, FileCode2,
 } from "lucide-react";
+
+// Lazy-loaded so pdf.js (~600KB) is only fetched when a page actually has a
+// PDF to render or view. Mounting cost on a PDF-free WO is zero.
+const PdfThumb = dynamic(() => import("@/components/pdf-thumb"), { ssr: false });
+const PdfViewer = dynamic(() => import("@/components/pdf-viewer"), { ssr: false });
 
 interface WODoc {
   doc_id: number;
@@ -80,6 +86,7 @@ export function WODocumentsPanel({
   const [expanded, setExpanded] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
   const [showModelViewer, setShowModelViewer] = useState<string | null>(null);
   const [dragDocId, setDragDocId] = useState<number | null>(null);
   const [dragOverDocId, setDragOverDocId] = useState<number | null>(null);
@@ -155,7 +162,13 @@ export function WODocumentsPanel({
       try { const url = await getOneDriveUrl(doc.onedrive_path); setShowModelViewer(url); setPreviewName(doc.file_name); } catch { alert("Failed to load model"); }
       return;
     }
-    if (doc.mime_type?.startsWith("image/") || doc.mime_type === "application/pdf") {
+    if (doc.mime_type === "application/pdf") {
+      // PDFs use the same-origin view endpoint so pdf.js can fetch the bytes
+      // without CORS surprises from the Graph CDN.
+      try { const url = await getOneDriveViewUrl(doc.onedrive_path); setPdfViewerUrl(url); setPreviewName(doc.file_name); } catch { alert("Failed to load PDF"); }
+      return;
+    }
+    if (doc.mime_type?.startsWith("image/")) {
       try { const url = await getOneDriveUrl(doc.onedrive_path); setPreviewUrl(url); setPreviewName(doc.file_name); } catch { alert("Failed to load preview"); }
     }
   };
@@ -269,6 +282,8 @@ export function WODocumentsPanel({
                                 <button onClick={() => openPreview(doc)} className="w-44 h-32 rounded-lg border border-subtle overflow-hidden bg-white hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
                                   {doc.mime_type?.startsWith("image/") ? (
                                     <OneDriveThumb path={doc.onedrive_path} />
+                                  ) : doc.mime_type === "application/pdf" ? (
+                                    <PdfDocThumb path={doc.onedrive_path} />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-surface-dim"><FileText className="h-10 w-10 text-faint" /></div>
                                   )}
@@ -330,19 +345,24 @@ export function WODocumentsPanel({
         )}
       </div>
 
-      {/* Image preview lightbox */}
+      {/* Image preview lightbox (PDFs go through PdfViewer below) */}
       {previewUrl && !showModelViewer && (
         <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
           <div className="max-w-4xl max-h-[90vh] relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setPreviewUrl(null)} className="absolute -top-3 -right-3 bg-surface rounded-full p-1.5 shadow-lg text-muted hover:text-navy z-10">✕</button>
             <p className="text-white text-xs text-center mb-2">{previewName}</p>
-            {previewName.endsWith(".pdf") ? (
-              <iframe src={previewUrl} className="w-full h-[80vh] rounded-lg" />
-            ) : (
-              <img src={previewUrl} alt={previewName} className="max-w-full max-h-[85vh] object-contain rounded-lg" />
-            )}
+            <img src={previewUrl} alt={previewName} className="max-w-full max-h-[85vh] object-contain rounded-lg" />
           </div>
         </div>
+      )}
+
+      {/* In-app PDF viewer — pdf.js, pagination, zoom */}
+      {pdfViewerUrl && (
+        <PdfViewer
+          url={pdfViewerUrl}
+          fileName={previewName}
+          onClose={() => setPdfViewerUrl(null)}
+        />
       )}
 
       {/* 3D Model viewer — Three.js with OrbitControls */}
@@ -358,4 +378,14 @@ function OneDriveThumb({ path }: { path: string | null }) {
   useEffect(() => { if (path) getOneDriveUrl(path).then(setUrl).catch(() => {}); }, [path]);
   if (!url) return <div className="w-full h-full bg-surface-mid animate-pulse" />;
   return <img src={url} alt="" className="w-full h-full object-contain" />;
+}
+
+// PDF first-page thumbnail. Wraps PdfThumb with same-origin view URL fetch.
+// Separate from OneDriveThumb because PDFs need the proxy (so pdf.js can
+// fetch the bytes without CORS), while images use Graph CDN directly.
+function PdfDocThumb({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => { if (path) getOneDriveViewUrl(path).then(setUrl).catch(() => {}); }, [path]);
+  if (!url) return <div className="w-full h-full bg-surface-mid animate-pulse" />;
+  return <PdfThumb url={url} width={176} />;
 }
