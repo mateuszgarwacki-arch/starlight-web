@@ -249,17 +249,17 @@ export function WODocumentsPanel({
                                 onDragEnd={handleDragEnd}
                                 onDrop={(e) => handleDrop(e, doc.doc_id, type)}
                               >
-                                <button onClick={() => openPreview(doc)} className="w-16 h-16 rounded-lg border border-subtle overflow-hidden bg-surface-dim hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
+                                <button onClick={() => openPreview(doc)} className="w-44 h-32 rounded-lg border border-subtle overflow-hidden bg-white hover:border-starlight-blue transition-colors cursor-grab active:cursor-grabbing" title={doc.caption || doc.file_name}>
                                   {doc.mime_type?.startsWith("image/") ? (
                                     <OneDriveThumb path={doc.onedrive_path} />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center"><FileText className="h-6 w-6 text-faint" /></div>
+                                    <div className="w-full h-full flex items-center justify-center bg-surface-dim"><FileText className="h-10 w-10 text-faint" /></div>
                                   )}
                                 </button>
-                                <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-navy text-white text-[9px] font-bold flex items-center justify-center shadow-sm pointer-events-none">{idx + 1}</span>
+                                <span className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full bg-navy text-white text-[11px] font-bold flex items-center justify-center shadow-sm pointer-events-none">{idx + 1}</span>
                                 {!readOnly && (
-                                  <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-surface border border-subtle rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-starlight-red">
-                                    <Trash2 className="h-2.5 w-2.5" />
+                                  <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-1 bg-surface border border-subtle rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-starlight-red">
+                                    <Trash2 className="h-3 w-3" />
                                   </button>
                                 )}
                               </div>
@@ -337,5 +337,5 @@ function OneDriveThumb({ path }: { path: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => { if (path) getOneDriveUrl(path).then(setUrl).catch(() => {}); }, [path]);
   if (!url) return <div className="w-full h-full bg-surface-mid animate-pulse" />;
-  return <img src={url} alt="" className="w-full h-full object-cover" />;
+  return <img src={url} alt="" className="w-full h-full object-contain" />;
 }

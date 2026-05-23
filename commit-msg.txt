@@ -1,14 +1,14 @@
-S47 close: docs sync
+feat(wo-docs): enlarge drawing/reference thumbnails for visual identification during reorder
 
-TRACKER.md — full S47 session log entry (5 sub-sections: a/b/c/d/e
-covering FA Little Rollright intake, multi-page cutlist fix, dashboard
-two-clock fix, phantom-timer patrol cron, inbox editable hours +
-tbl_tasks audit gap closure). One new cleanup item added (workshop
-requests audit gap). Two open phantoms documented at session close.
+Previous: 64x64 square with object-cover (centre crop) - landscape drawings cropped to
+a tiny middle slice, indistinguishable without click-through to preview.
 
-03_database_schema.md — RPC count 18 → 19 (added
-rpc_close_phantom_timers); cron job count 2 → 3 (added
-phantom-timer-patrol-daily); rpc_dashboard_data row annotated to note
-S47 activeWorkers UNION; header date and verification line updated.
+Now: 176x128 (A-series landscape ratio) with object-contain on white bg - whole
+drawing visible, identifiable at a glance during drag-drop reorder. Order badge
+and delete button scaled proportionally so they don't look lost on the larger
+thumbnail.
 
-No code changes in this commit — docs only.
+Affects both drawing and reference doc types (shared code path).
+
+Note: PDFs still fall back to a generic FileText icon (now larger but still
+generic) - pdf.js rendering remains on the backlog.
