@@ -1,7 +1,7 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 20 May 2026 (S46)
-**Verified live:** Counts queried from `information_schema` and `pg_proc` at S46 close — 57 tables, 34 views, 18 RPCs, 2 cron jobs, 217 RLS policies. Unchanged from S45 close (S46 was a security hardening / RLS tightening pass — zero schema objects added).
+**Last updated:** 23 May 2026 (S47)
+**Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46; no other schema changes.
 
 ## Counts
 
@@ -9,8 +9,8 @@
 |---|---|
 | Tables (`tbl_*`) | 57 |
 | Views (`qry_*`) | 34 |
-| RPC functions (`rpc_*`) | 18 |
-| pg_cron jobs | 2 |
+| RPC functions (`rpc_*`) | 19 |
+| pg_cron jobs | 3 |
 
 ## Tables (57)
 
@@ -53,15 +53,16 @@ qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ord
 qry_wo_with_activities
 ```
 
-## RPC functions (18)
+## RPC functions (19)
 
 | Function | Args | Purpose |
 |---|---|---|
 | `rpc_active_workers` | — | SECURITY DEFINER. Cross-user view of who's currently clocked-in (non-sensitive fields only) |
 | `rpc_approve_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Atomic apply of a freelancer-proposed time-entry edit. Rebuilds timestamps from `proposed_date + actual_start_timestamp::time`, recalculates `entry_cost` from current `applied_hourly_rate`. Role check: `admin/pm/production_manager` only |
 | `rpc_capacity_data` | `p_date_from text, p_date_to text` | Capacity page data; filters Complete jobs |
+| `rpc_close_phantom_timers` | — | SECURITY DEFINER. Phantom-timer patrol. Closes any WO timer (`tbl_wo_time_entries.system_end_timestamp IS NULL`) or quick timer (`tbl_tasks.status='in_progress'`) that has been running >16h. WO entries → hours=0 + `flag_note`; tasks → `status='pending'` + hours=0 + `review_note`. Returns `(wo_closed, task_closed)`. Driven by `phantom-timer-patrol-daily` cron at 04:00 UTC |
 | `rpc_confirm_wo_completion` | `p_proposal_id integer, p_review_note text DEFAULT NULL` | SECURITY DEFINER. Locks a freelancer-marked WO completion. Marks proposal `confirmed`; idempotently re-asserts WO `Complete` state (heals partial-failure orphans). Role check: `admin/pm/production_manager` |
-| `rpc_dashboard_data` | — | Dashboard data (16+ queries collapsed); upcoming jobs filters Complete |
+| `rpc_dashboard_data` | — | Dashboard data (16+ queries collapsed); upcoming jobs filters Complete. `activeWorkers` block (S47) UNIONs WO timers and quick timers; each row carries `kind` (`'wo'`\|`'task'`), `id`, `started_at`, `task_title` |
 | `rpc_detect_timesheet_gaps` | `p_flag_date date` | Idempotent flag detector for sub-90% logged hours; cron-driven daily |
 | `rpc_job_close_report` | `p_job_id integer` | Close report data — header, commercial summary (with `material_cost_planned`/`actual`/`committed` split), labour, materials by category/supplier, WO variance, scope cost, learnings, post-complete edit count. Live data, never a snapshot |
 | `rpc_job_detail_data` | `p_job_id integer` | Job page main data |
@@ -76,11 +77,12 @@ qry_wo_with_activities
 | `rpc_undo_wo_completion` | `p_proposal_id integer, p_review_note text DEFAULT NULL` | SECURITY DEFINER. Reverts a PM-undone WO completion. Marks proposal `undone`; restores WO's `previous_wo_status` from the proposal snapshot, clears `completion_photo_path` and completion timestamps. Role check: `admin/pm/production_manager` |
 | `rpc_workshop_data` | — | Workshop page data; filters Complete jobs |
 
-## pg_cron jobs (2)
+## pg_cron jobs (3)
 
 | Name | Schedule | Command |
 |---|---|---|
 | `audit-retention-monthly` | `0 3 1 * *` | `SELECT audit_retention_cycle()` — monthly audit log retention |
+| `phantom-timer-patrol-daily` | `0 4 * * *` | `SELECT rpc_close_phantom_timers()` — daily 04:00 UTC. Caps any forgotten WO/quick timer at ~24h before next-day close |
 | `timesheet-gap-detect-daily` | `0 6 * * *` | `SELECT rpc_detect_timesheet_gaps(CURRENT_DATE - INTERVAL '1 day')` — daily 06:00 UTC |
 
 ## Audited tables (`src/lib/audit.ts` — `AUDITED_TABLES`)

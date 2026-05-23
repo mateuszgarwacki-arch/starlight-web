@@ -64,6 +64,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **Lint rule for raw `.update()` / `.delete()`** *(S46h)* — add an ESLint custom rule (or pre-commit grep in `scripts/db-checks.sql`'s sibling) that fails on `supabase.from(...).update(` or `.delete(` outside of `lib/audit.ts`. Forces all writes through the helper. Pairs with the harden-`auditedUpdate` task — do them together.
 
+- [ ] **Audit gap on workshop requests** *(S47e)* — `handleRequestAction` in `/review/inbox/page.tsx` still uses raw `supabase.from("tbl_workshop_requests").update(...)`. Easy fix once `tbl_workshop_requests` is added to `AUDITED_TABLES` (currently absent). Smaller-stakes than the task gap closed in S47e because workshop requests aren't pay-affecting, but worth tidying when the wider audit sweep happens (pairs naturally with the harden-`auditedUpdate` task above).
+
 ### Long-running / strategic
 
 - [ ] **Supabase Pro upgrade** *(carried)* — prerequisite for multi-PM operation. Enables daily backups + PITR. Currently on hobby tier.
@@ -74,6 +76,104 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S47 — 23 May 2026
+
+New job intake (FA Little Rollright), traveller bug fix, and a clock-system overhaul: the main dashboard banner was reading from only one of two clock tables, so quick timers were invisible — and two real phantoms had been running unnoticed for 3 and 17 days respectively. Fixed at three levels (DB, UI, janitor) and closed an audit gap on the inbox while editable hours were being added.
+
+Three migrations, three deploys, two cleanup items added, one closed.
+
+#### S47a — Job 13774 FA Little Rollright + quote 40839 v13
+
+**Migration:** `import_quote_40839_little_rollright_v13_job22`
+
+New job for Fait Accompli ("FA"), event 6 June 2026 at Little Rollright. Job 13774 / job_id 22. `external_project_ref = 40839` (FA's quote ref from the PDF footer). `budget_allowance` left NULL — the Jobs list reads from `qry_job_accepted_quote` since S41, so the accepted quote drives the "Quoted" column on its own.
+
+Quote imported as v13 (footer canonical version, header showed V5 — same convention as the FA Léoube import: footer "v" version is authoritative, header "V" is FA-internal). 36 lines totalling £62,965 net across 8 sections (Garden Lighting £5,480 / Marquee Lighting £2,400 / Décor £12,660 / Sound £6,825 / Power £4,100 / Labour £19,430 / Transport £7,370 / Additions £4,700). Sub-totals checked against the PDF. Status set to `Accepted` on import — only status value present in the system so far (S45 import flow assumes accepted quotes; draft handling is YAGNI until needed). S39 overhead trigger fired correctly — overhead scope #91, OVERHEAD WO #134, £0 overhead quote-line #549 all created.
+
+Category assignments on the lines were judgement calls — flagged in chat for PM review (Décor split Workshop/Subcontracted by build vs hire, generators Subcontracted, labour lines under Install/Lighting/Sound categories). No "Labour" category in the taxonomy; Install was the closest fit for design-crew lines. Event zones used granular per-line locations (Drinks Reception, Garden, Pavilion, House Front, Car Park, Marquee, Dancefloor, Nightclub, Dining, Pergola/Lawn, Production for production-overhead lines).
+
+#### S47b — Multi-page cutlist on job traveller
+
+**Files changed:** `src/app/traveller/page.tsx`
+
+Mateusz noticed a centre-staircase cutlist that's split across 2 PDF pages only printed page 1. Two coupled bugs in `traveller/page.tsx`:
+
+1. **Data load**: `pdfPageUrls[doc.doc_id] = [url]` always created a one-element array regardless of PDF page count. The render loop then iterates `urls.length` (= 1), so page 2 onward was silently dropped.
+2. **Render**: `ImagePage` hardcoded `pdf.getPage(1)`. Even if you fixed (1), every iteration would still show page 1.
+
+Fix: at data-load time (after the OneDrive URL is fetched), open the PDF with pdf.js and read `numPages`. Populate `pdfPageUrls[doc_id]` with `numPages` copies of the URL. `ImagePage` gets a new `pdfPage` prop and renders `pdf.getPage(pdfPage || 1)`. Label is `"Cut list (1/2)"` / `"Cut list (2/2)"` when there's more than one page so it's obvious in the print. `totalPages` calculation already summed `pdfPageUrls.length` and the per-iteration loop was already correct, so the cosmetic surface needed only the page-count populate + the `pdfPage` plumbing — small, isolated diff.
+
+pdf.js is loaded `beforeInteractive` in `traveller/layout.tsx` so it's reliably available when `loadData` runs (in a `useEffect` after hydration). Fallback if `window.pdfjsLib` is missing or `getDocument` throws: length stays 1 (current behaviour preserved on error).
+
+Trade-off: each `ImagePage` instance fetches and parses the PDF independently, so a 2-page cutlist downloads + parses the PDF 3 times total (once for page-count, twice for rendering). Acceptable for typical cutlist sizes; if cutlists grow large or numerous, cache the parsed `pdf` object on a ref keyed by `doc_id`.
+
+#### S47c — Dashboard active workers: surface both clock systems
+
+**Migration:** `dashboard_active_workers_include_quick_timers`
+**Files changed:** `src/app/(dashboard)/page.tsx`
+
+The diagnostic question Mateusz raised was "James asked me to stop his clock but I can't see it". James had already stopped himself, but the investigation surfaced a real architectural gap: the dashboard's "Active Now" banner only reads from `tbl_wo_time_entries`. The system has **two** independent clock tables:
+
+| | WO timer | Quick timer |
+|---|---|---|
+| Table | `tbl_wo_time_entries` | `tbl_tasks` |
+| How freelancer starts it | Opens a specific WO and presses Start | Floating header timer, no WO chosen |
+| Open state | `system_end_timestamp IS NULL AND archived_at IS NULL` | `status = 'in_progress'` |
+| Stoppable | Workshop page PM controls + mobile | Workshop page PM controls + mobile |
+| Visible on main `/` dashboard banner | ✅ | ❌ (pre-S47) |
+| Visible on `/workshop` page | ✅ | ✅ (separate `tbl_tasks` query → `activeTasks`) |
+
+Two real phantoms surfaced once we knew where to look: Mateusz Filar's quick timer running 81h (3.4 days), Radoslaw Kowalik's running 405h (17 days). Both invisible to the main dashboard, both unactioned because no one knew they existed.
+
+**Fix at the RPC layer:** `rpc_dashboard_data.activeWorkers` now UNIONs the two sources. Each row carries `kind` (`'wo'`\|`'task'`), `id` (entry_id or task_id), `freelancer_id`, `work_order_id` (NULL for quick timers), `started_at`, `name`, `task_title`. Sorted oldest-first so the worst phantoms surface first.
+
+**Fix at the UI layer:** dashboard banner shows duration on every pill with colour escalating by age — blue ≤12h, amber 12–24h, red >24h (with ⚠ phantom marker). Quick timers tagged inline (`· QT`) to distinguish from WO timers. Whole banner wraps in a `<Link href="/workshop">` so a click takes you to the screen where the stop controls actually live. Key changed from `w.entry_id` (collision-prone with two ID spaces) to `${w.kind}-${w.id}`.
+
+Mateusz applied a slightly different variant of the UI patch manually while Desktop Commander was unresponsive (one clickable card vs per-pill links — arguably cleaner). Final shipped version is his pattern with a small tooltip-field fix (`w.task_title` not `w.title`).
+
+#### S47d — Phantom-timer patrol (cron janitor)
+
+**Migration:** `phantom_timer_patrol`
+
+New SECURITY DEFINER function `rpc_close_phantom_timers()` and a daily `pg_cron` job (`phantom-timer-patrol-daily`, `0 4 * * *` UTC, active). Auto-closes any timer that's been running >16h:
+
+- WO timers: `system_end_timestamp = NOW()`, `actual_end_timestamp = NOW()`, `actual_hours = 0`, `flag_note` explaining. Hours=0 means no pay attributed; `flag_note` ensures the entry surfaces in the dashboard flags banner for PM correction.
+- Quick timers: `status = 'pending'`, `logged_at = NOW()`, `hours = 0`, `review_note` explaining. Status=pending routes to the PM inbox for review through the normal flow.
+
+Threshold rationale: 16h is long enough to allow a genuinely brutal day (design crew during a build can legitimately log 12–14h), short enough that a forgotten timer can't accrue more than ~24h before the next nightly cleanup catches it. Anything legitimately longer than 16h continuous is almost certainly a forgotten timer — no one stays continuously clocked-in across a full sleep cycle.
+
+04:00 UTC chosen so phantoms close **before** `timesheet-gap-detect-daily` runs at 06:00 — clean state for the gap detector to evaluate. The two existing phantoms (Filar 81h, Kowalik 405h) would be caught on the first run unless stopped manually first from `/workshop` (Mateusz's call on whether to attribute reasonable hours retrospectively or accept the zero).
+
+**Audit caveat:** the patrol writes via SQL inside a SECURITY DEFINER function — bypasses `auditedUpdate`. The `flag_note` / `review_note` on each closed record IS the audit trail for the cron action. If this ever needs richer auditing, the patrol function could insert directly into `tbl_audit_log` with `user_id = NULL` and `user_name = 'phantom-patrol'`.
+
+#### S47e — Workshop Inbox editable hours + tbl_tasks audit gap closed
+
+**Files changed:** `src/app/(dashboard)/review/inbox/page.tsx`
+
+Mateusz raised that with the phantom patrol now landing zeroed entries in the inbox every morning, the workflow shape was wrong: "approve task → leave inbox → hunt entry → edit hours → save" was 4 steps and a context switch for what's logically one edit.
+
+**UI fix:** every task row now has an inline editable hours `<input type="number" step="0.25" min="0">` (decimal hours, 15-min increments) where the static `claimed_hours` span used to sit. Pre-populated from `claimed_hours ?? 0`. When the value differs from the original, the border goes amber and an `edited` tag appears with the original value in the tooltip. The edited value flows through to both Approve Overhead (writes `hours` directly into `tbl_tasks`) and Route to WO (passes through to `RouteTaskModal.claimed_hours` so the resulting WO time entry carries the corrected number). Reject ignores hours (irrelevant when rejecting).
+
+**Audit gap closed:** `tbl_tasks` is in `AUDITED_TABLES` but `handleApproveOverhead` and `handleRejectTask` were using raw `supabase.from("tbl_tasks").update(...)` — a pre-existing violation of the "never raw update on key tables" rule (S46h cleanup item). Both switched to `auditedUpdate`. With editable hours about to make `tbl_tasks.hours` a pay-affecting writeable field directly from the PM inbox, audit coverage was no longer optional.
+
+`handleRequestAction` (still raw on `tbl_workshop_requests`) added to cleanup backlog — smaller-stakes since workshop requests aren't pay-affecting and `tbl_workshop_requests` isn't in `AUDITED_TABLES`.
+
+#### Phantom timers right now (not yet resolved)
+
+The two open phantoms at S47 close:
+
+- **Mateusz Filar** quick timer "Quick timer (07:48)" — started 19 May 07:48, currently ~81h running. Workshop General category. 0h logged.
+- **Radoslaw Kowalik** quick timer "Quick timer (19:14)" — started 5 May 19:14, currently ~405h running. Workshop General category. 0h logged.
+
+Both visible in `/review/inbox` now (S47d patrolled them into `pending`). PM action: open the inbox, set realistic hours via the new inline editor if knowable, otherwise approve at 0h or reject. Cron will catch any new phantoms automatically going forward.
+
+#### Carried forward from S47
+
+- **Audit gap on workshop requests** (added) — `handleRequestAction` still raw.
+- **Phantom-timer patrol of WO timers in flight in real time** — currently only the nightly cron catches them. A real-time trigger (e.g. when a freelancer with an open WO timer tries to start a NEW timer) would prevent the daytime running phantom altogether. Not added to backlog yet — wait to see whether the nightly cap is sufficient.
+
+---
 
 ### S46 — 20 May 2026
 

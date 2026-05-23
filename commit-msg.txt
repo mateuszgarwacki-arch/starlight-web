@@ -1,26 +1,14 @@
-Workshop Inbox: editable hours before approve/route
+S47 close: docs sync
 
-Problem: PM had to approve a task first, then leave the inbox, hunt
-down the resulting entry, and edit the hours separately. With the
-phantom-timer patrol now auto-closing forgotten timers to 0h, this
-shape became actively painful — every patrolled task arrives in the
-inbox needing an hours correction.
+TRACKER.md — full S47 session log entry (5 sub-sections: a/b/c/d/e
+covering FA Little Rollright intake, multi-page cutlist fix, dashboard
+two-clock fix, phantom-timer patrol cron, inbox editable hours +
+tbl_tasks audit gap closure). One new cleanup item added (workshop
+requests audit gap). Two open phantoms documented at session close.
 
-Fix:
-- Inline editable hours input on every task row (replaces read-only
-  claimed_hours span). Decimal hours, 0.25 step.
-- Amber border + "edited" tag when value differs from claimed_hours
-  so the override is visible at a glance.
-- Approve Overhead now writes the effective hours into tbl_tasks.hours
-  and reports it in the toast + notification.
-- Route to WO carries the edited value through to RouteTaskModal.
-- Reject ignores hours (task is rejected — hours irrelevant).
+03_database_schema.md — RPC count 18 → 19 (added
+rpc_close_phantom_timers); cron job count 2 → 3 (added
+phantom-timer-patrol-daily); rpc_dashboard_data row annotated to note
+S47 activeWorkers UNION; header date and verification line updated.
 
-Audit gap closed at the same time:
-- handleApproveOverhead and handleRejectTask switched from raw
-  supabase.update() to auditedUpdate(). tbl_tasks is in
-  AUDITED_TABLES; the prior raw calls were a violation of the
-  "never raw supabase.update() on key tables" rule. Hours edits
-  in particular are pay-affecting and must be audited.
-
-Files: src/app/(dashboard)/review/inbox/page.tsx
+No code changes in this commit — docs only.
