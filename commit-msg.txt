@@ -1,36 +1,8 @@
-feat(pdf-viewer): in-app PDF viewer + first-page PDF thumbnails
+feat(pdf-viewer): route all PDFs in docs panel through in-app viewer
 
-Replaces the previous browser-default iframe preview (inconsistent across
-browsers, no zoom control, mobile-hostile) with a proper react-pdf based
-viewer mounted as a fullscreen modal.
+viewDoc() (the eye icon on cut lists and other non-grid doc types) now
+opens PDFs in the PdfViewer modal instead of a new browser tab. Non-PDF
+types (csv, xlsx, etc.) continue to open in a new tab as before.
 
-Components added (both reusable across the system, not WO-specific):
-
-src/components/pdf-viewer.tsx
-  Fullscreen modal. Page nav (prev/next + page input), zoom (in/out +
-  fit-to-width), keyboard shortcuts (Esc, arrows, +/-/0). Optional
-  onDownload callback for caller-provided download action.
-
-src/components/pdf-thumb.tsx
-  Small first-page render for use inside fixed-size containers (e.g.
-  the drawings grid 176x128 slot). Falls back to FileText icon on load
-  error.
-
-Wiring in wo-documents-panel:
-  - PDFs in drawings/references grid now render real first-page thumbs
-    via PdfDocThumb (was: generic FileText icon)
-  - Clicking a PDF opens PdfViewer modal in-app (was: iframe inside
-    image lightbox, browser-dependent rendering)
-  - PDF data is sourced via getOneDriveViewUrl (same-origin proxy) to
-    avoid Graph CDN CORS surprises when pdf.js fetches the bytes
-
-Performance:
-  - Both components lazy-loaded via next/dynamic. pdf.js (~600KB
-    gzipped) only ships when a page actually has a PDF to render or
-    view. Zero impact on PDF-free pages.
-  - pdf.js worker self-hosted at public/pdf.worker.min.mjs (copied
-    from node_modules/pdfjs-dist/build at install time). No external
-    CDN dependency, no CORS.
-
-Out of v1 scope (easy adds later): text selection, search, annotation
-layer, multi-page sidebar.
+Closes the inconsistency where drawings/references PDFs opened in-app
+but cut list PDFs (same file type, same panel) still opened externally.

@@ -178,12 +178,21 @@ export function WODocumentsPanel({
     try { const url = await getOneDriveUrl(doc.onedrive_path); window.open(url, "_blank"); } catch { alert("Failed to get download link"); }
   };
 
-  // Open the file inline in a new tab (PDF/image render in-browser, others
-  // fall back to download). Auth is via short-lived token in the URL — see
-  // /api/onedrive/view for trust details.
+  // Open the file inline. PDFs go through the in-app PdfViewer; other types
+  // (csv/xlsx cut lists, etc.) open in a new tab via the same-origin proxy.
+  // Auth is via short-lived token in the URL — see /api/onedrive/view for
+  // trust details.
   const viewDoc = async (doc: WODoc) => {
     if (!doc.onedrive_path) return;
-    try { const url = await getOneDriveViewUrl(doc.onedrive_path); window.open(url, "_blank"); } catch { alert("Failed to open file"); }
+    try {
+      const url = await getOneDriveViewUrl(doc.onedrive_path);
+      if (doc.mime_type === "application/pdf") {
+        setPdfViewerUrl(url);
+        setPreviewName(doc.file_name);
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch { alert("Failed to open file"); }
   };
 
   const handleDragStart = (docId: number) => { setDragDocId(docId); };
