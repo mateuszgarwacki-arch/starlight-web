@@ -52,6 +52,23 @@ function sanitiseName(name: string, maxLen = 80): string {
   return name.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").substring(0, maxLen) || "unnamed";
 }
 
+// Strip the {activity}-{scope}- prefix and file extension that sanitiseName/
+// upload appends, so the displayed caption shows just the human-named part.
+// Falls back to the raw file name if no prefix matches (e.g. doc uploaded
+// under different context or moved between WOs).
+function displayDocName(fileName: string, activityLabel?: string, scopeName?: string): string {
+  let name = fileName.replace(/\.[^.]+$/, ""); // drop extension
+  if (activityLabel) {
+    const prefix = sanitiseName(activityLabel, 30) + "-";
+    if (name.startsWith(prefix)) name = name.substring(prefix.length);
+  }
+  if (scopeName) {
+    const prefix = sanitiseName(scopeName, 40) + "-";
+    if (name.startsWith(prefix)) name = name.substring(prefix.length);
+  }
+  return name.replace(/-/g, " ").trim() || fileName;
+}
+
 export function WODocumentsPanel({
   workOrderId, scopeItemId, jobId, jobNumber, jobName,
   scopeName, activityLabel, readOnly = false, onBomChanged,
@@ -256,6 +273,9 @@ export function WODocumentsPanel({
                                     <div className="w-full h-full flex items-center justify-center bg-surface-dim"><FileText className="h-10 w-10 text-faint" /></div>
                                   )}
                                 </button>
+                                <p className="mt-1.5 text-xs text-muted text-center w-44 line-clamp-2 leading-tight break-words">
+                                  {doc.caption || displayDocName(doc.file_name, activityLabel, scopeName)}
+                                </p>
                                 <span className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full bg-navy text-white text-[11px] font-bold flex items-center justify-center shadow-sm pointer-events-none">{idx + 1}</span>
                                 {!readOnly && (
                                   <button onClick={() => deleteDoc(doc.doc_id)} className="absolute -top-1.5 -right-1.5 p-1 bg-surface border border-subtle rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-starlight-red">

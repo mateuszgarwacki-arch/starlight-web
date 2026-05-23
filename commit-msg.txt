@@ -1,14 +1,13 @@
-feat(wo-docs): enlarge drawing/reference thumbnails for visual identification during reorder
+feat(wo-docs): show stripped filename under drawing/reference thumbnails
 
-Previous: 64x64 square with object-cover (centre crop) - landscape drawings cropped to
-a tiny middle slice, indistinguishable without click-through to preview.
+When reordering drawings, the meaningful clue is often in the user's
+original filename - but the displayed name was previously only available
+on hover via title attribute, which is awkward during drag-drop reorder.
 
-Now: 176x128 (A-series landscape ratio) with object-contain on white bg - whole
-drawing visible, identifiable at a glance during drag-drop reorder. Order badge
-and delete button scaled proportionally so they don't look lost on the larger
-thumbnail.
+Now shows the filename as a caption under each thumbnail, with the
+{activity}-{scope}- prefix stripped (those parts are already implicit
+from the WO context) and the file extension removed. Hyphens converted
+to spaces for readability. Caption respects doc.caption if explicitly
+set, otherwise computes from file_name.
 
-Affects both drawing and reference doc types (shared code path).
-
-Note: PDFs still fall back to a generic FileText icon (now larger but still
-generic) - pdf.js rendering remains on the backlog.
+Layout: 2-line clamp, 12px muted text, centred under 176px-wide thumb.
