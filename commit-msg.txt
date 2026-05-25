@@ -1,19 +1,27 @@
-docs(tracker): S48 — WO docs UX polish + reusable PDF viewer
+feat(planner): rename + Confirmed-off-system booking path
 
-Session log entry covering:
-- S48a: WO drawing thumbnails 64x64 -> 176x128 with object-contain and
-  stripped-prefix caption underneath
-- S48b: react-pdf-based PdfViewer + PdfThumb components (reusable across
-  the system), wired into wo-documents-panel for both grid thumbnails
-  and click-to-preview; routes all PDFs in the docs panel through the
-  in-app viewer instead of new tabs / iframes
-- S48c: Crew page PIN visibility investigation (declined - SP-002 ban
-  on plaintext PIN storage), pattern recorded for future reference
+S49a — first pass of the planner rework.
 
-Cleanup backlog:
-- Handover PDF drawing rendering item updated to reflect that react-pdf
-  + worker are now in place (just needs the multi-page print adaptation)
-- Added: PDF thumbnail aspect-aware sizing (portrait PDFs top-cropped)
-- Added: react-pdf transitive vulnerabilities recheck on each upgrade
+1. Rename "Capacity" -> "Planner" (sidebar label + page H1 only;
+   URL stays /capacity to avoid bookmark breakage + chained renames).
 
-No schema changes. Totals unchanged: 57 tables / 34 views / 18 RPCs / 2 cron jobs.
+2. Add-booking page: third action "Book - already confirmed" creates
+   the schedule row in Confirmed state directly (no WhatsApp, no wait
+   for freelancer accept). Use when the booking has been arranged via
+   WhatsApp / phone / in person. Original two paths unchanged:
+   - Book & notify via WhatsApp -> status Notified, opens WA
+   - Book without notifying     -> status Booked (pencil-in)
+
+3. Inline booking-calendar dialog: "Already confirmed" checkbox. New
+   bookings default to checked (the PM's typical case is recording an
+   already-arranged commitment). Allows promoting an existing Booked
+   row to Confirmed PM-side, or demoting back. Hidden for freelancer-
+   driven states (Notified / Declined / Unavailable).
+
+No schema change. tbl_freelancer_schedule.status is plain text with
+no CHECK constraint; we're using existing values (Booked, Confirmed)
+that the capacity RPC already treats as active.
+
+Pass 2 (separate session): drive timesheet no-show flags off booking
+presence + add cancellation_reason so cancelled/sick days suppress
+the flag. Spec lives in chat for now.

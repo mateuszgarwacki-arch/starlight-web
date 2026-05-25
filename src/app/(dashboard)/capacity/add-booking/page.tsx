@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency } from "@/lib/utils";
-import { ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, Save } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, Save, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -171,20 +171,24 @@ export default function AddBookingPage() {
   const totalCost = dayCount * (selectedFreelancer?.day_rate || 0);
 
   // Save booking
-  const saveBooking = async (notify: boolean) => {
+  // mode: "notify"    → status=Notified, fires WhatsApp (freelancer to confirm via mobile)
+  //       "silent"    → status=Booked, no WhatsApp (pencil-in; PM will follow up)
+  //       "confirmed" → status=Confirmed, no WhatsApp (already arranged off-system)
+  const saveBooking = async (mode: "notify" | "silent" | "confirmed") => {
     if (!selectedFreelancer || !selectedJob || selectedDates.length === 0) return;
     setSaving(true);
 
     const bookingGroup = crypto.randomUUID();
     const jobIdToSave = selectedJob.job_id === 0 ? null : selectedJob.job_id;
+    const statusFor = mode === "notify" ? "Notified" : mode === "confirmed" ? "Confirmed" : "Booked";
     const inserts = selectedDates.sort().map((d) => ({
       freelancer_id: selectedFreelancer.freelancer_id,
       job_id: jobIdToSave,
       scheduled_date: d,
-      status: notify ? "Notified" : "Booked",
+      status: statusFor,
       booking_group: bookingGroup,
       notes: note.trim() || null,
-      notified_at: notify ? new Date().toISOString() : null,
+      notified_at: mode === "notify" ? new Date().toISOString() : null,
     }));
 
     const { error } = await supabase.from("tbl_freelancer_schedule").insert(inserts);
@@ -194,7 +198,7 @@ export default function AddBookingPage() {
       return;
     }
 
-    if (notify && selectedFreelancer.phone) {
+    if (mode === "notify" && selectedFreelancer.phone) {
       // Format dates for message
       const sorted = [...selectedDates].sort();
       const fmtD = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -211,7 +215,8 @@ export default function AddBookingPage() {
       window.open(waUrl, "_blank");
     }
 
-    toast.success(`Booked ${selectedDates.length} day${selectedDates.length > 1 ? "s" : ""}${notify ? " — WhatsApp opening" : ""}`);
+    const tail = mode === "notify" ? " — WhatsApp opening" : mode === "confirmed" ? " — marked confirmed" : "";
+    toast.success(`Booked ${selectedDates.length} day${selectedDates.length > 1 ? "s" : ""}${tail}`);
     router.push("/capacity");
   };
 
@@ -315,7 +320,7 @@ export default function AddBookingPage() {
           {/* Action buttons */}
           <div className="space-y-2">
             <button
-              onClick={() => saveBooking(true)}
+              onClick={() => saveBooking("notify")}
               disabled={saving || !selectedFreelancer || !selectedJob || dayCount === 0}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-starlight-blue/10 text-starlight-blue font-medium text-sm rounded-lg hover:bg-starlight-blue/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -323,9 +328,19 @@ export default function AddBookingPage() {
               {saving ? "Saving..." : "Book & notify via WhatsApp"}
             </button>
             <button
-              onClick={() => saveBooking(false)}
+              onClick={() => saveBooking("confirmed")}
+              disabled={saving || !selectedFreelancer || !selectedJob || dayCount === 0}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-starlight-green/10 text-starlight-green font-medium text-sm rounded-lg hover:bg-starlight-green/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Use when you've already arranged it via WhatsApp / phone / in person"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Book — already confirmed
+            </button>
+            <button
+              onClick={() => saveBooking("silent")}
               disabled={saving || !selectedFreelancer || !selectedJob || dayCount === 0}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-subtle text-muted text-sm rounded-lg hover:bg-surface-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Pencil-in only — no message sent, no confirmation marked. Follow up later."
             >
               <Save className="h-4 w-4" />
               Book without notifying

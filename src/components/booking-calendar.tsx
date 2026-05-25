@@ -56,6 +56,10 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
   } | null>(null);
   const [dialogJobId, setDialogJobId] = useState<string>("");
   const [dialogNotes, setDialogNotes] = useState("");
+  // Confirmed-off-system toggle. Defaults true for new bookings (PM is usually
+  // creating these from a known commitment), false only when editing an
+  // existing pencil-in (Booked). Hidden for Declined / Unavailable rows.
+  const [dialogConfirmed, setDialogConfirmed] = useState(true);
 
   // Generate 7 days (Mon-Sun) or 5 days (Mon-Fri)
   const days: Date[] = [];
@@ -117,27 +121,44 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
     setDialog({ freelancerId: fId, date, name, existing });
     setDialogJobId(existing?.job_id ? String(existing.job_id) : "");
     setDialogNotes(existing?.notes || "");
+    // New booking → default confirmed (PM's typical use is recording an
+    // already-arranged commitment). Existing booking → reflect actual status.
+    if (!existing) setDialogConfirmed(true);
+    else setDialogConfirmed(existing.status === "Confirmed");
   };
+
+  // Whether the confirmed/booked toggle should be visible in the dialog.
+  // Hidden for freelancer-driven states (Notified awaits their response;
+  // Declined and Unavailable shouldn't be silently flipped PM-side).
+  const showConfirmToggle =
+    !dialog?.existing ||
+    dialog.existing.status === "Booked" ||
+    dialog.existing.status === "Confirmed";
 
   const saveBooking = async () => {
     if (!dialog) return;
     if (dialog.existing) {
+      // Only allow status flip for rows where the toggle is shown.
+      const newStatus = showConfirmToggle
+        ? (dialogConfirmed ? "Confirmed" : "Booked")
+        : dialog.existing.status;
       await supabase.from("tbl_freelancer_schedule").update({
         job_id: dialogJobId ? Number(dialogJobId) : null,
         notes: dialogNotes.trim() || null,
+        status: newStatus,
       }).eq("schedule_id", dialog.existing.schedule_id);
     } else {
       await supabase.from("tbl_freelancer_schedule").insert({
         freelancer_id: dialog.freelancerId,
         scheduled_date: dialog.date,
-        status: "Booked",
+        status: dialogConfirmed ? "Confirmed" : "Booked",
         job_id: dialogJobId ? Number(dialogJobId) : null,
         notes: dialogNotes.trim() || null,
       });
     }
     setDialog(null);
     loadBookings();
-    toast.success(dialog.existing ? "Booking updated" : "Day booked");
+    toast.success(dialog.existing ? "Booking updated" : (dialogConfirmed ? "Booked & confirmed" : "Day booked"));
   };
 
   const removeBooking = async () => {
@@ -310,6 +331,20 @@ export function BookingCalendar({ crew }: BookingCalendarProps) {
                   className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue"
                 />
               </div>
+              {showConfirmToggle && (
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={dialogConfirmed}
+                    onChange={(e) => setDialogConfirmed(e.target.checked)}
+                    className="mt-0.5 accent-starlight-green"
+                  />
+                  <div className="text-xs leading-tight">
+                    <span className="font-medium text-navy">Already confirmed</span>
+                    <span className="block text-muted mt-0.5">Tick if arranged off-system (text / phone / in person). Untick to leave as a pencil-in.</span>
+                  </div>
+                </label>
+              )}
               {dialog.existing && (
                 <div className="flex items-center gap-2 text-xs text-muted">
                   Status: <span className={"font-medium " + (

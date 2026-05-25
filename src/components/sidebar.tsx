@@ -35,7 +35,7 @@ const navItems = [
   { href: "/workshop", label: "Workshop", icon: Hammer, zone: 2 },
   { href: "/review", label: "Review", icon: AlertTriangle, zone: 3, hasInboxBadge: true, badgeHref: "/review/inbox" },
   { href: "/review/timesheets", label: "Timesheets", icon: Clock, zone: 3, hasTimesheetBadge: true },
-  { href: "/capacity", label: "Capacity", icon: Users, zone: 1 },
+  { href: "/capacity", label: "Planner", icon: Users, zone: 1 },
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
   { href: "/stock", label: "Stock", icon: Warehouse, zone: 1 },
   { href: "/library/cad", label: "CAD Library", icon: Library, zone: 1 },
