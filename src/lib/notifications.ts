@@ -19,7 +19,8 @@ export type NotificationType =
   | "task_reviewed"
   | "workshop_request"
   | "request_resolved"
-  | "wo_completion_undone";
+  | "wo_completion_undone"
+  | "timesheet_no_show";
 
 export type NotificationSeverity = "info" | "warning" | "urgent";
 

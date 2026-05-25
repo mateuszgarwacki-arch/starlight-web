@@ -44,6 +44,7 @@ const typeLabels: Record<string, string> = {
   scope_change: "Scope",
   wo_overrun: "Cost",
   material_needed: "Materials",
+  timesheet_no_show: "Timesheet",
 };
 
 function timeAgo(dateStr: string): string {

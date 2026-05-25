@@ -1,6 +1,47 @@
-docs(tracker): S49 — Planner rename + Confirmed-off-system booking path
+feat(timesheet): no-show detection - flag booked-but-zero-hours freelancers
 
-Pass 1 of the planner rework. Records the chat reframe (Held -> Booked/Confirmed),
-investigation findings (status column is loose text, no constraints), the three
-file changes, the default-checked rationale + risk, and the pass 2 spec for the
-booking-driven timesheet no-show detector.
+S49b - pass 2 of the planner rework.
+
+Detector change:
+Today rpc_detect_timesheet_gaps only considered freelancers who logged
+>0h on the date. A freelancer booked for the day but logging nothing was
+invisible to the system. Now the candidate set is the UNION of:
+  (A) freelancers who logged time on the date - existing source
+  (B) freelancers with an active booking on the date - new source
+
+The "active" filter is status IN ('Booked', 'Confirmed', 'Notified').
+Declined and Unavailable are excluded - those are freelancer-driven
+not-going states, not no-shows. A no-show naturally classifies as
+is_short (logged_hours=0) and lands in tbl_timesheet_flags via the same
+upsert path.
+
+Notification:
+For genuinely-new flags (xmax=0 = INSERT, not UPDATE) where logged_hours
+is exactly 0, the RPC inserts a notification of type 'timesheet_no_show',
+severity 'warning', action_url '/m/me'. Short-but-non-zero days remain
+dashboard-only - those freelancers already had the app open and will see
+the gap; no need to push.
+
+Idempotency:
+- Existing UNIQUE (freelancer_id, flag_date) prevents duplicate flags.
+- xmax=0 trick ensures the notification fires only on the row's first
+  INSERT, not on subsequent runs that touch logged_hours.
+
+Test run on 2026-05-22 against live data produced expected results:
+  Karol 11h - ok
+  George 12h - ok
+  Jake 0h (was booked) - flagged + notification 753 created
+  James 1.5h (already-open flag) - flagged, no new notification
+Re-run confirmed idempotency: 1 notification, not 2.
+
+Cron unchanged. timesheet-gap-detect-daily at 06:00 UTC continues to call
+the same function. No new schedule, no new RPC, no new table - existing
+pipes carry the new signal.
+
+TS side:
+- Add 'timesheet_no_show' to NotificationType union (lib/notifications.ts)
+- Add 'timesheet_no_show': 'Timesheet' to typeLabels (notifications page)
+
+Cancellation reason on bookings deferred. Existing affordances (Remove,
+Declined, Unavailable) cover the cancellation case. Add only if false
+flags become a real problem in practice.
