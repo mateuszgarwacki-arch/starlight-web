@@ -16,6 +16,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **`cancellation_reason` on `tbl_freelancer_schedule`** *(S49b, watcher)* — pass-2 spec originally called for this column to suppress no-show flags when a booking is cancelled. Deferred because existing affordances cover the cancellation case (Remove button on the dialog deletes the row entirely; flipping status to `Declined` or `Unavailable` excludes the row from the detector's candidate set). If real false-flag pressure shows up — i.e., PMs find themselves dismissing `timesheet_no_show` flags from `tbl_timesheet_flags` because the booking should have been cancelled but the row wasn't removed/restatused — add the column. One-line ALTER + a `WHERE cancellation_reason IS NULL` clause in the `booked` CTE of `rpc_detect_timesheet_gaps`. UI side: a small "Mark cancelled" affordance on the inline calendar dialog, separate from Remove (so the booking row stays as reliability data).
+
 - [ ] **Consolidate workshop-quote definition into a shared view** *(S45c)* — "workshop + stock quoted" (category text contains `workshop` / `stock pick` / `stock-and-hire`) is now computed in two places: the `quote_workshop` CTE in `rpc_job_close_report` and the `workshopCats` filter in `cost-breakdown.tsx`. They must stay in lockstep. If this rule is touched again, pull it into a view (e.g. `qry_job_workshop_quote`) as the single source of truth and have both consumers read it.
 
 - [ ] **"No Accepted quote" guard on Complete** *(S45a)* — three separate "Quoted shows £0 on close report" bugs to date (S41 NULL value, S42b duplicate Accepted, S45a stuck in `Issued`). Add a soft warning in the Job Complete dialog when the job has no `status='Accepted'` quote — and/or a watcher view listing Complete jobs with no Accepted quote. Soft signal only, doesn't block the close.
@@ -127,6 +129,68 @@ Deferred to its own session per the principle that ship pass 1 (UX), then pass 2
 
 - **0 schema changes** (text column, no CHECK constraint, no triggers, no dependent views — used existing status values)
 - **1 deploy** (`b25fe52`)
+- **Live totals unchanged from S48:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+
+---
+
+#### S49b — Timesheet no-show detection (booking-driven)
+
+The pass-2 piece from the morning: drive missing-timesheet flags off bookings, not just off zero-hour gaps in existing time entries. Today's `rpc_detect_timesheet_gaps` only considered freelancers who logged >0h on the date — a freelancer booked for the day but logging nothing was invisible. That's the silent slip Mateusz wanted to close.
+
+**Design pivot from the spec.** The S49a doc-entry's deferred section proposed a sibling RPC (`rpc_detect_timesheet_no_shows`) plus a `flag_type` column on `tbl_timesheet_flags`. Inspection of the live schema killed that approach:
+
+- `tbl_timesheet_flags` already has `expected_hours` / `logged_hours` / `status`. A no-show is `expected = standard_day_hours, logged = 0` — same row shape as a gap. Adding `flag_type` would have been schema noise.
+- The existing unique constraint `(freelancer_id, flag_date)` gives idempotency for free, no matter how the row got there.
+- The daily cron at `0 6 * * *` UTC already calls `rpc_detect_timesheet_gaps(CURRENT_DATE - 1 day)`. Folding the no-show case into the same function means one cron, one piece of logic, no behaviour drift between the two paths.
+
+So pass 2 ships as a CREATE OR REPLACE of `rpc_detect_timesheet_gaps`, not a new RPC.
+
+**Function change.** The candidate set is now the UNION of:
+
+- *(A)* freelancers who logged time on the date — existing source
+- *(B)* freelancers with `tbl_freelancer_schedule.status IN ('Booked','Confirmed','Notified')` on the date — new source
+
+`Declined` and `Unavailable` are deliberately excluded — those are freelancer-driven not-going states, not no-shows. The `(B)`-only case (booked, logged nothing) flows through the same `with_std` / `classified` pipeline as before and lands in `tbl_timesheet_flags` via the existing upsert. `logged_hrs` is `COALESCE(l.hrs, 0)`, so no-show rows are naturally `is_short`.
+
+**Notification on first detect.** For genuinely-new flags (`xmax = 0`, the Postgres trick to distinguish INSERT from UPDATE in `ON CONFLICT`) where `logged_hours = 0`, the function inserts a `timesheet_no_show` notification directly. Severity `warning`, `action_url = '/m/me'` (freelancer mobile home, where backfill lives), `source_freelancer_id` set. Title: *"Missing timesheet — Dy DD Mon"*. Detail: *"You were booked on … but no hours were logged. Tap to backfill or let the office know."*
+
+Notifications fire **only on no-show (logged_hours=0), not on short-but-non-zero days.** Rationale: a freelancer who logged anything that day is already on their phone and will see the gap on `/m/me` themselves. Spamming them on top of a half-completed timesheet is overkill. If a real case surfaces where short-day notifications would help, easy to extend.
+
+**Why no `cancellation_reason` column (departure from the S49a spec).** The spec proposed adding it to `tbl_freelancer_schedule` to skip flag generation when a booking was cancelled. Decided to defer. The existing surfaces cover cancellation today:
+
+- Remove button on the inline calendar dialog → row gone, no flag.
+- Status flip to `Declined` (freelancer rejected) or `Unavailable` (self-marked off) → excluded by the new `status IN ('Booked','Confirmed','Notified')` filter.
+
+Real false-flag pressure (PM-cancelled bookings that nobody updates the status of) hasn't shown up yet. If it does, the column is a one-line ALTER plus a WHERE clause in the function. YAGNI for now. Added to the cleanup backlog as a watcher.
+
+**Test run on live data (2026-05-22).**
+
+```
+SELECT * FROM rpc_detect_timesheet_gaps('2026-05-22'::date);
+```
+
+Result:
+
+- Karol Socha 11h → `ok`
+- George Cullingford 12h → `ok`
+- **Jake Macklin 0h (booked, never logged)** → `flagged` — flag 5801 inserted, notification 753 fired with `/m/me` action URL.
+- James Hackney 1.5h (already-open flag from existing detector) → `flagged`, no new notification (`is_new = false`).
+
+Re-run confirmed idempotency: `n_notifs` for Jake remained 1 after a second invocation. Jake's flag for 2026-05-22 and the corresponding notification are real captured data (not test artifacts) — left in place. They'd have been caught on the morning cron had the change shipped a few days earlier.
+
+**App-side changes.**
+
+- `src/lib/notifications.ts` — `timesheet_no_show` added to `NotificationType` union.
+- `src/app/(dashboard)/notifications/page.tsx` — `timesheet_no_show: 'Timesheet'` added to `typeLabels`. Without it the type renders without a category badge.
+
+**Backfill — not run.** Past 14 days have several Jake-no-show dates (May 18, 19, 21, 22, plus a couple more outside the live window). The cron will start catching new ones from tomorrow's run (06:00 UTC on 26 May, processing 25 May). Past days won't be retroactively processed unless someone calls the RPC with an older date. Discussed; decision deferred to Mateusz on whether to run a manual backfill loop for the past 2 weeks (would generate ~6 more notifications for Jake at once).
+
+#### S49b schema summary
+
+- **0 tables**, **0 new functions** — replaced existing RPC body, signature unchanged
+- **+1 NotificationType** value in the application union (`timesheet_no_show`)
+- **1 migration** (`s49b_expand_timesheet_detector_for_no_shows`)
+- **1 deploy** (`2cb495d`)
 - **Live totals unchanged from S48:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
 
 ---
