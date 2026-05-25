@@ -1,27 +1,6 @@
-feat(planner): rename + Confirmed-off-system booking path
+docs(tracker): S49 — Planner rename + Confirmed-off-system booking path
 
-S49a — first pass of the planner rework.
-
-1. Rename "Capacity" -> "Planner" (sidebar label + page H1 only;
-   URL stays /capacity to avoid bookmark breakage + chained renames).
-
-2. Add-booking page: third action "Book - already confirmed" creates
-   the schedule row in Confirmed state directly (no WhatsApp, no wait
-   for freelancer accept). Use when the booking has been arranged via
-   WhatsApp / phone / in person. Original two paths unchanged:
-   - Book & notify via WhatsApp -> status Notified, opens WA
-   - Book without notifying     -> status Booked (pencil-in)
-
-3. Inline booking-calendar dialog: "Already confirmed" checkbox. New
-   bookings default to checked (the PM's typical case is recording an
-   already-arranged commitment). Allows promoting an existing Booked
-   row to Confirmed PM-side, or demoting back. Hidden for freelancer-
-   driven states (Notified / Declined / Unavailable).
-
-No schema change. tbl_freelancer_schedule.status is plain text with
-no CHECK constraint; we're using existing values (Booked, Confirmed)
-that the capacity RPC already treats as active.
-
-Pass 2 (separate session): drive timesheet no-show flags off booking
-presence + add cancellation_reason so cancelled/sick days suppress
-the flag. Spec lives in chat for now.
+Pass 1 of the planner rework. Records the chat reframe (Held -> Booked/Confirmed),
+investigation findings (status column is loose text, no constraints), the three
+file changes, the default-checked rationale + risk, and the pass 2 spec for the
+booking-driven timesheet no-show detector.

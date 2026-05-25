@@ -81,6 +81,56 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S49 — 25 May 2026
+
+Planner rename + new "Confirmed off-system" booking path. One deploy. No schema change.
+
+#### S49a — Capacity → Planner, plus a third booking action for off-system confirmations
+
+**Trigger:** Mateusz: *"in my capacity page — I think I would like to change it to 'planner', and when choosing people for specific dates I don't want to have the only option to book them. Sometimes I just want to check that they will be here as they were booked either by text message or verbally."*
+
+**Reframe in chat (worth recording):** my first instinct was a new "Held" state alongside the formal booking — a second axis to the existing confirmation flow. Mateusz pushed back: *"if I mark it held, I treat it as officially booked. In matter of fact it should be just 'booked'. If booked with confirmation, it can say 'booked confirmed' or similar."* The new state was theoretical complexity; reality is one booking row, two creation paths. Same downstream effect. He also surfaced the actual operational driver, which is the prize for pass 2 (separate session): freelancers sometimes forget to log a timesheet, and there's no signal because there's no booking expectation to compare against. **Bookings should drive the no-show flag.** Pass 1 ships the booking-creation surface; pass 2 ships the no-show detector on top of it.
+
+**Investigation findings:**
+- `tbl_freelancer_schedule.status` is plain `text` with default `'Booked'`. No CHECK constraint, no triggers, no dependent views, only `rpc_capacity_data` reads it. Schema is loose — no migration needed for new status values (everything is already free text).
+- Status values in live data: `Confirmed` (97), `Declined` (6), `Booked` (5). `Notified` and `Unavailable` exist in code paths but currently no live rows.
+- `Notified` is a transient state set by the "Book & notify via WhatsApp" path on `/capacity/add-booking`; freelancer's mobile schedule confirm/decline action moves it to `Confirmed` / `Declined`.
+
+**Changes shipped (5 files, 1 deploy, 0 schema):**
+
+1. **Sidebar label + page H1 rename** (`src/components/sidebar.tsx`, `src/app/(dashboard)/capacity/page.tsx`). URL stays `/capacity` — renaming the route would chain-rename `/capacity/add-booking`, break bookmarks, and require updating Link refs throughout. Page label is the user-visible thing; URL is mechanical. Deferred URL rename to a quiet session if Mateusz wants it.
+
+2. **`/capacity/add-booking` — third action** (`src/app/(dashboard)/capacity/add-booking/page.tsx`). Refactored `saveBooking(notify: boolean)` into `saveBooking(mode: "notify" | "silent" | "confirmed")`. Three buttons now:
+   - **Book & notify via WhatsApp** (blue) — status `Notified`, fires WA. *Existing behaviour.*
+   - **Book — already confirmed** (green, new) — status `Confirmed`, no WhatsApp. Tooltip: "Use when you've already arranged it via WhatsApp / phone / in person."
+   - **Book without notifying** (muted) — status `Booked`, no WhatsApp. *Existing behaviour, kept for the pencil-in case.* Tooltip clarifies its distinct purpose now that "confirmed" is its own button.
+
+3. **Inline `BookingCalendar` dialog** (`src/components/booking-calendar.tsx`). Added `dialogConfirmed` state + a small "Already confirmed" checkbox with helper subtext. Defaults checked for new bookings (PM's typical case is recording an already-arranged commitment); reflects current status for existing rows. Visible for new / `Booked` / `Confirmed` rows; hidden for `Notified` (awaiting freelancer response — PM shouldn't be flipping the meaning silently), `Declined`, and `Unavailable` (freelancer-driven states). Save path now writes `status` on existing-row updates (previously only `job_id` and `notes`), which is what enables PM-side promote/demote.
+
+**Status colour mapping unchanged.** Confirmed = green, Notified = blue, Booked = amber, Declined = red strikethrough, Unavailable = grey. The new path lands directly on green.
+
+**Default-checked choice — rationale + risk.** Defaulting the inline-dialog checkbox to checked changes the default outcome of a single-cell click from `Booked` → `Confirmed`. This is the right default given the dominant use case Mateusz described (he treats every PM-side booking as confirmed unless he's pencilling). The risk is that the previous muscle-memory of "click cell, click Book" now produces a Confirmed row instead of a Booked one. Mitigation: the checkbox is visible above the action buttons, defaults visibly to checked, and the post-save toast says "Booked & confirmed" so it's obvious what happened. If this proves wrong in practice, flipping the default is one line.
+
+#### Deferred — Pass 2 (separate session): booking-driven timesheet no-show flag
+
+The actual operational reason Mateusz wanted this: today `rpc_detect_timesheet_gaps` flags freelancers who log >0h but <90% of `standard_day_hours`. It can't catch a complete no-show because there's no row to detect against. Bookings are the missing signal — a freelancer booked for today with zero `tbl_wo_time_entries` by EOD is a no-show. Spec for next session:
+
+- New RPC `rpc_detect_timesheet_no_shows(DATE)` — for each `tbl_freelancer_schedule` row on the date with active status (`Booked` / `Confirmed` / `Notified`) and no time entries, insert a row into `tbl_timesheet_flags` with `flag_type = 'no_show'`.
+- `pg_cron` schedule at ~18:00 UK time (UTC offset depends on BST; cron is UTC per project convention — pick 17:00 UTC for now and revisit when DST changes).
+- Add `cancellation_reason text` (or enum: `sick | no_show | cancelled_by_us | cancelled_by_them`) to `tbl_freelancer_schedule`. Skip flag generation when set. Gives operational signal *and* freelancer-reliability data over time.
+- Notifications: freelancer gets a deep-link to mobile timesheet entry; PM sees in existing flags dashboard alongside gap flags.
+- Idempotency: `UNIQUE(freelancer_id, flag_date, flag_type)` on `tbl_timesheet_flags` (verify if not already present).
+
+Deferred to its own session per the principle that ship pass 1 (UX), then pass 2 (data + cron + notify) — they share no code, debugging cron timing simultaneously with modal UX is asking for trouble.
+
+#### S49 schema summary
+
+- **0 schema changes** (text column, no CHECK constraint, no triggers, no dependent views — used existing status values)
+- **1 deploy** (`b25fe52`)
+- **Live totals unchanged from S48:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+
+---
+
 ### S48 — 25 May 2026
 
 WO documents panel UX polish and a reusable in-app PDF viewer. Also a security-policy investigation on freelancer PIN visibility (closed without ship — see S48c). Four deploys. No schema changes.
