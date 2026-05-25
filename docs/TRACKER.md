@@ -46,7 +46,11 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **Auto-complete active WOs on Job Complete** *(S41)* — option 3 from the Tramp Club Dancing podium discussion. Add a checkbox to the Job Complete dialog: "Also mark N active WO(s) Complete" (checked by default when active non-OVERHEAD WOs exist). Bypasses the WO-completion photo requirement, which is the right tradeoff for retro-closing old jobs but should be visible in the audit log (e.g. `closed_via='job_complete'` flag on the WO update). Worth ~15 min.
 
-- [ ] **Handover — PDF drawing rendering** *(S39)* — image drawings render full-page inline; PDF drawings currently show a fallback "Open PDF" box. Add pdf.js (dynamic import, ~500KB gzipped) and render PDF pages to canvas at 2× DPR for crisp print. Applies to `DrawingPage` in `/reports/handover/[jobId]/page.tsx`.
+- [ ] **Handover — PDF drawing rendering** *(S39, dep now in place via S48b)* — image drawings render full-page inline; PDF drawings currently show a fallback "Open PDF" box. `react-pdf` + `pdfjs-dist` + self-hosted worker (`public/pdf.worker.min.mjs`) all shipped in S48b. `src/components/pdf-thumb.tsx` is the pattern starting point — needs adapting from single-page render to multi-page print render (iterate `numPages`, render each `<Page>` at print scale, 2× DPR for crisp output). Applies to `DrawingPage` in `/reports/handover/[jobId]/page.tsx`. Probably 30 min now that the infrastructure is in.
+
+- [ ] **PDF thumbnail aspect-aware sizing** *(S48b)* — drawings/references grid container is 176×128 (landscape A-series). Portrait PDFs render top-cropped (page renders at 176 wide → ~250 tall, container overflow-hidden trims to 128). Usually fine because title blocks live at the top, but identifying info mid-page on a portrait drawing gets cut. Either compute container height per page aspect via react-pdf's `onLoadSuccess` callback, or accept the top-crop. Cosmetic.
+
+- [ ] **react-pdf transitive vulnerabilities recheck on upgrade** *(S48b)* — npm audit flags 4 issues in pdf.js text-extraction and annotation code paths. Both paths disabled in our usage (`renderTextLayer={false} renderAnnotationLayer={false}` on every `<Page>`), so no operational risk today. Re-evaluate on each react-pdf version bump.
 
 - [ ] **Handover — persist drawing rotation** *(S39)* — rotation state is currently in-memory only (matches traveller). If a zone has 10 landscape drawings, every session restart means re-rotating. Add `rotation INT DEFAULT 0` on `tbl_handover_zone_documents` and persist on rotate. One small migration + a PATCH on the handler.
 
@@ -76,6 +80,95 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S48 — 25 May 2026
+
+WO documents panel UX polish and a reusable in-app PDF viewer. Also a security-policy investigation on freelancer PIN visibility (closed without ship — see S48c). Four deploys. No schema changes.
+
+#### S48a — Drawing/reference thumbnails: bigger, named, and laid out for identification
+
+**Trigger:** Mateusz, on reordering drawings for print: *"thumbnails are very small, so it's hard to see what's on them when I'm changing the order — need to click each one. I don't need great resolution, but they need to be big enough to identify."*
+
+**Two coupled UX fixes in `wo-documents-panel.tsx`:**
+
+**(1) Size + crop.** Thumbnail size bumped from 64×64 square to 176×128 (close to A-series landscape ratio). `object-cover` (centre crop — the killer for landscape A3 drawings since only the middle slice was visible) switched to `object-contain` (full drawing visible, aspect preserved). Background changed `bg-surface-dim` → `bg-white` so line drawings have proper context (white-on-grey loses contrast on dark CAD output). Order badge and delete button scaled proportionally (was `w-5 h-5 text-[9px]`, now `w-6 h-6 text-[11px]`). FileText icon fallback also bumped (h-6 → h-10) for the non-image-non-PDF case.
+
+**(2) Caption under each thumb.** The hover-only `title` attribute was awkward during drag-drop reorder — Mateusz: *"clue is in the name."* Added a 2-line clamped caption below each thumbnail rendering `doc.caption || displayDocName(file_name, activityLabel, scopeName)`. The new `displayDocName` helper at module level strips the `{activity}-{scope}-` prefix that the upload pipeline adds (those parts are implicit from the WO context), strips the file extension, and converts hyphens back to spaces. Falls back to raw name if no prefix matches (covers docs moved between WOs).
+
+Schema/backend unchanged — both fixes are pure render-side. Affects both `drawing` and `reference` doc types (shared code path). Layout impact: 3–4 thumbs per row on a typical panel width instead of 8+, which is the correct density for identification rather than stamp-collection.
+
+#### S48b — In-app PDF viewer + first-page PDF thumbnails
+
+**Trigger:** Mateusz, after S48a landed: *"shall we build PDF viewer/thumbnail on same logic as JPEG? I don't want to need to download all PDFs to see them — do a nice PDF viewer which we can use in different parts of our system, when and where necessary."*
+
+**Library choice — react-pdf over alternatives:**
+- `@react-pdf-viewer/core` — prettier defaults but commercial-use license required (we'd pay)
+- `pdf.js` direct — same engine, more boilerplate, no upside
+- **`react-pdf`** (Wojciech Maj, MIT) — chosen. Industry standard, ~600KB gzipped, well-typed
+
+**Considered and rejected: Microsoft Graph thumbnail API.** OneDrive auto-generates first-page thumbnails for PDFs server-side at zero client cost. Would have been the cheaper thumbnail solution. But Mateusz wanted a real viewer (zoom, page nav), not just thumbnails. Once react-pdf was in for the viewer, using it for thumbnails too kept the system on one library. The Graph approach remains a fallback if pdf.js client-side rendering ever becomes a perf problem on PDF-heavy WOs.
+
+**Components shipped (both reusable across the system, not WO-specific):**
+- `src/components/pdf-viewer.tsx` — fullscreen modal. Page nav (prev/next + page-number input), zoom in/out + fit-to-width, keyboard shortcuts (Esc / ← → / + - / 0). Optional `onDownload` callback for caller-provided download action. Takes a URL and an `onClose`, nothing else. v1 scope: page nav, zoom, close. Out of scope (easy adds later): text selection, search, annotation, multi-page sidebar.
+- `src/components/pdf-thumb.tsx` — small first-page render for fixed-size containers. Falls back to FileText icon on load error.
+
+**Worker setup:** `pdf.worker.min.mjs` copied from `node_modules/pdfjs-dist/build` to `public/` and referenced at `/pdf.worker.min.mjs`. Self-hosted, same-origin, no CDN dependency, no CORS. Committed to repo so Vercel builds have it. On future react-pdf upgrades, re-copy the worker file from node_modules — they must match.
+
+**Performance — lazy loading via `next/dynamic`:** both PdfViewer and PdfThumb are dynamic-imported with `ssr: false`. pdf.js (~600KB) only downloads when a page actually has a PDF to render. Zero impact on PDF-free pages.
+
+**Wiring in `wo-documents-panel.tsx`:**
+- **Drawings/references grid:** PDFs in the grid now render real first-page thumbnails via `PdfDocThumb` (a small wrapper that fetches a same-origin view URL then renders `<PdfThumb>`). Was: generic FileText icon.
+- **Click-to-preview (grid):** `openPreview` routes PDFs to the new PdfViewer modal. Was: PDF rendered in an `<iframe>` inside the image lightbox (browser-default PDF viewer, inconsistent across browsers, mobile-hostile).
+- **Eye-icon on non-grid doc types (cut lists, CAD breakdown line items):** `viewDoc` now routes PDFs to PdfViewer. Other types (csv, xlsx) continue to open in a new tab.
+
+**URL source for PDFs:** `getOneDriveViewUrl(path)` — same-origin `/api/onedrive/view` proxy returning streaming inline content. Used instead of `getOneDriveUrl` (which returns Graph CDN URLs) specifically because pdf.js's `fetch()` of the PDF bytes is sensitive to CORS — the proxy sidesteps that surface entirely.
+
+**Known limitation — portrait PDFs in landscape thumb slot.** Container is 176×128 (landscape). Portrait drawings render at 176 wide → ~250 tall → top-cropped to 128. Usually fine because title blocks live at the top, but identifying info mid-page on a portrait drawing gets cut. Logged in cleanup backlog.
+
+**Crosswind with existing handover backlog item:** "Handover — PDF drawing rendering" (S39) is now mostly satisfied at the infrastructure level — `react-pdf`, `pdfjs-dist`, and the self-hosted worker are all live. The handover print page still needs its own adaptation of `pdf-thumb.tsx` (multi-page iteration, print scale, 2× DPR). Updated the cleanup item to reflect.
+
+**Deps added:** `react-pdf` (and transitive `pdfjs-dist`). `npm audit` flagged 4 transitive vulnerabilities (2 moderate, 2 high) in pdf.js text-extraction and annotation paths — neither code path active in our usage (`renderTextLayer={false} renderAnnotationLayer={false}` on every Page). Accepted for now; logged in backlog to re-check on every react-pdf version bump.
+
+**Reusability** — to use elsewhere in the system:
+```tsx
+import dynamic from "next/dynamic";
+const PdfViewer = dynamic(() => import("@/components/pdf-viewer"), { ssr: false });
+<PdfViewer url={someUrl} fileName="..." onClose={() => setOpen(false)} />
+```
+Same for `PdfThumb`. The proxy URL pattern (`getOneDriveViewUrl(path)`) is what to feed them when the PDF lives in OneDrive.
+
+#### S48c — Crew page: PIN visibility investigated, declined on policy
+
+**Trigger:** Mateusz: *"in crew page I'd like to view freelancers' PIN numbers — a little icon so if anyone loses theirs I don't need to reset."*
+
+**Investigation:** PINs are stored only as bcrypt hashes in Supabase Auth (SP-002). The legacy plaintext `tbl_freelancers.pin` column was dropped pre-S41; SP-002 explicitly bans reintroducing one. Building "view PIN later" would require storing PINs recoverably somewhere in the application database — a SP-002 violation that would surface in any future security audit.
+
+**Alternative proposed:** a single "Reset & Send" button on each crew row that combines the existing 4-click flow (Generate → Save via `freelancer-sync` → WhatsApp share) into one click. Same security model, much less ceremony — the underlying workflow problem ("freelancer forgot, I want to give them one without ceremony") solved within policy. Existing detailed Mobile Access dialog stays for first-time onboarding and the rare case of setting a specific PIN.
+
+**Outcome — Mateusz declined.** *"That's fine, leave it."* The existing Mobile Access dialog handles the workflow; he doesn't want to add a parallel fast-path. Crew page unchanged.
+
+**Pattern worth recording:** the conversation here — user asks for a specific affordance that turns out to violate a security policy → I flag the policy → propose an alternative that solves the underlying problem within the policy → user decides. This is the SP-002 enforcement loop working as designed. Logging the trace so future-Claude doesn't relitigate when the same request reappears.
+
+---
+
+#### Cleanup updates this session
+
+- **Updated:** "Handover — PDF drawing rendering" (S39). Was: "add pdf.js…" — now: dep is in place via S48b, scope narrowed to "adapt pdf-thumb.tsx pattern to multi-page print render."
+- **Added (small):** PDF thumbnail aspect-aware sizing — portrait PDFs render top-cropped in the 176×128 landscape slot. Cosmetic.
+- **Added (small):** `react-pdf` transitive vulnerabilities recheck on each version bump (currently dormant — text/annotation code paths are disabled in our usage).
+
+---
+
+#### S48 summary
+
+- **0 schema changes** (no migration, no DB writes)
+- **2 new reusable components:** `pdf-viewer.tsx`, `pdf-thumb.tsx`
+- **1 new npm dep:** `react-pdf` (+ transitive `pdfjs-dist`)
+- **1 new public asset:** `public/pdf.worker.min.mjs` (self-hosted pdf.js worker)
+- **4 deploys:** thumbnail size+caption (`e8a9b60`), display-name caption (`bc4eef7`), PDF viewer+thumbs (`105b6f3`), all-PDFs-through-viewer (`246424b`)
+- **Live totals unchanged from S47:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+
+---
 
 ### S47 — 23 May 2026
 

@@ -1,8 +1,19 @@
-feat(pdf-viewer): route all PDFs in docs panel through in-app viewer
+docs(tracker): S48 — WO docs UX polish + reusable PDF viewer
 
-viewDoc() (the eye icon on cut lists and other non-grid doc types) now
-opens PDFs in the PdfViewer modal instead of a new browser tab. Non-PDF
-types (csv, xlsx, etc.) continue to open in a new tab as before.
+Session log entry covering:
+- S48a: WO drawing thumbnails 64x64 -> 176x128 with object-contain and
+  stripped-prefix caption underneath
+- S48b: react-pdf-based PdfViewer + PdfThumb components (reusable across
+  the system), wired into wo-documents-panel for both grid thumbnails
+  and click-to-preview; routes all PDFs in the docs panel through the
+  in-app viewer instead of new tabs / iframes
+- S48c: Crew page PIN visibility investigation (declined - SP-002 ban
+  on plaintext PIN storage), pattern recorded for future reference
 
-Closes the inconsistency where drawings/references PDFs opened in-app
-but cut list PDFs (same file type, same panel) still opened externally.
+Cleanup backlog:
+- Handover PDF drawing rendering item updated to reflect that react-pdf
+  + worker are now in place (just needs the multi-page print adaptation)
+- Added: PDF thumbnail aspect-aware sizing (portrait PDFs top-cropped)
+- Added: react-pdf transitive vulnerabilities recheck on each upgrade
+
+No schema changes. Totals unchanged: 57 tables / 34 views / 18 RPCs / 2 cron jobs.
