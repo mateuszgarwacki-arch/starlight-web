@@ -1,7 +1,21 @@
-docs(s49b): tracker + schema sync
+feat(jobs): scroll-restore on return from scope/WO page
 
-- TRACKER.md: S49b session entry (no-show detection), cleanup-backlog
-  watcher for cancellation_reason.
-- 03_database_schema.md: rpc_detect_timesheet_gaps description updated
-  to reflect the UNION-with-bookings candidate set and the no-show
-  notification side-effect. Signature, cron, totals unchanged.
+Job detail page now remembers which WO/scope row the user clicked, and
+returns them to it on Back-to-Job — no more scrolling through a long
+work-orders list to find where they were.
+
+How it works:
+- Job page `activeTab` initialiser reads `?tab=` (lines|scopes|wo).
+- Job page adds `id="wo-{id}"` and `id="scope-{id}"` anchors on the row
+  Links, plus `scroll-mt-24` for sticky-header breathing room.
+- A one-shot useEffect (gated by a didRestoreScroll ref) calls
+  scrollIntoView on `window.location.hash` once `loading` flips false.
+- Scope page "Back to Job" link now points at
+  `/jobs/X?tab=wo#wo-{expandWoId}` when the user arrived via a WO row,
+  else `/jobs/X?tab=scopes#scope-{scopeId}`.
+
+Rejected alternatives: Next.js built-in scroll restoration (only fires
+on browser-back, not on a forward Link), and sessionStorage stash
+(breaks silently if the list re-orders between visits).
+
+S50a — TRACKER updated.

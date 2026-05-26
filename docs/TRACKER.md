@@ -83,6 +83,39 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S50 — 26 May 2026
+
+Scroll-restore on the job detail page. Tiny UX-only ship. One deploy, no schema change.
+
+#### S50a — Hash-anchor + `?tab=` scroll restore from scope/WO → job
+
+**Trigger:** Mateusz: *"when i'm in the job level and clicking work order, do some changes, when i click back to job - can i be taken where i clicked so i don't need to scroll down again to look where were i."*
+
+**Reframe.** Three approaches considered:
+1. **Rely on Next.js built-in scroll restoration** — only works for browser back / `router.back()`. The scope page's "Back to Job" is a forward `<Link>` to `/jobs/X` so scroll always resets. Rejected.
+2. **`sessionStorage` scroll-position stash** — works but stores ephemeral state and silently breaks if the list re-orders or filters between visits. Rejected.
+3. **Hash-anchor + scrollIntoView (shipped)** — deterministic, survives refresh, self-documenting in the URL, no state to manage. The `?expand=` query param already on the scope page tells us whether the user came via a WO row or a scope card.
+
+**Changes shipped (2 files, 1 deploy, 0 schema):**
+
+1. **`src/app/(dashboard)/jobs/[id]/page.tsx`** — `useRef` import; `activeTab` initialiser now reads `?tab=` (`lines | scopes | wo`); a new one-shot `useEffect` (guarded by `didRestoreScroll` ref so it fires exactly once after `loading` flips false) calls `scrollIntoView({ behavior: "instant", block: "center" })` on `window.location.hash`. Anchor IDs `id="scope-{id}"` and `id="wo-{id}"` on the two `<Link>` rows that lead off to scope/WO detail, plus `scroll-mt-24` for breathing room.
+
+2. **`src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx`** — "Back to Job" link is now conditional: if `expandWoId` is set (user arrived via a WO row), href is `/jobs/X?tab=wo#wo-{expandWoId}`; otherwise `/jobs/X?tab=scopes#scope-{scopeId}`. `deleteScope`'s `router.push("/jobs/" + jobId)` left alone — no point anchoring to a row that no longer exists.
+
+**Why `block: 'center'` over `'start'`.** The dashboard layout has a sticky top bar; `'start'` would tuck the row behind it. `'center'` puts the row mid-viewport with context above and below — also why `scroll-mt-24` is largely belt-and-braces here, but harmless.
+
+**Why `behavior: 'instant'` over `'smooth'`.** Snappier, no motion sickness on a long jump down a 50-WO list, and it matches the feel of going back rather than the feel of a guided tour.
+
+**Failure modes.** If the WO/scope row was deleted between leaving and returning (rare given the flow), `querySelector` returns null, `scrollIntoView` silently no-ops, user lands at top. Acceptable. If the user lands on the job page directly via bookmark or sidebar (no `?tab=`, no hash), default behaviour is unchanged: Quote Lines tab, top of page.
+
+#### S50 schema summary
+
+- **0 schema changes**
+- **1 deploy**
+- **Live totals unchanged from S49:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+
+---
+
 ### S49 — 25 May 2026
 
 Planner rename + new "Confirmed off-system" booking path. One deploy. No schema change.

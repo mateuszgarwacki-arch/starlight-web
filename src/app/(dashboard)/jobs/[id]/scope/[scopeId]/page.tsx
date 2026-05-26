@@ -219,7 +219,11 @@ export default function ScopeDetailPage() {
       {/* Back + presence */}
       <div className="flex items-center justify-between">
         <Link
-          href={`/jobs/${jobId}`}
+          href={
+            expandWoId
+              ? `/jobs/${jobId}?tab=wo#wo-${expandWoId}`
+              : `/jobs/${jobId}?tab=scopes#scope-${scopeId}`
+          }
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

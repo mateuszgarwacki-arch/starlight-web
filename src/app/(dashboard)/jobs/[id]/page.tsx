@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from "react";
+import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { formatDate, formatCurrency, statusClass } from "@/lib/utils";
@@ -129,7 +129,14 @@ export default function JobDetailPage() {
   const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
+  const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">(() => {
+    // Read ?tab= so a "Back to Job" link from the scope page lands on the
+    // same tab the user was on when they navigated away.
+    if (typeof window === "undefined") return "lines";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "lines" || t === "scopes" || t === "wo") return t;
+    return "lines";
+  });
   const [woData, setWoData] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(() => {
     // Persist last-used filter per job (session-scoped — dies on tab close)
@@ -295,6 +302,23 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Scroll-restore on return from a scope/WO page.
+  // The scope page's "Back to Job" link encodes the row the user came from
+  // as `?tab=wo#wo-123` (or `?tab=scopes#scope-456`). The `?tab=` is read
+  // by the activeTab initialiser above; the hash is consumed here, once,
+  // after the data load completes and the rows have rendered.
+  const didRestoreScroll = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (loading || didRestoreScroll.current) return;
+    if (!window.location.hash) return;
+    didRestoreScroll.current = true; // attempt once; silently no-op if element is missing
+    requestAnimationFrame(() => {
+      const el = document.querySelector(window.location.hash);
+      if (el) el.scrollIntoView({ behavior: "instant", block: "center" });
+    });
+  }, [loading]);
 
   // Record visit for recent jobs strip
   useEffect(() => {
@@ -1591,8 +1615,9 @@ export default function JobDetailPage() {
               return (
                 <Link
                   key={scope.scope_item_id}
+                  id={`scope-${scope.scope_item_id}`}
                   href={`/jobs/${jobId}/scope/${scope.scope_item_id}`}
-                  className="card px-5 py-4 flex items-center gap-4 hover:shadow-md transition-shadow block"
+                  className="card px-5 py-4 flex items-center gap-4 hover:shadow-md transition-shadow block scroll-mt-24"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
@@ -1641,8 +1666,9 @@ export default function JobDetailPage() {
             woData.map((wo: any) => (
               <Link
                 key={wo.work_order_id}
+                id={`wo-${wo.work_order_id}`}
                 href={`/jobs/${jobId}/scope/${wo.scope_item_id}?expand=${wo.work_order_id}`}
-                className="card px-5 py-3.5 flex items-center gap-4 hover:shadow-md transition-shadow block"
+                className="card px-5 py-3.5 flex items-center gap-4 hover:shadow-md transition-shadow block scroll-mt-24"
               >
                 <div className="flex flex-col items-center w-12 shrink-0">
                   <span className="text-xs font-semibold text-navy">{wo.wo_sequence || "?"}/{wo.scope_total_wos}</span>
