@@ -1,33 +1,30 @@
-fix(jobs): scroll-restore actually works (S50c)
+fix(jobs): scroll-restore SSR hydration trap (S50d)
 
-S50a shipped the feature but it never landed scroll on prod -
-Mateusz tested and got "lands at top, ignores hash entirely".
+The real bug behind "url is correct but doesn't take me anywhere":
 
-Two bugs, both fixed:
+activeTab's useState lazy initialiser used `typeof window === "undefined"`
+to read `?tab=` from the URL. This is a classic Next.js App Router
+hydration trap:
 
-1. Next.js App Router scroll-to-top winning the race against
-   scrollIntoView. Added scroll={false} to the scope page's
-   Back-to-Job Link so Next.js doesn't auto-scroll after nav.
+- Server prerender: window undefined -> initialiser returns "lines"
+- Server emits HTML with Quote Lines tab content rendered
+- Client hydrates with the server's state value
+- Even though the client-side initialiser would now return "wo", the
+  hydrated state stays "lines"
 
-2. didRestoreScroll ref was set to true BEFORE the rAF callback
-   ran, so if the row wasn't in the DOM yet (data still loading)
-   the flag burnt and we never retried. New effect:
-   - Only marks done after scrollIntoView actually runs
-   - Re-fires on woData.length / scopes.length / activeTab changes
-   - setTimeout(50ms) instead of rAF for slacker timing
-   - behavior: "auto" instead of "instant" for broader support
+Net effect: the URL has `?tab=wo#wo-XXX`, but the active tab is still
+Quote Lines, so the WO rows are never rendered. document.querySelector
+returns null, scrollIntoView never fires, page stays at top.
 
-Bundled in: docs/06_tooling.md correction from after S50b deploy
-when I noticed Vercel:deploy_to_vercel doesn't actually trigger a
-build (it returns help text). The deploy section, decision matrix
-row, and contingency bullet now reflect the real workflow: shell
-the npx vercel call, accept "Tool execution failed" noise from the
-MCP timeout, monitor through Vercel:list_deployments and get_deployment.
+Fix: drop the window-check from the initialiser (now just "lines"),
+and add a separate useEffect that reads `?tab=` after mount. This runs
+purely client-side, post-hydration, and triggers a re-render to the
+correct tab. The scroll-restore useEffect already has activeTab in its
+deps, so it re-fires after the tab switch and finds the row.
 
-Files:
-  src/app/(dashboard)/jobs/[id]/page.tsx
-  src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx
-  docs/06_tooling.md
-  docs/TRACKER.md
+Cost: a ~16ms flash of Quote Lines on initial load before the tab
+switches. Acceptable; barely perceptible.
 
-S50c - TRACKER updated.
+Same pattern (typeof window check in useState initialiser) exists for
+activeFilter from sessionStorage. Leaving alone -- not the bug path and
+the flash trade-off is uglier there.

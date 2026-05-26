@@ -129,14 +129,7 @@ export default function JobDetailPage() {
   const [contractorMap, setContractorMap] = useState<Record<number, ContractorInfo>>({});
   const [loading, setLoading] = useState(true);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">(() => {
-    // Read ?tab= so a "Back to Job" link from the scope page lands on the
-    // same tab the user was on when they navigated away.
-    if (typeof window === "undefined") return "lines";
-    const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "lines" || t === "scopes" || t === "wo") return t;
-    return "lines";
-  });
+  const [activeTab, setActiveTab] = useState<"lines" | "scopes" | "wo">("lines");
   const [woData, setWoData] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterKey | "zone" | null>(() => {
     // Persist last-used filter per job (session-scoped — dies on tab close)
@@ -302,6 +295,18 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Sync activeTab from `?tab=` after mount. Doing this here (not in the
+  // useState initialiser) avoids an SSR hydration trap: the server has no
+  // window so the initialiser returns "lines" there, and once that lands
+  // in the hydrated state, the client-side window-check version never gets
+  // applied. Reading the URL in useEffect runs purely on the client, post-
+  // hydration, and triggers a re-render to the correct tab.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "lines" || t === "scopes" || t === "wo") setActiveTab(t);
+  }, []);
 
   // Scroll-restore on return from a scope/WO page.
   // The scope page's "Back to Job" link encodes the row the user came from
