@@ -220,9 +220,9 @@ export default function ScopeDetailPage() {
       <div className="flex items-center justify-between">
         <Link
           href={
-            expandWoId
-              ? `/jobs/${jobId}?tab=wo#wo-${expandWoId}`
-              : `/jobs/${jobId}?tab=scopes#scope-${scopeId}`
+            scope?.quote_line_id
+              ? `/jobs/${jobId}?tab=lines#line-${scope.quote_line_id}`
+              : `/jobs/${jobId}`
           }
           scroll={false}
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"

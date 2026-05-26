@@ -332,7 +332,7 @@ export default function JobDetailPage() {
       }
     }, 50);
     return () => clearTimeout(id);
-  }, [loading, activeTab, woData.length, scopes.length]);
+  }, [loading, activeTab, woData.length, scopes.length, lines.length]);
 
   // Record visit for recent jobs strip
   useEffect(() => {
@@ -787,7 +787,8 @@ export default function JobDetailPage() {
     return (
       <Fragment key={line.quote_line_id}>
       <tr
-        className={`border-t border-subtle transition-colors ${
+        id={`line-${line.quote_line_id}`}
+        className={`border-t border-subtle transition-colors scroll-mt-24 ${
           isUninterpreted
             ? "bg-starlight-amber/10/60 border-l-4 border-l-starlight-amber"
             : lineIsDone

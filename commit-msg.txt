@@ -1,30 +1,34 @@
-fix(jobs): scroll-restore SSR hydration trap (S50d)
+fix(jobs): back-to-job lands on Quote Lines, anchored to the line (S50e)
 
-The real bug behind "url is correct but doesn't take me anywhere":
+Mateusz: "i want to be taken to quote line tab - that's from where i operate."
 
-activeTab's useState lazy initialiser used `typeof window === "undefined"`
-to read `?tab=` from the URL. This is a classic Next.js App Router
-hydration trap:
+Reframe of the original feature. S50a-d targeted "land on whatever tab
+you came from" but the actual workflow is: PM lives on Quote Lines,
+clicks into a WO or scope to inspect/edit, comes back. The anchor that
+matters is the line, not the child element. A line can hold multiple
+scopes and multiple WOs but they're all children of one line - landing
+on the line gives the user immediate context for what they were just
+looking at.
 
-- Server prerender: window undefined -> initialiser returns "lines"
-- Server emits HTML with Quote Lines tab content rendered
-- Client hydrates with the server's state value
-- Even though the client-side initialiser would now return "wo", the
-  hydrated state stays "lines"
+Changes:
 
-Net effect: the URL has `?tab=wo#wo-XXX`, but the active tab is still
-Quote Lines, so the WO rows are never rendered. document.querySelector
-returns null, scrollIntoView never fires, page stays at top.
+1. Job page (renderLineRow) - quote line <tr> now carries
+   id="line-{quote_line_id}" and scroll-mt-24 so it sits below the
+   sticky topbar when scrolled into view.
 
-Fix: drop the window-check from the initialiser (now just "lines"),
-and add a separate useEffect that reads `?tab=` after mount. This runs
-purely client-side, post-hydration, and triggers a re-render to the
-correct tab. The scroll-restore useEffect already has activeTab in its
-deps, so it re-fires after the tab switch and finds the row.
+2. Scope page (Back-to-Job link) - href is now always
+   /jobs/X?tab=lines#line-{quote_line_id} (or just /jobs/X if the
+   scope is orphaned from a line - the auto-overhead case). scroll={false}
+   stays in place so Next.js doesn't fight the scrollIntoView.
 
-Cost: a ~16ms flash of Quote Lines on initial load before the tab
-switches. Acceptable; barely perceptible.
+3. Scroll-restore deps - lines.length added so the effect re-fires
+   when the quote-lines data arrives.
 
-Same pattern (typeof window check in useState initialiser) exists for
-activeFilter from sessionStorage. Leaving alone -- not the bug path and
-the flash trade-off is uglier there.
+Side effect: no more SSR tab-switching trap to worry about. The default
+activeTab is "lines" and that matches both the server prerender and the
+target tab. The useEffect that reads ?tab= still runs (harmless when t
+is already "lines") but isn't the load-bearing path anymore.
+
+The wo-{id} and scope-{id} anchors stay in place; they're no longer
+reached by the back link but cost nothing and might be useful for
+future deep-linking.
