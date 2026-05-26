@@ -85,7 +85,7 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### S50 — 26 May 2026
 
-Scroll-restore on the job detail page + documented tooling/MCP policy. Two deploys, no schema change.
+Scroll-restore on the job detail page + documented tooling/MCP policy. Three deploys, no schema change.
 
 #### S50a — Hash-anchor + `?tab=` scroll restore from scope/WO → job
 
@@ -140,10 +140,32 @@ Both handled `git status` / `git log` / `dir` cleanly. windows-cli wins on tool-
 
 **No code changes, no schema changes.** Docs-only commit.
 
+---
+
+#### S50c — Scroll-restore actually working
+
+**Trigger:** Mateusz tested S50a on prod. "scroll doesn't work" — lands at top, hash ignored entirely.
+
+**Root causes (two of them, both fixed in this commit):**
+
+1. **Next.js App Router scroll-to-top winning the race.** When a `<Link>` navigates, Next.js fires an automatic scroll-to-top after the route mounts. Our `scrollIntoView` would fire first (from the `loading` useEffect) and Next.js would override seconds later. The `scroll={false}` prop on the source `<Link>` (scope page's "Back to Job") disables that auto-scroll so our hash-driven scroll is the last word.
+
+2. **`didRestoreScroll` flag set before the scroll succeeded.** The S50a useEffect set the ref to `true` BEFORE the `requestAnimationFrame` callback ran. If the rows weren't in the DOM yet (data still loading, tab not switched), the `querySelector` returned null, no scroll happened, but the flag was already burnt — no retry on subsequent renders. New code only sets the flag after `scrollIntoView` actually runs, and the effect deps include `woData.length`, `scopes.length`, and `activeTab` so it re-fires whenever the relevant DOM might now contain the target.
+
+**Other tweaks:**
+- `requestAnimationFrame` → `setTimeout(50ms)` for more generous timing on slower machines.
+- `behavior: "instant"` → `behavior: "auto"` for broader browser support (instant is a newer spec value).
+
+**Files (2):**
+- `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` — added `scroll={false}` to the Back-to-Job Link.
+- `src/app/(dashboard)/jobs/[id]/page.tsx` — rewrote the scroll-restore effect: better retry semantics, broader deps, longer settle window.
+
+**Bundled:** `docs/06_tooling.md` correction (deploy section, decision matrix, contingency bullet) from after the S50b deploy when I noticed `Vercel:deploy_to_vercel` doesn't actually deploy. Was sitting uncommitted in the working tree; carried it on this commit.
+
 #### S50 schema summary
 
 - **0 schema changes**
-- **2 deploys** (S50a code, S50b docs)
+- **3 deploys** (S50a code, S50b docs, S50c scroll-restore fix)
 - **Live totals unchanged from S49:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
 
 ---

@@ -1,22 +1,33 @@
-docs(s50b): tooling policy + MCP server reference
+fix(jobs): scroll-restore actually works (S50c)
 
-Codify which MCP tool to reach for in which situation so the choice
-isn't relitigated each session. Born from S50a's two long-running
-shell commands that hung for 8 and 17 minutes through DC before being
-swapped to Vercel MCP / native build.
+S50a shipped the feature but it never landed scroll on prod -
+Mateusz tested and got "lands at top, ignores hash entirely".
 
-New file: docs/06_tooling.md
-  - Decision matrix: file I/O → Filesystem; SQL → Supabase;
-    deploys → Vercel MCP; short shell → windows-cli (cmd, workingDir).
-  - Never run through shell-over-MCP: production builds, full-repo
-    typechecks, fresh npm install, npm run dev. Anything >30s with
-    streaming output is a poor fit for MCP request/response.
-  - DC kept installed as fallback for stateful sessions (REPLs, SSH).
+Two bugs, both fixed:
 
-Updates:
-  - docs/00_README.md: 06_tooling.md added to read-order (item 6) and
-    update-triggers table; TRACKER now item 7.
-  - docs/TRACKER.md: S50 covers S50a (code) + S50b (this doc commit);
-    schema summary updated to 2 deploys, 0 schema changes.
+1. Next.js App Router scroll-to-top winning the race against
+   scrollIntoView. Added scroll={false} to the scope page's
+   Back-to-Job Link so Next.js doesn't auto-scroll after nav.
 
-No code changes.
+2. didRestoreScroll ref was set to true BEFORE the rAF callback
+   ran, so if the row wasn't in the DOM yet (data still loading)
+   the flag burnt and we never retried. New effect:
+   - Only marks done after scrollIntoView actually runs
+   - Re-fires on woData.length / scopes.length / activeTab changes
+   - setTimeout(50ms) instead of rAF for slacker timing
+   - behavior: "auto" instead of "instant" for broader support
+
+Bundled in: docs/06_tooling.md correction from after S50b deploy
+when I noticed Vercel:deploy_to_vercel doesn't actually trigger a
+build (it returns help text). The deploy section, decision matrix
+row, and contingency bullet now reflect the real workflow: shell
+the npx vercel call, accept "Tool execution failed" noise from the
+MCP timeout, monitor through Vercel:list_deployments and get_deployment.
+
+Files:
+  src/app/(dashboard)/jobs/[id]/page.tsx
+  src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx
+  docs/06_tooling.md
+  docs/TRACKER.md
+
+S50c - TRACKER updated.

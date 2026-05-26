@@ -224,6 +224,7 @@ export default function ScopeDetailPage() {
               ? `/jobs/${jobId}?tab=wo#wo-${expandWoId}`
               : `/jobs/${jobId}?tab=scopes#scope-${scopeId}`
           }
+          scroll={false}
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

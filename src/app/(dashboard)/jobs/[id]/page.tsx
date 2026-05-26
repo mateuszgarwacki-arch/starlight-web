@@ -306,19 +306,28 @@ export default function JobDetailPage() {
   // Scroll-restore on return from a scope/WO page.
   // The scope page's "Back to Job" link encodes the row the user came from
   // as `?tab=wo#wo-123` (or `?tab=scopes#scope-456`). The `?tab=` is read
-  // by the activeTab initialiser above; the hash is consumed here, once,
-  // after the data load completes and the rows have rendered.
+  // by the activeTab initialiser above; the hash is consumed here, after
+  // the data load completes AND the tab content has rendered. We retry on
+  // each data-arrival render until the element is actually findable,
+  // because Next.js scroll-to-top can otherwise win the race.
   const didRestoreScroll = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (loading || didRestoreScroll.current) return;
     if (!window.location.hash) return;
-    didRestoreScroll.current = true; // attempt once; silently no-op if element is missing
-    requestAnimationFrame(() => {
+    // Wait a frame so the active tab's rows are in DOM, then try. If the
+    // element isn't there yet (data still settling), DON'T mark done — let
+    // the next render's effect retry. Only mark done once we've actually
+    // scrolled.
+    const id = setTimeout(() => {
       const el = document.querySelector(window.location.hash);
-      if (el) el.scrollIntoView({ behavior: "instant", block: "center" });
-    });
-  }, [loading]);
+      if (el) {
+        el.scrollIntoView({ behavior: "auto", block: "center" });
+        didRestoreScroll.current = true;
+      }
+    }, 50);
+    return () => clearTimeout(id);
+  }, [loading, activeTab, woData.length, scopes.length]);
 
   // Record visit for recent jobs strip
   useEffect(() => {
