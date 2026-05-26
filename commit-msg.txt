@@ -1,21 +1,22 @@
-feat(jobs): scroll-restore on return from scope/WO page
+docs(s50b): tooling policy + MCP server reference
 
-Job detail page now remembers which WO/scope row the user clicked, and
-returns them to it on Back-to-Job — no more scrolling through a long
-work-orders list to find where they were.
+Codify which MCP tool to reach for in which situation so the choice
+isn't relitigated each session. Born from S50a's two long-running
+shell commands that hung for 8 and 17 minutes through DC before being
+swapped to Vercel MCP / native build.
 
-How it works:
-- Job page `activeTab` initialiser reads `?tab=` (lines|scopes|wo).
-- Job page adds `id="wo-{id}"` and `id="scope-{id}"` anchors on the row
-  Links, plus `scroll-mt-24` for sticky-header breathing room.
-- A one-shot useEffect (gated by a didRestoreScroll ref) calls
-  scrollIntoView on `window.location.hash` once `loading` flips false.
-- Scope page "Back to Job" link now points at
-  `/jobs/X?tab=wo#wo-{expandWoId}` when the user arrived via a WO row,
-  else `/jobs/X?tab=scopes#scope-{scopeId}`.
+New file: docs/06_tooling.md
+  - Decision matrix: file I/O → Filesystem; SQL → Supabase;
+    deploys → Vercel MCP; short shell → windows-cli (cmd, workingDir).
+  - Never run through shell-over-MCP: production builds, full-repo
+    typechecks, fresh npm install, npm run dev. Anything >30s with
+    streaming output is a poor fit for MCP request/response.
+  - DC kept installed as fallback for stateful sessions (REPLs, SSH).
 
-Rejected alternatives: Next.js built-in scroll restoration (only fires
-on browser-back, not on a forward Link), and sessionStorage stash
-(breaks silently if the list re-orders between visits).
+Updates:
+  - docs/00_README.md: 06_tooling.md added to read-order (item 6) and
+    update-triggers table; TRACKER now item 7.
+  - docs/TRACKER.md: S50 covers S50a (code) + S50b (this doc commit);
+    schema summary updated to 2 deploys, 0 schema changes.
 
-S50a — TRACKER updated.
+No code changes.

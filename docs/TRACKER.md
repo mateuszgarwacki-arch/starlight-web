@@ -85,7 +85,7 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### S50 — 26 May 2026
 
-Scroll-restore on the job detail page. Tiny UX-only ship. One deploy, no schema change.
+Scroll-restore on the job detail page + documented tooling/MCP policy. Two deploys, no schema change.
 
 #### S50a — Hash-anchor + `?tab=` scroll restore from scope/WO → job
 
@@ -108,10 +108,42 @@ Scroll-restore on the job detail page. Tiny UX-only ship. One deploy, no schema 
 
 **Failure modes.** If the WO/scope row was deleted between leaving and returning (rare given the flow), `querySelector` returns null, `scrollIntoView` silently no-ops, user lands at top. Acceptable. If the user lands on the job page directly via bookmark or sidebar (no `?tab=`, no hash), default behaviour is unchanged: Quote Lines tab, top of page.
 
+---
+
+#### S50b — Tooling policy promoted to `docs/06_tooling.md`
+
+**Trigger:** S50a deploy had two long-running shell commands hang (8-min `tsc`, 17-min `vercel --prod`) before specialised MCPs were used instead. Mateusz: *"i really didn't like that desktop commander was slow and sometimes tripping."* The root cause wasn't Desktop Commander itself — it was using shell-over-MCP for long-running commands with streaming output, a bad fit for MCP's request/response model. Right division of labour needed codifying so the choice isn't relitigated every session.
+
+**Tool tests run (short commands, identical workloads through both shells):**
+
+| | windows-cli | Desktop Commander |
+|---|---|---|
+| Tool calls for 3 commands | 3 | 5 (start_process + 3 interact + force_terminate) |
+| Output cleanliness | Just the command output | Output + trailing `C:\...>` prompt + "Response may be incomplete (timeout reached)" on every call even when complete |
+| State management | Stateless | PID tracking + cleanup |
+| Speed (subjective) | Instant | Instant |
+
+Both handled `git status` / `git log` / `dir` cleanly. windows-cli wins on tool-call count and output noise for the stateless short-command workload that dominates our sessions.
+
+**Policy shipped (`docs/06_tooling.md`):**
+
+- **Default shell** — `windows-cli:execute_command`, `shell: cmd`, explicit `workingDir`. No `&` / `&&` chaining inside one command string.
+- **File I/O** — Filesystem MCP (`read_file` / `edit_file` / `write_file`).
+- **SQL** — Supabase MCP unchanged.
+- **Deploy** — `Vercel:deploy_to_vercel` + `list_deployments`; never `npx vercel --prod` through a shell.
+- **Never run through shell-over-MCP:** production builds, full-repo typechecks, fresh `npm install`, `npm run dev`. Specifically: anything that takes >30s with streaming output.
+- **Desktop Commander reserved for stateful sessions** — interactive REPLs, SSH, `psql`. None of these are currently used in this project, but DC stays installed as a fallback.
+
+**Deploy sequence updated** — the old `git ... && npx vercel --prod` one-liner is replaced with a split: git via `windows-cli`, deploy via `Vercel:deploy_to_vercel`. Both `claude_desktop_config.json` MCP servers (`filesystem` + `windows-cli`) and the remote Vercel/Supabase connectors documented in the new file.
+
+**README updated** — `00_README.md` read-order now points at `06_tooling.md` as item 6 (TRACKER is now item 7), with an update-trigger row added to the table.
+
+**No code changes, no schema changes.** Docs-only commit.
+
 #### S50 schema summary
 
 - **0 schema changes**
-- **1 deploy**
+- **2 deploys** (S50a code, S50b docs)
 - **Live totals unchanged from S49:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
 
 ---

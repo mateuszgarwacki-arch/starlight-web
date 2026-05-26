@@ -12,7 +12,8 @@ These docs are the authoritative reference for the Starlight Production System. 
 3. **`03_database_schema.md`** — Current verified schema. Tables, views, RPCs, invariants, watcher views. Read when touching data.
 4. **`04_security_policy.md`** — SP-001 to SP-017. Formal policy register. Read when touching auth, RLS, secrets, or deployment.
 5. **`05_conventions.md`** — Deploy sequence, SQL rules, UX patterns, audit/notification patterns, Desktop Commander gotchas. Read before writing code.
-6. **`TRACKER.md`** — Living session log. The running record of what's shipped, what's deferred, what's broken. Always check the Cleanup Backlog at the top.
+6. **`06_tooling.md`** — Which MCP tool to use for which job. Default shell, file I/O, deploy sequence, what never to run through shell-over-MCP. Read at session start; the decision matrix saves real time.
+7. **`TRACKER.md`** — Living session log. The running record of what's shipped, what's deferred, what's broken. Always check the Cleanup Backlog at the top.
 
 ## Update triggers
 
@@ -23,6 +24,7 @@ These docs are the authoritative reference for the Starlight Production System. 
 | `03_database_schema.md` | Every session with schema changes. Ship in the same commit as the migration. |
 | `04_security_policy.md` | Every 6 months (SP-001), or after any security change. |
 | `05_conventions.md` | When a new pattern is promoted from TRACKER session notes. |
+| `06_tooling.md` | When the tool/MCP setup changes (added/removed servers, new specialised MCPs, shell config tweaks). |
 | `TRACKER.md` | Every session. |
 
 ## Working with these docs
