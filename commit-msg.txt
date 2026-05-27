@@ -1,34 +1,23 @@
-fix(jobs): back-to-job lands on Quote Lines, anchored to the line (S50e)
+docs(s50): TRACKER session log for S50d + S50e
 
-Mateusz: "i want to be taken to quote line tab - that's from where i operate."
+Five deploys in S50 total, not three. The scroll-restore feature
+that S50a shipped took three more attempts to actually land:
 
-Reframe of the original feature. S50a-d targeted "land on whatever tab
-you came from" but the actual workflow is: PM lives on Quote Lines,
-clicks into a WO or scope to inspect/edit, comes back. The anchor that
-matters is the line, not the child element. A line can hold multiple
-scopes and multiple WOs but they're all children of one line - landing
-on the line gives the user immediate context for what they were just
-looking at.
+- S50a: feature ships, doesn't actually scroll on prod
+- S50b: tooling policy (docs/06_tooling.md), no scroll fix
+- S50c: first scroll fix (race-condition flag + scroll={false} on
+  Link). Real bug, real fix, but not the one that mattered.
+- S50d: SSR hydration trap. typeof window check in useState
+  initialiser meant the active tab never actually switched, the
+  WO rows were never in the DOM, querySelector returned null,
+  no scroll. Fixed by moving the URL read into a post-mount
+  useEffect.
+- S50e: design reframe from Mateusz - "i want to be taken to
+  quote line tab - that's from where i operate". Back-link now
+  always lands on Quote Lines anchored to the line, regardless
+  of whether the user came via a scope or a WO. Cleaner mental
+  model, side benefit of removing the SSR trap from the critical
+  path.
 
-Changes:
-
-1. Job page (renderLineRow) - quote line <tr> now carries
-   id="line-{quote_line_id}" and scroll-mt-24 so it sits below the
-   sticky topbar when scrolled into view.
-
-2. Scope page (Back-to-Job link) - href is now always
-   /jobs/X?tab=lines#line-{quote_line_id} (or just /jobs/X if the
-   scope is orphaned from a line - the auto-overhead case). scroll={false}
-   stays in place so Next.js doesn't fight the scrollIntoView.
-
-3. Scroll-restore deps - lines.length added so the effect re-fires
-   when the quote-lines data arrives.
-
-Side effect: no more SSR tab-switching trap to worry about. The default
-activeTab is "lines" and that matches both the server prerender and the
-target tab. The useEffect that reads ?tab= still runs (harmless when t
-is already "lines") but isn't the load-bearing path anymore.
-
-The wo-{id} and scope-{id} anchors stay in place; they're no longer
-reached by the back link but cost nothing and might be useful for
-future deep-linking.
+Schema summary updated: 5 deploys, 0 schema changes, lifetime
+totals unchanged (57 tables, 34 views, 18 RPCs, 2 cron jobs).

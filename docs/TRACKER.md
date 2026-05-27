@@ -85,7 +85,7 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### S50 — 26 May 2026
 
-Scroll-restore on the job detail page + documented tooling/MCP policy. Three deploys, no schema change.
+Scroll-restore on the job detail page + documented tooling/MCP policy. Five deploys, no schema change. The scroll-restore feature took five attempts to ship correctly — two real bugs (SSR hydration trap + race-condition flag) and one design reframe (back-link should anchor to the line, not to the WO/scope tab the user came from).
 
 #### S50a — Hash-anchor + `?tab=` scroll restore from scope/WO → job
 
@@ -162,11 +162,51 @@ Both handled `git status` / `git log` / `dir` cleanly. windows-cli wins on tool-
 
 **Bundled:** `docs/06_tooling.md` correction (deploy section, decision matrix, contingency bullet) from after the S50b deploy when I noticed `Vercel:deploy_to_vercel` doesn't actually deploy. Was sitting uncommitted in the working tree; carried it on this commit.
 
+---
+
+#### S50d — SSR hydration trap behind the scroll-restore
+
+**Trigger:** Mateusz tested S50c. "still nothing - url is correct, but doesn't take me anywhere." URL had `?tab=wo#wo-XXX` but the page wouldn't scroll. Clarifying questions confirmed: hard-refreshed, browser cache ruled out. Asked which tab was active on landing — answer in S50e below.
+
+**Root cause.** The `activeTab` `useState` lazy initialiser used `typeof window === "undefined"` to read `?tab=` from the URL. This is a classic Next.js App Router hydration trap:
+
+- Server prerender: `window` is undefined → initialiser returns `"lines"`
+- Server emits HTML with the Quote Lines tab content rendered
+- Client hydrates with the server's state value
+- Even though the client-side initialiser would now return `"wo"` from the URL, the hydrated state stays `"lines"`
+
+Net effect: URL had `?tab=wo#wo-XXX`, but the active tab was still Quote Lines, the WO rows never rendered, `document.querySelector("#wo-XXX")` returned null, no scroll fired.
+
+**Fix.** Dropped the `window` check from the initialiser (now just `"lines"`) and added a separate `useEffect` that reads `?tab=` after mount. Runs purely client-side, post-hydration, triggers a real re-render to the correct tab. The scroll-restore effect already had `activeTab` in its deps so it re-fires after the tab switch and finds the row.
+
+**Cost.** ~16ms flash of Quote Lines on initial load before the tab switches. Barely perceptible. Same pattern (`typeof window` check in `useState` initialiser) exists for `activeFilter` from `sessionStorage` — left alone, not on the bug path, and the flash trade-off is uglier there.
+
+**Files (1):** `src/app/(dashboard)/jobs/[id]/page.tsx` — initialiser + new tab-sync useEffect.
+
+---
+
+#### S50e — Reframe: back-to-job lands on Quote Lines, anchored to the line
+
+**Trigger:** S50d shipped, Mateusz tested. "all good - works" — then qualified: *"but when clicking back to job, i want to be taken to quote line tab - that's from where i operate."* (He'd landed on Scope Items because that's where he'd been navigating from in the test, but his actual operational pattern is to live on Quote Lines and dip into scopes/WOs to inspect or edit.)
+
+**Design reframe.** S50a–d targeted "land on whatever tab you came from." Wrong frame. The PM operates from Quote Lines, clicks into a WO or scope to inspect or edit, and comes back. The anchor that matters is the line itself — a line can hold multiple scopes and multiple WOs but they're all children of one line. Landing on the line gives immediate context for what was just being looked at, regardless of which child element the user navigated through.
+
+**Changes (3 files):**
+
+1. **`src/app/(dashboard)/jobs/[id]/page.tsx` (renderLineRow)** — quote line `<tr>` now carries `id="line-{quote_line_id}"` and `scroll-mt-24` so it sits below the sticky topbar when scrolled into view. Scroll-restore effect deps now include `lines.length` so the effect re-fires when the quote-lines data arrives.
+
+2. **`src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx`** — Back-to-Job href is now always `/jobs/X?tab=lines#line-{scope.quote_line_id}` (or just `/jobs/X` when the scope is orphaned from a line — the auto-overhead case). `scroll={false}` stays in place so Next.js doesn't fight the `scrollIntoView`.
+
+3. **The `wo-{id}` / `scope-{id}` anchors stay in place.** No longer reached by the Back link, but cost nothing and might be useful for future deep-linking.
+
+**Side effect: SSR trap no longer load-bearing.** Default `activeTab` is `"lines"` and that matches both the server prerender and the target tab the back-link now goes to. The S50d useEffect that reads `?tab=` still runs (harmless when `t` is already `"lines"`) but isn't on the critical path anymore. If a future back-link wants a different tab, the mechanism still works.
+
 #### S50 schema summary
 
 - **0 schema changes**
-- **3 deploys** (S50a code, S50b docs, S50c scroll-restore fix)
+- **5 deploys** — `c7ae10b` S50a code, `66228cd` S50b docs, `0e95919` S50c first scroll fix, `b62479a` S50d SSR hydration fix, `29b90a8` S50e quote-lines reframe
 - **Live totals unchanged from S49:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+- **Net lesson:** when a feature "doesn't work" three deploys in a row, the bug isn't always the obvious one. S50c looked like a race condition (and there was one, but fixing it didn't help). S50d found the actual blocker (SSR hydration). S50e was Mateusz reframing the problem itself. Lessons stack: each fix was correct, just incomplete.
 
 ---
 
