@@ -9,6 +9,8 @@ import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Printer, RotateCw, Loader2, Check } from "lucide-react";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { buildMaterialSummary, type ExtractedLine, type MaterialSummary, type CatalogueMat } from "@/lib/cut-layout";
+import { CutPlanSection } from "@/components/cut-layout-renderer";
 
 /* ================================================================
    Types
@@ -103,6 +105,7 @@ interface WOData {
   imageUrls: Record<number, string>;
   pdfPageUrls: Record<number, string[]>;
   steps: WOStep[];
+  cutPlanSummaries: MaterialSummary[];
 }
 
 /* ================================================================
@@ -223,6 +226,16 @@ export default function TravellerPage() {
           .sort((a, b) => (a.wo_sequence || 999) - (b.wo_sequence || 999));
 
     // 5. Load BOM, docs, linked items, image URLs for each
+    //    Fetch the full active materials catalogue once — used for both BOM
+    //    enrichment and cut plan computation across all WOs.
+    const { data: allMaterialsRes } = await supabase
+      .from("tbl_materials")
+      .select("material_id, material_name, standard_length, standard_sheet_size, unit, current_unit_cost, material_category")
+      .eq("active", true);
+    const allMaterials = (allMaterialsRes || []) as CatalogueMat[];
+    const fullMatMap: Record<number, CatalogueMat> = {};
+    allMaterials.forEach((m) => { fullMatMap[m.material_id] = m; });
+
     const dataMap: Record<number, WOData> = {};
     for (const wo of toPrint) {
       const [bomRes, docsRes, jxnRes, stepsRes] = await Promise.all([
@@ -284,18 +297,8 @@ export default function TravellerPage() {
 
       // Enrich BOM with material catalogue data (standard lengths, sheet sizes)
       const rawBom = (bomRes.data || []) as any[];
-      const matIds = rawBom.map((b: any) => b.material_id).filter(Boolean);
-      let matMap: Record<number, { standard_length: number | null; standard_sheet_size: string | null; unit: string | null }> = {};
-      if (matIds.length > 0) {
-        const { data: mats } = await supabase.from("tbl_materials")
-          .select("material_id, standard_length, standard_sheet_size, unit")
-          .in("material_id", matIds);
-        if (mats) mats.forEach((m: any) => {
-          matMap[m.material_id] = { standard_length: m.standard_length, standard_sheet_size: m.standard_sheet_size, unit: m.unit };
-        });
-      }
       const enrichedBom: BOM[] = rawBom.map((b: any) => {
-        const mat = b.material_id ? matMap[b.material_id] : null;
+        const mat = b.material_id ? fullMatMap[b.material_id] : null;
         return {
           ...b,
           mat_standard_length: mat?.standard_length || null,
@@ -304,9 +307,23 @@ export default function TravellerPage() {
         };
       });
 
+      // Cut plan summaries — computed deterministically from any extracted
+      // cut lists. Recompute (not persisted) keeps the algorithm authoritative
+      // and avoids stale snapshots if material catalogue changes.
+      const cutListsWithData = docs.filter(
+        (d) => d.doc_type === "cut_list" && d.extracted_data?.lines,
+      );
+      const allCutLines: ExtractedLine[] = cutListsWithData.flatMap(
+        (d) => d.extracted_data.lines as ExtractedLine[],
+      );
+      const cutPlanSummaries = allCutLines.length > 0
+        ? buildMaterialSummary(allCutLines, allMaterials)
+        : [];
+
       dataMap[wo.work_order_id] = {
         wo, bom: enrichedBom, docs, linkedItems, imageUrls, pdfPageUrls,
         steps: (stepsRes.data || []) as WOStep[],
+        cutPlanSummaries,
       };
     }
 
@@ -552,7 +569,7 @@ export default function TravellerPage() {
     pageNum++;
     pages.push(
       <Page key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} steps={data.steps} />
+        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} steps={data.steps} cutPlanSummaries={data.cutPlanSummaries} />
       </Page>
     );
 
@@ -700,11 +717,12 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
    Task Brief (page 1 content)
    ================================================================ */
 
-function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount, steps }: {
+function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount, steps, cutPlanSummaries }: {
   wo: TravellerWO; woIdx: number; totalWOs: number; bom: BOM[]; linkedItems: LinkedItem[];
   scope: Scope; siblingWOs: TravellerWO[]; daysRemaining: number | null;
   drawingCount: number; referenceCount: number; cutListCount: number;
   steps: WOStep[];
+  cutPlanSummaries: MaterialSummary[];
 }) {
   return (
     <div className="space-y-3 text-[13px]">
@@ -838,6 +856,13 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
           </table>
         )}
       </div>
+
+      {/* Suggested cut plan — layouts for any extracted cut lists on this WO */}
+      {cutPlanSummaries.length > 0 && (
+        <div className="mt-3">
+          <CutPlanSection summaries={cutPlanSummaries} compact />
+        </div>
+      )}
 
       <hr className="border-subtle" />
 

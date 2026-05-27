@@ -1,23 +1,34 @@
-docs(s50): TRACKER session log for S50d + S50e
+S51: Suggested cut plan on traveller + extractor (2D/1D layout viz)
 
-Five deploys in S50 total, not three. The scroll-restore feature
-that S50a shipped took three more attempts to actually land:
+Visualises the bin-packing layouts already computed by the cutlist
+extractor's guillotine and 1D-FFD algorithms — placements were
+captured internally but discarded after sheet/length counting.
 
-- S50a: feature ships, doesn't actually scroll on prod
-- S50b: tooling policy (docs/06_tooling.md), no scroll fix
-- S50c: first scroll fix (race-condition flag + scroll={false} on
-  Link). Real bug, real fix, but not the one that mattered.
-- S50d: SSR hydration trap. typeof window check in useState
-  initialiser meant the active tab never actually switched, the
-  WO rows were never in the DOM, querySelector returned null,
-  no scroll. Fixed by moving the URL read into a post-mount
-  useEffect.
-- S50e: design reframe from Mateusz - "i want to be taken to
-  quote line tab - that's from where i operate". Back-link now
-  always lands on Quote Lines anchored to the line, regardless
-  of whether the user came via a scope or a WO. Cleaner mental
-  model, side benefit of removing the SSR trap from the critical
-  path.
+What changed:
+- src/lib/cut-layout.ts (new) — shared types + pure calc functions
+  (binPackLengths, guillotinePack, buildMaterialSummary, parseSheetSize,
+  labelFor). Algorithms now return Placement[] and LengthBin[] capturing
+  which piece goes where at what offset.
+- src/components/cut-layout-renderer.tsx (new) — SVG renderers
+  (SheetLayout, LengthBinRow, MaterialCutPlan, CutPlanSection). Compact
+  mode: sheets 2-up at ~88mm, lengths 1-up at ~180mm. Dynamic font sizing
+  per part. break-inside-avoid on each diagram + material block.
+- src/app/api/extract-cutlist/route.ts — prompt updated to extract
+  part_label from source (OpenCutList column, prefix, or null). No
+  schema change; stored in existing extracted_data JSON.
+- src/components/cutlist-extractor.tsx (rewritten) — calc moved to lib,
+  layout toggle in both extracted+confirmed states, part_label column
+  in parts reference table. Audit gap closed: tbl_wo_documents writes
+  now go through auditedUpdate (3 sites: extract, confirm, re-add).
+- src/app/traveller/page.tsx — full materials catalogue fetched once
+  per traveller load, reused for both BOM enrichment and cut plan
+  computation. WOData carries cutPlanSummaries: MaterialSummary[].
+  TaskBrief renders <CutPlanSection> after the BOM table when
+  summaries exist. Recompute, not persisted.
+- docs/TRACKER.md — S51 entry + backlog item for remaining
+  tbl_wo_bom raw insert gap.
 
-Schema summary updated: 5 deploys, 0 schema changes, lifetime
-totals unchanged (57 tables, 34 views, 18 RPCs, 2 cron jobs).
+Pre-existing cutlists need a Re-extract to populate part_label.
+Renderer falls back to description.slice(0, 12) until that happens.
+
+No schema changes. No DB writes added.

@@ -47,6 +47,14 @@ NAMING CONVENTIONS USED IN THIS WORKSHOP:
 - Numbers in prefixes usually indicate thickness in mm for sheet goods, or cross-section for timber
 - The part description IS the item name. The material must be INFERRED from the prefix and dimensions.
 ${materialsSection}
+PART LABELS:
+- Extract "part_label" from the source if present. Common sources:
+  * An explicit column in OpenCutList CSV/PDF ("Number", "Label", "Ref", "ID", "Part")
+  * A short alphanumeric prefix on the part name (e.g. "P1 - upright", "A.2 backboard", "[3] side")
+  * A numbered reference visible on the source document or drawing
+- Use the source's own labels verbatim — do not invent, reformat, or renumber.
+- If no label exists in the source, set part_label to null (do not generate one).
+
 YOUR ONLY JOB: Extract the individual parts list. Do NOT attempt to calculate sheet counts, standard lengths, or totals — the frontend will compute these.
 
 For material_category use EXACTLY ONE of: Timber, Sheet, Metal, Fabric, Hardware, Other.
@@ -59,6 +67,7 @@ Return ONLY valid JSON with no preamble:
   "lines": [
     {
       "line_number": 1,
+      "part_label": "P1",
       "description": "The part name exactly as written in the cut list",
       "material": "The matched material from catalogue, or best guess (e.g. '18mm General Plywood 8x4', '3x1 PAR')",
       "material_category": "Timber|Sheet|Metal|Fabric|Hardware|Other",

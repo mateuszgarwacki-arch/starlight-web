@@ -70,6 +70,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **Lint rule for raw `.update()` / `.delete()`** *(S46h)* — add an ESLint custom rule (or pre-commit grep in `scripts/db-checks.sql`'s sibling) that fails on `supabase.from(...).update(` or `.delete(` outside of `lib/audit.ts`. Forces all writes through the helper. Pairs with the harden-`auditedUpdate` task — do them together.
 
+- [ ] **`tbl_wo_bom` raw inserts in cutlist-extractor** *(S51)* — `addToBom` writes BOM rows via raw `supabase.from("tbl_wo_bom").insert(...)` despite `tbl_wo_bom` being in `AUDITED_TABLES`. Pre-existing pattern, not introduced by S51, but visible there. Migrate to `auditedInsert(ctx, "tbl_wo_bom", row, jobId)` for each row in the loop. Pairs naturally with the wider "harden auditedUpdate" and "lint raw .update()/.delete()" sweep below.
+
 - [ ] **Audit gap on workshop requests** *(S47e)* — `handleRequestAction` in `/review/inbox/page.tsx` still uses raw `supabase.from("tbl_workshop_requests").update(...)`. Easy fix once `tbl_workshop_requests` is added to `AUDITED_TABLES` (currently absent). Smaller-stakes than the task gap closed in S47e because workshop requests aren't pay-affecting, but worth tidying when the wider audit sweep happens (pairs naturally with the harden-`auditedUpdate` task above).
 
 ### Long-running / strategic
@@ -82,6 +84,47 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S51 — 27 May 2026
+
+Suggested cut plan on the WO traveller and inside the BOM extractor. Visualises the 1D and 2D bin-packing layouts that the extractor already computes — the algorithms were running, but the placement data was being thrown away after counting sheets/lengths. No schema change, no DB writes. One deploy.
+
+#### Trigger
+
+Mateusz: "On a print traveller — I want to add what is the most efficient way to do cuts for each item/length, take another guess work out of the way."
+
+First-pass advice was "hold off on 2D nesting—too much effort for marginal yield gain." Mateusz pushed back: *"isn't there simple guillotine function?"* Inspection of `cutlist-extractor.tsx` revealed full Best-Short-Side-Fit + Shorter-Axis-Split guillotine packing already implemented for sheet counting, plus First-Fit Decreasing 1D for timber. The algorithms ran and discarded the placements. Visualising what was already computed was a small build, not a from-scratch nesting engine.
+
+#### Design decisions (settled before building)
+
+- **Capture placements; don't persist.** `binPackLengths()` and `guillotinePack()` now return `LengthBin[]` and `{ sheets, placements }` respectively, capturing which piece goes into which bin/sheet and at what offset. Recompute on every render rather than store — algorithm is deterministic and fast (<50ms for typical jobs), and material catalogue changes shouldn't surface stale layouts.
+- **Part labels from source.** New `part_label` field on `ExtractedLine`, populated from OpenCutList CSV columns or alphanumeric prefixes on the description ("P1 - upright"). Falls back to truncated description when source has no labels. Carpenter cross-references between traveller diagram and the original cutlist they already know.
+- **Compact layout.** Sheets render 2-up at ~88mm width, lengths 1-up at ~180mm. Material header above the grid, sheet number as a small badge in the SVG corner. `break-inside-avoid` on each diagram and on the whole material block so layouts don't split mid-sheet. A typical WO with 6 sheets + 4 lengths lands in roughly half a page.
+- **Reference, not instruction.** Section header reads *"Suggested cut plan — verify each sheet/length for defects before cutting. Adjust if needed."* Workshop reality: carpenters will deviate when a sheet has damage. The plan is a starting layout, not a binding spec.
+- **Same renderer in two places.** Layout viewer attaches to both extracted and confirmed states of the cutlist extractor (collapsible toggle), and to the traveller (always shown, no toggle). Pure presentational components in `cut-layout-renderer.tsx` driven from the same `MaterialSummary[]` shape.
+
+#### Files
+
+- **`src/lib/cut-layout.ts` (new).** Shared library — types (`ExtractedLine`, `Placement`, `LengthBin`, `MaterialSummary`, `PartRect`, `CatalogueMat`), pure-function calc (`binPackLengths`, `guillotinePack`, `parseSheetSize`, `buildMaterialSummary`, `labelFor`). No React, no Supabase dependency. Lifts the duplicated algorithm out of `cutlist-extractor.tsx` so the traveller can reuse it without coupling.
+- **`src/components/cut-layout-renderer.tsx` (new).** Pure SVG components (`SheetLayout`, `LengthBinRow`) plus two wrappers (`MaterialCutPlan` for a single material, `CutPlanSection` for the whole "Suggested cut plan" block). Compact mode controls layout density. Labels scale dynamically with cell size, with minimum and maximum bounds so tight nests stay legible and large parts don't get oversized text.
+- **`src/app/api/extract-cutlist/route.ts`.** Prompt updated to extract `part_label` from source documents, with explicit fallback to `null` when no label exists. No schema change — stored in the existing `extracted_data` JSON.
+- **`src/components/cutlist-extractor.tsx` (rewritten).** Calc functions removed (now imported from the lib). New `part_label` column in the individual-parts reference table. Layout toggle ("▸ Cut layout preview") in extracted state, collapsible. In confirmed state, the success bar gains an inline "Show cut layout" toggle alongside the existing Re-add-to-BOM control. **Audit gap closed:** the two `tbl_wo_documents` writes (extraction status flip on success, confirmed flip on Add-to-BOM, extracted flip on Re-add) now go through `auditedUpdate(ctx, "tbl_wo_documents", docId, ...)`. The pre-existing raw `tbl_wo_bom` inserts in `addToBom` remain raw — flagged in the cleanup backlog above for the wider audit sweep.
+- **`src/app/traveller/page.tsx`.** Full active materials catalogue now fetched once at load time (previously per-WO subsets only) and reused for both BOM enrichment and cut plan computation. Each WO's `WOData` now carries `cutPlanSummaries: MaterialSummary[]`, built from any cut list docs with `extracted_data.lines`. `TaskBrief` renders `<CutPlanSection summaries={cutPlanSummaries} compact />` after the BOM table when summaries exist. No change to existing PDF rendering of the source cutlist — the suggested plan sits alongside it.
+
+#### Re-extraction note
+
+Cut lists extracted before S51 have `part_label: undefined` in storage. Renderer falls back to `description.slice(0, 12)` so labels still appear, just less concise. To get real source labels on Job 13774 (and others), open each cutlist's extractor and hit Re-extract. Minor inconvenience, not a migration.
+
+#### S51 schema summary
+
+- **0 schema changes**, **0 DB writes** — all client-side calculation
+- **2 new files:** `src/lib/cut-layout.ts`, `src/components/cut-layout-renderer.tsx`
+- **4 modified files:** `extract-cutlist/route.ts`, `cutlist-extractor.tsx`, `traveller/page.tsx`, `docs/TRACKER.md`
+- **Audit gap closed:** `tbl_wo_documents` updates in cutlist-extractor now audited
+- **Audit gap remaining (backlog):** `tbl_wo_bom` inserts in `addToBom` still raw
+- **Live totals unchanged from S50:** 57 tables, 34 views, 18 RPCs, 2 cron jobs
+
+---
 
 ### S50 — 26 May 2026
 
