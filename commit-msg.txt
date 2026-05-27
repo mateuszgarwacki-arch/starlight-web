@@ -1,22 +1,21 @@
-S51: move cut plan from TaskBrief to a dedicated page after PDFs
+S51 fix: drop break-inside-avoid on MaterialCutPlan wrapper
 
-Mateusz: "cutlist view should be placed under parts list in print
-traveller (normally from 3rd page)."
+Empty cut-plan page on long cut lists (e.g. job 13585 step 2 of 2,
+33 sheets of OSB + 4 sheets of plywood).
 
-Page sequence per WO now reads:
-  Task brief (BOM)  ->  source cutlist PDF(s)  ->  suggested cut plan
-                    ->  drawings  ->  references
+Root cause: print CSS
 
-Changes:
-- src/app/traveller/page.tsx
-  - Drop CutPlanSection from TaskBrief signature + render
-  - Add dedicated cut-plan page after the cut-list PDF loop, gated on
-    any material having sheet_placements or length_bins. flowLayout so
-    it can spill onto a second printed page when many materials.
-  - hasCutPlanPage computed once per WO in both totalPages count loop
-    and the page-rendering loop (separate scopes, separate declarations).
-- docs/TRACKER.md
-  - S51 entry: updated traveller paragraph and added a brief "Initial
-    placement and refinement" note recording the move.
+  .traveller-page.traveller-cover { page-break-inside: auto !important }
 
-No schema. No DB writes. No new files.
+correctly lets the cut plan page spill across printed pages, but inside
+the page MaterialCutPlan wrapped its whole block in break-inside-avoid.
+For a ~770mm material block, Chromium honoured the avoid hint by pushing
+the whole block past the current page — landing nowhere it actually fit,
+leaving the cut-plan page rendering only the section header.
+
+Fix: remove break-inside-avoid from the material wrapper; keep per-sheet
+break-inside-avoid on each SheetLayout (those are ~44mm, satisfiable);
+add break-after-avoid to the material header paragraph so the header
+doesn't orphan from the first sheet.
+
+- src/components/cut-layout-renderer.tsx

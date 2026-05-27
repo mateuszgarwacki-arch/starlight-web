@@ -167,8 +167,8 @@ export function MaterialCutPlan({
     : `${summary.lengths_needed} × ${summary.standard_length_mm}mm`;
 
   return (
-    <div className="mt-2 break-inside-avoid">
-      <p className="text-[8pt] font-semibold text-foreground mb-1">
+    <div className="mt-2">
+      <p className="text-[8pt] font-semibold text-foreground mb-1 break-after-avoid">
         {summary.material} — {headerDetail}
         {summary.waste_pct != null && (
           <span className="text-muted font-normal"> · {summary.waste_pct}% waste</span>
