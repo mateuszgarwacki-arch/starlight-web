@@ -342,3 +342,94 @@ export function buildMaterialSummary(
     };
   });
 }
+
+/* ============================================================
+   Page chunking for traveller print
+
+   Splits a list of material summaries into per-page chunks that
+   fit on one A4 with proper header/footer chrome. Each chunk is
+   rendered as its own <Page> wrapper, so totalPages and the actual
+   printed page count agree.
+
+   Empirical density (compact 2-up sheets, 1-up timber lengths):
+     SHEETS_PER_PAGE = 10  (~250mm of content area)
+     BINS_PER_PAGE   = 25  (timber bins are ~6mm tall each)
+
+   Tune if the page-break-inside: avoid budget gets tight — if a chunk
+   ever overflows, the entire chunk pushes to the next page and leaves
+   a blank page behind.
+   ============================================================ */
+
+export interface CutPlanPageChunk {
+  /** True on the first chunk of the whole cut plan — render section preamble. */
+  isFirst: boolean;
+  material: string;
+  /** "33 sheets of 2440x1220mm · 11% waste" — same on every chunk of a material. */
+  materialDetail: string;
+  /** Anomalies are shown on the first chunk of each material only. */
+  anomalies?: string[];
+  /* Sheet payload */
+  sheetIndices?: number[];
+  placements?: Placement[];
+  sheetW?: number;
+  sheetH?: number;
+  /* Timber payload */
+  bins?: LengthBin[];
+}
+
+const SHEETS_PER_PAGE = 10;
+const BINS_PER_PAGE = 25;
+
+export function buildCutPlanPages(summaries: MaterialSummary[]): CutPlanPageChunk[] {
+  const chunks: CutPlanPageChunk[] = [];
+  let isFirst = true;
+
+  for (const s of summaries) {
+    const hasSheets = !!(s.sheet_placements && s.sheet_placements.length > 0 && s.sheets_needed);
+    const hasLengths = !!(s.length_bins && s.length_bins.length > 0);
+    if (!hasSheets && !hasLengths) continue;
+
+    if (hasSheets) {
+      const sz = parseSheetSize(s.standard_sheet_size);
+      const sheetW = sz?.w || 2440;
+      const sheetH = sz?.h || 1220;
+      const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
+      const detail = `${s.sheets_needed} sheet${s.sheets_needed! > 1 ? "s" : ""} of ${s.standard_sheet_size}mm${wasteStr}`;
+      const total = s.sheets_needed!;
+
+      for (let i = 0; i < total; i += SHEETS_PER_PAGE) {
+        const end = Math.min(i + SHEETS_PER_PAGE, total);
+        const indices: number[] = [];
+        for (let j = i; j < end; j++) indices.push(j);
+        chunks.push({
+          isFirst: isFirst && i === 0,
+          material: s.material,
+          materialDetail: detail,
+          anomalies: i === 0 ? s.anomalies : undefined,
+          sheetIndices: indices,
+          placements: s.sheet_placements,
+          sheetW, sheetH,
+        });
+        isFirst = false;
+      }
+    }
+
+    if (hasLengths) {
+      const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
+      const detail = `${s.lengths_needed} × ${s.standard_length_mm}mm${wasteStr}`;
+      const bins = s.length_bins!;
+      for (let i = 0; i < bins.length; i += BINS_PER_PAGE) {
+        chunks.push({
+          isFirst: isFirst && i === 0,
+          material: s.material,
+          materialDetail: detail,
+          anomalies: i === 0 ? s.anomalies : undefined,
+          bins: bins.slice(i, i + BINS_PER_PAGE),
+        });
+        isFirst = false;
+      }
+    }
+  }
+
+  return chunks;
+}

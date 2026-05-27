@@ -12,7 +12,7 @@
    2-up sheets at ~88mm; non-compact targets 1-up at ~180mm.
    ============================================================ */
 
-import type { Placement, LengthBin, MaterialSummary } from "@/lib/cut-layout";
+import type { Placement, LengthBin, MaterialSummary, CutPlanPageChunk } from "@/lib/cut-layout";
 import { parseSheetSize } from "@/lib/cut-layout";
 
 function SheetLayout({
@@ -237,6 +237,62 @@ export function CutPlanSection({
       {withLayout.map(s => (
         <MaterialCutPlan key={s.material} summary={s} compact={compact} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Renders one cut plan chunk — fits comfortably on one printed page.
+ * For multi-page cut plans (e.g. 33-sheet OSB), the traveller renders
+ * one <Page> wrapper per chunk so each gets proper header/footer chrome.
+ */
+export function CutPlanPage({
+  chunk, compact = true,
+}: {
+  chunk: CutPlanPageChunk;
+  compact?: boolean;
+}) {
+  return (
+    <div className="space-y-2 text-[13px]">
+      {chunk.isFirst && (
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+          Suggested cut plan
+          <span className="ml-2 font-normal text-faint normal-case tracking-normal text-[9px]">
+            Verify each sheet/length for defects — adjust if needed
+          </span>
+        </p>
+      )}
+      <p className="text-[8pt] font-semibold text-foreground">
+        {chunk.material} — {chunk.materialDetail}
+      </p>
+      {chunk.anomalies && chunk.anomalies.length > 0 && (
+        <div>
+          {chunk.anomalies.map((a, i) => (
+            <p key={i} className="text-[8pt] text-starlight-amber">⚠ {a}</p>
+          ))}
+        </div>
+      )}
+      {chunk.sheetIndices && chunk.placements && chunk.sheetW && chunk.sheetH && (
+        <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
+          {chunk.sheetIndices.map(sIdx => (
+            <SheetLayout
+              key={sIdx}
+              placements={chunk.placements!}
+              sheetW={chunk.sheetW!}
+              sheetH={chunk.sheetH!}
+              sheetIdx={sIdx}
+              compact={compact}
+            />
+          ))}
+        </div>
+      )}
+      {chunk.bins && (
+        <div className="space-y-1">
+          {chunk.bins.map(bin => (
+            <LengthBinRow key={bin.stockIdx} bin={bin} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

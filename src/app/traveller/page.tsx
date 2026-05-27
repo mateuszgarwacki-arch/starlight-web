@@ -9,8 +9,8 @@ import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Printer, RotateCw, Loader2, Check } from "lucide-react";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
-import { buildMaterialSummary, type ExtractedLine, type MaterialSummary, type CatalogueMat } from "@/lib/cut-layout";
-import { CutPlanSection } from "@/components/cut-layout-renderer";
+import { buildMaterialSummary, buildCutPlanPages, type ExtractedLine, type MaterialSummary, type CatalogueMat, type CutPlanPageChunk } from "@/lib/cut-layout";
+import { CutPlanPage } from "@/components/cut-layout-renderer";
 
 /* ================================================================
    Types
@@ -106,6 +106,7 @@ interface WOData {
   pdfPageUrls: Record<number, string[]>;
   steps: WOStep[];
   cutPlanSummaries: MaterialSummary[];
+  cutPlanChunks: CutPlanPageChunk[];
 }
 
 /* ================================================================
@@ -319,11 +320,13 @@ export default function TravellerPage() {
       const cutPlanSummaries = allCutLines.length > 0
         ? buildMaterialSummary(allCutLines, allMaterials)
         : [];
+      const cutPlanChunks = buildCutPlanPages(cutPlanSummaries);
 
       dataMap[wo.work_order_id] = {
         wo, bom: enrichedBom, docs, linkedItems, imageUrls, pdfPageUrls,
         steps: (stepsRes.data || []) as WOStep[],
         cutPlanSummaries,
+        cutPlanChunks,
       };
     }
 
@@ -461,18 +464,11 @@ export default function TravellerPage() {
     if (mode === "pack" && wosToPrint.indexOf(wo) > 0) totalPages++;
     totalPages++; // task brief
     const cutLists = data.docs.filter((d) => d.doc_type === "cut_list");
-    const hasCutPlanPage = data.cutPlanSummaries.some(
-      (s) =>
-        (s.sheet_placements && s.sheet_placements.length > 0) ||
-        (s.length_bins && s.length_bins.length > 0),
-    );
     for (const cl of cutLists) {
       const pages = data.pdfPageUrls[cl.doc_id];
       totalPages += pages ? pages.length : 1;
     }
-    if (hasCutPlanPage) {
-      totalPages++;
-    }
+    totalPages += data.cutPlanChunks.length;
     totalPages += data.docs.filter((d) => d.doc_type === "drawing").length;
     totalPages += data.docs.filter((d) => d.doc_type === "reference").length;
   }
@@ -552,11 +548,6 @@ export default function TravellerPage() {
     const drawings = data.docs.filter((d) => d.doc_type === "drawing");
     const references = data.docs.filter((d) => d.doc_type === "reference");
     const cutLists = data.docs.filter((d) => d.doc_type === "cut_list");
-    const hasCutPlanPage = data.cutPlanSummaries.some(
-      (s) =>
-        (s.sheet_placements && s.sheet_placements.length > 0) ||
-        (s.length_bins && s.length_bins.length > 0),
-    );
 
     // Pack divider
     if (mode === "pack" && woIdx > 0) {
@@ -610,15 +601,15 @@ export default function TravellerPage() {
       }
     }
 
-    // Suggested cut plan — dedicated page after the source cutlist PDFs.
-    // Flow layout so it can spill onto a second printed page when many
-    // sheets/lengths are involved. break-inside-avoid on each material
-    // block keeps a single material's diagrams together where possible.
-    if (hasCutPlanPage) {
+    // Suggested cut plan — one <Page> per chunk so each printed page gets
+    // proper header/footer chrome and the page count agrees with reality.
+    // Chunks are sized to fit on one A4 (10 sheets in 2-up, 25 timber
+    // lengths in 1-up) by buildCutPlanPages().
+    for (const chunk of data.cutPlanChunks) {
       pageNum++;
       pages.push(
-        <Page key={`cutplan-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr} flowLayout>
-          <CutPlanSection summaries={data.cutPlanSummaries} compact />
+        <Page key={`cutplan-${wo.work_order_id}-${pageNum}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
+          <CutPlanPage chunk={chunk} compact />
         </Page>
       );
     }
