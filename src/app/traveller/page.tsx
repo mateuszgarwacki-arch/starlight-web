@@ -461,9 +461,17 @@ export default function TravellerPage() {
     if (mode === "pack" && wosToPrint.indexOf(wo) > 0) totalPages++;
     totalPages++; // task brief
     const cutLists = data.docs.filter((d) => d.doc_type === "cut_list");
+    const hasCutPlanPage = data.cutPlanSummaries.some(
+      (s) =>
+        (s.sheet_placements && s.sheet_placements.length > 0) ||
+        (s.length_bins && s.length_bins.length > 0),
+    );
     for (const cl of cutLists) {
       const pages = data.pdfPageUrls[cl.doc_id];
       totalPages += pages ? pages.length : 1;
+    }
+    if (hasCutPlanPage) {
+      totalPages++;
     }
     totalPages += data.docs.filter((d) => d.doc_type === "drawing").length;
     totalPages += data.docs.filter((d) => d.doc_type === "reference").length;
@@ -544,6 +552,11 @@ export default function TravellerPage() {
     const drawings = data.docs.filter((d) => d.doc_type === "drawing");
     const references = data.docs.filter((d) => d.doc_type === "reference");
     const cutLists = data.docs.filter((d) => d.doc_type === "cut_list");
+    const hasCutPlanPage = data.cutPlanSummaries.some(
+      (s) =>
+        (s.sheet_placements && s.sheet_placements.length > 0) ||
+        (s.length_bins && s.length_bins.length > 0),
+    );
 
     // Pack divider
     if (mode === "pack" && woIdx > 0) {
@@ -569,7 +582,7 @@ export default function TravellerPage() {
     pageNum++;
     pages.push(
       <Page key={`brief-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr}>
-        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} steps={data.steps} cutPlanSummaries={data.cutPlanSummaries} />
+        <TaskBrief wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} bom={data.bom} linkedItems={data.linkedItems} scope={scope} siblingWOs={siblingWOs} daysRemaining={daysRemaining} drawingCount={drawings.length} referenceCount={references.length} cutListCount={cutLists.length} steps={data.steps} />
       </Page>
     );
 
@@ -595,6 +608,19 @@ export default function TravellerPage() {
           </Page>
         );
       }
+    }
+
+    // Suggested cut plan — dedicated page after the source cutlist PDFs.
+    // Flow layout so it can spill onto a second printed page when many
+    // sheets/lengths are involved. break-inside-avoid on each material
+    // block keeps a single material's diagrams together where possible.
+    if (hasCutPlanPage) {
+      pageNum++;
+      pages.push(
+        <Page key={`cutplan-${wo.work_order_id}`} scope={scope} wo={wo} woIdx={stepNum - 1} totalWOs={totalWOCount} pageNum={pageNum} totalPages={totalPages} printDate={nowStr} flowLayout>
+          <CutPlanSection summaries={data.cutPlanSummaries} compact />
+        </Page>
+      );
     }
 
     // Drawings
@@ -717,12 +743,11 @@ function Page({ scope, wo, woIdx, totalWOs, pageNum, totalPages, printDate, chil
    Task Brief (page 1 content)
    ================================================================ */
 
-function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount, steps, cutPlanSummaries }: {
+function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, daysRemaining, drawingCount, referenceCount, cutListCount, steps }: {
   wo: TravellerWO; woIdx: number; totalWOs: number; bom: BOM[]; linkedItems: LinkedItem[];
   scope: Scope; siblingWOs: TravellerWO[]; daysRemaining: number | null;
   drawingCount: number; referenceCount: number; cutListCount: number;
   steps: WOStep[];
-  cutPlanSummaries: MaterialSummary[];
 }) {
   return (
     <div className="space-y-3 text-[13px]">
@@ -856,13 +881,6 @@ function TaskBrief({ wo, woIdx, totalWOs, bom, linkedItems, scope, siblingWOs, d
           </table>
         )}
       </div>
-
-      {/* Suggested cut plan — layouts for any extracted cut lists on this WO */}
-      {cutPlanSummaries.length > 0 && (
-        <div className="mt-3">
-          <CutPlanSection summaries={cutPlanSummaries} compact />
-        </div>
-      )}
 
       <hr className="border-subtle" />
 

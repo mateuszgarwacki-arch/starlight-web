@@ -1,34 +1,22 @@
-S51: Suggested cut plan on traveller + extractor (2D/1D layout viz)
+S51: move cut plan from TaskBrief to a dedicated page after PDFs
 
-Visualises the bin-packing layouts already computed by the cutlist
-extractor's guillotine and 1D-FFD algorithms — placements were
-captured internally but discarded after sheet/length counting.
+Mateusz: "cutlist view should be placed under parts list in print
+traveller (normally from 3rd page)."
 
-What changed:
-- src/lib/cut-layout.ts (new) — shared types + pure calc functions
-  (binPackLengths, guillotinePack, buildMaterialSummary, parseSheetSize,
-  labelFor). Algorithms now return Placement[] and LengthBin[] capturing
-  which piece goes where at what offset.
-- src/components/cut-layout-renderer.tsx (new) — SVG renderers
-  (SheetLayout, LengthBinRow, MaterialCutPlan, CutPlanSection). Compact
-  mode: sheets 2-up at ~88mm, lengths 1-up at ~180mm. Dynamic font sizing
-  per part. break-inside-avoid on each diagram + material block.
-- src/app/api/extract-cutlist/route.ts — prompt updated to extract
-  part_label from source (OpenCutList column, prefix, or null). No
-  schema change; stored in existing extracted_data JSON.
-- src/components/cutlist-extractor.tsx (rewritten) — calc moved to lib,
-  layout toggle in both extracted+confirmed states, part_label column
-  in parts reference table. Audit gap closed: tbl_wo_documents writes
-  now go through auditedUpdate (3 sites: extract, confirm, re-add).
-- src/app/traveller/page.tsx — full materials catalogue fetched once
-  per traveller load, reused for both BOM enrichment and cut plan
-  computation. WOData carries cutPlanSummaries: MaterialSummary[].
-  TaskBrief renders <CutPlanSection> after the BOM table when
-  summaries exist. Recompute, not persisted.
-- docs/TRACKER.md — S51 entry + backlog item for remaining
-  tbl_wo_bom raw insert gap.
+Page sequence per WO now reads:
+  Task brief (BOM)  ->  source cutlist PDF(s)  ->  suggested cut plan
+                    ->  drawings  ->  references
 
-Pre-existing cutlists need a Re-extract to populate part_label.
-Renderer falls back to description.slice(0, 12) until that happens.
+Changes:
+- src/app/traveller/page.tsx
+  - Drop CutPlanSection from TaskBrief signature + render
+  - Add dedicated cut-plan page after the cut-list PDF loop, gated on
+    any material having sheet_placements or length_bins. flowLayout so
+    it can spill onto a second printed page when many materials.
+  - hasCutPlanPage computed once per WO in both totalPages count loop
+    and the page-rendering loop (separate scopes, separate declarations).
+- docs/TRACKER.md
+  - S51 entry: updated traveller paragraph and added a brief "Initial
+    placement and refinement" note recording the move.
 
-No schema changes. No DB writes added.
+No schema. No DB writes. No new files.
