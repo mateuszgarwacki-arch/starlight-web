@@ -1,8 +1,19 @@
-fix(labels): rotate label content 90° for portrait-fed GT800 (S53)
+feat(labels): generate hard-sized 50x25mm PDF for the GT800 (S53)
 
-Print output came out sideways relative to the physical 2x1 label. The
-GT800 feeds the 1in edge first, so the page is now portrait (1in x 2in)
-and the 2x1 content is rotated 90° into it via a .label-inner wrapper
-(absolute-centred, transform rotate(90deg)). Rotation is print-only —
-the on-screen preview stays upright and readable. If it comes out 180°
-off, flip rotate(90deg) -> rotate(-90deg).
+Chrome's HTML print won't honour the die-cut label pitch — output
+straddled two physical labels regardless of @page size. Switched the
+"Print labels" button to build a PDF whose pages are exactly 50x25mm
+(landscape) and hand it to the existing ZDesigner GT800 driver, the same
+reliable path MS Access uses. No Browser Print install needed.
+
+- jspdf + qrcode added; QR pre-rendered to a PNG data URL on load so the
+  print click stays in the user gesture (no popup-blocker trip).
+- One PDF page per physical label: JOB# . WO#, description (bold, wrapped
+  to 3 lines), finish (PAINT/COVER + set only), qty-overflow note, k/n.
+- doc.autoPrint() + open blob → PDF print dialog; user picks GT800 at
+  Actual size.
+- HTML page is now preview-only; dead @media print rotation removed.
+
+Orientation assumes the 50mm edge prints across the head (label reads
+landscape). If the first physical print is 90 deg out, it's a one-line
+flip of the PDF format/rotation — confirming on first print per request.

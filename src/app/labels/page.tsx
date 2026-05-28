@@ -20,6 +20,8 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { QRCodeSVG } from "qrcode.react";
 import { Printer, Loader2, Tags } from "lucide-react";
+import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
 
 interface LabelItem {
   item_id: number;
@@ -44,6 +46,7 @@ export default function LabelsPage() {
   const [activity, setActivity] = useState("");
   const [isPaintOrCover, setIsPaintOrCover] = useState(false);
   const [origin, setOrigin] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
 
   // Next 16: read params off window.location.search (no Suspense needed).
   useEffect(() => {
@@ -52,6 +55,15 @@ export default function LabelsPage() {
     const id = p.get("woId");
     setWoId(id ? Number(id) : null);
   }, []);
+
+  // Pre-render the QR to a PNG data URL so the print handler stays synchronous
+  // (an await between the click and window.open trips the popup blocker).
+  useEffect(() => {
+    if (!origin || woId === null) return;
+    QRCode.toDataURL(`${origin}/m/wo/${woId}`, { margin: 0, width: 320, errorCorrectionLevel: "M" })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [origin, woId]);
 
   const loadData = useCallback(async () => {
     if (!woId) { setError("No work order specified"); setLoading(false); return; }
@@ -143,6 +155,55 @@ export default function LabelsPage() {
   });
   const qrUrl = origin ? `${origin}/m/wo/${woId}` : "";
 
+  // Build a hard-sized 50×25mm PDF and hand it to the GT800 driver. A PDF page
+  // pins the geometry the way an MS Access report does — Chrome's HTML print
+  // would not honour the label pitch and straddled two physical labels.
+  const generatePdf = () => {
+    if (!labels.length || !qrDataUrl) return;
+    const W = 50, H = 25, PAD = 1.5;        // mm — physical label, landscape
+    const QR = 20;                          // mm QR box
+    const qrX = W - PAD - QR;
+    const qrY = (H - QR) / 2;
+    const textW = qrX - PAD - 1;            // left text column width
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [W, H] });
+
+    labels.forEach(({ item, idx, total }, i) => {
+      if (i > 0) doc.addPage([W, H], "landscape");
+
+      doc.addImage(qrDataUrl, "PNG", qrX, qrY, QR, QR);
+
+      let y = PAD + 2.4;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.text(`JOB ${jobNumber || "—"} · WO ${woId}`, PAD, y);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      const nameLines = (doc.splitTextToSize(item.description || "(no description)", textW) as string[]).slice(0, 3);
+      y += 3.6;
+      nameLines.forEach((ln) => { doc.text(ln, PAD, y); y += 3.6; });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      if (isPaintOrCover && item.finish_required && item.finish_required.trim() !== "") {
+        doc.text((doc.splitTextToSize(item.finish_required, textW) as string[])[0], PAD, y);
+        y += 3.2;
+      }
+      if (item.qtyOverflow) {
+        doc.text(`Qty ${item.qtyOverflow}${item.unit ? ` ${item.unit}` : ""}`, PAD, y);
+      }
+
+      if (total > 1) {
+        doc.setFontSize(6);
+        doc.text(`${idx} / ${total}`, PAD, H - PAD);
+      }
+    });
+
+    doc.autoPrint();
+    window.open(doc.output("bloburl"), "_blank");
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>
@@ -172,14 +233,14 @@ export default function LabelsPage() {
           </span>
         </div>
         <button
-          onClick={() => window.print()}
-          disabled={labels.length === 0}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: labels.length ? "#1f2a44" : "#aaa", color: "#fff", border: "none", cursor: labels.length ? "pointer" : "default", fontSize: 14 }}
+          onClick={generatePdf}
+          disabled={labels.length === 0 || !qrDataUrl}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: (labels.length && qrDataUrl) ? "#1f2a44" : "#aaa", color: "#fff", border: "none", cursor: (labels.length && qrDataUrl) ? "pointer" : "default", fontSize: 14 }}
         >
-          <Printer className="h-4 w-4" /> Print labels
+          <Printer className="h-4 w-4" /> Print labels (PDF)
         </button>
         <span style={{ fontSize: 12, color: "#888" }}>
-          Pick the GT800 (2×1 in) in the dialog · margins None · scale 100%
+          Opens a 50×25 mm PDF → print to the GT800 at <b>Actual size</b> (not Fit)
         </span>
       </div>
 
@@ -261,30 +322,9 @@ const LABEL_CSS = `
   }
   .label-finish { font-size: 8pt; font-weight: 600; line-height: 1.1; margin-top: 1px; }
   .label-count { font-size: 7pt; margin-top: 1px; }
+  /* This page is a preview; real printing goes through the 50x25mm PDF
+     (Print labels button). Browser printing of the HTML is not used. */
   @media print {
-    /* Portrait page; the 2x1 content is rotated 90° to read along the
-       long edge of the physical label (GT800 feeds the 1in edge first). */
-    @page { size: 1in 2in; margin: 0; }
-    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     .no-print { display: none !important; }
-    .sheet { gap: 0 !important; padding: 0 !important; }
-    .label {
-      width: 1in !important;
-      height: 2in !important;
-      position: relative;
-      border: none !important;
-      margin: 0 !important;
-      overflow: hidden;
-      page-break-after: always;
-      break-after: page;
-    }
-    .label-inner {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(90deg);
-      transform-origin: center center;
-    }
-    .label:last-child { page-break-after: auto; break-after: auto; }
   }
 `;
