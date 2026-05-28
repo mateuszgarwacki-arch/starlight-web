@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuditContext, auditedInsert } from "@/lib/audit";
 import { formatHours } from "@/lib/format-hours";
@@ -88,6 +88,12 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
   );
   const [routeNote, setRouteNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Ref to the pre-selected WO so we can scroll it into view on open. On busy
+  // jobs (30+ WOs) the pre-routed WO is otherwise below the fold and the modal
+  // looks like nothing was selected — the "find the WO again" complaint.
+  const selectedWoRef = useRef<HTMLButtonElement | null>(null);
+  const didInitialScroll = useRef(false);
 
   // Close on ESC
   useEffect(() => {
@@ -314,6 +320,20 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
     if (wo && wo.job_id !== selectedJobId) setSelectedWoId(null);
   }, [selectedJobId, selectedWoId, allWos]);
 
+  // On first load, scroll the pre-routed WO into view — once only, so we don't
+  // yank the pane when the PM clicks around afterwards.
+  useEffect(() => {
+    if (loading || didInitialScroll.current) return;
+    if (
+      task.work_order_id &&
+      selectedWoId === task.work_order_id &&
+      selectedWoRef.current
+    ) {
+      selectedWoRef.current.scrollIntoView({ block: "center" });
+      didInitialScroll.current = true;
+    }
+  }, [loading, selectedWoId, task.work_order_id]);
+
   // ————————————————————————————————————————
   // Submit
   // ————————————————————————————————————————
@@ -404,6 +424,14 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
   const selectedJob = selectedJobId
     ? jobs.find((j) => j.job_id === selectedJobId)
     : null;
+
+  const selectedWo = useMemo(
+    () =>
+      selectedWoId
+        ? allWos.find((w) => w.work_order_id === selectedWoId) ?? null
+        : null,
+    [selectedWoId, allWos],
+  );
 
   const hoursChanged =
     task.claimed_hours != null &&
@@ -604,6 +632,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                           return (
                             <button
                               key={wo.work_order_id}
+                              ref={isSel ? selectedWoRef : null}
                               onClick={() => setSelectedWoId(wo.work_order_id)}
                               className={
                                 "w-full text-left p-3 rounded-lg border-2 transition-all " +
@@ -658,6 +687,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
                           return (
                             <button
                               key={wo.work_order_id}
+                              ref={isSel ? selectedWoRef : null}
                               onClick={() => setSelectedWoId(wo.work_order_id)}
                               className={
                                 "w-full text-left p-3 rounded-lg border transition-all " +
@@ -724,6 +754,26 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
 
         {/* Footer — hours, note, actions */}
         <div className="px-6 py-4 border-t border-subtle bg-surface-dim flex items-end gap-3 shrink-0 flex-wrap">
+          <div className="w-full -mb-1">
+            {selectedWo ? (
+              <p className="text-xs text-navy">
+                <CornerDownRight className="inline h-3 w-3 text-starlight-blue mr-1 -mt-0.5" />
+                <span className="text-muted">Routing to: </span>
+                <span className="font-semibold">
+                  {selectedWo.is_overhead
+                    ? "Job Overhead"
+                    : selectedWo.scope_name}
+                </span>
+                {selectedWo.description ? (
+                  <span className="text-muted"> — {selectedWo.description}</span>
+                ) : null}
+              </p>
+            ) : (
+              <p className="text-xs text-muted italic">
+                Select a work order above to route this time
+              </p>
+            )}
+          </div>
           <div className="shrink-0">
             <label className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
               <Clock className="h-3 w-3" /> Hours

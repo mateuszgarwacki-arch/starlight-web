@@ -1,46 +1,14 @@
-S51: chunk cut plan into per-page units with proper chrome
+fix(review): make route-task pre-selection visible + clarify Approve Overhead
 
-Mateusz: "Still no good - it is not breaking it into the pages - it
-shows page 4 for 3 pages - so at the bottom a printout, it shows 13
-pages, but ready to print 16... Each page should have a header, a
-bottom bit etc. - it all should be uniform"
+Route Task modal:
+- Scroll the pre-routed WO into view on open (once). On busy jobs (e.g.
+  13585 has 33 WOs) the pre-selected WO sat below the fold, so the modal
+  looked like nothing was chosen and PMs re-hunted for the WO.
+- Add a "Routing to: <scope> — <description>" banner in the footer so the
+  current selection is always visible and a pre-routed task is one click
+  (confirm + Route), not a search.
 
-The previous flowLayout single-page approach let the cut plan spill
-across multiple printed pages via page-break-inside: auto, but the
-Page chrome (job header / scope / step indicator / page footer) only
-renders once on the first printed page and once on the last. Middle
-printed pages were bare, and the page counter said "4 of 13" on the
-final cut-plan page while the actual printed total was 16.
-
-Fix: chunk the cut plan at the JS layer and render one <Page> per
-chunk.
-
-- src/lib/cut-layout.ts
-  - New CutPlanPageChunk type and buildCutPlanPages() helper.
-  - Sheet materials chunked into pages of SHEETS_PER_PAGE=10 (2-up
-    grid). Timber materials chunked into BINS_PER_PAGE=25 (1-up).
-  - First chunk overall carries isFirst=true so the renderer shows
-    the "Suggested cut plan / Verify each sheet..." preamble.
-  - Anomalies carried on the first chunk of each material only.
-
-- src/components/cut-layout-renderer.tsx
-  - New CutPlanPage component renders one chunk: preamble (first
-    only), material header, anomalies, SVG slice.
-  - CutPlanSection and MaterialCutPlan unchanged - still used by
-    the live preview in the BOM extractor (no print, no chunking
-    needed).
-
-- src/app/traveller/page.tsx
-  - WOData gets cutPlanChunks: CutPlanPageChunk[], computed once
-    in loadData alongside cutPlanSummaries.
-  - totalPages count loop: replace hasCutPlanPage boolean with
-    totalPages += data.cutPlanChunks.length.
-  - Render loop: replace the single flowLayout Page + CutPlanSection
-    with a for-loop emitting one regular <Page> (no flowLayout) per
-    chunk + <CutPlanPage chunk={chunk} />.
-
-- docs/TRACKER.md
-  - S51 "Initial placement and refinement" section: added the
-    flowLayout-chrome bug + chunking fix paragraphs.
-
-No schema. No DB writes. No new files at the storage layer.
+Review inbox:
+- Tooltip on Approve Overhead clarifying it logs as general workshop
+  overhead, not billed to a job (distinct from the in-modal Job Overhead
+  bucket).
