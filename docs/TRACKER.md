@@ -72,6 +72,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **`tbl_wo_bom` raw inserts in cutlist-extractor** *(S51)* — `addToBom` writes BOM rows via raw `supabase.from("tbl_wo_bom").insert(...)` despite `tbl_wo_bom` being in `AUDITED_TABLES`. Pre-existing pattern, not introduced by S51, but visible there. Migrate to `auditedInsert(ctx, "tbl_wo_bom", row, jobId)` for each row in the loop. Pairs naturally with the wider "harden auditedUpdate" and "lint raw .update()/.delete()" sweep below.
 
+- [ ] **`addToBom` ignores catalogue swap for quantities** *(S51 cont.)* — when a user swaps the catalogue match on a cut-plan material (different sheet size / stock length), the live preview and traveller recompute correctly, but `addToBom` recomputes BOM quantities from the **auto-matched** catalogue (it re-runs `buildMaterialSummary` then only copies `_selected`/`_catalogueMatch`, not the override-derived layout). So `sheets_needed`/`lengths_needed` written to BOM can differ from what the swapped preview showed. Pre-existing (predates the override editor); low impact because auto-match is usually right. Fix: feed the chosen catalogue into the per-material `sheetLayoutFields`/`timberLayoutFields` recompute inside `addToBom`.
+
 - [ ] **Audit gap on workshop requests** *(S47e)* — `handleRequestAction` in `/review/inbox/page.tsx` still uses raw `supabase.from("tbl_workshop_requests").update(...)`. Easy fix once `tbl_workshop_requests` is added to `AUDITED_TABLES` (currently absent). Smaller-stakes than the task gap closed in S47e because workshop requests aren't pay-affecting, but worth tidying when the wider audit sweep happens (pairs naturally with the harden-`auditedUpdate` task above).
 
 ### Long-running / strategic
@@ -84,6 +86,49 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S51 (cont.) — Cut nesting add-ons (kerf, squaring, stack cutting) — 28 May 2026
+
+Four add-ons to the S51 cut plan, requested after seeing the first version print. The nest is now physically honest (blade kerf + squaring loss) and the visualisation is built around **stack cutting**: identical sheet layouts are grouped into patterns and reported as stacked passes. Plus a per-WO settings override. One schema change (`tbl_work_orders.cut_settings`), one deploy.
+
+#### Trigger
+
+Mateusz, after the S51 print landed: *"we need an add-on for cut nesting - few add-ons. First - blade kerf, that is 4mm (3.2 to be exact). Allow another 5mm for squaring. Then rules I should be able to choose from work order level - if we cut 18mm we cut 2 at a time, 12mm → 3, 9mm → 4, 6 and 3.6 → 5. Visualising it should make sense, and I'd like each element to have size as well — some has, some no, not sure why."*
+
+#### Design decisions (settled before building)
+
+- **Kerf default 4mm** (3.2mm true). Rounded up — erring generous on kerf is the safe direction (sliver spare beats coming up short). Per-WO overridable. Modelled by inflating each part footprint by kerf during packing while storing the **true** size in the placement, so kerf renders as the visible gap between parts.
+- **Squaring 5mm**, trimmed off two reference edges → usable area `(sheetW−sq) × (sheetH−sq)`. For timber it's an end-trim on the stock length. Effect is in the counts; at sheet scale a 5mm strip is too thin to draw, so it isn't.
+- **Stack count = `clamp(floor(36 / thickness), 1, 5)`** — reproduces Mateusz's table exactly (18→2, 12→3, 9→4, 6→5, 3.6→5; ≈ a 36mm saw stack). Per-WO override on top.
+- **Stack handling: pattern-grouped, and optimised for it (Option B).** Detect sheets with an identical layout signature, group them, and report `×N sheets · ⌈N/stack⌉ passes`. Stacking only works when sheets get the same cuts, so this is the form that actually saves setups.
+- **Every part shows label AND size.** The old renderer only printed dimensions when the part's short side exceeded 250mm (`showDims = min(w,h) > 250`) — that was the "some have it, some don't". Now always shown; font auto-scales and label+dims are clamped to fit the part.
+- **Per-WO override shipped now**, not deferred — `cut_settings` JSONB on the WO, edited from a gear-button panel on the BOM extractor's cut-layout block.
+
+#### Key finding — single-phase beats two-phase
+
+Original plan was a two-phase nest: (1) a pure-pattern phase grid-packing high-count part types into identical sheets, then (2) a guillotine remainder. Verified offline against real data (doc 428 — Summer Solstice OSB+ply, 29 lines): the **single-phase** kerf-aware guillotine fed *all* parts, then grouped by layout signature, gives the **same** 35 sheets / 16% waste as the two-phase approach **but finds larger identical runs** (×7, ×5, ×3 sheets vs the pure phase's fragmented ×5/×3/×2). The deterministic area-sorted packer naturally fills high-count identical parts the same way across sheets, so signature grouping captures the stackable runs for free. The pure-pattern phase added code and *raised* waste (22% at a permissive fill threshold). **Dropped the pure phase entirely.**
+
+Verified doc 428 (kerf 4, squaring 5): 18mm OSB → 35 sheets, 20 patterns, 26 passes, 16% waste (e.g. a ×7-sheet pattern at 93% fill = 4 stacked passes; ×5 at 91% = 3 passes). 9mm ply → 5 sheets, 2 patterns, 2 passes (S×4 sheets stacked 4-high = a single pass). Prior no-kerf figure was 33 sheets / 11% — the increase is the legitimate kerf+squaring cost plus a tiny stacking premium.
+
+#### Files
+
+- **`src/lib/cut-layout.ts`.** New `CutSettings` type + `DEFAULT_CUT_SETTINGS` (kerf 4, squaring 5) + `resolveCutSettings()` (merges partial/NULL stored settings with defaults — one place owns the rule) + `stackCountForThickness()`. `MaterialSummary` reshaped: `sheet_placements` **removed**, replaced by `patterns: SheetPattern[]` (`{ placements, count, stackCount, passes, fillPct }`) plus `total_passes`, `stack_count`, `sheetW/H`, `squaring_mm`. `guillotinePack()` and `binPackLengths()` are now kerf-aware and pack within the squared usable area. New internal `groupSheetsIntoPatterns()` (signature = sorted part/x/y/w/h/rot). Layout maths extracted into shared `sheetLayoutFields()` / `timberLayoutFields()` so `buildMaterialSummary` **and** the extractor's catalogue-swap handler use one code path — kills the prior drift where the swap handler reimplemented packing inline (and on the old, kerf-less signature).
+- **`src/components/cut-layout-renderer.tsx`.** `SheetLayout` → `PatternLayout`: renders one representative sheet plus a caption `×N sheets · M passes · stack K · F% used`. Every part shows label + size with fit-clamped fonts. `MaterialCutPlan` / `CutPlanSection` (live preview) and `CutPlanPage` (print, chunked by patterns, 10/page) all read `patterns`.
+- **`src/app/traveller/page.tsx`.** Fetches `cut_settings` per WO in a small separate query (the `qry_wo_phase_ordered` view expands `*` at creation, so the new column isn't exposed — and the view is `SECURITY INVOKER`/load-bearing, not worth recreating for this). Threads `resolveCutSettings()` into `buildMaterialSummary`.
+- **`src/components/cutlist-extractor.tsx`.** Loads the WO's `cut_settings`; gear-button editor (kerf, squaring, per-thickness stack overrides with `auto N` placeholders) saved via `auditedUpdate(ctx, "tbl_work_orders", woId, { cut_settings }, jobId)` — stores NULL when the draft equals defaults. Live preview recomputes on save and on catalogue swap. Removed now-unused inline packing imports.
+
+#### Known gaps / backlog
+
+- The override editor saves at WO level and the preview/traveller recompute correctly. `addToBom` still recomputes BOM quantities from the **auto-matched** catalogue rather than a manually swapped catalogue override — a pre-existing latent issue, not introduced here. Flagged in backlog.
+
+#### S51 (cont.) schema summary
+
+- **1 schema change:** `tbl_work_orders.cut_settings JSONB` (nullable; NULL = workshop defaults)
+- **0 new files; 4 modified:** `cut-layout.ts`, `cut-layout-renderer.tsx`, `traveller/page.tsx`, `cutlist-extractor.tsx`
+- **Algorithm:** single-phase kerf/squaring-aware guillotine + pattern grouping (pure-pattern phase considered and rejected on data)
+- **Live totals:** 57 tables, 34 views, 18 RPCs, 2 cron jobs (table count unchanged — column add only)
+
+---
 
 ### S51 — 27 May 2026
 

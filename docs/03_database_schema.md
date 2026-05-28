@@ -136,7 +136,16 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S45)
+## Recent additions (S40 → S51)
+
+### S51 (cont.) — Cut nesting settings (per-WO override)
+
+**New column (`tbl_work_orders.cut_settings`):**
+- `JSONB`, nullable. Per-WO cut-nesting overrides for the suggested cut plan. Shape: `{ kerf_mm: number, squaring_mm: number, stack_overrides: { "<thickness>": number } }`. **NULL = workshop defaults** (kerf 4mm, squaring 5mm, stack = `clamp(floor(36/thickness), 1, 5)`), resolved by `resolveCutSettings()` in `src/lib/cut-layout.ts`. The extractor stores NULL back when the user's draft equals defaults, keeping rows clean.
+- `tbl_work_orders` is already in `AUDITED_TABLES` (PK `work_order_id`); the editor writes via `auditedUpdate`.
+- Not exposed on `qry_wo_phase_ordered` (the view expands `*` at creation, so the new column isn't picked up). The traveller fetches `cut_settings` in a small separate `tbl_work_orders` query rather than recreating the load-bearing `SECURITY INVOKER` view.
+
+No new tables/views/RPCs. Counts unchanged: 57 tables, 34 views, 18 RPCs, 2 cron jobs.
 
 ### S45 — Close report: workshop-quoted differential (pure RPC change)
 
