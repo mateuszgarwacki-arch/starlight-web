@@ -1,18 +1,18 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 23 May 2026 (S47)
-**Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46; no other schema changes.
+**Last updated:** 28 May 2026 (S52)
+**Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change).
 
 ## Counts
 
 | Category | Count |
 |---|---|
-| Tables (`tbl_*`) | 57 |
-| Views (`qry_*`) | 34 |
+| Tables (`tbl_*`) | 58 |
+| Views (`qry_*`) | 35 |
 | RPC functions (`rpc_*`) | 19 |
 | pg_cron jobs | 3 |
 
-## Tables (57)
+## Tables (58)
 
 ```
 tbl_audit_log                   tbl_business_settings           tbl_category_prompts
@@ -26,7 +26,7 @@ tbl_maintenance_assets          tbl_maintenance_checks          tbl_maintenance_
 tbl_maintenance_logs            tbl_maintenance_tasks           tbl_master_lookups
 tbl_material_aliases            tbl_material_category_config    tbl_material_prices
 tbl_material_spec_defs          tbl_materials                   tbl_notifications
-tbl_pm_queries                  tbl_production_plan             tbl_quote_line_checks
+tbl_overhead_costs              tbl_pm_queries                  tbl_production_plan             tbl_quote_line_checks
 tbl_quote_line_contractors      tbl_quote_lines                 tbl_quotes
 tbl_rate_card                   tbl_scope_item_categories       tbl_scope_items
 tbl_scope_options               tbl_stock_items                 tbl_suppliers
@@ -36,7 +36,7 @@ tbl_wo_documents                tbl_wo_steps                    tbl_wo_time_entr
 tbl_wo_time_entry_edits         tbl_work_orders                 tbl_workshop_requests
 ```
 
-## Views (34)
+## Views (35)
 
 ```
 qry_bom_enriched                qry_bom_invariant_violations    qry_dash_quote_stats
@@ -45,7 +45,7 @@ qry_freelancer_hours_summary    qry_invoice_job_rollup          qry_invoice_scop
 qry_invoice_wo_costs            qry_job_accepted_quote          qry_job_execution_list
 qry_jobitems_withcoverage       qry_learnings_enriched          qry_maintenance_asset_summary
 qry_maintenance_task_status     qry_manpower_demand             qry_materials_list
-qry_procurement_needed          qry_quote_line_badges           qry_quote_lines_with_contractors
+qry_overhead_monthly            qry_procurement_needed          qry_quote_line_badges           qry_quote_lines_with_contractors
 qry_quote_scopes                qry_recent_orders               qry_review_inbox
 qry_scope_breakdown             qry_scope_context               qry_scope_estimated_cost
 qry_scope_wo_stats              qry_stale_travellers            qry_supplier_summary
@@ -83,7 +83,7 @@ qry_wo_with_activities
 |---|---|---|
 | `audit-retention-monthly` | `0 3 1 * *` | `SELECT audit_retention_cycle()` — monthly audit log retention |
 | `phantom-timer-patrol-daily` | `0 4 * * *` | `SELECT rpc_close_phantom_timers()` — daily 04:00 UTC. Caps any forgotten WO/quick timer at ~24h before next-day close |
-| `timesheet-gap-detect-daily` | `0 6 * * *` | `SELECT rpc_detect_timesheet_gaps(CURRENT_DATE - INTERVAL '1 day')` — daily 06:00 UTC |
+| `timesheet-gap-detect-daily` | `0 6 * * *` | `SELECT rpc_detect_timesheet_gaps(d::date) FROM generate_series(CURRENT_DATE-7, CURRENT_DATE-1, '1 day') d` — daily 06:00 UTC. S52: widened from yesterday-only to a rolling 7-day window so backfills are revisited and flags/notifications self-heal |
 
 ## Audited tables (`src/lib/audit.ts` — `AUDITED_TABLES`)
 
@@ -103,6 +103,7 @@ qry_wo_with_activities
   tbl_timesheet_flags:  "flag_id",
   tbl_tasks:            "task_id",
   tbl_wo_completion_proposals: "proposal_id",
+  tbl_overhead_costs:   "overhead_cost_id",
 }
 ```
 
@@ -136,7 +137,24 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S51)
+## Recent additions (S40 → S52)
+
+### S52 — Workshop overhead pool + timesheet-gap self-heal
+
+**New table (`tbl_overhead_costs`):** non-job workshop running costs.
+- Columns: `overhead_cost_id` PK; `cost_date` date; `cost_type` text CHECK in ('spend','labour'); `category_id` int FK→`tbl_master_lookups(lookup_id)` **ON DELETE SET NULL**; `description` text; `amount` numeric(12,2) (net of VAT); `hours` numeric(8,2) (labour only); `freelancer_id` int FK; `supplier_id` int FK (spend only); `receipt_url` text; `source_task_id` int FK→`tbl_tasks` (links the Approve-Overhead task); `note` text; `created_by` uuid; `created_at` timestamptz.
+- Indexes: `uq_overhead_source_task` UNIQUE on `source_task_id WHERE source_task_id IS NOT NULL` (idempotency — one labour row per task); `idx_overhead_cost_date`; `idx_overhead_category`.
+- RLS: 4 policies, PM/admin only via `get_my_role()` (mirrors `tbl_invoices`). In `AUDITED_TABLES` (PK `overhead_cost_id`).
+
+**New view (`qry_overhead_monthly`, SECURITY INVOKER):** `month × category_id × cost_type` rollup with `entries` and `total`; category name coalesced to 'Uncategorised'.
+
+**Lookups:** 8 rows `category='OVERHEAD_CATEGORY'` (Consumables, Cleaning & Waste, PPE & Safety, Tooling & small repairs, Equipment servicing, Utilities, General labour, Other). Managed in Settings → Overhead Categories.
+
+**Wiring:** Review-inbox Approve Overhead inserts a `labour` row (`hours × day_rate/standard_day_hours`) then marks the task — previously the hours hit no cost pool. Workshop page has a collapsible Overhead panel (entry + monthly/category rollups + recent entries).
+
+**Function change (`rpc_detect_timesheet_gaps`):** added `clear_notifs` CTE — dismisses the `timesheet_no_show` notification (by `source_freelancer_id` + type + date-specific title) once `logged_hrs > 0`. Flag auto-resolve (`auto_close`) unchanged. The enabler is cron job 6 now re-running a rolling 7-day window (see pg_cron table).
+
+Counts: 58 tables, 35 views, 19 RPCs, 3 cron jobs.
 
 ### S51 (cont.) — Cut nesting settings (per-WO override)
 

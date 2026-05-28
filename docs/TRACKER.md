@@ -16,6 +16,10 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Cost-visibility "Workshop Overhead" card → read from `tbl_overhead_costs`** *(S52, strategic)* — the Review → Cost Visibility page still derives its Workshop Overhead figure from `approved_overhead` **tasks** (task-status aggregation). Since S52, Approve Overhead also writes a labour row into `tbl_overhead_costs`, so the same labour hour now lives in two stores, and the card can't see the *spend* side (consumables/cleaning) at all. End state: point that card at the pool (`qry_overhead_monthly` / `tbl_overhead_costs`), which is the superset (labour + spend), and retire the task-derived calc — single source of truth. Touches the cost-visibility RPC; confirm directors want spend folded into that headline number before building.
+- [ ] **Overhead allocation onto jobs** *(S52, strategic)* — Phase 2 of the overhead pool. Push pooled overhead back onto jobs (e.g. a recovery rate per productive labour hour) to get fully-loaded item cost — the real prize for "are we profitable on this desk." Deliberately deferred until a few months of real `tbl_overhead_costs` data exist to set the recovery rate against; building it now is guessing at the rate. Flat per-hour recovery is the simple starting method; activity-based costing is overkill at this size.
+- [ ] **Overhead spend — receipt upload** *(S52)* — `tbl_overhead_costs.receipt_url` column exists but the entry form has no upload yet (kept Phase 1 lean, avoids the 4.5MB Vercel limit / OneDrive upload-session path). Wire the existing upload-session API if PMs want receipts attached to consumable/cleaning costs.
+
 - [ ] **`cancellation_reason` on `tbl_freelancer_schedule`** *(S49b, watcher)* — pass-2 spec originally called for this column to suppress no-show flags when a booking is cancelled. Deferred because existing affordances cover the cancellation case (Remove button on the dialog deletes the row entirely; flipping status to `Declined` or `Unavailable` excludes the row from the detector's candidate set). If real false-flag pressure shows up — i.e., PMs find themselves dismissing `timesheet_no_show` flags from `tbl_timesheet_flags` because the booking should have been cancelled but the row wasn't removed/restatused — add the column. One-line ALTER + a `WHERE cancellation_reason IS NULL` clause in the `booked` CTE of `rpc_detect_timesheet_gaps`. UI side: a small "Mark cancelled" affordance on the inline calendar dialog, separate from Remove (so the booking row stays as reliability data).
 
 - [ ] **Consolidate workshop-quote definition into a shared view** *(S45c)* — "workshop + stock quoted" (category text contains `workshop` / `stock pick` / `stock-and-hire`) is now computed in two places: the `quote_workshop` CTE in `rpc_job_close_report` and the `workshopCats` filter in `cost-breakdown.tsx`. They must stay in lockstep. If this rule is touched again, pull it into a view (e.g. `qry_job_workshop_quote`) as the single source of truth and have both consumers read it.
@@ -86,6 +90,52 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S52 — Workshop overhead pool + Approve-Overhead wiring + review UX + self-healing timesheet gaps — 28 May 2026
+
+Started from two review-inbox UX niggles, expanded into a proper workshop-overhead cost subsystem. Three deploys: (1) route-task UX fix, (2) overhead pool, (3) nav fold + cron self-heal. The throughline is closing costing leaks — general (non-job) labour and consumables previously vanished from every report.
+
+#### Trigger
+- PM on a busy job clicks "Route to WO" on a task that *already* carried its WO, but the modal looked like nothing was selected and they re-hunted for it. Plus: "not sure what Approve Overhead does."
+- Follow-on: general overhead (blades, cleaning, non-job labour) needs to live somewhere — new table.
+- Then: drop the standalone Timesheets nav item (fold into Review), and make the gap cron self-heal when timesheets get backfilled.
+
+#### What shipped
+1. **Route-task pre-selection visible.** Modal scrolls the pre-routed WO into view on open (once) and shows a "Routing to: scope — description" banner in the footer. On 30+ WO jobs the pre-selection was below the fold. Root cause was purely cosmetic — selection logic was already correct.
+2. **Approve Overhead clarified + wired.** Tooltip added. Now inserts a labour row into `tbl_overhead_costs` (hours × `day_rate/standard_day_hours`) before marking the task `approved_overhead`. Was previously a costing black hole (verified: no view/RPC read `approved_overhead` hours into cost).
+3. **Overhead pool.** `tbl_overhead_costs` (spend + labour discriminator), `qry_overhead_monthly` view, 8 starter `OVERHEAD_CATEGORY` lookups, collapsible Overhead panel on `/workshop`, and a Settings → Overhead Categories tab (add/rename/hide/delete).
+4. **Nav fold.** Removed `/review/timesheets` sidebar item; Review badge now = inbox items + open timesheet gaps, landing on whichever queue has items. Route still exists as the Timesheet gaps tab.
+5. **Self-healing gaps.** `rpc_detect_timesheet_gaps` gained `clear_notifs` (dismisses the no-show notification once any hours are logged). The real fix was the cron: job 6 now re-runs a rolling 7-day window instead of only yesterday — the existing `auto_close` flag-resolve logic had been dead in prod because each date was only ever processed once.
+
+#### Design decisions
+- **One table, discriminator over two tables** — `cost_type IN ('spend','labour')` keeps the directors' monthly figure a single SUM, not a UNION.
+- **`category_id` FK `ON DELETE SET NULL`** — deleting a category in Settings never blocks and never loses the cost row; orphans show as "Uncategorised". Settings nudges hide-over-delete to preserve history.
+- **Idempotency** — unique partial index on `source_task_id` so an Approve-Overhead task spawns at most one labour row; `23505` on insert is treated as already-recorded, not an error.
+- **RLS PM/admin only** — mirrors `tbl_invoices` (commercial data, freelancers get nothing).
+- **Notification clears on "logged anything", flag clears on "no longer short"** — two audiences, two thresholds. The no-show alert literally says "no hours logged", so it's stale the moment they log something; the PM-side short-day flag is a separate signal that persists until they're genuinely not short.
+- **Amounts net of VAT** — matches BOM cost convention.
+
+#### Files
+- Migrations: `overhead_costs_pool`, `timesheet_gap_self_heal`.
+- `src/lib/audit.ts` — `tbl_overhead_costs` added to `AUDITED_TABLES`.
+- `src/components/route-task-modal.tsx` — scroll-into-view ref + "Routing to" banner.
+- `src/app/(dashboard)/review/inbox/page.tsx` — `handleApproveOverhead` writes the labour row; tooltip.
+- `src/components/overhead-panel.tsx` (new) — Workshop overhead card.
+- `src/components/overhead-categories-editor.tsx` (new) + `src/app/(dashboard)/settings/page.tsx` — Overhead Categories tab.
+- `src/app/(dashboard)/workshop/page.tsx` — mounts `<OverheadPanel />`.
+- `src/components/sidebar.tsx` — Timesheets removed, Review badge aggregates.
+
+#### Known gaps / backlog (added this session)
+- Cost-visibility "Workshop Overhead" card still task-derived → should read from the pool (two stores for the same labour hour; card can't see spend). Strategic.
+- Overhead allocation onto jobs (Phase 2) — deferred until real data sets the recovery rate.
+- Overhead spend receipt upload — column exists, no upload wired yet.
+
+#### S52 schema summary
+- **New table** `tbl_overhead_costs` — `overhead_cost_id` PK; `cost_date`, `cost_type` ('spend'|'labour'), `category_id` FK→`tbl_master_lookups` (ON DELETE SET NULL), `description`, `amount` numeric(12,2) net, `hours`, `freelancer_id` FK, `supplier_id` FK, `receipt_url`, `source_task_id` FK→`tbl_tasks`, `note`, `created_by` uuid, `created_at`. Unique partial index `uq_overhead_source_task` on `source_task_id WHERE NOT NULL`; indexes on `cost_date`, `category_id`. RLS: 4 policies, PM/admin via `get_my_role()`.
+- **New view** `qry_overhead_monthly` (security invoker) — month × category × cost_type rollup.
+- **Lookups** — 8 rows `category='OVERHEAD_CATEGORY'` (Consumables, Cleaning & Waste, PPE & Safety, Tooling & small repairs, Equipment servicing, Utilities, General labour, Other).
+- **Function** `rpc_detect_timesheet_gaps` — added `clear_notifs` CTE (dismisses `timesheet_no_show` notification when logged_hrs > 0).
+- **Cron** — job 6 (`timesheet-gap-detect-daily`) command now loops `generate_series(CURRENT_DATE-7 … CURRENT_DATE-1)`.
 
 ### S51 (cont.) — Cut nesting add-ons (kerf, squaring, stack cutting) — 28 May 2026
 
