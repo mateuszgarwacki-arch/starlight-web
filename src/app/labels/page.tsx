@@ -192,6 +192,7 @@ export default function LabelsPage() {
         <div className="sheet">
           {labels.map(({ key, item, idx, total }) => (
             <div className="label" key={key}>
+              <div className="label-inner">
               <div className="label-left">
                 <div className="label-meta">JOB {jobNumber || "—"} · WO {woId}</div>
                 <div className="label-name">{item.description || "(no description)"}</div>
@@ -205,6 +206,7 @@ export default function LabelsPage() {
               </div>
               <div className="label-qr">
                 {qrUrl && <QRCodeSVG value={qrUrl} size={78} level="M" />}
+              </div>
               </div>
             </div>
           ))}
@@ -226,15 +228,21 @@ const LABEL_CSS = `
     width: 2in;
     height: 1in;
     box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    gap: 0.06in;
-    padding: 0.06in 0.08in;
     overflow: hidden;
     background: #fff;
     color: #000;
     font-family: Arial, Helvetica, sans-serif;
     border: 1px dashed #c4c4c4; /* preview only — removed on print */
+  }
+  .label-inner {
+    width: 2in;
+    height: 1in;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.06in;
+    padding: 0.06in 0.08in;
+    background: #fff;
   }
   .label-left { flex: 1 1 auto; min-width: 0; }
   .label-qr { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
@@ -254,15 +262,28 @@ const LABEL_CSS = `
   .label-finish { font-size: 8pt; font-weight: 600; line-height: 1.1; margin-top: 1px; }
   .label-count { font-size: 7pt; margin-top: 1px; }
   @media print {
-    @page { size: 2in 1in; margin: 0; }
+    /* Portrait page; the 2x1 content is rotated 90° to read along the
+       long edge of the physical label (GT800 feeds the 1in edge first). */
+    @page { size: 1in 2in; margin: 0; }
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     .no-print { display: none !important; }
     .sheet { gap: 0 !important; padding: 0 !important; }
     .label {
+      width: 1in !important;
+      height: 2in !important;
+      position: relative;
       border: none !important;
       margin: 0 !important;
+      overflow: hidden;
       page-break-after: always;
       break-after: page;
+    }
+    .label-inner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(90deg);
+      transform-origin: center center;
     }
     .label:last-child { page-break-after: auto; break-after: auto; }
   }
