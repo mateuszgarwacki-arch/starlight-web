@@ -22,7 +22,6 @@ import {
   Warehouse,
   Wrench,
   Library,
-  Clock,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
@@ -34,7 +33,6 @@ const navItems = [
   { href: "/jobs", label: "Jobs", icon: Briefcase, zone: 1 },
   { href: "/workshop", label: "Workshop", icon: Hammer, zone: 2 },
   { href: "/review", label: "Review", icon: AlertTriangle, zone: 3, hasInboxBadge: true, badgeHref: "/review/inbox" },
-  { href: "/review/timesheets", label: "Timesheets", icon: Clock, zone: 3, hasTimesheetBadge: true },
   { href: "/capacity", label: "Planner", icon: Users, zone: 1 },
   { href: "/materials", label: "Materials", icon: Package, zone: 1 },
   { href: "/stock", label: "Stock", icon: Warehouse, zone: 1 },
@@ -126,14 +124,15 @@ export function Sidebar() {
               ? pathname === "/"
               : pathname.startsWith(item.href);
           const showBadge = (item as any).hasBadge && unreadCount > 0;
-          const showInbox = (item as any).hasInboxBadge && inboxCount > 0;
-          const showTimesheet = (item as any).hasTimesheetBadge && timesheetCount > 0;
-          const badgeCount = showBadge ? unreadCount : showInbox ? inboxCount : showTimesheet ? timesheetCount : 0;
-          // When an inbox badge is live, clicking the item jumps to the inbox page
-          // (badgeHref) rather than the landing page. Matches user expectation —
-          // the badge means "there's stuff to look at" and should land you on it.
+          // Review aggregates its two queues: pending inbox items + open
+          // timesheet gaps. (Timesheets no longer has its own nav item.)
+          const reviewCount = inboxCount + timesheetCount;
+          const showInbox = (item as any).hasInboxBadge && reviewCount > 0;
+          const badgeCount = showBadge ? unreadCount : showInbox ? reviewCount : 0;
+          // Land on whichever queue has items — inbox first (actionable),
+          // else the timesheet-gaps tab.
           const effectiveHref = showInbox && (item as any).badgeHref
-            ? (item as any).badgeHref
+            ? (inboxCount > 0 ? (item as any).badgeHref : "/review/timesheets")
             : item.href;
 
           return (
@@ -149,8 +148,8 @@ export function Sidebar() {
             >
               <div className="relative shrink-0">
                 <item.icon className="h-4.5 w-4.5" />
-                {(showBadge || showInbox || showTimesheet) && (
-                  <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${showBadge ? "bg-starlight-pink" : showInbox ? "bg-starlight-amber" : "bg-starlight-red"}`}>
+                {(showBadge || showInbox) && (
+                  <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${showBadge ? "bg-starlight-pink" : "bg-starlight-amber"}`}>
                     {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}

@@ -1,27 +1,18 @@
-feat(overhead): workshop overhead cost pool (S52)
+feat: fold Timesheets into Review nav + self-healing timesheet gaps (S52 cont.)
 
-Captures non-job running costs so general labour and consumables stop
-vanishing from costing.
+Nav:
+- Remove standalone /review/timesheets sidebar item; it lives as the
+  Timesheet gaps tab inside Review. The route still exists.
+- Review badge now aggregates pending inbox items + open timesheet gaps,
+  and lands on whichever queue has items (inbox first, else timesheet gaps).
 
-Schema (migration overhead_costs_pool):
-- tbl_overhead_costs: cost_type 'spend'|'labour', category_id ->
-  tbl_master_lookups (OVERHEAD_CATEGORY, on delete set null), amount (net),
-  hours/freelancer_id (labour), supplier_id/receipt_url (spend),
-  source_task_id (links the Approve-Overhead task). Unique index on
-  source_task_id keeps labour rows idempotent. RLS PM/admin only (mirrors
-  tbl_invoices).
-- 8 starter categories seeded; manageable in Settings.
-- qry_overhead_monthly view (security invoker) — month x category x type.
-
-Wiring:
-- lib/audit.ts: tbl_overhead_costs added to AUDITED_TABLES.
-- Review inbox Approve Overhead now inserts a labour row (hours x
-  day_rate/standard_day_hours) into the pool, then marks the task. Tooltip
-  updated to say it logs to the overhead pool.
-- components/overhead-panel.tsx: collapsible card on /workshop — cost entry
-  form, by-month + by-category rollups, recent entries with delete.
-- components/overhead-categories-editor.tsx + Settings "Overhead Categories"
-  tab: add / rename / hide / delete categories (PM/admin).
-
-Not built yet (flagged): overhead allocation back onto jobs for fully-loaded
-item cost — needs real data first to pick a recovery rate.
+Timesheet gap cron (migration timesheet_gap_self_heal):
+- rpc_detect_timesheet_gaps: added clear_notifs CTE — dismisses the
+  'timesheet_no_show' notification once the freelancer logs any hours for
+  that date (the alert said "no hours logged", no longer true). The open
+  flag already auto-resolves when they're no longer short.
+- cron job 6 now re-runs a rolling 7-day window (was: yesterday only).
+  This is what actually makes the self-heal fire — previously each date was
+  processed once and never revisited, so backfills were never picked up.
+  Idempotent: flags stay single via ON CONFLICT, notifications only fire
+  for genuinely new no-shows.
