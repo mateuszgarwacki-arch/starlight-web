@@ -4,16 +4,17 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { toast } from "sonner";
-import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown, Lightbulb, Package } from "lucide-react";
+import { Settings, Check, Users, Shield, History, Plus, X, Key, ChevronDown, Lightbulb, Package, Receipt } from "lucide-react";
 import { TypicalComponentsEditor } from "@/components/typical-components-editor";
 import { MaterialCategoriesEditor } from "@/components/material-categories-editor";
+import { OverheadCategoriesEditor } from "@/components/overhead-categories-editor";
 
 interface RateCard { id: number; complexity: number; label: string; rate_per_hour: number; description: string | null; }
 interface BusinessSetting { id: number; setting_key: string; setting_value: string; description: string | null; }
 interface StaffUser { auth_id: string; email: string; name: string; role: string; freelancer_id: number | null; created_at: string; last_sign_in: string | null; }
 interface AuditEntry { audit_id: number; user_name: string; user_role: string; table_name: string; record_id: number; field_name: string; old_value: string | null; new_value: string | null; changed_at: string; job_id: number | null; action_type: string; reverted_at: string | null; reverted_by: string | null; }
 
-type TabKey = "rates" | "defaults" | "users" | "audit" | "prompts" | "materials";
+type TabKey = "rates" | "defaults" | "users" | "audit" | "prompts" | "materials" | "overhead";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -176,6 +177,7 @@ export default function SettingsPage() {
     { key: "audit", label: "Audit Log", icon: History, show: canManageUsers },
     { key: "prompts", label: "Typical Components", icon: Lightbulb, show: true },
     { key: "materials", label: "Material Categories", icon: Package, show: canManageUsers },
+    { key: "overhead", label: "Overhead Categories", icon: Receipt, show: canManageUsers },
   ];
 
   return (
@@ -477,6 +479,16 @@ export default function SettingsPage() {
             Configure how each material category is priced by suppliers, how you order it, and how cut lists calculate quantities.
           </p>
           <MaterialCategoriesEditor />
+        </section>
+      )}
+
+      {/* Overhead Categories */}
+      {activeTab === "overhead" && canManageUsers && (
+        <section className="space-y-4">
+          <p className="text-sm text-muted">
+            Buckets for non-job workshop running costs (consumables, cleaning, general labour). These drive the category picker on the Workshop &rarr; Overhead panel.
+          </p>
+          <OverheadCategoriesEditor />
         </section>
       )}
     </div>

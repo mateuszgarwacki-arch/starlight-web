@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { getAuditContext, auditedUpdate, auditedInsert } from "@/lib/audit";
 import { formatHours } from "@/lib/format-hours";
 import { notify } from "@/lib/notifications";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
@@ -63,6 +63,46 @@ export default function ReviewInboxPage() {
   const handleApproveOverhead = async (task: InboxItem, note: string) => {
     const ctx = await getAuditContext(supabase);
     const hrs = effectiveHours(task);
+
+    // Record the labour in the workshop overhead pool so it stops being a
+    // costing black hole. Rate = day_rate / standard_day_hours, the same calc
+    // the WO router uses. A unique index on source_task_id keeps this
+    // idempotent — a task can only ever spawn one overhead row.
+    const { data: fr } = await supabase
+      .from("tbl_freelancers")
+      .select("day_rate, standard_day_hours")
+      .eq("freelancer_id", task.freelancer_id)
+      .single();
+    const hourlyRate =
+      fr && fr.standard_day_hours > 0 ? fr.day_rate / fr.standard_day_hours : 0;
+    const { data: cat } = await supabase
+      .from("tbl_master_lookups")
+      .select("lookup_id")
+      .eq("category", "OVERHEAD_CATEGORY")
+      .eq("lookup_value", "General labour")
+      .maybeSingle();
+    const n = new Date();
+    const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+
+    const ins = await auditedInsert(ctx, "tbl_overhead_costs", {
+      cost_date: task.worked_date || today,
+      cost_type: "labour",
+      category_id: cat?.lookup_id ?? null,
+      description: task.title,
+      amount: Math.round(hrs * hourlyRate * 100) / 100,
+      hours: hrs,
+      freelancer_id: task.freelancer_id,
+      source_task_id: task.item_id,
+      note: note || null,
+      created_by: ctx.userId,
+    });
+    // 23505 = unique violation (task already produced an overhead row): fine,
+    // treat as already-recorded. Any other error: stop, don't mark approved.
+    if (ins.error && (ins.error as any).code !== "23505") {
+      toast.error("Couldn't record overhead labour");
+      return;
+    }
+
     await auditedUpdate(ctx, "tbl_tasks", task.item_id, {
       status: "approved_overhead",
       hours: hrs,
@@ -70,8 +110,8 @@ export default function ReviewInboxPage() {
       reviewed_at: new Date().toISOString(),
       review_note: note || null,
     });
-    await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: note || `Approved as overhead (${hrs}h)`, severity: "info", freelancerId: task.freelancer_id });
-    toast.success(`Approved as overhead — ${hrs}h`); loadInbox();
+    await notify({ supabase, type: "task_reviewed", title: `Task approved: ${task.title}`, detail: note || `Logged to workshop overhead (${hrs}h)`, severity: "info", freelancerId: task.freelancer_id });
+    toast.success(`Logged to workshop overhead — ${hrs}h`); loadInbox();
   };
 
   const handleRejectTask = async (task: InboxItem, note: string) => {
@@ -182,7 +222,7 @@ export default function ReviewInboxPage() {
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-subtle">
                 {isTask ? (<>
                   <button onClick={() => openRouteModal(item)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 transition-colors"><CornerDownRight className="h-3 w-3" /> Route to WO</button>
-                  <button onClick={() => handleApproveOverhead(item, "")} title="Approve as general workshop overhead (not billed to a job)" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors"><Check className="h-3 w-3" /> Approve Overhead</button>
+                  <button onClick={() => handleApproveOverhead(item, "")} title="Logs these hours to the workshop overhead pool (General labour) — not billed to a job" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-green/10 text-starlight-green rounded-lg hover:bg-starlight-green/20 transition-colors"><Check className="h-3 w-3" /> Approve Overhead</button>
                   <button onClick={() => { setActionItem(item); setActionType("reject"); setActionNote(""); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-surface-mid text-muted rounded-lg hover:bg-surface-hi transition-colors"><X className="h-3 w-3" /> Reject</button>
                 </>) : (<>
                   {item.status === "open" && (<button onClick={() => handleRequestAction(item, "acknowledged", "")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-starlight-blue/10 text-starlight-blue rounded-lg hover:bg-starlight-blue/20 transition-colors"><Check className="h-3 w-3" /> Acknowledge</button>)}

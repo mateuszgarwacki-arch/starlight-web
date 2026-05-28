@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRealtimeRefresh } from "@/lib/use-realtime";
 import { toast } from "sonner";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
+import { OverheadPanel } from "@/components/overhead-panel";
 
 interface WorkshopWO {
   work_order_id: number;
@@ -361,6 +362,9 @@ export default function WorkshopPage() {
           <p className="text-lg font-semibold text-starlight-green">{formatHours(stats.totalLoggedHrs)}</p>
         </div>
       </div>
+
+      {/* Workshop overhead — non-job running costs, collapsed by default */}
+      <OverheadPanel />
 
       {/* Active workers banner — shows who's on what */}
       {(stats.activeWorkerCount > 0 || activeTasks.length > 0) && (

@@ -1,14 +1,27 @@
-fix(review): make route-task pre-selection visible + clarify Approve Overhead
+feat(overhead): workshop overhead cost pool (S52)
 
-Route Task modal:
-- Scroll the pre-routed WO into view on open (once). On busy jobs (e.g.
-  13585 has 33 WOs) the pre-selected WO sat below the fold, so the modal
-  looked like nothing was chosen and PMs re-hunted for the WO.
-- Add a "Routing to: <scope> — <description>" banner in the footer so the
-  current selection is always visible and a pre-routed task is one click
-  (confirm + Route), not a search.
+Captures non-job running costs so general labour and consumables stop
+vanishing from costing.
 
-Review inbox:
-- Tooltip on Approve Overhead clarifying it logs as general workshop
-  overhead, not billed to a job (distinct from the in-modal Job Overhead
-  bucket).
+Schema (migration overhead_costs_pool):
+- tbl_overhead_costs: cost_type 'spend'|'labour', category_id ->
+  tbl_master_lookups (OVERHEAD_CATEGORY, on delete set null), amount (net),
+  hours/freelancer_id (labour), supplier_id/receipt_url (spend),
+  source_task_id (links the Approve-Overhead task). Unique index on
+  source_task_id keeps labour rows idempotent. RLS PM/admin only (mirrors
+  tbl_invoices).
+- 8 starter categories seeded; manageable in Settings.
+- qry_overhead_monthly view (security invoker) — month x category x type.
+
+Wiring:
+- lib/audit.ts: tbl_overhead_costs added to AUDITED_TABLES.
+- Review inbox Approve Overhead now inserts a labour row (hours x
+  day_rate/standard_day_hours) into the pool, then marks the task. Tooltip
+  updated to say it logs to the overhead pool.
+- components/overhead-panel.tsx: collapsible card on /workshop — cost entry
+  form, by-month + by-category rollups, recent entries with delete.
+- components/overhead-categories-editor.tsx + Settings "Overhead Categories"
+  tab: add / rename / hide / delete categories (PM/admin).
+
+Not built yet (flagged): overhead allocation back onto jobs for fully-loaded
+item cost — needs real data first to pick a recovery rate.
