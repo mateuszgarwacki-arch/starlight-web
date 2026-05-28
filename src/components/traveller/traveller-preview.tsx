@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, Package } from "lucide-react";
+import { Printer, Package, Tags } from "lucide-react";
 
 interface PrintButtonWO {
   work_order_id: number;
@@ -47,6 +47,27 @@ export function PrintTravellerButton({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Per-WO label print button. Opens the 2"×1" label sheet for the Zebra GT800
+ * (one label per linked job item). Sits beside the traveller printer icon.
+ */
+export function PrintLabelsButton({ wo }: { wo: PrintButtonWO }) {
+  const openLabels = () => {
+    const params = new URLSearchParams({ woId: String(wo.work_order_id) });
+    window.open(`/labels?${params.toString()}`, "_blank");
+  };
+
+  return (
+    <button
+      onClick={openLabels}
+      className="p-1.5 rounded-lg text-muted hover:text-navy hover:bg-surface-mid transition-colors"
+      title="Print item labels (2×1) for this WO"
+    >
+      <Tags className="h-4 w-4" />
+    </button>
   );
 }
 

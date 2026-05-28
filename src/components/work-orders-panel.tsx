@@ -7,7 +7,7 @@ import { isTruthy } from "@/lib/types";
 import type { WoBom, Freelancer, ScopeContext } from "@/lib/types";
 import { StatusBadge } from "@/components/ui/badges";
 import { WODocumentsPanel } from "@/components/wo-documents-panel";
-import { PrintTravellerButton } from "@/components/traveller/traveller-preview";
+import { PrintTravellerButton, PrintLabelsButton } from "@/components/traveller/traveller-preview";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, Hammer, ShieldCheck,
   AlertTriangle, Link2, ArrowUp, ArrowDown, Warehouse, Paintbrush,
@@ -817,6 +817,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                         title="Capture learning for this WO"
                       />
                       <PrintTravellerButton wo={{ ...wo, activity_label: wo.activity_label || "No Activity" }} scopeId={scopeId} />
+                      <PrintLabelsButton wo={wo} />
                       {wo.status === "Not-Started" && <button onClick={() => updateWOStatus(wo.work_order_id, "Ready")} className="p-1.5 rounded-lg text-starlight-green hover:bg-starlight-green/10 transition-colors" title="Release as Ready"><ShieldCheck className="h-4 w-4" /></button>}
                       {(wo.status === "Not-Started" || wo.status === "Ready") && <button onClick={() => { if (confirm("Delete this work order?")) deleteWO(wo.work_order_id); }} className="p-1.5 rounded-lg text-faint hover:text-starlight-red hover:bg-starlight-red/10 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>}
                       {wo.status !== "Voided" && wo.status !== "Complete" && wo.status !== "Not-Started" && <button onClick={() => setVoidDialog({ woId: wo.work_order_id, status: wo.status || "" })} className="p-1.5 rounded-lg text-faint hover:text-starlight-amber hover:bg-starlight-amber/10 transition-colors" title="Void"><AlertTriangle className="h-4 w-4" /></button>}

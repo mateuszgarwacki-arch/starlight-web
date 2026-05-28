@@ -1,18 +1,22 @@
-feat: fold Timesheets into Review nav + self-healing timesheet gaps (S52 cont.)
+feat(labels): per-WO 2x1 item labels for Zebra GT800 (S53)
 
-Nav:
-- Remove standalone /review/timesheets sidebar item; it lives as the
-  Timesheet gaps tab inside Review. The route still exists.
-- Review badge now aggregates pending inbox items + open timesheet gaps,
-  and lands on whichever queue has items (inbox first, else timesheet gaps).
+New /labels?woId= print route — one 2x1in label per job item linked to
+the WO. Label face: JOB# . WO#, item description (large, human-readable),
+and a QR to /m/wo/{woId} so a phone camera opens the WO page.
 
-Timesheet gap cron (migration timesheet_gap_self_heal):
-- rpc_detect_timesheet_gaps: added clear_notifs CTE — dismisses the
-  'timesheet_no_show' notification once the freelancer logs any hours for
-  that date (the alert said "no hours logged", no longer true). The open
-  flag already auto-resolves when they're no longer short.
-- cron job 6 now re-runs a rolling 7-day window (was: yesterday only).
-  This is what actually makes the self-heal fire — previously each date was
-  processed once and never revisited, so backfills were never picked up.
-  Idempotent: flags stay single via ON CONFLICT, notifications only fire
-  for genuinely new no-shows.
+Offline-first: finish_required is printed ON the face (the painter's
+primary need is never hidden behind a network call), and only when the
+WO carries a PAINT or COVER activity and the field is set. The QR is the
+"show me the drawing" bonus layer.
+
+- quantity -> copies, capped at 30; measured-material overflow (e.g. sqm
+  of floor covering) prints a single "Qty N" label instead of a runaway
+  spool. k/n stamped when copies > 1.
+- junction dedup via .in() (tbl_jobitem_workorder has no unique key).
+- PrintLabelsButton (Tags icon) sits beside the traveller printer icon
+  on each WO row in the work-orders panel.
+- Manual print (not auto): GT800 is a different printer from the A4
+  default, so the user picks it in the dialog. @page size 2in 1in.
+
+No schema change — finish_required already on tbl_job_items; reuses the
+existing qrcode.react dependency.
