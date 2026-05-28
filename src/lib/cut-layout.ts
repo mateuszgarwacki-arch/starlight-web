@@ -6,12 +6,19 @@
    - src/app/traveller/page.tsx            (suggested cut plan on traveller)
 
    Algorithms:
-   - binPackLengths()   1D First-Fit Decreasing for timber lengths
+   - binPackLengths()   1D First-Fit Decreasing for timber lengths (kerf-aware)
    - guillotinePack()   2D guillotine packing for sheets, Best Short Side
-                        Fit + Shorter Axis Split heuristics (Jylänki).
+                        Fit + Shorter Axis Split heuristics (Jylänki),
+                        kerf-aware, packs within a usable (squared) area.
+   - buildMaterialSummary()  groups parts → materials, and for sheet goods
+                        runs a kerf/squaring-aware guillotine nest, then
+                        groups the resulting sheets into distinct PATTERNS by
+                        layout signature. The deterministic area-sorted packer
+                        fills high-count identical parts the same way across
+                        sheets, so identical layouts collapse into stackable
+                        runs (e.g. "×7 sheets · 4 stacked passes").
 
-   Both algorithms now CAPTURE placements (which piece goes where) rather
-   than just returning counts, so the layout can be visualised.
+   Placements capture true part size (kerf shows as the gap between parts).
    ============================================================ */
 
 export interface ExtractedLine {
@@ -46,9 +53,9 @@ export interface Placement {
   sheetIdx: number;
   x: number;
   y: number;
-  /** Post-rotation width (rendered). */
+  /** Post-rotation TRUE width (rendered; kerf shows as the gap to the next part). */
   w: number;
-  /** Post-rotation height (rendered). */
+  /** Post-rotation TRUE height. */
   h: number;
   rotated: boolean;
   partDesc: string;
@@ -60,6 +67,72 @@ export interface LengthBin {
   used: number;
   waste: number;
   pieces: { length: number; partDesc: string; offset: number }[];
+}
+
+/* ============================================================
+   Cut settings — workshop defaults + per-WO overrides
+   ============================================================ */
+
+export interface CutSettings {
+  /** Saw blade kerf in mm — material lost per cut. */
+  kerf_mm: number;
+  /** Squaring allowance in mm — trimmed off two reference edges per sheet. */
+  squaring_mm: number;
+  /** Stack-cut overrides keyed by thickness string, e.g. {"18": 2}. */
+  stack_overrides?: Record<string, number>;
+}
+
+export const DEFAULT_CUT_SETTINGS: CutSettings = {
+  kerf_mm: 4,
+  squaring_mm: 5,
+};
+
+/**
+ * Merge a stored (possibly partial / null) cut_settings value with workshop
+ * defaults. NULL or missing fields fall back to defaults. Used by both the
+ * traveller and the cutlist extractor so the resolution rule lives in one place.
+ */
+export function resolveCutSettings(raw: Partial<CutSettings> | null | undefined): CutSettings {
+  if (!raw) return DEFAULT_CUT_SETTINGS;
+  return {
+    kerf_mm: raw.kerf_mm != null ? raw.kerf_mm : DEFAULT_CUT_SETTINGS.kerf_mm,
+    squaring_mm: raw.squaring_mm != null ? raw.squaring_mm : DEFAULT_CUT_SETTINGS.squaring_mm,
+    stack_overrides:
+      raw.stack_overrides && Object.keys(raw.stack_overrides).length > 0
+        ? raw.stack_overrides
+        : undefined,
+  };
+}
+
+/**
+ * Sheets stacked per cutting pass for a given thickness.
+ * Default rule clamp(floor(36 / thickness), 1, 5) reproduces the workshop
+ * table exactly: 18→2, 12→3, 9→4, 6→5, 3.6→5. Per-WO overrides win.
+ */
+export function stackCountForThickness(thickness: number, settings: CutSettings): number {
+  const key = String(thickness);
+  if (settings.stack_overrides && settings.stack_overrides[key] != null) {
+    return Math.max(1, settings.stack_overrides[key]);
+  }
+  if (!thickness || thickness <= 0) return 1;
+  return Math.min(5, Math.max(1, Math.floor(36 / thickness)));
+}
+
+/* ============================================================
+   Sheet patterns + material summary
+   ============================================================ */
+
+export interface SheetPattern {
+  /** Layout for ONE representative sheet (placements all use sheetIdx 0). */
+  placements: Placement[];
+  /** Physical sheets that share this exact layout. */
+  count: number;
+  /** Sheets stacked per cutting pass (from thickness). */
+  stackCount: number;
+  /** ceil(count / stackCount). */
+  passes: number;
+  /** Area fill % for this pattern. */
+  fillPct: number;
 }
 
 export interface MaterialSummary {
@@ -74,8 +147,16 @@ export interface MaterialSummary {
   waste_pct?: number;
   piece_lengths?: number[];
   anomalies?: string[];
-  /** 2D placements when material_category === "Sheet". */
-  sheet_placements?: Placement[];
+  /** Distinct sheet layouts (Sheet category). Replaces flat sheet_placements. */
+  patterns?: SheetPattern[];
+  /** Total stacked cutting passes across all patterns. */
+  total_passes?: number;
+  /** Sheets stacked per pass for this material (from thickness). */
+  stack_count?: number;
+  sheetW?: number;
+  sheetH?: number;
+  /** Squaring allowance used (mm) — for drawing the trim boundary. */
+  squaring_mm?: number;
   /** 1D bins when material_category === "Timber". */
   length_bins?: LengthBin[];
   /** UI state — selected for "Add to BOM". Not persisted. */
@@ -90,12 +171,13 @@ export function labelFor(p: ExtractedLine): string {
 }
 
 /* ============================================================
-   1D bin packing — First-Fit Decreasing
+   1D bin packing — First-Fit Decreasing, kerf-aware
    ============================================================ */
 
 export function binPackLengths(
   pieces: { length: number; desc: string }[],
   standardLength: number,
+  kerf = 0,
 ): LengthBin[] {
   const sorted = [...pieces].sort((a, b) => b.length - a.length);
   const bins: LengthBin[] = [];
@@ -103,9 +185,11 @@ export function binPackLengths(
   for (const piece of sorted) {
     let placed = false;
     for (const bin of bins) {
-      if (bin.used + piece.length <= standardLength) {
-        bin.pieces.push({ length: piece.length, partDesc: piece.desc, offset: bin.used });
-        bin.used += piece.length;
+      const gap = bin.pieces.length > 0 ? kerf : 0;
+      if (bin.used + gap + piece.length <= standardLength) {
+        const offset = bin.used + gap;
+        bin.pieces.push({ length: piece.length, partDesc: piece.desc, offset });
+        bin.used = offset + piece.length;
         placed = true;
         break;
       }
@@ -126,8 +210,9 @@ export function binPackLengths(
 }
 
 /* ============================================================
-   2D guillotine bin packing
-   Best Short Side Fit + Shorter Axis Split rule
+   2D guillotine bin packing — Best Short Side Fit + Shorter Axis
+   Split. Kerf-aware: each part's footprint is inflated by kerf, but
+   the stored placement keeps the TRUE size so kerf renders as a gap.
    ============================================================ */
 
 function findBestFit(freeRects: FreeRect[], pw: number, ph: number): number {
@@ -178,26 +263,32 @@ function mergeFreeRects(rects: FreeRect[]) {
 
 export function guillotinePack(
   parts: PartRect[],
-  sheetW: number,
-  sheetH: number,
+  usableW: number,
+  usableH: number,
+  kerf = 0,
 ): { sheets: number; placements: Placement[] } {
   const sorted = [...parts].sort((a, b) => (b.w * b.h) - (a.w * a.h));
   const sheetsFree: FreeRect[][] = [];
   const placements: Placement[] = [];
 
   const tryPlace = (free: FreeRect[], sheetIdx: number, p: PartRect): boolean => {
-    let idx = findBestFit(free, p.w, p.h);
+    // footprint includes kerf on right + bottom
+    const fw = p.w + kerf;
+    const fh = p.h + kerf;
+    let idx = findBestFit(free, fw, fh);
     let rotated = false;
     if (idx === -1 && p.w !== p.h) {
-      idx = findBestFit(free, p.h, p.w);
+      idx = findBestFit(free, fh, fw);
       rotated = true;
     }
     if (idx === -1) return false;
     const r = free[idx];
-    const placedW = rotated ? p.h : p.w;
-    const placedH = rotated ? p.w : p.h;
-    placements.push({ sheetIdx, x: r.x, y: r.y, w: placedW, h: placedH, rotated, partDesc: p.desc });
-    splitRect(free, idx, placedW, placedH);
+    const trueW = rotated ? p.h : p.w;
+    const trueH = rotated ? p.w : p.h;
+    const footW = rotated ? fh : fw;
+    const footH = rotated ? fw : fh;
+    placements.push({ sheetIdx, x: r.x, y: r.y, w: trueW, h: trueH, rotated, partDesc: p.desc });
+    splitRect(free, idx, footW, footH);
     return true;
   };
 
@@ -207,7 +298,7 @@ export function guillotinePack(
       if (tryPlace(sheetsFree[s], s, part)) { placed = true; break; }
     }
     if (!placed) {
-      const newSheet: FreeRect[] = [{ x: 0, y: 0, w: sheetW, h: sheetH }];
+      const newSheet: FreeRect[] = [{ x: 0, y: 0, w: usableW, h: usableH }];
       tryPlace(newSheet, sheetsFree.length, part);
       sheetsFree.push(newSheet);
     }
@@ -217,23 +308,171 @@ export function guillotinePack(
 }
 
 /* ============================================================
-   Sheet size parser
+   Pattern grouping — collapse identical sheet layouts
    ============================================================ */
 
-export function parseSheetSize(sizeStr?: string | null): { w: number; h: number } | null {
-  if (!sizeStr) return null;
-  const m = sizeStr.match(/(\d+)\s*[x×]\s*(\d+)/i);
-  if (m) return { w: parseInt(m[1]), h: parseInt(m[2]) };
-  return null;
+function sheetSignature(pl: Placement[]): string {
+  return pl
+    .map(p => `${p.partDesc}|${Math.round(p.x)}|${Math.round(p.y)}|${Math.round(p.w)}|${Math.round(p.h)}|${p.rotated ? 1 : 0}`)
+    .sort()
+    .join(";");
+}
+
+function groupSheetsIntoPatterns(
+  placements: Placement[],
+  sheetCount: number,
+  stackCount: number,
+  usableW: number,
+  usableH: number,
+): SheetPattern[] {
+  const bySheet: Record<number, Placement[]> = {};
+  for (const p of placements) (bySheet[p.sheetIdx] ||= []).push(p);
+
+  const groups: Record<string, { placements: Placement[]; count: number }> = {};
+  const order: string[] = [];
+  for (let i = 0; i < sheetCount; i++) {
+    const sheet = bySheet[i] || [];
+    const sig = sheetSignature(sheet);
+    if (!groups[sig]) {
+      groups[sig] = { placements: sheet.map(p => ({ ...p, sheetIdx: 0 })), count: 0 };
+      order.push(sig);
+    }
+    groups[sig].count++;
+  }
+
+  return order.map(sig => {
+    const g = groups[sig];
+    const partArea = g.placements.reduce((s, p) => s + p.w * p.h, 0);
+    return {
+      placements: g.placements,
+      count: g.count,
+      stackCount,
+      passes: Math.ceil(g.count / stackCount),
+      fillPct: usableW * usableH > 0 ? Math.round((partArea / (usableW * usableH)) * 100) : 0,
+    };
+  });
+}
+
+function dominantThickness(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const counts: Record<number, number> = {};
+  let best = nums[0], bestC = 0;
+  for (const n of nums) {
+    counts[n] = (counts[n] || 0) + 1;
+    if (counts[n] > bestC) { bestC = counts[n]; best = n; }
+  }
+  return best;
 }
 
 /* ============================================================
    Build material summary from extracted parts
    ============================================================ */
 
+/** Sheet-goods layout fields for one material on a given stock sheet size. */
+export function sheetLayoutFields(
+  matParts: ExtractedLine[],
+  sheetW: number,
+  sheetH: number,
+  settings: CutSettings,
+): Partial<MaterialSummary> {
+  const kerf = settings.kerf_mm ?? 4;
+  const squaring = settings.squaring_mm ?? 5;
+  const usableW = Math.max(1, sheetW - squaring);
+  const usableH = Math.max(1, sheetH - squaring);
+  const thickness = dominantThickness(
+    matParts.map(p => p.thickness_mm || 0).filter(t => t > 0),
+  );
+  const stackCount = stackCountForThickness(thickness, settings);
+
+  // Oversize check (against usable area, both orientations, incl. kerf)
+  const anomalies: string[] = [];
+  for (const p of matParts) {
+    const l = p.length_mm || 0;
+    const w = p.width_mm || 0;
+    const fits =
+      (l + kerf <= usableW && w + kerf <= usableH) ||
+      (w + kerf <= usableW && l + kerf <= usableH);
+    if (l > 0 && w > 0 && !fits) {
+      const msg = `${p.description}: ${l}×${w}mm does not fit on ${usableW}×${usableH}mm usable sheet (after ${squaring}mm squaring) in any orientation`;
+      if (!anomalies.includes(msg)) anomalies.push(msg);
+    }
+  }
+
+  // Build all part rects (true sizes), then nest with a kerf-aware guillotine.
+  // The deterministic area-sorted packer fills high-count identical parts the
+  // same way across sheets, so grouping by layout signature yields natural
+  // stackable runs (e.g. ×7 identical sheets).
+  const rects: PartRect[] = [];
+  let totalPartArea = 0;
+  for (const p of matParts) {
+    const l = p.length_mm || 0;
+    const w = p.width_mm || 0;
+    const qty = p.quantity || 1;
+    if (l <= 0 || w <= 0) continue;
+    totalPartArea += l * w * qty;
+    const desc = labelFor(p);
+    for (let i = 0; i < qty; i++) rects.push({ w: l, h: w, desc });
+  }
+
+  const { sheets, placements } = guillotinePack(rects, usableW, usableH, kerf);
+  const patterns = groupSheetsIntoPatterns(placements, sheets, stackCount, usableW, usableH);
+  const sheetsNeeded = patterns.reduce((s, p) => s + p.count, 0);
+  const totalPasses = patterns.reduce((s, p) => s + p.passes, 0);
+  const wastePct = sheetsNeeded > 0
+    ? Math.round((1 - totalPartArea / (sheetsNeeded * sheetW * sheetH)) * 100)
+    : 0;
+
+  return {
+    sheets_needed: sheetsNeeded,
+    standard_sheet_size: `${sheetW}x${sheetH}`,
+    sheetW, sheetH,
+    squaring_mm: squaring,
+    waste_pct: wastePct,
+    patterns,
+    total_passes: totalPasses,
+    stack_count: stackCount,
+    anomalies,
+  };
+}
+
+/** Timber 1D layout fields for one material on a given stock length. */
+export function timberLayoutFields(
+  matParts: ExtractedLine[],
+  standardLength: number,
+  settings: CutSettings,
+): Partial<MaterialSummary> {
+  const kerf = settings.kerf_mm ?? 4;
+  const squaring = settings.squaring_mm ?? 5;
+  const pieces: { length: number; desc: string }[] = [];
+  for (const p of matParts) {
+    const l = p.length_mm || 0;
+    if (l > 0) {
+      for (let i = 0; i < (p.quantity || 1); i++) pieces.push({ length: l, desc: labelFor(p) });
+    }
+  }
+  const totalLinearMm = pieces.reduce((a, b) => a + b.length, 0);
+  const usableLen = Math.max(1, standardLength - squaring); // end trim
+  const bins = pieces.length > 0 ? binPackLengths(pieces, usableLen, kerf) : [];
+  const lengthsNeeded = bins.length > 0
+    ? bins.length
+    : Math.max(1, Math.ceil(totalLinearMm / usableLen));
+  const usedMm = lengthsNeeded * usableLen;
+  const waste = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
+
+  return {
+    total_linear_mm: totalLinearMm,
+    lengths_needed: lengthsNeeded,
+    standard_length_mm: standardLength,
+    waste_pct: waste,
+    piece_lengths: pieces.map(p => p.length),
+    length_bins: bins,
+  };
+}
+
 export function buildMaterialSummary(
   parts: ExtractedLine[],
   catalogueMaterials: CatalogueMat[],
+  settings: CutSettings = DEFAULT_CUT_SETTINGS,
 ): MaterialSummary[] {
   const groups: Record<string, { parts: ExtractedLine[]; category: string }> = {};
   for (const p of parts) {
@@ -253,34 +492,12 @@ export function buildMaterialSummary(
     const totalParts = matParts.reduce((s, p) => s + (p.quantity || 1), 0);
 
     if (category === "timber") {
-      const pieces: { length: number; desc: string }[] = [];
-      for (const p of matParts) {
-        const l = p.length_mm || 0;
-        if (l > 0) {
-          for (let i = 0; i < (p.quantity || 1); i++) {
-            pieces.push({ length: l, desc: labelFor(p) });
-          }
-        }
-      }
-      const totalLinearMm = pieces.reduce((a, b) => a + b.length, 0);
-      const stdLen = catMat?.standard_length || 4800;
-      const bins = pieces.length > 0 ? binPackLengths(pieces, stdLen) : [];
-      const lengthsNeeded = bins.length > 0
-        ? bins.length
-        : Math.max(1, Math.ceil(totalLinearMm / stdLen));
-      const usedMm = lengthsNeeded * stdLen;
-      const waste = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
-
+      const catLen = catMat?.standard_length || 4800;
       return {
         material: materialName,
         material_category: "Timber",
         total_parts: totalParts,
-        total_linear_mm: totalLinearMm,
-        lengths_needed: lengthsNeeded,
-        standard_length_mm: stdLen,
-        waste_pct: waste,
-        piece_lengths: pieces.map(p => p.length),
-        length_bins: bins,
+        ...timberLayoutFields(matParts, catLen, settings),
         anomalies,
         _selected: true,
         _catalogueMatch: catMat || null,
@@ -291,42 +508,11 @@ export function buildMaterialSummary(
       const catSheet = parseSheetSize(catMat?.standard_sheet_size);
       const sheetW = catSheet?.w || 2440;
       const sheetH = catSheet?.h || 1220;
-
-      const rects: PartRect[] = [];
-      for (const p of matParts) {
-        const l = p.length_mm || 0;
-        const w = p.width_mm || 0;
-        if (l > 0 && w > 0) {
-          for (let i = 0; i < (p.quantity || 1); i++) {
-            rects.push({ w: l, h: w, desc: labelFor(p) });
-          }
-        }
-      }
-
-      for (const p of matParts) {
-        const l = p.length_mm || 0;
-        const w = p.width_mm || 0;
-        const fits = (l <= sheetW && w <= sheetH) || (l <= sheetH && w <= sheetW);
-        if (l > 0 && w > 0 && !fits) {
-          const msg = `${p.description}: ${l}×${w}mm does not fit on ${sheetW}×${sheetH}mm sheet in any orientation`;
-          if (!anomalies.includes(msg)) anomalies.push(msg);
-        }
-      }
-
-      const { sheets, placements } = guillotinePack(rects, sheetW, sheetH);
-      const sheetArea = sheetW * sheetH;
-      const partArea = rects.reduce((s, r) => s + r.w * r.h, 0);
-      const wastePct = sheets > 0 ? Math.round((1 - partArea / (sheets * sheetArea)) * 100) : 0;
-
       return {
         material: materialName,
         material_category: "Sheet",
         total_parts: totalParts,
-        sheets_needed: sheets,
-        standard_sheet_size: `${sheetW}x${sheetH}`,
-        waste_pct: wastePct,
-        sheet_placements: placements,
-        anomalies,
+        ...sheetLayoutFields(matParts, sheetW, sheetH, settings),
         _selected: true,
         _catalogueMatch: catMat || null,
       };
@@ -344,40 +530,40 @@ export function buildMaterialSummary(
 }
 
 /* ============================================================
+   Sheet size parser
+   ============================================================ */
+
+export function parseSheetSize(sizeStr?: string | null): { w: number; h: number } | null {
+  if (!sizeStr) return null;
+  const m = sizeStr.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (m) return { w: parseInt(m[1]), h: parseInt(m[2]) };
+  return null;
+}
+
+/* ============================================================
    Page chunking for traveller print
 
-   Splits a list of material summaries into per-page chunks that
-   fit on one A4 with proper header/footer chrome. Each chunk is
-   rendered as its own <Page> wrapper, so totalPages and the actual
-   printed page count agree.
-
-   Empirical density (compact 2-up sheets, 1-up timber lengths):
-     SHEETS_PER_PAGE = 10  (~250mm of content area)
-     BINS_PER_PAGE   = 25  (timber bins are ~6mm tall each)
-
-   Tune if the page-break-inside: avoid budget gets tight — if a chunk
-   ever overflows, the entire chunk pushes to the next page and leaves
-   a blank page behind.
+   One <Page> per chunk so totalPages and printed page count agree.
+   Chunks slice a material's PATTERNS (not raw sheets) — typically far
+   fewer than sheets, so the cut plan is compact.
    ============================================================ */
 
 export interface CutPlanPageChunk {
   /** True on the first chunk of the whole cut plan — render section preamble. */
   isFirst: boolean;
   material: string;
-  /** "33 sheets of 2440x1220mm · 11% waste" — same on every chunk of a material. */
   materialDetail: string;
-  /** Anomalies are shown on the first chunk of each material only. */
   anomalies?: string[];
   /* Sheet payload */
-  sheetIndices?: number[];
-  placements?: Placement[];
+  patterns?: SheetPattern[];
   sheetW?: number;
   sheetH?: number;
+  squaring?: number;
   /* Timber payload */
   bins?: LengthBin[];
 }
 
-const SHEETS_PER_PAGE = 10;
+const PATTERNS_PER_PAGE = 10;
 const BINS_PER_PAGE = 25;
 
 export function buildCutPlanPages(summaries: MaterialSummary[]): CutPlanPageChunk[] {
@@ -385,30 +571,28 @@ export function buildCutPlanPages(summaries: MaterialSummary[]): CutPlanPageChun
   let isFirst = true;
 
   for (const s of summaries) {
-    const hasSheets = !!(s.sheet_placements && s.sheet_placements.length > 0 && s.sheets_needed);
+    const hasPatterns = !!(s.patterns && s.patterns.length > 0);
     const hasLengths = !!(s.length_bins && s.length_bins.length > 0);
-    if (!hasSheets && !hasLengths) continue;
+    if (!hasPatterns && !hasLengths) continue;
 
-    if (hasSheets) {
-      const sz = parseSheetSize(s.standard_sheet_size);
-      const sheetW = sz?.w || 2440;
-      const sheetH = sz?.h || 1220;
+    if (hasPatterns) {
+      const patterns = s.patterns!;
       const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
-      const detail = `${s.sheets_needed} sheet${s.sheets_needed! > 1 ? "s" : ""} of ${s.standard_sheet_size}mm${wasteStr}`;
-      const total = s.sheets_needed!;
+      const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
+      const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
+      const patStr = `${patterns.length} pattern${patterns.length === 1 ? "" : "s"}`;
+      const detail = `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${patStr}${passStr}${stackStr}${wasteStr}`;
 
-      for (let i = 0; i < total; i += SHEETS_PER_PAGE) {
-        const end = Math.min(i + SHEETS_PER_PAGE, total);
-        const indices: number[] = [];
-        for (let j = i; j < end; j++) indices.push(j);
+      for (let i = 0; i < patterns.length; i += PATTERNS_PER_PAGE) {
         chunks.push({
           isFirst: isFirst && i === 0,
           material: s.material,
           materialDetail: detail,
           anomalies: i === 0 ? s.anomalies : undefined,
-          sheetIndices: indices,
-          placements: s.sheet_placements,
-          sheetW, sheetH,
+          patterns: patterns.slice(i, i + PATTERNS_PER_PAGE),
+          sheetW: s.sheetW,
+          sheetH: s.sheetH,
+          squaring: s.squaring_mm,
         });
         isFirst = false;
       }

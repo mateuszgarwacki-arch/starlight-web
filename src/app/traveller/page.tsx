@@ -9,7 +9,7 @@ import { isTruthy } from "@/lib/types";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
 import { Printer, RotateCw, Loader2, Check } from "lucide-react";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
-import { buildMaterialSummary, buildCutPlanPages, type ExtractedLine, type MaterialSummary, type CatalogueMat, type CutPlanPageChunk } from "@/lib/cut-layout";
+import { buildMaterialSummary, buildCutPlanPages, resolveCutSettings, type ExtractedLine, type MaterialSummary, type CatalogueMat, type CutPlanPageChunk } from "@/lib/cut-layout";
 import { CutPlanPage } from "@/components/cut-layout-renderer";
 
 /* ================================================================
@@ -237,6 +237,15 @@ export default function TravellerPage() {
     const fullMatMap: Record<number, CatalogueMat> = {};
     allMaterials.forEach((m) => { fullMatMap[m.material_id] = m; });
 
+    // Per-WO cut-nesting overrides (kerf/squaring/stack). Not in the view, so
+    // fetched directly. NULL rows resolve to workshop defaults.
+    const { data: cutSettingsRows } = await supabase
+      .from("tbl_work_orders")
+      .select("work_order_id, cut_settings")
+      .in("work_order_id", toPrint.map((w) => w.work_order_id));
+    const cutSettingsMap: Record<number, any> = {};
+    (cutSettingsRows || []).forEach((r: any) => { cutSettingsMap[r.work_order_id] = r.cut_settings || null; });
+
     const dataMap: Record<number, WOData> = {};
     for (const wo of toPrint) {
       const [bomRes, docsRes, jxnRes, stepsRes] = await Promise.all([
@@ -318,7 +327,7 @@ export default function TravellerPage() {
         (d) => d.extracted_data.lines as ExtractedLine[],
       );
       const cutPlanSummaries = allCutLines.length > 0
-        ? buildMaterialSummary(allCutLines, allMaterials)
+        ? buildMaterialSummary(allCutLines, allMaterials, resolveCutSettings(cutSettingsMap[wo.work_order_id]))
         : [];
       const cutPlanChunks = buildCutPlanPages(cutPlanSummaries);
 

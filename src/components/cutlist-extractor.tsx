@@ -3,18 +3,20 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { getOneDriveUrl } from "@/lib/onedrive-client";
-import { Loader2, Check, Plus, FileText, Zap, ArrowRightLeft, Search } from "lucide-react";
+import { Loader2, Check, Plus, FileText, Zap, ArrowRightLeft, Search, Settings2 } from "lucide-react";
 import { getAuditContext, auditedUpdate } from "@/lib/audit";
 import {
   buildMaterialSummary,
-  binPackLengths,
-  guillotinePack,
+  sheetLayoutFields,
+  timberLayoutFields,
+  resolveCutSettings,
+  stackCountForThickness,
   parseSheetSize,
-  labelFor,
+  DEFAULT_CUT_SETTINGS,
   type ExtractedLine,
   type MaterialSummary,
   type CatalogueMat,
-  type PartRect,
+  type CutSettings,
 } from "@/lib/cut-layout";
 import { CutPlanSection } from "@/components/cut-layout-renderer";
 
@@ -47,8 +49,25 @@ export function CutListExtractor({
   const [swappingIdx, setSwappingIdx] = useState<number | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [allCatMats, setAllCatMats] = useState<CatalogueMat[]>([]);
+  // Per-WO cut-nesting overrides. null = workshop defaults.
+  const [cutSettings, setCutSettings] = useState<Partial<CutSettings> | null>(null);
+  const [showCutSettings, setShowCutSettings] = useState(false);
+  const [draftSettings, setDraftSettings] = useState<CutSettings>(DEFAULT_CUT_SETTINGS);
+  const [savingSettings, setSavingSettings] = useState(false);
 
-  // Recalculate material summary from parts data whenever parts change
+  // Load this WO's saved cut settings (kerf / squaring / stack overrides)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("tbl_work_orders")
+        .select("cut_settings")
+        .eq("work_order_id", workOrderId)
+        .single();
+      setCutSettings((data?.cut_settings as Partial<CutSettings>) || null);
+    })();
+  }, [workOrderId]);
+
+  // Recalculate material summary from parts data whenever parts or settings change
   useEffect(() => {
     if (parts.length === 0 || status === "pending") return;
     const recalc = async () => {
@@ -56,11 +75,11 @@ export function CutListExtractor({
         .select("material_id, material_name, standard_length, standard_sheet_size, unit, current_unit_cost, material_category")
         .eq("active", true);
       setAllCatMats((catMats || []) as CatalogueMat[]);
-      const recalced = buildMaterialSummary(parts, (catMats || []) as CatalogueMat[]);
+      const recalced = buildMaterialSummary(parts, (catMats || []) as CatalogueMat[], resolveCutSettings(cutSettings));
       setMatSummary(recalced);
     };
     recalc();
-  }, [parts, status]);
+  }, [parts, status, cutSettings]);
 
   const handleExtract = async () => {
     if (!onedrivePath) return;
@@ -121,7 +140,7 @@ export function CutListExtractor({
       setAllCatMats((catMats || []) as CatalogueMat[]);
 
       // Client-side calculation — all math done deterministically in the lib
-      const recalced = buildMaterialSummary(extractedParts, (catMats || []) as CatalogueMat[]);
+      const recalced = buildMaterialSummary(extractedParts, (catMats || []) as CatalogueMat[], resolveCutSettings(cutSettings));
       setMatSummary(recalced);
       setSummary(data.summary || null);
       setStatus("extracted");
@@ -142,71 +161,69 @@ export function CutListExtractor({
     setMatSummary(prev => prev.map((m, i) => i === idx ? { ...m, _selected: !m._selected } : m));
   };
 
-  // Swap catalogue material for a summary row and recalculate bin packing
+  // Swap catalogue material for a summary row and recalculate layout.
+  // Uses the same shared helpers as buildMaterialSummary — single source of truth.
   const swapCatalogueMat = (idx: number, newCat: CatalogueMat) => {
+    const settings = resolveCutSettings(cutSettings);
     setMatSummary(prev => prev.map((m, i) => {
       if (i !== idx) return m;
-      const updated = { ...m, _catalogueMatch: newCat };
       const matLower = (m.material || "").toLowerCase();
       const matParts = parts.filter(p => (p.material || "").toLowerCase() === matLower);
+      const cat = m.material_category.toLowerCase();
 
-      if (m.material_category.toLowerCase() === "timber") {
-        const pieces: { length: number; desc: string }[] = [];
-        for (const p of matParts) {
-          const l = p.length_mm || 0;
-          if (l > 0) {
-            for (let q = 0; q < (p.quantity || 1); q++) {
-              pieces.push({ length: l, desc: labelFor(p) });
-            }
-          }
-        }
-        const totalLinearMm = pieces.reduce((a, b) => a + b.length, 0);
-        const stdLen = newCat.standard_length || 4800;
-        const bins = pieces.length > 0 ? binPackLengths(pieces, stdLen) : [];
-        const lengthsNeeded = bins.length > 0 ? bins.length : Math.max(1, Math.ceil(totalLinearMm / stdLen));
-        const usedMm = lengthsNeeded * stdLen;
-        updated.standard_length_mm = stdLen;
-        updated.lengths_needed = lengthsNeeded;
-        updated.total_linear_mm = totalLinearMm;
-        updated.waste_pct = usedMm > 0 ? Math.round((1 - totalLinearMm / usedMm) * 100) : 0;
-        updated.piece_lengths = pieces.map(p => p.length);
-        updated.length_bins = bins;
-      } else if (m.material_category.toLowerCase() === "sheet") {
-        const catSheet = parseSheetSize(newCat.standard_sheet_size);
-        const sheetW = catSheet?.w || 2440;
-        const sheetH = catSheet?.h || 1220;
-        const rects: PartRect[] = [];
-        for (const p of matParts) {
-          const l = p.length_mm || 0; const w = p.width_mm || 0;
-          if (l > 0 && w > 0) {
-            for (let q = 0; q < (p.quantity || 1); q++) {
-              rects.push({ w: l, h: w, desc: labelFor(p) });
-            }
-          }
-        }
-        const anomalies: string[] = [];
-        for (const p of matParts) {
-          const l = p.length_mm || 0; const w = p.width_mm || 0;
-          const fits = (l <= sheetW && w <= sheetH) || (l <= sheetH && w <= sheetW);
-          if (l > 0 && w > 0 && !fits) {
-            const msg = `${p.description}: ${l}×${w}mm does not fit on ${sheetW}×${sheetH}mm sheet`;
-            if (!anomalies.includes(msg)) anomalies.push(msg);
-          }
-        }
-        const { sheets, placements } = guillotinePack(rects, sheetW, sheetH);
-        const sheetArea = sheetW * sheetH;
-        const partArea = rects.reduce((s, r) => s + r.w * r.h, 0);
-        updated.sheets_needed = sheets;
-        updated.standard_sheet_size = `${sheetW}x${sheetH}`;
-        updated.waste_pct = sheets > 0 ? Math.round((1 - partArea / (sheets * sheetArea)) * 100) : 0;
-        updated.anomalies = anomalies;
-        updated.sheet_placements = placements;
+      if (cat === "timber") {
+        return {
+          ...m,
+          _catalogueMatch: newCat,
+          patterns: undefined,
+          total_passes: undefined,
+          stack_count: undefined,
+          ...timberLayoutFields(matParts, newCat.standard_length || 4800, settings),
+        };
       }
-      return updated;
+      if (cat === "sheet") {
+        const catSheet = parseSheetSize(newCat.standard_sheet_size);
+        return {
+          ...m,
+          _catalogueMatch: newCat,
+          length_bins: undefined,
+          ...sheetLayoutFields(matParts, catSheet?.w || 2440, catSheet?.h || 1220, settings),
+        };
+      }
+      return { ...m, _catalogueMatch: newCat };
     }));
     setSwappingIdx(null);
     setCatSearch("");
   };
+
+  // Cut settings editor: open seeds the draft from current resolved settings.
+  const openCutSettings = () => {
+    setDraftSettings(resolveCutSettings(cutSettings));
+    setShowCutSettings(true);
+  };
+
+  const saveCutSettings = async () => {
+    setSavingSettings(true);
+    // Store NULL when the draft is just the workshop defaults (keeps rows clean).
+    const noOverrides = !draftSettings.stack_overrides || Object.keys(draftSettings.stack_overrides).length === 0;
+    const isDefault =
+      draftSettings.kerf_mm === DEFAULT_CUT_SETTINGS.kerf_mm &&
+      draftSettings.squaring_mm === DEFAULT_CUT_SETTINGS.squaring_mm &&
+      noOverrides;
+    const toStore = isDefault ? null : draftSettings;
+    const ctx = await getAuditContext(supabase);
+    await auditedUpdate(ctx, "tbl_work_orders", workOrderId, { cut_settings: toStore }, jobId);
+    setCutSettings(toStore);
+    setSavingSettings(false);
+    setShowCutSettings(false);
+  };
+
+  // Distinct sheet thicknesses present, for the per-thickness stack table.
+  const sheetThicknesses = Array.from(new Set(
+    parts
+      .filter(p => (p.material_category || "").toLowerCase() === "sheet" && p.thickness_mm)
+      .map(p => p.thickness_mm as number)
+  )).sort((a, b) => b - a);
 
   const addToBom = async () => {
     const selected = matSummary.filter(m => m._selected);
@@ -225,7 +242,7 @@ export function CutListExtractor({
       .eq("active", true);
 
     // Recalculate inline from parts — deterministic JS math via shared lib
-    const recalced = buildMaterialSummary(parts, (materials || []) as CatalogueMat[]);
+    const recalced = buildMaterialSummary(parts, (materials || []) as CatalogueMat[], resolveCutSettings(cutSettings));
     // Apply user's checkbox selections and catalogue overrides from matSummary state
     const selectedMats = new Set(matSummary.filter(m => m._selected).map(m => (m.material || "").toLowerCase()));
     const overrideMap: Record<string, CatalogueMat | null> = {};
@@ -306,7 +323,7 @@ export function CutListExtractor({
 
   const selectedCount = matSummary.filter(m => m._selected).length;
   const hasLayoutData = matSummary.some(m =>
-    (m.sheet_placements && m.sheet_placements.length > 0) ||
+    (m.patterns && m.patterns.length > 0) ||
     (m.length_bins && m.length_bins.length > 0)
   );
 
@@ -494,12 +511,104 @@ export function CutListExtractor({
           </div>
         </div>
 
-        {/* Cut layout — collapsible */}
+        {/* Cut layout — collapsible, with per-WO cut settings */}
         {hasLayoutData && (
           <div className="border-t border-subtle">
-            <button onClick={() => setShowLayout(!showLayout)} className="w-full px-3 py-1.5 text-left text-[10px] text-muted hover:text-muted">
-              {showLayout ? "▾" : "▸"} Cut layout preview
-            </button>
+            <div className="flex items-center justify-between">
+              <button onClick={() => setShowLayout(!showLayout)} className="flex-1 px-3 py-1.5 text-left text-[10px] text-muted hover:text-foreground">
+                {showLayout ? "▾" : "▸"} Cut layout preview
+              </button>
+              <button
+                onClick={openCutSettings}
+                className="px-2 py-1.5 text-muted hover:text-starlight-blue"
+                aria-label="Cut settings"
+              >
+                <span title="Cut settings — kerf, squaring, stacking">
+                  <Settings2 className="h-3.5 w-3.5" />
+                </span>
+              </button>
+            </div>
+
+            {showCutSettings && (
+              <div className="px-3 py-2 border-t border-subtle bg-surface-dim space-y-2">
+                <p className="text-[9px] text-muted uppercase tracking-wider font-semibold">
+                  Cut settings — this work order
+                </p>
+                <div className="flex gap-3">
+                  <label className="text-[10px] text-muted flex flex-col gap-0.5">
+                    Blade kerf (mm)
+                    <input
+                      type="number" step="0.1" min="0"
+                      value={draftSettings.kerf_mm}
+                      onChange={e => setDraftSettings(s => ({ ...s, kerf_mm: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface"
+                    />
+                  </label>
+                  <label className="text-[10px] text-muted flex flex-col gap-0.5">
+                    Squaring (mm)
+                    <input
+                      type="number" step="0.5" min="0"
+                      value={draftSettings.squaring_mm}
+                      onChange={e => setDraftSettings(s => ({ ...s, squaring_mm: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface"
+                    />
+                  </label>
+                </div>
+
+                {sheetThicknesses.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-muted mb-1">Sheets stacked per cut <span className="text-faint">(blank = auto)</span></p>
+                    <div className="flex flex-wrap gap-2">
+                      {sheetThicknesses.map(t => {
+                        const auto = stackCountForThickness(t, { kerf_mm: draftSettings.kerf_mm, squaring_mm: draftSettings.squaring_mm });
+                        const override = draftSettings.stack_overrides?.[String(t)];
+                        return (
+                          <label key={t} className="text-[10px] text-muted flex flex-col gap-0.5">
+                            {t}mm
+                            <input
+                              type="number" min="1" max="20"
+                              placeholder={`auto ${auto}`}
+                              value={override ?? ""}
+                              onChange={e => setDraftSettings(s => {
+                                const next = { ...(s.stack_overrides || {}) };
+                                const v = parseInt(e.target.value);
+                                if (!e.target.value || isNaN(v)) delete next[String(t)];
+                                else next[String(t)] = v;
+                                return { ...s, stack_overrides: next };
+                              })}
+                              className="w-16 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={saveCutSettings}
+                    disabled={savingSettings}
+                    className="text-[10px] px-2 py-1 rounded bg-starlight-blue text-white hover:bg-starlight-blue/90 disabled:opacity-50"
+                  >
+                    {savingSettings ? "Saving…" : "Save & recompute"}
+                  </button>
+                  <button
+                    onClick={() => setDraftSettings(DEFAULT_CUT_SETTINGS)}
+                    className="text-[10px] px-2 py-1 rounded border border-subtle text-muted hover:text-foreground"
+                  >
+                    Reset to defaults
+                  </button>
+                  <button
+                    onClick={() => setShowCutSettings(false)}
+                    className="text-[10px] px-2 py-1 text-muted hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showLayout && (
               <div className="px-3 pb-2 border-t border-subtle">
                 <CutPlanSection summaries={matSummary} compact />

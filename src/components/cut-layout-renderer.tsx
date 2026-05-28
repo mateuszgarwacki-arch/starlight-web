@@ -7,27 +7,25 @@
    - src/components/cutlist-extractor.tsx  (live preview during BOM extraction)
    - src/app/traveller/page.tsx            (suggested cut plan on traveller)
 
-   All measurements are in viewBox units (mm). The container constrains
-   the rendered width; SVGs scale proportionally. Compact mode targets
-   2-up sheets at ~88mm; non-compact targets 1-up at ~180mm.
+   Renders distinct PATTERNS (not every physical sheet). Each pattern shows
+   one representative layout plus a caption "×N sheets · M passes · fill%".
+   Every part carries its label AND its size. Kerf shows as the gap between
+   parts. All measurements are viewBox units (mm); the container constrains
+   width and the SVG scales. Compact mode: 2-up at ~88mm; non-compact 1-up.
    ============================================================ */
 
-import type { Placement, LengthBin, MaterialSummary, CutPlanPageChunk } from "@/lib/cut-layout";
-import { parseSheetSize } from "@/lib/cut-layout";
+import type { LengthBin, MaterialSummary, SheetPattern, CutPlanPageChunk } from "@/lib/cut-layout";
 
-function SheetLayout({
-  placements, sheetW, sheetH, sheetIdx, compact = true,
+function PatternLayout({
+  pattern, sheetW, sheetH, index, compact = true,
 }: {
-  placements: Placement[];
+  pattern: SheetPattern;
   sheetW: number;
   sheetH: number;
-  sheetIdx: number;
+  index: number;
   compact?: boolean;
 }) {
-  const my = placements.filter(p => p.sheetIdx === sheetIdx);
   const widthClass = compact ? "max-w-[88mm]" : "max-w-[180mm]";
-  const labelMin = compact ? 60 : 40;
-  const labelMax = compact ? 140 : 100;
 
   return (
     <div className="break-inside-avoid">
@@ -36,14 +34,22 @@ function SheetLayout({
         className={`w-full h-auto ${widthClass} border border-gray-700 bg-white`}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Sheet number badge */}
-        <text x="40" y="130" fontSize="110" fill="#999" fontWeight="bold">
-          {sheetIdx + 1}
-        </text>
+        {/* Pattern index badge */}
+        <text x="36" y="120" fontSize="105" fill="#bbb" fontWeight="bold">{index}</text>
 
-        {my.map((p, i) => {
-          const labelSize = Math.max(labelMin, Math.min(labelMax, Math.min(p.w, p.h) / 4.5));
-          const showDims = Math.min(p.w, p.h) > 250;
+        {pattern.placements.map((p, i) => {
+          const cx = p.x + p.w / 2;
+          const cy = p.y + p.h / 2;
+          const short = Math.min(p.w, p.h);
+          let labelSize = Math.max(40, Math.min(140, short * 0.30));
+          let dimSize = labelSize * 0.6;
+          // Ensure label + dims fit within the part height
+          const totalH = labelSize + dimSize;
+          if (totalH > p.h * 0.9) {
+            const k = (p.h * 0.9) / totalH;
+            labelSize *= k;
+            dimSize *= k;
+          }
           return (
             <g key={i}>
               <rect
@@ -54,29 +60,28 @@ function SheetLayout({
                 strokeWidth={3}
               />
               <text
-                x={p.x + p.w / 2}
-                y={p.y + p.h / 2}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={labelSize}
-                fill="#003366"
-                fontWeight="600"
+                x={cx} y={cy - dimSize * 0.45}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={labelSize} fill="#003366" fontWeight="600"
               >
                 {p.partDesc}{p.rotated ? " ↻" : ""}
               </text>
-              {showDims && (
-                <text
-                  x={p.x + 30} y={p.y + 90}
-                  fontSize="55"
-                  fill="#666"
-                >
-                  {Math.round(p.w)}×{Math.round(p.h)}
-                </text>
-              )}
+              <text
+                x={cx} y={cy + labelSize * 0.55}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={dimSize} fill="#5a6b80"
+              >
+                {Math.round(p.w)}×{Math.round(p.h)}
+              </text>
             </g>
           );
         })}
       </svg>
+      <p className="text-[7.5pt] text-muted mt-0.5 leading-tight">
+        ×{pattern.count} sheet{pattern.count === 1 ? "" : "s"} · {pattern.passes} pass{pattern.passes === 1 ? "" : "es"}
+        {pattern.stackCount > 1 ? ` · stack ${pattern.stackCount}` : ""}
+        {" · "}{pattern.fillPct}% used
+      </p>
     </div>
   );
 }
@@ -144,9 +149,19 @@ function LengthBinRow({ bin }: { bin: LengthBin }) {
   );
 }
 
+/** Header line for a sheet material (mirrors buildCutPlanPages detail). */
+function sheetDetail(s: MaterialSummary): string {
+  const n = s.patterns?.length || 0;
+  const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
+  const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
+  const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
+  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${n} pattern${n === 1 ? "" : "s"}${passStr}${stackStr}${wasteStr}`;
+}
+
 /**
- * Renders the cut plan for a single material — header line + layout grid.
- * Returns null if the material has no layout data (e.g. fabric, hardware).
+ * Renders the cut plan for a single material — header + pattern grid (or
+ * timber bins). Used by the live preview (all patterns, scrolls).
+ * Returns null if the material has no layout data.
  */
 export function MaterialCutPlan({
   summary, compact = true,
@@ -154,36 +169,29 @@ export function MaterialCutPlan({
   summary: MaterialSummary;
   compact?: boolean;
 }) {
-  const hasSheets = !!(summary.sheet_placements && summary.sheet_placements.length > 0 && summary.sheets_needed);
+  const hasPatterns = !!(summary.patterns && summary.patterns.length > 0);
   const hasLengths = !!(summary.length_bins && summary.length_bins.length > 0);
-  if (!hasSheets && !hasLengths) return null;
+  if (!hasPatterns && !hasLengths) return null;
 
-  const sheetSize = parseSheetSize(summary.standard_sheet_size);
-  const sheetW = sheetSize?.w || 2440;
-  const sheetH = sheetSize?.h || 1220;
-
-  const headerDetail = hasSheets
-    ? `${summary.sheets_needed} sheet${summary.sheets_needed! > 1 ? "s" : ""} of ${summary.standard_sheet_size}mm`
-    : `${summary.lengths_needed} × ${summary.standard_length_mm}mm`;
+  const detail = hasPatterns
+    ? sheetDetail(summary)
+    : `${summary.lengths_needed} × ${summary.standard_length_mm}mm${summary.waste_pct != null ? ` · ${summary.waste_pct}% waste` : ""}`;
 
   return (
     <div className="mt-2">
-      <p className="text-[8pt] font-semibold text-foreground mb-1 break-after-avoid">
-        {summary.material} — {headerDetail}
-        {summary.waste_pct != null && (
-          <span className="text-muted font-normal"> · {summary.waste_pct}% waste</span>
-        )}
+      <p className="text-[8pt] font-semibold text-foreground mb-1">
+        {summary.material} — {detail}
       </p>
 
-      {hasSheets && (
+      {hasPatterns && (
         <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
-          {Array.from({ length: summary.sheets_needed! }).map((_, sIdx) => (
-            <SheetLayout
-              key={sIdx}
-              placements={summary.sheet_placements!}
-              sheetW={sheetW}
-              sheetH={sheetH}
-              sheetIdx={sIdx}
+          {summary.patterns!.map((pat, i) => (
+            <PatternLayout
+              key={i}
+              pattern={pat}
+              sheetW={summary.sheetW || 2440}
+              sheetH={summary.sheetH || 1220}
+              index={i + 1}
               compact={compact}
             />
           ))}
@@ -210,8 +218,8 @@ export function MaterialCutPlan({
 }
 
 /**
- * Renders a "Suggested cut plan" section header + each material's layout.
- * Materials without layout data (fabric, hardware, etc.) are silently skipped.
+ * "Suggested cut plan" section header + each material's layout.
+ * Used by the live preview in the BOM extractor (not paginated).
  */
 export function CutPlanSection({
   summaries, title, compact = true,
@@ -221,7 +229,7 @@ export function CutPlanSection({
   compact?: boolean;
 }) {
   const withLayout = summaries.filter(s =>
-    (s.sheet_placements && s.sheet_placements.length > 0) ||
+    (s.patterns && s.patterns.length > 0) ||
     (s.length_bins && s.length_bins.length > 0)
   );
   if (withLayout.length === 0) return null;
@@ -242,9 +250,9 @@ export function CutPlanSection({
 }
 
 /**
- * Renders one cut plan chunk — fits comfortably on one printed page.
- * For multi-page cut plans (e.g. 33-sheet OSB), the traveller renders
- * one <Page> wrapper per chunk so each gets proper header/footer chrome.
+ * Renders one cut plan chunk on the traveller — fits one printed page.
+ * The traveller renders one <Page> wrapper per chunk so each gets full
+ * header/footer chrome.
  */
 export function CutPlanPage({
   chunk, compact = true,
@@ -258,7 +266,7 @@ export function CutPlanPage({
         <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">
           Suggested cut plan
           <span className="ml-2 font-normal text-faint normal-case tracking-normal text-[9px]">
-            Verify each sheet/length for defects — adjust if needed
+            Verify each sheet/length for defects — adjust if needed · identical sheets can be stacked
           </span>
         </p>
       )}
@@ -272,15 +280,15 @@ export function CutPlanPage({
           ))}
         </div>
       )}
-      {chunk.sheetIndices && chunk.placements && chunk.sheetW && chunk.sheetH && (
+      {chunk.patterns && chunk.sheetW && chunk.sheetH && (
         <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
-          {chunk.sheetIndices.map(sIdx => (
-            <SheetLayout
-              key={sIdx}
-              placements={chunk.placements!}
+          {chunk.patterns.map((pat, i) => (
+            <PatternLayout
+              key={i}
+              pattern={pat}
               sheetW={chunk.sheetW!}
               sheetH={chunk.sheetH!}
-              sheetIdx={sIdx}
+              index={i + 1}
               compact={compact}
             />
           ))}
