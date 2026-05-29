@@ -1,14 +1,26 @@
-fix(labels): portrait page + 90° rotated content for the GT800 (S53)
+feat(labels): print to GT800 via Browser Print + native ZPL (S53)
 
-The 50x25mm PDF seated correctly (one label per label — page size was
-right), but printed 90° rotated: the GT800 feeds this stock portrait and
-rotates a landscape page to fit. Now we author a portrait 25x50mm page
-and render each label's landscape content rotated 90° onto a canvas, so
-the page matches the printer's feed and prints upright, reading along the
-50mm edge. Footprint still equals the label, so seating is preserved.
+The print-dialog path can't win here: in a rasterised page, seating and
+orientation are coupled (page sized to seat -> driver rotates 90°; page
+rotated to fix -> length stops matching the 25mm pitch and labels drift).
+It also can't tell the printer the label length / gap registration — the
+"advance per label" that MS Access does via the driver.
 
-- generatePdf now renders via an offscreen canvas (rotated 90° CW) and
-  adds one full-page PNG per label; QR pre-decoded to an <img> so the
-  print click stays in the user gesture.
-- If a print ever comes out 180° (upside down), it's a one-line swap of
-  the canvas rotate direction (noted in code).
+So we now send native ZPL straight to the printer through Zebra Browser
+Print (small local agent, bypasses the OS dialog), exactly like the
+native path:
+- lib/zebra.ts: Browser Print client (loopback HTTP API; tries
+  http://127.0.0.1:9100 then https 9101; default printer or first
+  available; clear errors when the agent/printer isn't found).
+- buildZpl(): per-label ^XA..^XZ with ^PW/^LL + ^MNY (gap tracking ->
+  per-label register & advance), native ^BQ QR, ^FB-wrapped description,
+  conditional finish (PAINT/COVER + set), qty-overflow, k/n.
+- "Print to GT800 (Zebra)" is now primary; PDF kept as fallback. Status
+  line surfaces Browser Print errors.
+
+Requires Zebra Browser Print installed on the print PC (free) with the
+GT800 added (by IP) / set as default.
+
+Geometry assumes the 50mm edge is across the head. If the first native
+print is 90° out, flip ^FWN -> ^FWR (one line). EPL driver is in use but
+the GT800 auto-senses language per job, so ZPL should print.

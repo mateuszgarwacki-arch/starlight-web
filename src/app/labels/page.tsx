@@ -22,6 +22,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Printer, Loader2, Tags } from "lucide-react";
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
+import { printZpl } from "@/lib/zebra";
 
 interface LabelItem {
   item_id: number;
@@ -48,6 +49,7 @@ export default function LabelsPage() {
   const [origin, setOrigin] = useState("");
   const [qrReady, setQrReady] = useState(false);
   const qrImgRef = useRef<HTMLImageElement | null>(null);
+  const [zebraStatus, setZebraStatus] = useState("");
 
   // Next 16: read params off window.location.search (no Suspense needed).
   useEffect(() => {
@@ -160,6 +162,49 @@ export default function LabelsPage() {
     }
   });
   const qrUrl = origin ? `${origin}/m/wo/${woId}` : "";
+
+  // Native ZPL for the GT800 (300 dpi). We set the print width + label length
+  // and gap tracking (^MNY) so the printer registers and advances per die-cut
+  // label, and place text + a native QR (^BQ) with explicit positions. This is
+  // sent straight to the printer via Browser Print — no page, no rasterising,
+  // no rotation/seating conflict.
+  // Geometry assumes the 50mm edge is across the head (label reads landscape).
+  // If the first native print is 90° out, swap ^FWN -> ^FWR on the field block.
+  const buildZpl = (): string => {
+    const W = 590, H = 295, PAD = 18;     // dots @300dpi (50×25mm)
+    const QR = 231;                       // ~ ^BQ magnification 7
+    const qrX = W - PAD - QR;
+    const qrY = Math.round((H - QR) / 2);
+    const textW = qrX - PAD - 14;
+    const esc = (s: string | null) => (s || "").replace(/[\^~]/g, " ").trim();
+
+    let z = "";
+    labels.forEach(({ item, idx, total }) => {
+      const desc = esc(item.description) || "(no description)";
+      const showFinish = isPaintOrCover && !!esc(item.finish_required);
+      z += "^XA^CI28";
+      z += `^PW${W}^LL${H}^LH0,0^MNY`;
+      z += `^FO${qrX},${qrY}^BQN,2,7^FDMA,${qrUrl}^FS`;
+      z += `^FO${PAD},14^A0N,22,22^FDJOB ${jobNumber || "-"}   WO ${woId}^FS`;
+      z += `^FO${PAD},46^A0N,40,40^FB${textW},3,2,L^FD${desc}^FS`;
+      if (showFinish) z += `^FO${PAD},204^A0N,30,30^FB${textW},1,0,L^FD${esc(item.finish_required)}^FS`;
+      if (item.qtyOverflow) z += `^FO${PAD},240^A0N,28,28^FDQty ${item.qtyOverflow}${item.unit ? ` ${esc(item.unit)}` : ""}^FS`;
+      if (total > 1) z += `^FO${PAD},266^A0N,20,20^FD${idx} / ${total}^FS`;
+      z += "^XZ";
+    });
+    return z;
+  };
+
+  const printZebra = async () => {
+    if (!labels.length) return;
+    setZebraStatus("Sending to GT800…");
+    try {
+      await printZpl(buildZpl());
+      setZebraStatus(`Sent ${labels.length} label${labels.length === 1 ? "" : "s"} to the printer ✓`);
+    } catch (e) {
+      setZebraStatus(e instanceof Error ? e.message : "Could not reach Browser Print.");
+    }
+  };
 
   // Build the label PDF. The GT800 feeds this stock portrait and rotates a
   // landscape page to fit (that was the 90° error). So we author a portrait
@@ -277,15 +322,21 @@ export default function LabelsPage() {
           </span>
         </div>
         <button
+          onClick={printZebra}
+          disabled={labels.length === 0}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: labels.length ? "#1f2a44" : "#aaa", color: "#fff", border: "none", cursor: labels.length ? "pointer" : "default", fontSize: 14 }}
+        >
+          <Printer className="h-4 w-4" /> Print to GT800 (Zebra)
+        </button>
+        <button
           onClick={generatePdf}
           disabled={labels.length === 0 || !qrReady}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: (labels.length && qrReady) ? "#1f2a44" : "#aaa", color: "#fff", border: "none", cursor: (labels.length && qrReady) ? "pointer" : "default", fontSize: 14 }}
+          title="Fallback — opens a 50×25 mm PDF to print via the dialog"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, background: "transparent", color: "#1f2a44", border: "1px solid #cbd2dc", cursor: (labels.length && qrReady) ? "pointer" : "default", fontSize: 13 }}
         >
-          <Printer className="h-4 w-4" /> Print labels (PDF)
+          PDF fallback
         </button>
-        <span style={{ fontSize: 12, color: "#888" }}>
-          Opens a 50×25 mm PDF → print to the GT800 at <b>Actual size</b> (not Fit)
-        </span>
+        {zebraStatus && <span style={{ fontSize: 13, color: zebraStatus.includes("✓") ? "#1a7f37" : "#b00" }}>{zebraStatus}</span>}
       </div>
 
       {labels.length === 0 ? (
