@@ -1,6 +1,8 @@
-fix(labels): target the loaded GT800, never the plastic-stock printer (S53)
+fix(labels): revert PDF fallback to seated 50x25 landscape (S53)
 
-The ...Plastic Barcode printer isn't loaded. getPrinter() now picks the
-first non-"plastic" printer Browser Print can see, only falling back to
-the default/first if no non-plastic printer exists — so labels always go
-to the normal (paper) GT800 regardless of the Browser Print default.
+The portrait/canvas PDF drifted on the dialog path (page length 50 != 25mm
+pitch). Reverted the PDF fallback to 50x25mm landscape — the size that
+seats one-per-label — and rely on the GT800 driver's own Orientation
+setting to bring it upright. This gives a zero-install path while Browser
+Print (native ZPL, primary button) is set up. QR drawn from the
+pre-decoded <img> via addImage.

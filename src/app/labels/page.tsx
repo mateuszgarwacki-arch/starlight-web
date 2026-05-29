@@ -206,87 +206,49 @@ export default function LabelsPage() {
     }
   };
 
-  // Build the label PDF. The GT800 feeds this stock portrait and rotates a
-  // landscape page to fit (that was the 90° error). So we author a portrait
-  // 25×50mm page and draw the landscape content rotated 90° via canvas — the
-  // page now matches the printer's feed, so it prints upright and reads along
-  // the 50mm edge. Page footprint still equals the label, so seating holds.
-  // If a future print comes out 180° (upside down), swap the rotate direction
-  // (translate(Wp,0)+rotate(+90°)  ->  translate(0,Hp)+rotate(-90°)).
+  // PDF fallback (no Browser Print needed). Built at 50x25mm landscape — the
+  // size that SEATS correctly on the stock (one per die-cut label). On its own
+  // it prints 90° rotated, so this path relies on the GT800 driver's own
+  // Orientation setting to turn it upright — the driver gives the rotation
+  // control independent of page size, which a rasterised page can't.
   const generatePdf = () => {
     if (!labels.length || !qrReady || !qrImgRef.current) return;
-    const S = 12;                       // px per mm (~305 dpi render)
-    const Wp = 25 * S, Hp = 50 * S;     // portrait canvas = physical label feed
-    const LW = 50 * S, LH = 25 * S;     // landscape content frame (drawn rotated)
-    const PAD = 1.5 * S;
-    const QRpx = 20 * S;
-    const qrX = LW - PAD - QRpx;
-    const qrY = (LH - QRpx) / 2;
-    const textW = qrX - PAD - S;
-    const fpt = (pt: number) => pt * 0.3528 * S;   // pt → px at this render scale
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Wp; canvas.height = Hp;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const wrap = (text: string, maxW: number, max: number) => {
-      const words = text.split(/\s+/).filter(Boolean);
-      const lines: string[] = [];
-      let cur = "";
-      for (const w of words) {
-        const t = cur ? `${cur} ${w}` : w;
-        if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; }
-        else cur = t;
-        if (lines.length >= max) break;
-      }
-      if (cur && lines.length < max) lines.push(cur);
-      return lines.slice(0, max);
-    };
-
-    const doc = new jsPDF({ unit: "mm", format: [25, 50] });
+    const W = 50, H = 25, PAD = 1.5;     // mm — landscape; this size seats
+    const QR = 20;
+    const qrX = W - PAD - QR;
+    const qrY = (H - QR) / 2;
+    const textW = qrX - PAD - 1;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [W, H] });
 
     labels.forEach(({ item, idx, total }, i) => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, Wp, Hp);
-      ctx.fillStyle = "#000";
-      ctx.textBaseline = "alphabetic";
+      if (i > 0) doc.addPage([W, H], "landscape");
+      doc.addImage(qrImgRef.current!, "PNG", qrX, qrY, QR, QR);
 
-      // rotate the landscape layout 90° CW into the portrait canvas
-      ctx.translate(Wp, 0);
-      ctx.rotate(Math.PI / 2);
+      let y = PAD + 2.4;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.text(`JOB ${jobNumber || "-"}   WO ${woId}`, PAD, y);
 
-      // QR (right of the landscape frame)
-      ctx.drawImage(qrImgRef.current!, qrX, qrY, QRpx, QRpx);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      const nameLines = (doc.splitTextToSize(item.description || "(no description)", textW) as string[]).slice(0, 3);
+      y += 3.6;
+      nameLines.forEach((ln) => { doc.text(ln, PAD, y); y += 3.6; });
 
-      // meta line
-      ctx.font = `${fpt(6)}px Arial`;
-      ctx.fillText(`JOB ${jobNumber || "—"} · WO ${woId}`, PAD, PAD + fpt(6));
-
-      // description (bold, wrapped, up to 3 lines)
-      ctx.font = `bold ${fpt(10)}px Arial`;
-      const nameLines = wrap(item.description || "(no description)", textW, 3);
-      const nameLH = fpt(10) * 1.15;
-      let y = PAD + fpt(6) + fpt(10) + 2 * S;
-      nameLines.forEach((ln) => { ctx.fillText(ln, PAD, y); y += nameLH; });
-
-      // finish (paint/cover only) + qty overflow
-      ctx.font = `${fpt(7.5)}px Arial`;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
       if (isPaintOrCover && item.finish_required && item.finish_required.trim() !== "") {
-        ctx.fillText(wrap(item.finish_required, textW, 1)[0], PAD, y); y += fpt(7.5) * 1.3;
+        doc.text((doc.splitTextToSize(item.finish_required, textW) as string[])[0], PAD, y);
+        y += 3.2;
       }
       if (item.qtyOverflow) {
-        ctx.fillText(`Qty ${item.qtyOverflow}${item.unit ? ` ${item.unit}` : ""}`, PAD, y);
+        doc.text(`Qty ${item.qtyOverflow}${item.unit ? ` ${item.unit}` : ""}`, PAD, y);
       }
 
-      // k / n bottom-left when copies > 1
       if (total > 1) {
-        ctx.font = `${fpt(6)}px Arial`;
-        ctx.fillText(`${idx} / ${total}`, PAD, LH - PAD);
+        doc.setFontSize(6);
+        doc.text(`${idx} / ${total}`, PAD, H - PAD);
       }
-
-      if (i > 0) doc.addPage([25, 50]);
-      doc.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 25, 50);
     });
 
     doc.autoPrint();
