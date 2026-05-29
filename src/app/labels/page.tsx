@@ -179,11 +179,14 @@ export default function LabelsPage() {
     const esc = (s: string | null) => (s || "").replace(/[\^~]/g, " ").trim();
 
     let z = "";
-    labels.forEach(({ item, idx, total }) => {
+    labels.forEach(({ item, idx, total }, i) => {
       const desc = esc(item.description) || "(no description)";
       const showFinish = isPaintOrCover && !!esc(item.finish_required);
+      // Tear-off (no cut) on every label except the last; cut once after the
+      // final label so a batch comes off as a single strip.
+      const cutMode = i === labels.length - 1 ? "^MMC" : "^MMT";
       z += "^XA^CI28";
-      z += `^MMC^PW${W}^LL${H}^LH0,0`;   // ^MMC = cut after each label
+      z += `${cutMode}^PW${W}^LL${H}^LH0,0`;
       z += `^FO${qrX},${qrY}^BQN,2,7^FDMA,${qrUrl}^FS`;
       z += `^FO${PAD},14^A0N,22,22^FDJOB ${jobNumber || "-"}   WO ${woId}^FS`;
       z += `^FO${PAD},46^A0N,40,40^FB${textW},3,2,L^FD${desc}^FS`;

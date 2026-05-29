@@ -1,10 +1,6 @@
-feat(labels): cutter mode (^MMC) + prefer https://localhost:9101 (S53)
+feat(labels): cut once after the batch, not per label (S53)
 
-- buildZpl now sends ^MMC so the printer feeds and cuts after each label
-  (requires the cutter accessory fitted — the same one MS Access drives).
-  Dropped ^MNY to avoid overriding the printer's existing gap calibration.
-- zebra.ts tries https://localhost:9101 first (Zebra's documented endpoint
-  for hosted apps; cert CN is "localhost"), then 127.0.0.1 / http variants.
-
-User still needs Browser Print running + a one-time browser trust of
-https://localhost:9101 (accept the localhost cert / allow the site).
+buildZpl now sets ^MMT (tear-off, no cut) on every label except the last,
+and ^MMC on the final label — so a run of N labels prints as one strip
+and the cutter fires once after the last. Single label still cuts (it is
+the last). Per Zebra/Loftware guidance for batch cutting.
