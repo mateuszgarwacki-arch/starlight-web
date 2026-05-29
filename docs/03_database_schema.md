@@ -1,7 +1,7 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 28 May 2026 (S52)
-**Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change).
+**Last updated:** 29 May 2026 (S55)
+**Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change). S55: +1 DB function `import_quote` (SECURITY DEFINER, `service_role`-only) catalogued below; no new tables/views (function was deployed in a prior session, documented now).
 
 ## Counts
 
@@ -10,6 +10,7 @@
 | Tables (`tbl_*`) | 58 |
 | Views (`qry_*`) | 35 |
 | RPC functions (`rpc_*`) | 19 |
+| Other DB functions | 1 |
 | pg_cron jobs | 3 |
 
 ## Tables (58)
@@ -53,10 +54,11 @@ qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ord
 qry_wo_with_activities
 ```
 
-## RPC functions (19)
+## Functions (20)
 
 | Function | Args | Purpose |
 |---|---|---|
+| `import_quote` | `payload jsonb, p_uploaded_by int DEFAULT NULL` | **Not `rpc_*`-prefixed** — called directly by the quote-import commit route (S55). SECURITY DEFINER, `search_path=public`, EXECUTE granted to `service_role` ONLY. One transaction: inserts the job (`tbl_production_plan`), quote header (`tbl_quotes`), all lines (`tbl_quote_lines`, numbered 1…N via `WITH ORDINALITY`), and the quote PDF as a job-level `reference` doc in `tbl_wo_documents` (confirmed AI extraction stored in `extracted_data`). Raises if `job_number` is missing or already exists. Source of record: `import_quote.function.sql` (repo root) |
 | `rpc_active_workers` | — | SECURITY DEFINER. Cross-user view of who's currently clocked-in (non-sensitive fields only) |
 | `rpc_approve_time_entry_edit` | `p_edit_id integer, p_review_note text DEFAULT NULL` | Atomic apply of a freelancer-proposed time-entry edit. Rebuilds timestamps from `proposed_date + actual_start_timestamp::time`, recalculates `entry_cost` from current `applied_hourly_rate`. Role check: `admin/pm/production_manager` only |
 | `rpc_capacity_data` | `p_date_from text, p_date_to text` | Capacity page data; filters Complete jobs |

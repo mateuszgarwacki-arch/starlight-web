@@ -16,6 +16,11 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Quote import — restyle `AddJobWithQuote` to design tokens** *(S55)* — the import UI ships with neutral Tailwind (black buttons, gray borders, plain table). Functional but off-theme. Swap to starlight tokens (`bg-surface`, `border-subtle`, `text-navy`, `starlight-red`/`starlight-blue`, card classes) to match the rest of the modal. Cosmetic; the logic is validated so touch styles only.
+- [ ] **Quote import — per-user attribution** *(S55)* — `getCurrentFreelancerId()` in the commit route returns `DEFAULT_IMPORT_FREELANCER_ID` (=5, Mateusz). Resolve the signed-in user instead (look up `tbl_freelancers` by authed email, or thread `get_my_freelancer_id()` through) so `created_by`/`imported_by`/`uploaded_by` reflect who actually imported. Low urgency while Mateusz is the sole importer.
+- [ ] **Quote import — scanned/image-PDF fallback** *(S55)* — `/extract` returns 422 when `pdf-parse` finds no text (scanned/image-only PDF). Quoting software emits text PDFs, so this is the rare path. When needed, add a branch that sends the PDF itself as a document block to the same model + schema (higher token cost, pages rasterised).
+- [ ] **Quote import — batch backfill of historical quotes** *(S55, strategic)* — run the same `/extract` logic through the Batch API (50% cheaper, async <24h) to import a stack of old quotes, skipping the review UI or queuing them for bulk review. Feeds the AI-estimating foundation. Same prompt, same schema.
+
 - [ ] **Label reprint subset** *(S53)* — `/labels?woId=` prints every job item linked to the WO. After a mid-build scope change you reprint the whole set. Add per-item checkboxes (default all-ticked) so you can reprint just the new/selected items. UI-only — `buildZpl()` and `generatePdf()` already iterate a `labels` array; filter it by selection before they run.
 
 - [ ] **Cost-visibility "Workshop Overhead" card → read from `tbl_overhead_costs`** *(S52, strategic)* — the Review → Cost Visibility page still derives its Workshop Overhead figure from `approved_overhead` **tasks** (task-status aggregation). Since S52, Approve Overhead also writes a labour row into `tbl_overhead_costs`, so the same labour hour now lives in two stores, and the card can't see the *spend* side (consumables/cleaning) at all. End state: point that card at the pool (`qry_overhead_monthly` / `tbl_overhead_costs`), which is the superset (labour + spend), and retire the task-derived calc — single source of truth. Touches the cost-visibility RPC; confirm directors want spend folded into that headline number before building.
@@ -92,6 +97,51 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S55 — Automated quote import (PDF -> AI extract -> review -> atomic insert) — 29 May 2026
+
+Wired the "add a new job from a quote PDF" feature. Upload a quote in the New Job modal, Sonnet extracts it into the Starlight schema (one job + one quote header + many lines), the PM reviews/edits the pre-filled fields, then commit saves the PDF to OneDrive and inserts everything in one transaction via `import_quote()`. Same result as the hand-done job-13812 import, on a button. The `import_quote()` Postgres function was already deployed and verified end-to-end in a prior session; this session placed the front-end + two API routes + supporting lib and closed the two `ADAPT:` wiring points.
+
+#### The idea
+Doing 13812 by hand was a one-time discovery cost — reading the schema, learning the zone/sub-group/category conventions, reconciling totals. That knowledge is now baked into a static, cached system prompt + one worked example (`src/lib/quote-import/prompt.ts`). At runtime the model does only the irreducible step: read this PDF, map it to the schema. Everything else is plain code.
+
+#### Consistency levers (why it repeats)
+- Pinned model snapshot `claude-sonnet-4-6` (not an evergreen alias).
+- `temperature: 0`.
+- Structured Outputs: `QUOTE_JSON_SCHEMA` (`schema.ts`) is compiled to a grammar; `category` is an enum so the model can't invent a value.
+- Cached prompt + example (`cache_control: ephemeral`) — written once, read at ~0.1x. Keep `prompt.ts` and `QUOTE_JSON_SCHEMA` byte-stable or the cache re-writes.
+- Human safety net in the UI: reconciliation banner (sum of lines vs printed total) + assumptions list, both reviewed before commit.
+
+#### Wiring decisions
+- **Service client = existing `createAdminClient()`** (`src/lib/supabase-admin.ts`), not the route's inline `createClient(process.env.SUPABASE_URL, …)`. `createAdminClient` reads `NEXT_PUBLIC_SUPABASE_URL`, which is present in Vercel; `SUPABASE_URL` also exists, but using the shared helper keeps one source of truth and removes a url-undefined failure mode. Dropped the inline client + its `createClient` import.
+- **OneDrive upload = existing `uploadFile()`** from `src/lib/microsoft-graph.ts` (the app-only/client-credentials helper already used for drawings/cut-lists). Graph's path-based PUT auto-creates intermediate folders, so no separate folder call. Path matches convention exactly: `Workshop/{job_number}-{job-name-slug}/Quotes/{file}`. Buffer is sliced to a clean `ArrayBuffer` before the call. The browser helper (`onedrive-client.ts`) is deliberately NOT used — wrong context for a service-role route.
+- **`pdf-parse` pinned to `1.1.1`.** `npm i pdf-parse` pulls `2.4.5`, a class-based rewrite that bundles a native `@napi-rs/canvas` binary + pdfjs 5.x — heavier than needed for text-only extraction and a Vercel serverless-bundling risk. `1.1.1` (+ `@types/pdf-parse`) matches the validated route's `(await import("pdf-parse")).default` shape. Watch: `1.1.1`'s top-level debug block reads a test file when `!module.parent`; harmless under Next's dynamic `import()`, but if a deploy ever throws ENOENT on a test PDF, switch the import to `pdf-parse/lib/pdf-parse.js`.
+- **Mounted as an "Import from quote" tab** in the existing New Job modal (`jobs/page.tsx`); modal widened to `max-w-3xl` on that tab for the lines table. Manual tab unchanged.
+- **Component placed as-is** (`AddJobWithQuote.tsx`, neutral Tailwind). Functional; restyle to design tokens is a cosmetic follow-up (backlog).
+
+#### What an import creates (trigger heads-up)
+Inserting the job fires existing automation: the job, an auto **Job Overhead** line (`quote_id` NULL, sequence 0) + its overhead scope item and WO, then the **quote** with lines numbered 1…N, then the quote **PDF** as a job-level `reference` doc in `tbl_wo_documents` (the confirmed AI extraction stored in `extracted_data` as an audit trail). No collision — overhead is sequence 0, imported lines 1…N.
+
+#### Files
+- `src/lib/quote-import/prompt.ts` — canonical cached system prompt + WHPS worked example.
+- `src/lib/quote-import/schema.ts` — `QUOTE_JSON_SCHEMA` (grammar), TS types, Zod re-validation, `reconcile()`.
+- `src/lib/quote-import/README.md` — integration notes.
+- `src/app/api/jobs/import-quote/extract/route.ts` — pdf-parse -> Sonnet -> validated preview + reconciliation (no storage, no DB).
+- `src/app/api/jobs/import-quote/commit/route.ts` — `uploadFile()` to OneDrive + `import_quote()` rpc (atomic).
+- `src/components/jobs/AddJobWithQuote.tsx` — upload -> review -> commit UI.
+- `src/app/(dashboard)/jobs/page.tsx` — Import tab + conditional modal width.
+- `import_quote.function.sql` (repo root) — source of record for the deployed function.
+- `docs/quote-import-extraction-prompt.md` — annotated version of the prompt.
+- deps: `@anthropic-ai/sdk`, `pdf-parse@1.1.1` (+ `@types/pdf-parse`), `zod`.
+
+#### Env
+- `DEFAULT_IMPORT_FREELANCER_ID=5` added to Vercel (Production) — fallback `created_by`/`imported_by`/`uploaded_by` until the route reads the session. `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and the `MICROSOFT_*` Graph creds already existed.
+
+#### Notes / watch
+- `tsc --noEmit` clean.
+- `npm audit`: 4 advisories (2 moderate, 2 high) in `pdf-parse@1.1.1`'s old pdfjs transitive deps. Server-side text extraction only; re-evaluate if the path is exposed or on any version bump.
+- `getCurrentFreelancerId()` still returns the env fallback (per-user attribution is a future wiring point).
+- Scanned/image-only PDFs return 422 from `/extract` (text-only); a document-block fallback is an easy future branch.
 
 ### S54 — Item Note prints on every label (finish → note repurpose) — 29 May 2026
 
