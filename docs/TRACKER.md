@@ -93,6 +93,36 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S54 — Item Note prints on every label (finish → note repurpose) — 29 May 2026
+
+Follow-up to S53. The label feature only printed the per-item finish line when the WO was a PAINT or COVER activity. Mateusz wanted that line on **every** WO so the floor can label which physical board belongs to which set part (e.g. a CUT WO of otherwise-identical MDF tops). Reframed the field from a paint-finish spec into a general free-text **Note**. Pure frontend — no schema change, no DB writes, one deploy.
+
+#### Trigger
+Mateusz, on the table-tops CUT WO screenshot: relabel the job-item "Finish" field to "Note", and print that note on the label regardless of WO activity — *"which board is which set part of — nice and clean."*
+
+#### Decisions
+- **No column rename.** The field is `tbl_job_items.finish_required`. It's read by `rpc_job_handover_data`, `rpc_load_list`, the view `qry_jobitems_withcoverage`, and ~10 frontend files. Renaming (e.g. → `label_note`) means recreating both RPCs — Postgres auto-rewrites dependent **views** on `RENAME COLUMN` but **not** function bodies — plus editing every `.select(...)`/interface. High blast radius for a cosmetic gain, and unlike the S41 `quote_value` drop there's no correctness bug forcing it. Kept the legacy name; documented the repurpose in code + conventions §21.
+- **Relabel "Finish" → "Note" everywhere the field is user-facing, not just the one card** — otherwise it reads "Note" in one place and "Finish" in six. A half-rename is exactly the inconsistency we'd normally sweep away.
+- **Left `notes` (the faint "Add note…" field) alone.** Separate per-item note, doesn't print, overloaded with the `PROMOTE_TO_STOCK` sentinel — not worth touching. The card now carries two notes: prominent **Note** (prints; placeholder "prints on label") and faint **Add note…** (internal).
+- **`finish_relative` untouched** — the WO/scope finish *state* (the "Raw" dropdown) is a different column that also renders under "Finish" labels; left as-is by design.
+
+#### What shipped
+- **Label print gate removed.** `src/app/labels/page.tsx`: the finish line was gated by `isPaintOrCover` in all three render paths (`buildZpl` native ZPL, `generatePdf` fallback, on-screen preview). All three now print whenever `finish_required` is non-empty. Removed the now-dead `isPaintOrCover` state and its activity-lookup derivation (the activities fetch stays — still feeds the toolbar context line). Header/inline comments updated.
+- **"Finish" → "Note" relabels** (6 files): scope card label + placeholder/tooltip; Add-Bespoke-Item form label + placeholder, and the linked-item "Finish:" display; handover items column header; load-list item line (both render paths); traveller items column header.
+
+#### Files
+- `src/app/labels/page.tsx` — gate removed (×3), dead state dropped, comments.
+- `src/app/(dashboard)/jobs/[id]/scope/[scopeId]/page.tsx` — card "Note" + tooltip.
+- `src/components/work-orders-panel.tsx` — bespoke form + linked-item display "Note".
+- `src/app/(dashboard)/reports/handover/[jobId]/page.tsx` — items column "Note".
+- `src/app/(dashboard)/reports/load-list/[jobId]/page.tsx` — item line "Note" (×2).
+- `src/app/traveller/page.tsx` — items column "Note".
+
+#### Notes / watch
+- `tsc --noEmit` clean. No schema change.
+- Flagged to Mateusz: the relabel also hits the **client-facing handover** (left as "Note" pending his call), and the card now shows two note fields.
+- Existing `finish_required` data (paint colours on ~20% of items) now displays under "Note" headings — harmless; a paint colour is a valid note.
+
 ### S53 — Job-item labels for the workshop floor: native ZPL via Zebra Browser Print — 29 May 2026
 
 Built a label-printing path so the painter (and anyone on the floor) can see what a physical item is and pull up its WO. 2×1" labels, one per job item, printed as native ZPL straight to the GT800 — not through the OS print dialog. Several deploys chasing the print path; the throughline is that the browser print dialog cannot drive die-cut label stock, and the printer has to be spoken to in its own language.

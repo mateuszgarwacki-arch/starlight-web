@@ -1,6 +1,7 @@
-feat(labels): cut once after the batch, not per label (S53)
+docs(S54): item-note label change — TRACKER entry + conventions §21
 
-buildZpl now sets ^MMT (tear-off, no cut) on every label except the last,
-and ^MMC on the final label — so a run of N labels prints as one strip
-and the cutter fires once after the last. Single label still cuts (it is
-the last). Per Zebra/Loftware guidance for batch cutting.
+- TRACKER.md: S54 session entry (finish->note repurpose, gate removal,
+  the no-rename decision and its rationale, files, flags).
+- 05_conventions.md §21: label face content + the item Note prints
+  regardless of activity; finish_required repurposed (legacy name);
+  finish_relative is a separate field.
