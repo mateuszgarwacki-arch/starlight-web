@@ -16,6 +16,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Label reprint subset** *(S53)* — `/labels?woId=` prints every job item linked to the WO. After a mid-build scope change you reprint the whole set. Add per-item checkboxes (default all-ticked) so you can reprint just the new/selected items. UI-only — `buildZpl()` and `generatePdf()` already iterate a `labels` array; filter it by selection before they run.
+
 - [ ] **Cost-visibility "Workshop Overhead" card → read from `tbl_overhead_costs`** *(S52, strategic)* — the Review → Cost Visibility page still derives its Workshop Overhead figure from `approved_overhead` **tasks** (task-status aggregation). Since S52, Approve Overhead also writes a labour row into `tbl_overhead_costs`, so the same labour hour now lives in two stores, and the card can't see the *spend* side (consumables/cleaning) at all. End state: point that card at the pool (`qry_overhead_monthly` / `tbl_overhead_costs`), which is the superset (labour + spend), and retire the task-derived calc — single source of truth. Touches the cost-visibility RPC; confirm directors want spend folded into that headline number before building.
 - [ ] **Overhead allocation onto jobs** *(S52, strategic)* — Phase 2 of the overhead pool. Push pooled overhead back onto jobs (e.g. a recovery rate per productive labour hour) to get fully-loaded item cost — the real prize for "are we profitable on this desk." Deliberately deferred until a few months of real `tbl_overhead_costs` data exist to set the recovery rate against; building it now is guessing at the rate. Flat per-hour recovery is the simple starting method; activity-based costing is overkill at this size.
 - [ ] **Overhead spend — receipt upload** *(S52)* — `tbl_overhead_costs.receipt_url` column exists but the entry form has no upload yet (kept Phase 1 lean, avoids the 4.5MB Vercel limit / OneDrive upload-session path). Wire the existing upload-session API if PMs want receipts attached to consumable/cleaning costs.
@@ -90,6 +92,39 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S53 — Job-item labels for the workshop floor: native ZPL via Zebra Browser Print — 29 May 2026
+
+Built a label-printing path so the painter (and anyone on the floor) can see what a physical item is and pull up its WO. 2×1" labels, one per job item, printed as native ZPL straight to the GT800 — not through the OS print dialog. Several deploys chasing the print path; the throughline is that the browser print dialog cannot drive die-cut label stock, and the printer has to be spoken to in its own language.
+
+#### Trigger
+- Painter is "messy with figuring out what he's painting." Idea: stick a small label on each item carrying the item name (human-readable) + a QR to the WO it came from, so identity travels with the physical object.
+
+#### What shipped
+1. **`/labels?woId=` print route + per-WO button.** `PrintLabelsButton` (Tags icon) sits beside the traveller printer on each WO row in `work-orders-panel`. One label per job item linked to the WO via `tbl_jobitem_workorder` (the `.in()` query dedups the no-unique-constraint junction). `quantity` → copies, capped at 30 (a measured-material item over the cap prints one "Qty N" label, not a runaway spool); `k/n` stamped when copies > 1.
+2. **Label face.** `JOB# · WO#`, item `description` (large), QR → `/m/wo/{woId}`, and the finish — but the finish line prints **only** when the WO carries a `PAINT` (lookup 5) or `COVER` (lookup 58) activity and `finish_required` is set. Offline-first by design: the painter's primary need (what + finish) is on the face; the QR is the "show me the drawing" layer, since workshop WiFi isn't guaranteed.
+3. **Native ZPL via Zebra Browser Print** (`lib/zebra.ts`). Browser Print is a local agent that relays raw ZPL to a USB/network Zebra printer, bypassing the OS print dialog. `^PW`/`^LL` (label length → per-label register & advance), native `^BQ` QR, `^FB`-wrapped description. Batch cut: `^MMT` (tear-off, no cut) on every label except the last, `^MMC` on the last → a run prints as one strip, cut once after the final label.
+4. **PDF fallback** (`jspdf`) at the seated 50×25 mm landscape size, for any machine without Browser Print (relies on the driver's own Orientation setting to de-rotate).
+
+#### The print-path journey (why ZPL, not a page)
+- **The browser print dialog is a dead end for die-cut labels.** In a rasterised page (HTML *or* PDF), orientation and seating are coupled: size the page to seat one-per-label (50×25) and the EPL driver rotates the image 90°; rotate it to fix that (25×50 portrait) and the page length no longer matches the 25 mm pitch, so labels drift across boundaries. Chrome won't honour `@page size` for thermal stock either. Native ZPL decouples the two — `^LL` sets the pitch for registration, field positions set orientation, independently.
+- **Browser Print is the cloud→LAN bridge.** The app is on Vercel; the GT800s are network printers shared from `sl-dc02` (`192.168.62.180`/`.181`) — the cloud can't reach a LAN IP. Browser Print runs on the print-station PC and relays. One-time per machine: install + trust the localhost cert by visiting `https://localhost:9101` once (Advanced → proceed). `lib/zebra.ts` tries `https://localhost:9101` first (cert CN is `localhost`).
+- **Hardware specifics.** Driver is `ZDesigner GT800-300dpi EPL` → 300 dpi (ZPL dots = mm × 11.81); QR/text crisp. Printer is in EPL mode but the GT800 auto-senses ZPL per job, so ZPL prints fine. Label feeds with the 50 mm edge across the head (content laid out `^FWN`; if a printer is ever loaded the other way, swap to `^FWR`).
+- **Non-plastic printer auto-selected.** Two GT800s exist (`…Barcode` paper, `…Plastic Barcode` synthetic). The plastic stock isn't loaded; `getPrinter()` picks the first printer whose name doesn't match `/plastic/i`.
+- **No schema change.** `finish_required` already existed on `tbl_job_items` (~20% populated). Giving it a place to print is the point: PMs now have a reason to fill it, and structured finish-per-item-type is exactly the "why" data the estimating goal wants — a small data-quality flywheel.
+
+#### Files
+- `src/app/labels/page.tsx` (new) — print route, on-screen preview, `buildZpl()` (ZPL + batch cut), `generatePdf()` (PDF fallback), QR pre-decoded to an `<img>` so the print click stays inside the user gesture.
+- `src/lib/zebra.ts` (new) — Browser Print client: `resolveBase()` (https-localhost-first endpoint probe), `getPrinter()` (non-plastic selection), `printZpl()`.
+- `src/components/traveller/traveller-preview.tsx` — `PrintLabelsButton`.
+- `src/components/work-orders-panel.tsx` — button mounted on each WO row.
+- deps: `jspdf`, `qrcode`, `@types/qrcode` (`qrcode.react` already present).
+
+#### Known gaps / backlog (added this session)
+- Browser Print is **per print-station** — each PC that prints labels needs the install + one-time cert trust. Documented in conventions §21.
+- Orientation (`^FWN`) and cut mode (`^MMC`, assumes the cutter accessory is fitted) are single-constant knobs — if a printer lacks the cutter, `^MMC` no-ops (prints, no cut) → switch to `^MMT`.
+- Label reprint subset — `/labels` prints **all** items on the WO; a checkbox to reprint only selected/new items after a scope change was discussed but not built.
+- Per-unit traceability — copies are identical bar the `k/n` stamp; unique per-physical-unit identity (scan unit 3 of 6 specifically) isn't modelled. YAGNI until a real case.
 
 ### S52 — Workshop overhead pool + Approve-Overhead wiring + review UX + self-healing timesheet gaps — 28 May 2026
 

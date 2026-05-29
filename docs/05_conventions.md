@@ -450,3 +450,13 @@ Function is `SECURITY DEFINER`, callable by `service_role` only — CI uses the 
 4. Regression test passes.
 
 The action needs the `SUPABASE_DB_URL` repo secret (direct connection URI from Supabase dashboard, **not the pooler**). Add new checks here as conventions evolve — the SQL is purely DO blocks that RAISE on violation, so additions are mechanical.
+
+
+## 21. Label printing — Zebra GT800 via Browser Print (S53)
+
+- **Drive label printers with native ZPL, never the OS/browser print dialog.** For die-cut label stock a rasterised page (HTML or PDF) couples orientation and seating: size the page to seat one-per-label (50×25) and the EPL driver rotates the image 90°; rotate it to fix that (25×50 portrait) and the page length no longer matches the gap pitch, so labels drift. Chrome also ignores `@page size` for thermal stock. Send ZPL: `^PW` (print width), `^LL` (label length = pitch, drives per-label register/advance), `^BQ` (native QR), `^FB` (wrapped text). 300 dpi → dots = mm × 11.81.
+- **Transport = Zebra Browser Print** (`src/lib/zebra.ts`). The app is cloud-hosted (Vercel) and the printers are on the workshop LAN (shared from `sl-dc02`, IPs `192.168.62.180`/`.181`); the cloud can't reach a LAN IP, so a local agent on the print-station PC relays the raw ZPL. Per machine, one-time: install Browser Print, then trust its localhost cert by visiting `https://localhost:9101` once (Advanced → proceed). The client probes `https://localhost:9101` first (cert CN = `localhost`), then 127.0.0.1 / http. `getPrinter()` skips any printer whose name matches `/plastic/i` (the plastic-stock GT800 isn't loaded).
+- **The GT800 is on the EPL driver but auto-senses ZPL per job** — ZPL prints fine without changing the driver. Geometry assumes the 50 mm edge is across the head (`^FWN`); if a printer is loaded the other way, swap to `^FWR`.
+- **Batch cut.** `^MMC` cuts after *every* label; for cut-once-after-a-run set `^MMT` (tear-off, no cut) on all labels except the last and `^MMC` on the last. `^MMC` only does anything if the cutter accessory is fitted — if not, it no-ops (prints, no cut).
+- **Keep a PDF fallback** (`jspdf`) at the seated 50×25 mm landscape size for machines without Browser Print; it relies on the printer driver's own Orientation setting to de-rotate.
+- **The print click must stay synchronous.** Pre-decode the QR to an `<img>`/data-URL on load — an `await` between the click and `window.open`/`send` trips the popup blocker.
