@@ -1,19 +1,14 @@
-feat(labels): generate hard-sized 50x25mm PDF for the GT800 (S53)
+fix(labels): portrait page + 90° rotated content for the GT800 (S53)
 
-Chrome's HTML print won't honour the die-cut label pitch — output
-straddled two physical labels regardless of @page size. Switched the
-"Print labels" button to build a PDF whose pages are exactly 50x25mm
-(landscape) and hand it to the existing ZDesigner GT800 driver, the same
-reliable path MS Access uses. No Browser Print install needed.
+The 50x25mm PDF seated correctly (one label per label — page size was
+right), but printed 90° rotated: the GT800 feeds this stock portrait and
+rotates a landscape page to fit. Now we author a portrait 25x50mm page
+and render each label's landscape content rotated 90° onto a canvas, so
+the page matches the printer's feed and prints upright, reading along the
+50mm edge. Footprint still equals the label, so seating is preserved.
 
-- jspdf + qrcode added; QR pre-rendered to a PNG data URL on load so the
-  print click stays in the user gesture (no popup-blocker trip).
-- One PDF page per physical label: JOB# . WO#, description (bold, wrapped
-  to 3 lines), finish (PAINT/COVER + set only), qty-overflow note, k/n.
-- doc.autoPrint() + open blob → PDF print dialog; user picks GT800 at
-  Actual size.
-- HTML page is now preview-only; dead @media print rotation removed.
-
-Orientation assumes the 50mm edge prints across the head (label reads
-landscape). If the first physical print is 90 deg out, it's a one-line
-flip of the PDF format/rotation — confirming on first print per request.
+- generatePdf now renders via an offscreen canvas (rotated 90° CW) and
+  adds one full-page PNG per label; QR pre-decoded to an <img> so the
+  print click stays in the user gesture.
+- If a print ever comes out 180° (upside down), it's a one-line swap of
+  the canvas rotate direction (noted in code).
