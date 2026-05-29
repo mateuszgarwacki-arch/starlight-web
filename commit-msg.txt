@@ -1,8 +1,10 @@
-fix(labels): revert PDF fallback to seated 50x25 landscape (S53)
+feat(labels): cutter mode (^MMC) + prefer https://localhost:9101 (S53)
 
-The portrait/canvas PDF drifted on the dialog path (page length 50 != 25mm
-pitch). Reverted the PDF fallback to 50x25mm landscape — the size that
-seats one-per-label — and rely on the GT800 driver's own Orientation
-setting to bring it upright. This gives a zero-install path while Browser
-Print (native ZPL, primary button) is set up. QR drawn from the
-pre-decoded <img> via addImage.
+- buildZpl now sends ^MMC so the printer feeds and cuts after each label
+  (requires the cutter accessory fitted — the same one MS Access drives).
+  Dropped ^MNY to avoid overriding the printer's existing gap calibration.
+- zebra.ts tries https://localhost:9101 first (Zebra's documented endpoint
+  for hosted apps; cert CN is "localhost"), then 127.0.0.1 / http variants.
+
+User still needs Browser Print running + a one-time browser trust of
+https://localhost:9101 (accept the localhost cert / allow the site).

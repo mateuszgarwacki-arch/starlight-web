@@ -23,7 +23,15 @@ export interface ZebraDevice {
   version?: number;
 }
 
-const BASES = ["http://127.0.0.1:9100", "https://127.0.0.1:9101"];
+// Zebra's docs point hosted (HTTPS) apps at the https endpoint, and its cert is
+// issued for "localhost" — so try https://localhost:9101 first (cert hostname
+// match), then the 127.0.0.1 / http variants.
+const BASES = [
+  "https://localhost:9101",
+  "https://127.0.0.1:9101",
+  "http://localhost:9100",
+  "http://127.0.0.1:9100",
+];
 
 let cachedBase: string | null = null;
 

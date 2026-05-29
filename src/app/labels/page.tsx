@@ -183,7 +183,7 @@ export default function LabelsPage() {
       const desc = esc(item.description) || "(no description)";
       const showFinish = isPaintOrCover && !!esc(item.finish_required);
       z += "^XA^CI28";
-      z += `^PW${W}^LL${H}^LH0,0^MNY`;
+      z += `^MMC^PW${W}^LL${H}^LH0,0`;   // ^MMC = cut after each label
       z += `^FO${qrX},${qrY}^BQN,2,7^FDMA,${qrUrl}^FS`;
       z += `^FO${PAD},14^A0N,22,22^FDJOB ${jobNumber || "-"}   WO ${woId}^FS`;
       z += `^FO${PAD},46^A0N,40,40^FB${textW},3,2,L^FD${desc}^FS`;
