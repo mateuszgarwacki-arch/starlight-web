@@ -1,26 +1,6 @@
-feat(labels): print to GT800 via Browser Print + native ZPL (S53)
+fix(labels): target the loaded GT800, never the plastic-stock printer (S53)
 
-The print-dialog path can't win here: in a rasterised page, seating and
-orientation are coupled (page sized to seat -> driver rotates 90°; page
-rotated to fix -> length stops matching the 25mm pitch and labels drift).
-It also can't tell the printer the label length / gap registration — the
-"advance per label" that MS Access does via the driver.
-
-So we now send native ZPL straight to the printer through Zebra Browser
-Print (small local agent, bypasses the OS dialog), exactly like the
-native path:
-- lib/zebra.ts: Browser Print client (loopback HTTP API; tries
-  http://127.0.0.1:9100 then https 9101; default printer or first
-  available; clear errors when the agent/printer isn't found).
-- buildZpl(): per-label ^XA..^XZ with ^PW/^LL + ^MNY (gap tracking ->
-  per-label register & advance), native ^BQ QR, ^FB-wrapped description,
-  conditional finish (PAINT/COVER + set), qty-overflow, k/n.
-- "Print to GT800 (Zebra)" is now primary; PDF kept as fallback. Status
-  line surfaces Browser Print errors.
-
-Requires Zebra Browser Print installed on the print PC (free) with the
-GT800 added (by IP) / set as default.
-
-Geometry assumes the 50mm edge is across the head. If the first native
-print is 90° out, flip ^FWN -> ^FWR (one line). EPL driver is in use but
-the GT800 auto-senses language per job, so ZPL should print.
+The ...Plastic Barcode printer isn't loaded. getPrinter() now picks the
+first non-"plastic" printer Browser Print can see, only falling back to
+the default/first if no non-plastic printer exists — so labels always go
+to the normal (paper) GT800 regardless of the Browser Print default.

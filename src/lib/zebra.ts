@@ -42,29 +42,45 @@ async function resolveBase(): Promise<string> {
   );
 }
 
-/** Resolve a printer: the configured default, else the first available printer. */
+/**
+ * Resolve a printer. Prefers a loaded, non-"plastic" GT800 — the plastic-stock
+ * printer (...Plastic Barcode) is not loaded, so we avoid it explicitly rather
+ * than trusting whatever happens to be the Browser Print default.
+ */
 export async function getPrinter(): Promise<ZebraDevice> {
   const base = await resolveBase();
 
+  // Gather every printer Browser Print can see.
+  let printers: ZebraDevice[] = [];
+  try {
+    const r = await fetch(`${base}/available`);
+    if (r.ok) {
+      const list = await r.json();
+      printers = Array.isArray(list) ? list : (list?.printer ?? []);
+    }
+  } catch {
+    /* ignore — handled below */
+  }
+  const usable = printers.filter((p) => p && p.uid);
+  const isPlastic = (p: ZebraDevice) => /plastic/i.test(p.name || "");
+
+  // 1. First non-plastic printer.
+  const preferred = usable.find((p) => !isPlastic(p));
+  if (preferred) return preferred;
+
+  // 2. The configured default, as long as it isn't the plastic one.
   try {
     const r = await fetch(`${base}/default?type=printer`);
     if (r.ok) {
       const d = await r.json();
-      if (d && d.uid) return d as ZebraDevice;
+      if (d && d.uid && !isPlastic(d)) return d as ZebraDevice;
     }
   } catch {
-    /* fall through to /available */
+    /* ignore */
   }
 
-  const r2 = await fetch(`${base}/available`);
-  if (r2.ok) {
-    const list = await r2.json();
-    const printers: ZebraDevice[] = Array.isArray(list)
-      ? list
-      : (list?.printer ?? []);
-    const first = printers.find((p) => p && p.uid);
-    if (first) return first;
-  }
+  // 3. Last resort: anything available.
+  if (usable[0]) return usable[0];
 
   throw new Error(
     "No Zebra printer found. In Browser Print → Settings → Manage, add the GT800 (by IP) and Set it as default."
