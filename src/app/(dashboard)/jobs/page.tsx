@@ -7,6 +7,7 @@ import { DaysRemainingBadge } from "@/components/ui/badges";
 import { Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Job } from "@/lib/types";
+import AddJobWithQuote from "@/components/jobs/AddJobWithQuote";
 
 export default function JobsPage() {
   const supabase = createClient();
@@ -15,6 +16,7 @@ export default function JobsPage() {
   const [showComplete, setShowComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showNewJob, setShowNewJob] = useState(false);
+  const [jobModalTab, setJobModalTab] = useState<"manual" | "import">("manual");
   const [saving, setSaving] = useState(false);
   const [newJob, setNewJob] = useState({
     job_number: "",
@@ -211,13 +213,34 @@ export default function JobsPage() {
       {/* NEW JOB MODAL */}
       {showNewJob && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowNewJob(false)}>
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className={`bg-surface rounded-xl shadow-xl w-full mx-4 ${jobModalTab === "import" ? "max-w-3xl" : "max-w-md"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
               <h2 className="text-lg font-semibold text-navy">New Job</h2>
               <button onClick={() => setShowNewJob(false)} className="p-1 text-muted hover:text-muted rounded">
                 <X className="h-5 w-5" />
               </button>
             </div>
+            <div className="flex gap-1 px-6 pt-3 border-b border-subtle">
+              <button
+                onClick={() => setJobModalTab("manual")}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${jobModalTab === "manual" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-navy"}`}
+              >
+                Manual
+              </button>
+              <button
+                onClick={() => setJobModalTab("import")}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${jobModalTab === "import" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-navy"}`}
+              >
+                Import from quote
+              </button>
+            </div>
+
+            {jobModalTab === "import" ? (
+              <div className="px-6 py-5">
+                <AddJobWithQuote onCreated={(jobId) => { window.location.href = `/jobs/${jobId}`; }} />
+              </div>
+            ) : (
+            <>
             <div className="px-6 py-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">Job Number</label>
@@ -260,6 +283,8 @@ export default function JobsPage() {
                 {saving ? "Creating..." : "Create Job"}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
