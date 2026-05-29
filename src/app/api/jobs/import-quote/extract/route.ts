@@ -24,8 +24,12 @@ export const maxDuration = 60;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 async function pdfToText(buf: Buffer): Promise<string> {
-  // pdf-parse ships its types oddly; this import form works in Node.
-  const pdfParse = (await import("pdf-parse")).default;
+  // Import the lib entry directly, NOT "pdf-parse". The package's index.js runs a debug
+  // block at import time that reads a bundled sample PDF (./test/data/05-versions-space.pdf),
+  // which throws ENOENT under Next's server bundler. lib/pdf-parse.js is the same
+  // implementation without that wrapper.
+  // @ts-ignore — no type declaration for the deep path; identical call shape to the package root.
+  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default as (data: Buffer) => Promise<{ text: string }>;
   const { text } = await pdfParse(buf);
   return text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").trim();
 }
