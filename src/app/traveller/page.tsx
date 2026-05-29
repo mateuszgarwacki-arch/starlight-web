@@ -1023,7 +1023,7 @@ function ScopeOverview({ scope, jobItems, drawingCount, woCount, daysRemaining }
                 <th className="text-left py-1 px-2 font-semibold text-muted w-16">Source</th>
                 <th className="text-left py-1 px-2 font-semibold text-muted">Item</th>
                 <th className="text-right py-1 px-2 font-semibold text-muted w-14">Qty</th>
-                <th className="text-left py-1 px-2 font-semibold text-muted w-24">Finish</th>
+                <th className="text-left py-1 px-2 font-semibold text-muted w-24">Note</th>
               </tr>
             </thead>
             <tbody>

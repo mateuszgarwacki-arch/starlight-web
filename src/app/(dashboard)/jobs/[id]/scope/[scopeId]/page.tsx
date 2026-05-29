@@ -427,7 +427,7 @@ export default function ScopeDetailPage() {
                           }) : <span className="text-[9px] text-faint italic">no WO</span>}
                         </div>
                       </div>
-                      {/* Row 2: Qty + Finish editable */}
+                      {/* Row 2: Qty + Note editable (prints on the item label) */}
                       <div className="flex items-center gap-2 pl-1">
                         <div className="flex items-center gap-1">
                           <label className="text-[9px] text-faint">Qty</label>
@@ -436,10 +436,11 @@ export default function ScopeDetailPage() {
                             className="w-12 px-1.5 py-0.5 text-xs text-center border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface" />
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <label className="text-[9px] text-faint shrink-0">Finish</label>
+                          <label className="text-[9px] text-faint shrink-0">Note</label>
                           <input type="text" key={`fin-${item.item_id}-${item.finish_required}`} defaultValue={item.finish_required || ""}
                             onBlur={e => { const v = e.target.value.trim() || null; woRef.current?.updateJobItem(item.item_id, "finish_required", v); }}
-                            placeholder="—"
+                            placeholder="prints on label"
+                            title="Prints on the item's label — shows on every work order, regardless of activity"
                             className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border border-subtle rounded focus:outline-none focus:ring-1 focus:ring-starlight-blue bg-surface placeholder:text-faint" />
                         </div>
                       </div>

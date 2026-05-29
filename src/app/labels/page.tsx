@@ -6,14 +6,15 @@
  * Launched per-WO from the work-orders panel: /labels?woId=123
  * One label per physical job item linked to the WO (quantity → copies, capped).
  * Each label carries: job # · WO #, the item description (large, human-readable),
- * a finish line (only when the WO is a PAINT or COVER activity and finish_required
- * is set), and a QR to /m/wo/{woId} so a phone camera opens the WO page.
+ * the item Note (printed whenever it is set, regardless of WO activity), and a QR
+ * to /m/wo/{woId} so a phone camera opens the WO page.
  *
- * Offline-first by design: the painter's primary need (what it is + the finish)
+ * Offline-first by design: the painter's primary need (what it is + the note)
  * is printed on the face. The QR is the "show me the drawing" bonus layer, never
  * the only source of truth — the workshop WiFi is not guaranteed.
  *
- * No schema change: finish_required already lives on tbl_job_items.
+ * No schema change: the per-item Note is stored in tbl_job_items.finish_required
+ * (legacy column name — repurposed S54 as a free-text label note).
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -45,7 +46,6 @@ export default function LabelsPage() {
   const [items, setItems] = useState<LabelItem[]>([]);
   const [jobNumber, setJobNumber] = useState("");
   const [activity, setActivity] = useState("");
-  const [isPaintOrCover, setIsPaintOrCover] = useState(false);
   const [origin, setOrigin] = useState("");
   const [qrReady, setQrReady] = useState(false);
   const qrImgRef = useRef<HTMLImageElement | null>(null);
@@ -96,7 +96,7 @@ export default function LabelsPage() {
       setJobNumber((ctx as any)?.job_number || "");
     }
 
-    // 3. Activities → resolve labels → is this a PAINT or COVER WO?
+    // 3. Activities → resolve labels for the toolbar context line.
     const { data: acts } = await supabase
       .from("tbl_wo_activities")
       .select("activity_id, sequence")
@@ -112,10 +112,6 @@ export default function LabelsPage() {
       (lookups || []).forEach((l: any) => { map[l.lookup_id] = l.lookup_value || ""; });
       const ordered = (acts || []).map((a: any) => map[a.activity_id]).filter(Boolean);
       setActivity(ordered.join(" + "));
-      setIsPaintOrCover(ordered.some((v) => {
-        const u = String(v).toUpperCase();
-        return u === "PAINT" || u === "COVER";
-      }));
     }
 
     // 4. Linked job items. The .in() query collapses duplicate junction rows
@@ -181,7 +177,7 @@ export default function LabelsPage() {
     let z = "";
     labels.forEach(({ item, idx, total }, i) => {
       const desc = esc(item.description) || "(no description)";
-      const showFinish = isPaintOrCover && !!esc(item.finish_required);
+      const showFinish = !!esc(item.finish_required);
       // Tear-off (no cut) on every label except the last; cut once after the
       // final label so a batch comes off as a single strip.
       const cutMode = i === labels.length - 1 ? "^MMC" : "^MMT";
@@ -240,7 +236,7 @@ export default function LabelsPage() {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
-      if (isPaintOrCover && item.finish_required && item.finish_required.trim() !== "") {
+      if (item.finish_required && item.finish_required.trim() !== "") {
         doc.text((doc.splitTextToSize(item.finish_required, textW) as string[])[0], PAD, y);
         y += 3.2;
       }
@@ -317,7 +313,7 @@ export default function LabelsPage() {
               <div className="label-left">
                 <div className="label-meta">JOB {jobNumber || "—"} · WO {woId}</div>
                 <div className="label-name">{item.description || "(no description)"}</div>
-                {isPaintOrCover && item.finish_required && item.finish_required.trim() !== "" && (
+                {item.finish_required && item.finish_required.trim() !== "" && (
                   <div className="label-finish">{item.finish_required}</div>
                 )}
                 {item.qtyOverflow && (

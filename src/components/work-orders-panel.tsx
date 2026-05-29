@@ -715,7 +715,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-navy font-medium truncate">{item.description || "Untitled"}</p>
-                      {item.finish_required && <p className="text-[10px] text-muted">Finish: {item.finish_required}</p>}
+                      {item.finish_required && <p className="text-[10px] text-muted">Note: {item.finish_required}</p>}
                     </div>
                     <div className="shrink-0 w-14 text-center">
                       <input type="number" value={item.quantity ?? ""} min={1}
@@ -1127,7 +1127,7 @@ export const WorkOrdersPanel = forwardRef<WorkOrdersPanelRef, WorkOrdersPanelPro
                 <div><label className="block text-xs font-medium text-muted mb-1">Description *</label><textarea value={bespokeForm.description} onChange={e => setBespokeForm({ ...bespokeForm, description: e.target.value })} rows={3} placeholder="Describe what needs to be built..." className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue resize-none" autoFocus /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-xs font-medium text-muted mb-1">Quantity</label><input type="number" value={bespokeForm.quantity} min={1} onChange={e => setBespokeForm({ ...bespokeForm, quantity: e.target.value })} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
-                  <div><label className="block text-xs font-medium text-muted mb-1">Finish</label><input type="text" value={bespokeForm.finish_required} onChange={e => setBespokeForm({ ...bespokeForm, finish_required: e.target.value })} placeholder="Paint colour..." className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
+                  <div><label className="block text-xs font-medium text-muted mb-1">Note</label><input type="text" value={bespokeForm.finish_required} onChange={e => setBespokeForm({ ...bespokeForm, finish_required: e.target.value })} placeholder="prints on label" title="Prints on the item's label" className="w-full px-3 py-2 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue" /></div>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1"><input type="checkbox" checked={bespokeForm.promote_to_stock} onChange={e => setBespokeForm({ ...bespokeForm, promote_to_stock: e.target.checked })} className="rounded border-subtle text-starlight-green focus:ring-starlight-green" />Also add to stock catalogue</label>
               </div>

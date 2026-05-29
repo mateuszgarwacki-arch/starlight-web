@@ -451,7 +451,7 @@ export default function LoadListPage() {
                               </p>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[10px] text-muted">
                                 {item.stock_reference && <span className="font-mono">#{item.stock_reference}</span>}
-                                {item.finish_required && <span>Finish: {item.finish_required}</span>}
+                                {item.finish_required && <span>Note: {item.finish_required}</span>}
                                 {isLoose && <span className="italic">Loose material</span>}
                                 {item.item_source === "stock" && <span className="italic">From stock</span>}
                                 {item.item_source === "bespoke" && <span className="italic">Bespoke build</span>}
@@ -551,7 +551,7 @@ export default function LoadListPage() {
                                 <p className="font-medium text-navy">{item.description || "Untitled"}</p>
                                 <div className="flex flex-wrap gap-x-3 text-[10px] text-muted mt-0.5">
                                   {item.stock_reference && <span className="font-mono">#{item.stock_reference}</span>}
-                                  {item.finish_required && <span>Finish: {item.finish_required}</span>}
+                                  {item.finish_required && <span>Note: {item.finish_required}</span>}
                                   {item.item_source === "stock" && <span>From stock</span>}
                                   {item.item_source === "bespoke" && <span>Bespoke</span>}
                                   {item.source_table === "tbl_wo_bom" && <span>Loose material</span>}

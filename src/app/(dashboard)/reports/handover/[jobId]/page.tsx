@@ -495,7 +495,7 @@ function ScopeBlock({
                 <th className="py-1">Description</th>
                 <th className="w-20 py-1 text-right">Qty</th>
                 <th className="w-2 py-1"></th>
-                <th className="w-24 py-1">Finish</th>
+                <th className="w-24 py-1">Note</th>
                 <th className="w-24 py-1">WO</th>
               </tr>
             </thead>
