@@ -97,6 +97,30 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S56 — Cut plan packs multiple materials per page (paper-waste fix) — 31 May 2026
+
+The suggested cut plan put each stock material on its own A4. On WHPS WO-226 (corkboard) that meant four cut-plan pages, two of them ~95% blank — the timber bins are ~6mm-tall bars on a ~250mm page. Mateusz: *"mix different stock on the page."*
+
+#### The distinction that drove the fix
+Two kinds of waste: **nesting waste** (the `27%`/`17%` offcut on the diagrams — real, and NOT fixable by mixing, because different cross-sections/thicknesses are different physical stock and can't share a cut) and **page waste** (one material per A4 regardless of fill). This was purely the latter — a print-layout problem, not a packing problem.
+
+#### What changed
+- **`buildCutPlanPages()` (`src/lib/cut-layout.ts`)** rewritten from one-chunk-per-material to a **greedy height-aware packer**. Each material's diagram is broken into row units — sheet patterns paired for the 2-up grid, or single timber bins — each tagged with an estimated mm height that keys off the **sheet aspect ratio** (so portrait stock is budgeted correctly, not assumed landscape). Row units fill page buckets up to a conservative `PAGE_BUDGET_MM = 225` (usable content ~247mm → ~20mm slack). A material taller than a page slices across pages with the header repeated (`(cont.)`); the packer then fills the last slice's leftover with the next material.
+- **`CutPlanPageChunk` shape changed** from `{ material, patterns|bins, … }` (one material) to `{ isFirst, blocks: CutPlanBlock[] }` (one page, many materials). New exported `CutPlanBlock` type.
+- **`CutPlanPage` (`src/components/cut-layout-renderer.tsx`)** now maps over `chunk.blocks`. Each block is `break-inside-avoid`, so if the height estimate runs short the page breaks cleanly **between** materials, never mid-diagram.
+
+#### Result
+WHPS cut plan 4 pages → 1; packet ~10 → 7.
+
+#### Blast radius
+Only `buildCutPlanPages` + `CutPlanPage` + the chunk type. The live BOM-extractor preview uses the separate unpaginated path (`CutPlanSection`/`MaterialCutPlan`) — untouched. The traveller page loop and `totalPages` math are shape-agnostic (they count `cutPlanChunks.length`), so fewer chunks → fewer printed pages automatically.
+
+#### Notes / watch
+- Removed the old fixed caps `PATTERNS_PER_PAGE = 10` / `BINS_PER_PAGE = 25` — the height budget supersedes them, and it incidentally fixes a latent bug where 10 portrait patterns overflowed a single page under the old layout.
+- Pattern index badges restart at 1 per block (matches prior per-chunk behaviour; a split material's continuation page renumbers from 1).
+- The height model is an **estimate**. If a real packet ever overflows the page border on a device, lower `PAGE_BUDGET_MM`. Each block being `break-inside-avoid` means the failure mode is a wasted gap, not a clipped diagram.
+- `tsc --noEmit` clean; `next build` clean. Frontend-only — no schema change.
+
 ### S55 — Automated quote import (PDF -> AI extract -> review -> atomic insert) — 29 May 2026
 
 Wired the "add a new job from a quote PDF" feature. Upload a quote in the New Job modal, Sonnet extracts it into the Starlight schema (one job + one quote header + many lines), the PM reviews/edits the pre-filled fields, then commit saves the PDF to OneDrive and inserts everything in one transaction via `import_quote()`. Same result as the hand-done job-13812 import, on a button. The `import_quote()` Postgres function was already deployed and verified end-to-end in a prior session; this session placed the front-end + two API routes + supporting lib and closed the two `ADAPT:` wiring points.

@@ -543,16 +543,25 @@ export function parseSheetSize(sizeStr?: string | null): { w: number; h: number 
 /* ============================================================
    Page chunking for traveller print
 
-   One <Page> per chunk so totalPages and printed page count agree.
-   Chunks slice a material's PATTERNS (not raw sheets) — typically far
-   fewer than sheets, so the cut plan is compact.
+   Each printed page packs as MANY materials as fit by estimated
+   height (mm), instead of one material per page — small timber bins
+   and single-sheet plans no longer each burn a whole A4. A material
+   taller than one page is sliced across pages (header repeated with
+   "(cont.)"); the cross-material packer then fills the leftover space
+   on the last slice's page with the next material. Heights key off
+   the sheet aspect ratio, so portrait stock is budgeted correctly.
+   Each block keeps break-inside-avoid in the renderer, so any estimate
+   miss breaks cleanly between materials, never mid-diagram.
+
+   One <Page> wrapper per chunk so totalPages stays honest.
    ============================================================ */
 
-export interface CutPlanPageChunk {
-  /** True on the first chunk of the whole cut plan — render section preamble. */
-  isFirst: boolean;
+/** One material's renderable unit on a page (a whole material, or a slice of an oversized one). */
+export interface CutPlanBlock {
   material: string;
   materialDetail: string;
+  /** True when this is a continuation slice of a material split across pages. */
+  isContinuation?: boolean;
   anomalies?: string[];
   /* Sheet payload */
   patterns?: SheetPattern[];
@@ -563,57 +572,131 @@ export interface CutPlanPageChunk {
   bins?: LengthBin[];
 }
 
-const PATTERNS_PER_PAGE = 10;
-const BINS_PER_PAGE = 25;
+/** One printed page of the cut plan — one or more material blocks. */
+export interface CutPlanPageChunk {
+  /** True on the first page of the whole cut plan — render the section preamble. */
+  isFirst: boolean;
+  blocks: CutPlanBlock[];
+}
+
+/* Height model (mm) for greedy page packing. Conservative: usable content
+   height is ~247mm; budgeting 225 leaves ~20mm slack for render variance. */
+const PAGE_BUDGET_MM = 225;
+const PREAMBLE_MM = 9;        // section heading (first page only)
+const BLOCK_HEADER_MM = 6;    // material name + detail line
+const BLOCK_GAP_MM = 3;       // space-y-2 between blocks
+const ANOMALY_MM = 4;         // per amber warning line
+const PATTERN_CELL_W_MM = 88; // 2-up grid cell width (max-w-[88mm])
+const PATTERN_CAPTION_MM = 5; // per pattern-row: caption + grid gap
+const BIN_ROW_MM = 11;        // per timber bin: caption + 6mm bar + margin
+
+interface RowUnit { h: number; patterns?: SheetPattern[]; bin?: LengthBin; }
+
+/** Height-tagged row units for one material: pairs of sheet patterns (2-up) or single timber bins. */
+function rowUnitsFor(s: MaterialSummary): RowUnit[] {
+  if (s.patterns && s.patterns.length > 0) {
+    const svgH = PATTERN_CELL_W_MM * ((s.sheetH || 1220) / (s.sheetW || 2440));
+    const rowH = svgH + PATTERN_CAPTION_MM;
+    const units: RowUnit[] = [];
+    for (let i = 0; i < s.patterns.length; i += 2) {
+      units.push({ h: rowH, patterns: s.patterns.slice(i, i + 2) });
+    }
+    return units;
+  }
+  if (s.length_bins && s.length_bins.length > 0) {
+    return s.length_bins.map(bin => ({ h: BIN_ROW_MM, bin }));
+  }
+  return [];
+}
+
+function sheetDetailStr(s: MaterialSummary): string {
+  const n = s.patterns?.length || 0;
+  const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
+  const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
+  const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
+  const patStr = `${n} pattern${n === 1 ? "" : "s"}`;
+  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${patStr}${passStr}${stackStr}${wasteStr}`;
+}
 
 export function buildCutPlanPages(summaries: MaterialSummary[]): CutPlanPageChunk[] {
-  const chunks: CutPlanPageChunk[] = [];
-  let isFirst = true;
+  const pages: CutPlanPageChunk[] = [];
+  let curBlocks: CutPlanBlock[] = [];
+  let curHeight = PREAMBLE_MM; // first page carries the section heading
+
+  const flush = () => {
+    if (curBlocks.length === 0) return;
+    pages.push({ isFirst: pages.length === 0, blocks: curBlocks });
+    curBlocks = [];
+    curHeight = 0; // preamble height only applies to the first page
+  };
 
   for (const s of summaries) {
-    const hasPatterns = !!(s.patterns && s.patterns.length > 0);
-    const hasLengths = !!(s.length_bins && s.length_bins.length > 0);
-    if (!hasPatterns && !hasLengths) continue;
+    const isSheet = !!(s.patterns && s.patterns.length > 0);
+    const isTimber = !isSheet && !!(s.length_bins && s.length_bins.length > 0);
+    if (!isSheet && !isTimber) continue;
 
-    if (hasPatterns) {
-      const patterns = s.patterns!;
-      const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
-      const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
-      const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
-      const patStr = `${patterns.length} pattern${patterns.length === 1 ? "" : "s"}`;
-      const detail = `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${patStr}${passStr}${stackStr}${wasteStr}`;
+    const units = rowUnitsFor(s);
+    if (units.length === 0) continue;
 
-      for (let i = 0; i < patterns.length; i += PATTERNS_PER_PAGE) {
-        chunks.push({
-          isFirst: isFirst && i === 0,
-          material: s.material,
-          materialDetail: detail,
-          anomalies: i === 0 ? s.anomalies : undefined,
-          patterns: patterns.slice(i, i + PATTERNS_PER_PAGE),
-          sheetW: s.sheetW,
-          sheetH: s.sheetH,
-          squaring: s.squaring_mm,
-        });
-        isFirst = false;
+    const detail = isSheet
+      ? sheetDetailStr(s)
+      : `${s.lengths_needed} × ${s.standard_length_mm}mm${s.waste_pct != null ? ` · ${s.waste_pct}% waste` : ""}`;
+
+    let i = 0;
+    let matFirst = true;
+    while (i < units.length) {
+      const anomalies = matFirst ? s.anomalies : undefined;
+      const anomalyH = anomalies && anomalies.length > 0 ? anomalies.length * ANOMALY_MM : 0;
+      const headerH = BLOCK_HEADER_MM + anomalyH;
+      const gap = curBlocks.length > 0 ? BLOCK_GAP_MM : 0;
+
+      // If header + first row can't fit on the current (non-empty) page, wrap.
+      if (curBlocks.length > 0 && curHeight + gap + headerH + units[i].h > PAGE_BUDGET_MM) {
+        flush();
       }
-    }
 
-    if (hasLengths) {
-      const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
-      const detail = `${s.lengths_needed} × ${s.standard_length_mm}mm${wasteStr}`;
-      const bins = s.length_bins!;
-      for (let i = 0; i < bins.length; i += BINS_PER_PAGE) {
-        chunks.push({
-          isFirst: isFirst && i === 0,
-          material: s.material,
-          materialDetail: detail,
-          anomalies: i === 0 ? s.anomalies : undefined,
-          bins: bins.slice(i, i + BINS_PER_PAGE),
-        });
-        isFirst = false;
+      curHeight += (curBlocks.length > 0 ? BLOCK_GAP_MM : 0) + headerH;
+
+      const taken: RowUnit[] = [];
+      while (i < units.length && curHeight + units[i].h <= PAGE_BUDGET_MM) {
+        taken.push(units[i]);
+        curHeight += units[i].h;
+        i++;
       }
+      // Guarantee progress: a single row taller than the whole budget still
+      // gets placed (it owns its page; we accept the overflow, as before).
+      if (taken.length === 0) {
+        taken.push(units[i]);
+        curHeight += units[i].h;
+        i++;
+      }
+
+      const block: CutPlanBlock = isSheet
+        ? {
+            material: s.material,
+            materialDetail: detail,
+            isContinuation: !matFirst,
+            anomalies,
+            patterns: taken.flatMap(u => u.patterns!),
+            sheetW: s.sheetW,
+            sheetH: s.sheetH,
+            squaring: s.squaring_mm,
+          }
+        : {
+            material: s.material,
+            materialDetail: detail,
+            isContinuation: !matFirst,
+            anomalies,
+            bins: taken.map(u => u.bin!),
+          };
+      curBlocks.push(block);
+      matFirst = false;
+
+      // More rows of this material remain → they spill to a fresh page.
+      if (i < units.length) flush();
     }
   }
 
-  return chunks;
+  flush();
+  return pages;
 }

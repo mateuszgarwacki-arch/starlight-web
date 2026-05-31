@@ -1,7 +1,20 @@
-docs(S54): item-note label change — TRACKER entry + conventions §21
+feat(S56): cut plan packs multiple materials per page
 
-- TRACKER.md: S54 session entry (finish->note repurpose, gate removal,
-  the no-rename decision and its rationale, files, flags).
-- 05_conventions.md §21: label face content + the item Note prints
-  regardless of activity; finish_required repurposed (legacy name);
-  finish_relative is a separate field.
+Traveller cut plan put each stock material on its own A4, so a
+4-material job printed 4 pages — timber bins are ~6mm bars on a ~250mm
+page. Replace one-chunk-per-material with a greedy height-aware packer
+that fills each page with as many materials as fit.
+
+- buildCutPlanPages: rewritten to estimate each material's printed
+  height (sheet rows key off aspect ratio, timber bins fixed) and pack
+  row units into pages up to a conservative 225mm budget. Oversized
+  materials slice across pages with header repeated ("(cont.)").
+- CutPlanPageChunk now { isFirst, blocks: CutPlanBlock[] } (one page,
+  many materials) instead of one material per chunk. New CutPlanBlock.
+- CutPlanPage maps over chunk.blocks; each block break-inside-avoid so
+  an estimate miss breaks between materials, never mid-diagram.
+- Removed fixed caps PATTERNS_PER_PAGE/BINS_PER_PAGE (height budget
+  supersedes; also fixes latent portrait-sheet overflow).
+
+WHPS cut plan 4 pages -> 1. Live BOM-extractor preview untouched
+(separate unpaginated path). tsc + next build clean. docs(S56) in TRACKER.

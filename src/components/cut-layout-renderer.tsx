@@ -250,9 +250,11 @@ export function CutPlanSection({
 }
 
 /**
- * Renders one cut plan chunk on the traveller — fits one printed page.
- * The traveller renders one <Page> wrapper per chunk so each gets full
- * header/footer chrome.
+ * Renders one cut plan page on the traveller — one or more material blocks
+ * packed by buildCutPlanPages() to fill the page. The traveller renders one
+ * <Page> wrapper per chunk so each gets full header/footer chrome. Each block
+ * is break-inside-avoid, so if the height estimate runs short the page breaks
+ * cleanly between materials, never mid-diagram.
  */
 export function CutPlanPage({
   chunk, compact = true,
@@ -270,37 +272,42 @@ export function CutPlanPage({
           </span>
         </p>
       )}
-      <p className="text-[8pt] font-semibold text-foreground">
-        {chunk.material} — {chunk.materialDetail}
-      </p>
-      {chunk.anomalies && chunk.anomalies.length > 0 && (
-        <div>
-          {chunk.anomalies.map((a, i) => (
-            <p key={i} className="text-[8pt] text-starlight-amber">⚠ {a}</p>
-          ))}
+      {chunk.blocks.map((block, bi) => (
+        <div key={bi} className="break-inside-avoid">
+          <p className="text-[8pt] font-semibold text-foreground">
+            {block.material} — {block.materialDetail}
+            {block.isContinuation ? " (cont.)" : ""}
+          </p>
+          {block.anomalies && block.anomalies.length > 0 && (
+            <div>
+              {block.anomalies.map((a, i) => (
+                <p key={i} className="text-[8pt] text-starlight-amber">⚠ {a}</p>
+              ))}
+            </div>
+          )}
+          {block.patterns && block.sheetW && block.sheetH && (
+            <div className={compact ? "grid grid-cols-2 gap-2 mt-1" : "space-y-2 mt-1"}>
+              {block.patterns.map((pat, i) => (
+                <PatternLayout
+                  key={i}
+                  pattern={pat}
+                  sheetW={block.sheetW!}
+                  sheetH={block.sheetH!}
+                  index={i + 1}
+                  compact={compact}
+                />
+              ))}
+            </div>
+          )}
+          {block.bins && (
+            <div className="space-y-1 mt-1">
+              {block.bins.map(bin => (
+                <LengthBinRow key={bin.stockIdx} bin={bin} />
+              ))}
+            </div>
+          )}
         </div>
-      )}
-      {chunk.patterns && chunk.sheetW && chunk.sheetH && (
-        <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
-          {chunk.patterns.map((pat, i) => (
-            <PatternLayout
-              key={i}
-              pattern={pat}
-              sheetW={chunk.sheetW!}
-              sheetH={chunk.sheetH!}
-              index={i + 1}
-              compact={compact}
-            />
-          ))}
-        </div>
-      )}
-      {chunk.bins && (
-        <div className="space-y-1">
-          {chunk.bins.map(bin => (
-            <LengthBinRow key={bin.stockIdx} bin={bin} />
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
