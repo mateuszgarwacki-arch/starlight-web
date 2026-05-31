@@ -213,14 +213,14 @@ export default function JobsPage() {
       {/* NEW JOB MODAL */}
       {showNewJob && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowNewJob(false)}>
-          <div className={`bg-surface rounded-xl shadow-xl w-full mx-4 ${jobModalTab === "import" ? "max-w-3xl" : "max-w-md"}`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
+          <div className={`bg-surface rounded-xl shadow-xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden ${jobModalTab === "import" ? "max-w-3xl" : "max-w-md"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-subtle shrink-0">
               <h2 className="text-lg font-semibold text-navy">New Job</h2>
               <button onClick={() => setShowNewJob(false)} className="p-1 text-muted hover:text-muted rounded">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="flex gap-1 px-6 pt-3 border-b border-subtle">
+            <div className="flex gap-1 px-6 pt-3 border-b border-subtle shrink-0">
               <button
                 onClick={() => setJobModalTab("manual")}
                 className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${jobModalTab === "manual" ? "border-starlight-red text-navy" : "border-transparent text-muted hover:text-navy"}`}
@@ -236,12 +236,12 @@ export default function JobsPage() {
             </div>
 
             {jobModalTab === "import" ? (
-              <div className="px-6 py-5">
+              <div className="px-6 py-5 overflow-y-auto min-h-0">
                 <AddJobWithQuote onCreated={(jobId) => { window.location.href = `/jobs/${jobId}`; }} />
               </div>
             ) : (
             <>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto min-h-0">
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">Job Number</label>
                 <input type="text" value={newJob.job_number} onChange={(e) => setNewJob({ ...newJob, job_number: e.target.value })}
@@ -273,7 +273,7 @@ export default function JobsPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3 shrink-0">
               <button onClick={() => setShowNewJob(false)}
                 className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors">
                 Cancel

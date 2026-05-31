@@ -97,6 +97,12 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S56b — New Job modal scrollable (quote-import review fix) — 31 May 2026
+
+Follow-up to S55. The New Job modal (`src/app/(dashboard)/jobs/page.tsx`) had no height cap and no internal scroll: the box was vertically centred in a `fixed inset-0 flex items-center justify-center` overlay, so a tall import-review (many extracted quote lines) grew past the viewport and clipped top **and** bottom off-screen — the "Create job & save quote" button at the bottom of the flowing content was unreachable.
+
+Fix: modal box → `max-h-[90vh] flex flex-col overflow-hidden`; header, tab bar, and the manual-tab footer → `shrink-0`; both tab bodies (import `<AddJobWithQuote>` wrapper and the manual fields block) → `overflow-y-auto min-h-0` so only the body scrolls while chrome stays pinned. Applies to both tabs; short content still renders a short modal (flex-col + max-h doesn't force full height). `AddJobWithQuote` itself unchanged — it always flowed correctly; the constraint was missing on the wrapper. `next build` clean.
+
 ### S56 — Cut plan packs multiple materials per page (paper-waste fix) — 31 May 2026
 
 The suggested cut plan put each stock material on its own A4. On WHPS WO-226 (corkboard) that meant four cut-plan pages, two of them ~95% blank — the timber bins are ~6mm-tall bars on a ~250mm page. Mateusz: *"mix different stock on the page."*

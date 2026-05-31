@@ -1,20 +1,13 @@
-feat(S56): cut plan packs multiple materials per page
+fix(S56b): make New Job modal scrollable (quote-import review)
 
-Traveller cut plan put each stock material on its own A4, so a
-4-material job printed 4 pages — timber bins are ~6mm bars on a ~250mm
-page. Replace one-chunk-per-material with a greedy height-aware packer
-that fills each page with as many materials as fit.
+The New Job modal box had no height cap and no internal scroll, and was
+vertically centred in a fixed inset-0 overlay. A tall import-review (many
+extracted quote lines) overflowed the viewport top and bottom, putting the
+"Create job & save quote" button out of reach.
 
-- buildCutPlanPages: rewritten to estimate each material's printed
-  height (sheet rows key off aspect ratio, timber bins fixed) and pack
-  row units into pages up to a conservative 225mm budget. Oversized
-  materials slice across pages with header repeated ("(cont.)").
-- CutPlanPageChunk now { isFirst, blocks: CutPlanBlock[] } (one page,
-  many materials) instead of one material per chunk. New CutPlanBlock.
-- CutPlanPage maps over chunk.blocks; each block break-inside-avoid so
-  an estimate miss breaks between materials, never mid-diagram.
-- Removed fixed caps PATTERNS_PER_PAGE/BINS_PER_PAGE (height budget
-  supersedes; also fixes latent portrait-sheet overflow).
+- modal box -> max-h-[90vh] flex flex-col overflow-hidden
+- header, tab bar, manual-tab footer -> shrink-0 (pinned)
+- import body + manual fields body -> overflow-y-auto min-h-0 (only body scrolls)
 
-WHPS cut plan 4 pages -> 1. Live BOM-extractor preview untouched
-(separate unpaginated path). tsc + next build clean. docs(S56) in TRACKER.
+Applies to both tabs; short content still renders a short modal.
+AddJobWithQuote unchanged. next build clean. docs(S56b) in TRACKER.
