@@ -16,6 +16,8 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ### Features deferred
 
+- [ ] **Cut plan — per-part squaring for mixed sheets** *(S57)* — `require_square` is a WO-level toggle in `cut_settings` (all parts on the WO are squared or not). A WO carrying both finish panels (need square) *and* rough rips on the **same** sheet can't express that today. Per-part would mean: partition parts by a per-part `requires_square`, pack square parts into squared bins and rough into full bins (square parts can't use a full-sheet region; rough can backfill either), and promote `squaring_mm` from per-material to per-pattern in `MaterialSummary` + the renderer, plus a per-line toggle in the extractor. Bigger blast radius for a rare case — the WO toggle covers the common "whole job is rips" case. Build when a real mixed sheet appears.
+
 - [ ] **Quote import — per-user attribution** *(S55)* — `getCurrentFreelancerId()` in the commit route returns `DEFAULT_IMPORT_FREELANCER_ID` (=5, Mateusz). Resolve the signed-in user instead (look up `tbl_freelancers` by authed email, or thread `get_my_freelancer_id()` through) so `created_by`/`imported_by`/`uploaded_by` reflect who actually imported. Low urgency while Mateusz is the sole importer.
 - [ ] **Quote import — scanned/image-PDF fallback** *(S55)* — `/extract` returns 422 when `pdf-parse` finds no text (scanned/image-only PDF). Quoting software emits text PDFs, so this is the rare path. When needed, add a branch that sends the PDF itself as a document block to the same model + schema (higher token cost, pages rasterised).
 - [ ] **Quote import — batch backfill of historical quotes** *(S55, strategic)* — run the same `/extract` logic through the Batch API (50% cheaper, async <24h) to import a stack of old quotes, skipping the review UI or queuing them for bulk review. Feeds the AI-estimating foundation. Same prompt, same schema.
@@ -96,6 +98,38 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S57 — Cut plan: optional squaring for full-sheet rips + kerf boundary fix — 1 Jun 2026
+
+A WO needed 12 rips at 2440×300 — full sheet length, and they don't need to be square. The suggested cut plan returned nothing for them: the S51 "usable area" model hard-trims 5mm of squaring off every sheet (2440×1220 → 2435×1215), and a 2440 part can't fit a 2435 length. Frontend-only; no schema change; one deploy.
+
+#### The diagnosis — two allowances were conflated
+The 2435×1215 usable area bundled two physically distinct losses into one number:
+- **Kerf** — material the blade turns to dust, on *every* cut. Already modelled (4mm).
+- **Squaring** — material sacrificed to true the factory edges so parts come out *square*. Only applies when the part actually needs to be square. It's a property of the part/job, not the sheet.
+
+A full-length rip rides the factory edge and needs no squaring trim, so squaring had to become conditional rather than a universal sheet haircut.
+
+#### Decisions
+- **WO-level toggle, not per-part (for now).** New `require_square` in `cut_settings` (default true). Off → use the full sheet / stock length. `squaring_mm` is a single per-material field in `MaterialSummary` and a rip job is all-or-nothing, so a WO toggle is the right granularity with zero new floor data-entry. Per-part mixing (square + rough on the same sheet) would need partitioned packing + per-pattern squaring — deferred (backlog). Same minimal-blast-radius instinct as S51/S54.
+- **Trailing kerf must not reject a part.** Turning squaring off alone does *not* fix the rip: kerf is added to every part's footprint (`w+kerf`, `h+kerf`), so a 2440 part becomes 2444 and won't fit even a full 2440 sheet. But kerf is the gap *between* cuts — a part's trailing edge sits against the sheet/offcut boundary, which is itself a cut, with no neighbour to clear. `guillotinePack` now fit-tests TRUE size and clamps the kerf reservation to the rect edge. This is the physically correct kerf model and it's **monotonic** — it can only pack tighter, never add sheets.
+- **No phantom empty sheets.** Genuinely-oversize parts previously left an empty sheet behind (the fresh-sheet branch pushed unconditionally, even when the part didn't place). Now the sheet is pushed only if the part places; otherwise it's skipped and surfaced by the existing oversize anomaly.
+
+#### What shipped
+- **`src/lib/cut-layout.ts`** — `CutSettings.require_square` (default true) threaded through `resolveCutSettings`. `sheetLayoutFields` / `timberLayoutFields` use `squaring = require_square === false ? 0 : squaring_mm`. Oversize anomaly check now tests TRUE size (matches the packer; kerf no longer counted against fit), with a "full sheet, no squaring" note when off. `guillotinePack` rewritten per above (true-size fit, footprint clamped to rect, no phantom sheet).
+- **`src/components/cutlist-extractor.tsx`** — "Parts need squaring (true factory edges)" checkbox in the cut-settings gear panel; squaring input dims/disables when off; `isDefault` detection updated so `require_square:false` persists (stored, not collapsed to NULL).
+- **Traveller** — inherits via the existing `tbl_work_orders.cut_settings` JSONB → `resolveCutSettings`. No change.
+
+#### Offline verification (real data, before deploy — packer core changed)
+Transpiled the patched lib and ran it directly:
+- **Rip (12× 2440×300 on a 2440×1220 sheet).** Square ON: 0 sheets + clean anomaly (can't be squared on this stock), no phantom sheets. Square OFF: **3 sheets, 1 pattern, 2 passes, 2% waste** — the fix.
+- **doc 428 regression** (the OSB+ply nest S51 was verified against). 9mm ply = **5 sheets** (S51: 5 — identical). 18mm OSB = **34 sheets** (S51 recorded **35**). The one-sheet drop is the trailing-kerf correction recovering the kerf-width that was being wasted at each sheet edge — expected, monotonic, **not a regression**. Waste 16% → 13% accordingly.
+- `tsc --noEmit` clean.
+
+#### Notes / watch
+- **The S51-recorded 35 sheets for doc 428 is now 34.** Don't read it as a regression — it's the corrected kerf model. For the same parts, any cut-plan figure will be ≤ the old value.
+- `cut_settings` JSONB gains a key (`require_square`); `tbl_work_orders.cut_settings` is still a nullable JSONB at the schema level, so `03_database_schema.md` is unchanged.
+- A part that needs square **and** is full-sheet-length is physically impossible from nominal stock — it shows as an oversize anomaly with squaring on (correct). The fix for that job is to turn squaring off (factory edge) or buy oversize stock.
 
 ### S56b — New Job modal scrollable (quote-import review fix) — 31 May 2026
 
