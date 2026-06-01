@@ -209,6 +209,7 @@ export function CutListExtractor({
     const isDefault =
       draftSettings.kerf_mm === DEFAULT_CUT_SETTINGS.kerf_mm &&
       draftSettings.squaring_mm === DEFAULT_CUT_SETTINGS.squaring_mm &&
+      draftSettings.require_square !== false &&
       noOverrides;
     const toStore = isDefault ? null : draftSettings;
     const ctx = await getAuditContext(supabase);
@@ -544,15 +545,31 @@ export function CutListExtractor({
                       className="w-20 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface"
                     />
                   </label>
-                  <label className="text-[10px] text-muted flex flex-col gap-0.5">
+                  <label className={"text-[10px] flex flex-col gap-0.5 " + (draftSettings.require_square === false ? "text-faint" : "text-muted")}>
                     Squaring (mm)
                     <input
                       type="number" step="0.5" min="0"
                       value={draftSettings.squaring_mm}
+                      disabled={draftSettings.require_square === false}
                       onChange={e => setDraftSettings(s => ({ ...s, squaring_mm: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface"
+                      className="w-20 px-1.5 py-0.5 text-xs border border-subtle rounded bg-surface disabled:opacity-50"
                     />
                   </label>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted">
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.require_square !== false}
+                      onChange={e => setDraftSettings(s => ({ ...s, require_square: e.target.checked }))}
+                      className="h-3 w-3 rounded border-subtle"
+                    />
+                    Parts need squaring (true factory edges)
+                  </label>
+                  <p className="text-[9px] text-faint mt-0.5">
+                    Off → use the full sheet / stock length, no {draftSettings.squaring_mm}mm trim. For rough work and full-sheet rips (e.g. 2440 strips).
+                  </p>
                 </div>
 
                 {sheetThicknesses.length > 0 && (

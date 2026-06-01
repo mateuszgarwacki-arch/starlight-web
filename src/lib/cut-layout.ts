@@ -78,6 +78,15 @@ export interface CutSettings {
   kerf_mm: number;
   /** Squaring allowance in mm — trimmed off two reference edges per sheet. */
   squaring_mm: number;
+  /**
+   * Whether parts must come out square/accurate (factory edges trued).
+   *   true  → trim `squaring_mm` off two reference edges (default).
+   *   false → use the FULL sheet / stock length (factory edges as-is). For
+   *           rough work and full-sheet rips that don't need squaring
+   *           (e.g. 12 × 2440×300 strips off a 2440 sheet).
+   * Optional/undefined is treated as true.
+   */
+  require_square?: boolean;
   /** Stack-cut overrides keyed by thickness string, e.g. {"18": 2}. */
   stack_overrides?: Record<string, number>;
 }
@@ -85,6 +94,7 @@ export interface CutSettings {
 export const DEFAULT_CUT_SETTINGS: CutSettings = {
   kerf_mm: 4,
   squaring_mm: 5,
+  require_square: true,
 };
 
 /**
@@ -97,6 +107,7 @@ export function resolveCutSettings(raw: Partial<CutSettings> | null | undefined)
   return {
     kerf_mm: raw.kerf_mm != null ? raw.kerf_mm : DEFAULT_CUT_SETTINGS.kerf_mm,
     squaring_mm: raw.squaring_mm != null ? raw.squaring_mm : DEFAULT_CUT_SETTINGS.squaring_mm,
+    require_square: raw.require_square != null ? raw.require_square : DEFAULT_CUT_SETTINGS.require_square,
     stack_overrides:
       raw.stack_overrides && Object.keys(raw.stack_overrides).length > 0
         ? raw.stack_overrides
@@ -272,21 +283,26 @@ export function guillotinePack(
   const placements: Placement[] = [];
 
   const tryPlace = (free: FreeRect[], sheetIdx: number, p: PartRect): boolean => {
-    // footprint includes kerf on right + bottom
-    const fw = p.w + kerf;
-    const fh = p.h + kerf;
-    let idx = findBestFit(free, fw, fh);
+    // Fit test on TRUE size. Kerf is the gap BETWEEN cuts; a part's trailing
+    // edge sits against the sheet/offcut boundary, which is itself a cut —
+    // there's no neighbour to clear there, so trailing kerf must never reject
+    // a part. (Otherwise a part that spans a full usable dimension — e.g. a
+    // 2440 rip on a 2440 sheet — is wrongly bumped to a fresh sheet because
+    // 2440 + kerf > 2440.)
+    let idx = findBestFit(free, p.w, p.h);
     let rotated = false;
     if (idx === -1 && p.w !== p.h) {
-      idx = findBestFit(free, fh, fw);
+      idx = findBestFit(free, p.h, p.w);
       rotated = true;
     }
     if (idx === -1) return false;
     const r = free[idx];
     const trueW = rotated ? p.h : p.w;
     const trueH = rotated ? p.w : p.h;
-    const footW = rotated ? fh : fw;
-    const footH = rotated ? fw : fh;
+    // Reserve kerf for a potential neighbour, but clamp to the rect boundary —
+    // a part flush to the edge consumes no kerf past it.
+    const footW = Math.min(trueW + kerf, r.w);
+    const footH = Math.min(trueH + kerf, r.h);
     placements.push({ sheetIdx, x: r.x, y: r.y, w: trueW, h: trueH, rotated, partDesc: p.desc });
     splitRect(free, idx, footW, footH);
     return true;
@@ -298,9 +314,13 @@ export function guillotinePack(
       if (tryPlace(sheetsFree[s], s, part)) { placed = true; break; }
     }
     if (!placed) {
+      // Fresh sheet. If the part can't fit a full empty usable sheet it is
+      // genuinely oversize — skip it (the caller's anomaly check reports it)
+      // instead of leaving a phantom empty sheet behind that inflates counts.
       const newSheet: FreeRect[] = [{ x: 0, y: 0, w: usableW, h: usableH }];
-      tryPlace(newSheet, sheetsFree.length, part);
-      sheetsFree.push(newSheet);
+      if (tryPlace(newSheet, sheetsFree.length, part)) {
+        sheetsFree.push(newSheet);
+      }
     }
   }
 
@@ -376,7 +396,10 @@ export function sheetLayoutFields(
   settings: CutSettings,
 ): Partial<MaterialSummary> {
   const kerf = settings.kerf_mm ?? 4;
-  const squaring = settings.squaring_mm ?? 5;
+  // Squaring trims two reference edges so parts come out square. When the WO
+  // doesn't need square parts (rough work / full-sheet rips), skip the trim
+  // and use the full sheet (factory edges as-is).
+  const squaring = settings.require_square === false ? 0 : (settings.squaring_mm ?? 5);
   const usableW = Math.max(1, sheetW - squaring);
   const usableH = Math.max(1, sheetH - squaring);
   const thickness = dominantThickness(
@@ -384,16 +407,19 @@ export function sheetLayoutFields(
   );
   const stackCount = stackCountForThickness(thickness, settings);
 
-  // Oversize check (against usable area, both orientations, incl. kerf)
+  // Oversize check (against usable area, both orientations). Tested on TRUE
+  // size to match the packer — trailing kerf at the sheet edge is harmless,
+  // so it must not count against fit here either.
   const anomalies: string[] = [];
+  const usableNote = squaring > 0 ? `after ${squaring}mm squaring` : "full sheet, no squaring";
   for (const p of matParts) {
     const l = p.length_mm || 0;
     const w = p.width_mm || 0;
     const fits =
-      (l + kerf <= usableW && w + kerf <= usableH) ||
-      (w + kerf <= usableW && l + kerf <= usableH);
+      (l <= usableW && w <= usableH) ||
+      (w <= usableW && l <= usableH);
     if (l > 0 && w > 0 && !fits) {
-      const msg = `${p.description}: ${l}×${w}mm does not fit on ${usableW}×${usableH}mm usable sheet (after ${squaring}mm squaring) in any orientation`;
+      const msg = `${p.description}: ${l}×${w}mm does not fit on ${usableW}×${usableH}mm usable sheet (${usableNote}) in any orientation`;
       if (!anomalies.includes(msg)) anomalies.push(msg);
     }
   }
@@ -442,7 +468,9 @@ export function timberLayoutFields(
   settings: CutSettings,
 ): Partial<MaterialSummary> {
   const kerf = settings.kerf_mm ?? 4;
-  const squaring = settings.squaring_mm ?? 5;
+  // Squaring is an end-trim on the stock length; skipped for rough/full-length
+  // work (see sheetLayoutFields). require_square false → use full stock length.
+  const squaring = settings.require_square === false ? 0 : (settings.squaring_mm ?? 5);
   const pieces: { length: number; desc: string }[] = [];
   for (const p of matParts) {
     const l = p.length_mm || 0;
