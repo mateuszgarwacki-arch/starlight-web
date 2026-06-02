@@ -22,6 +22,10 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 - [ ] **Quote import — scanned/image-PDF fallback** *(S55)* — `/extract` returns 422 when `pdf-parse` finds no text (scanned/image-only PDF). Quoting software emits text PDFs, so this is the rare path. When needed, add a branch that sends the PDF itself as a document block to the same model + schema (higher token cost, pages rasterised).
 - [ ] **Quote import — batch backfill of historical quotes** *(S55, strategic)* — run the same `/extract` logic through the Batch API (50% cheaper, async <24h) to import a stack of old quotes, skipping the review UI or queuing them for bulk review. Feeds the AI-estimating foundation. Same prompt, same schema.
 
+- [ ] **Quote import — "Discount" category** *(S58, conditional)* — `QUOTE_CATEGORIES` has no Discount value, so negative discount lines bucket into General/Production. Harmless for costing today (the S45c workshop-quote filter doesn't match those, so workshop margin is unaffected; the discount only reduces the *total* quote, which is correct). Adding an enum value recompiles the grammar (24h cache) + invalidates the prompt cache — not worth it for line-display tidiness alone. Build only if cross-job discount reporting becomes a felt need.
+
+- [ ] **Quote import — Nett-Total VAT mapping on no-VAT quotes** *(S58, watcher)* — when a quote prints only a "Nett Total" with no VAT line (e.g. GemFest), `reconcile()` either matches or shows a ~20% delta depending on whether the model files the figure as `net_ex_vat` vs `gross_inc_vat` (the schema comment nudges "Nett Total → gross", but FA-style "Nett" is typically ex-VAT). Non-blocking — `reconcile()` is display-only on the review screen, never gates the commit. If FA quotes keep flagging a false delta, either retune the prompt's net-vs-gross guidance for the no-VAT-line case or relax `reconcile()` to also match `computedNet` against `statedGross`.
+
 - [ ] **Label reprint subset** *(S53)* — `/labels?woId=` prints every job item linked to the WO. After a mid-build scope change you reprint the whole set. Add per-item checkboxes (default all-ticked) so you can reprint just the new/selected items. UI-only — `buildZpl()` and `generatePdf()` already iterate a `labels` array; filter it by selection before they run.
 
 - [ ] **Cost-visibility "Workshop Overhead" card → read from `tbl_overhead_costs`** *(S52, strategic)* — the Review → Cost Visibility page still derives its Workshop Overhead figure from `approved_overhead` **tasks** (task-status aggregation). Since S52, Approve Overhead also writes a labour row into `tbl_overhead_costs`, so the same labour hour now lives in two stores, and the card can't see the *spend* side (consumables/cleaning) at all. End state: point that card at the pool (`qry_overhead_monthly` / `tbl_overhead_costs`), which is the superset (labour + spend), and retire the task-derived calc — single source of truth. Touches the cost-visibility RPC; confirm directors want spend folded into that headline number before building.
@@ -98,6 +102,26 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S58 — Quote import: allow negative line_value (discount lines) — 2 Jun 2026
+
+Importing the GemFest 2026 quote (job 13803) failed at the extract step with a Zod `too_small` error on `lines[21].line_value`. The quote carries a **Discount line of −£2,770**, and `extractedQuoteZod` gated `line_value` at `z.number().min(0)`. The error surfaced raw in the New Job → Import-from-quote modal before reaching the review screen.
+
+#### Why the negative is correct, not a workaround
+`reconcile()` sums every line against the printed total. GemFest's item lines total **£27,770**; the −£2,770 discount is exactly what lands the sum on the **£25,000 Nett Total**. Stripping the discount would break reconciliation by £3,324. So the discount *must* persist as a negative line — dropping `.min(0)` is the correct semantics. `reconcile()` stays the real guard: a hallucinated sign won't match the printed total.
+
+#### Blast radius (traced before edit)
+- `tbl_quote_lines.line_value` is `numeric(10,2)`, nullable, **no CHECK** → accepts negatives.
+- `import_quote()` casts `(line_value)::numeric` straight through → **no sign filter**.
+- Jobs-page margin badge (`jobs/[id]/page.tsx`) is guarded by `line.line_value > 0` → a negative discount line renders no margin %, no divide-by-negative.
+- `QUOTE_JSON_SCHEMA` (the model grammar) already had no minimum → the model emits the negative correctly; only the Zod re-validation was too strict.
+
+#### What shipped
+- **`src/lib/quote-import/schema.ts`** — `extractedQuoteZod.lines[].line_value`: `z.number().min(0)` → `z.number()`. Updated the two stale "values >= 0" comments (header + inline). **QUOTE_JSON_SCHEMA untouched** → no grammar recompile (24h cache) and no prompt-cache invalidation. No DB schema / RPC change. tsc clean.
+
+#### Deferred / watch (also in backlog)
+- No "Discount" category in `QUOTE_CATEGORIES`; the model buckets it as General/Production. Harmless for costing (S45c workshop-quote filter doesn't match those). Not adding an enum value — would recompile the grammar for low payoff.
+- Reconciliation display on no-VAT quotes (only "Nett Total" printed) depends on the model filing the figure as `net_ex_vat` (matches) vs `gross_inc_vat` (~£5k delta). Non-blocking, display-only on review. Watch if FA-style "Nett = ex-VAT" quotes keep flagging.
 
 ### S57 — Cut plan: optional squaring for full-sheet rips + kerf boundary fix — 1 Jun 2026
 
