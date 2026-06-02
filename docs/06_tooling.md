@@ -1,6 +1,6 @@
 # Starlight Production System — Claude tooling policy
 
-**Last updated:** 26 May 2026 (S50b)
+**Last updated:** 2 Jun 2026 (S59)
 **Maintainer:** Mateusz Garwacki
 
 This file tells Claude which MCP tool to reach for in which situation. It exists because the same operation can usually be done multiple ways, and the wrong choice silently costs minutes per session (process hangs, opaque streams, extra tool calls, output noise). Codifying the policy here means every session opens with the right defaults.
@@ -56,6 +56,8 @@ The deploy is unavoidably a ~90s streaming-output operation. There is no API sho
 8. Once READY, the `workshop-five-gamma.vercel.app` alias is automatically updated by Vercel. Report back to the user with commit SHA, deploy ID, and build duration.
 
 **On the GitHub-push auto-deploy:** the webhook does fire when we push and queues its own deploy, but in practice that deploy is often CANCELED before completion (Vercel queue behaviour we haven't fully diagnosed — may be related to multiple deploys queued close together). The explicit `npx vercel --prod` from step 5 is what reliably lands production. Don't rely on the auto-deploy.
+
+**Capturing the CLI deploy cleanly (S59):** rather than eat the ~30s tool-timeout and then page through `list_deployments` (heavy output), run the deploy from a one-line `.bat` that redirects to a log with a sentinel — `call npx vercel --prod --yes > deploy.log 2>&1` then `echo ___DONE___ >> deploy.log` — launch it, then poll the log with `read_file` (tail). The log carries the `Production:` and `Aliased:` URLs plus the build tail, so you see READY and the live URL directly. `Vercel:get_deployment_build_logs` on the inspect ID is the quick way to tell a real build (events present) from an empty-log queue-cancel (`{"events":[]}`). Delete the scratch `.bat`/`.log` after. Hard-won corollary, now confirmed: **deploy is one push at a time.** S59 pushed code + docs + an empty trigger commit within ~10 min and Vercel cancelled all three before any built (empty build logs), leaving prod on a stale commit; the lone CLI deploy with nothing pushed alongside it is what landed.
 
 **Doc-only commits:** if the commit changes nothing under `src/`, `public/`, or anywhere the runtime reads, skip the deploy entirely. The file lives in git history and that's enough. Saves a build cycle.
 

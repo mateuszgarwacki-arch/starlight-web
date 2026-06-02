@@ -107,7 +107,7 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 *(Numbering note: the code commit landed as `50a794d feat(S58)` — a concurrent S58 (quote-import discount, below) had already taken the number and I didn't re-read the tracker top before starting. Renumbered to S59 here; the commit message is left as-is.)*
 
-S57 shipped the `require_square` toggle, but it was all-or-nothing per WO and had to be turned off by hand for rips. Another rib job (300×2440) still produced no cutlist on default settings: squaring on → usable length 2435 → the 2440 rib doesn't fit. Made squaring **per-axis and automatic**. Frontend-only; no schema change; one deploy.
+S57 shipped the `require_square` toggle, but it was all-or-nothing per WO and had to be turned off by hand for rips. Another rib job (300×2440) still produced no cutlist on default settings: squaring on → usable length 2435 → the 2440 rib doesn't fit. Made squaring **per-axis and automatic**. Frontend-only; no schema change. (Getting it live took a manual CLI deploy after a cancellation cascade — see Deployment below.)
 
 #### The rule
 You can't trim a reference edge off an axis a part already fills. So squaring is decided per sheet axis: if any part's size lands in the squaring band just below the sheet dimension (`sheetDim - squaring < size <= sheetDim`), that axis can't be trimmed → squaring suppressed there, kept on the other axis. A 300×2440 rib keeps the full 2440 length (factory ends) while the 1220 width is still squared to 1215. The S57 kerf clamp already stops trailing kerf at the spanning edge, so the rib's far end consumes no kerf either. Net: kerf only *between* ribs (width), none on the length, full length retained — the "305 × still 2440" behaviour requested.
@@ -125,6 +125,11 @@ The toggle stays as an override (`require_square:false` = full sheet both axes, 
 - **Full-length + full-width parts mixed:** 2 sheets, no anomalies — both axes' full-span parts place.
 - **doc 428 regression:** 18mm OSB **34**, 9mm ply **5** — identical to S57. The rule only fires for parts that reach the sheet edge; doc 428's max part is 2400, below the 2435 band, so usable stays 2435×1215.
 - `tsc --noEmit` clean.
+
+#### Deployment (and what went sideways)
+Production didn't update on the first three pushes. Code (`50a794d`), docs (`13dbf95`), and an empty redeploy-trigger (`f05f11a`) went out within ~10 min; Vercel's stale-build auto-cancel (hobby tier serialises builds) cancelled **every one before any build ran** (build logs empty), leaving production stuck on `0fff4a6` — the S58 discount docs — so none of S57/S58/S59's cut-plan code was actually live. 06_tooling.md already warns about exactly this ("don't push anything else until the deploy is READY; Vercel cancels in-flight builds when another push lands"); the miss was adherence, not the doc.
+
+Resolved with a single explicit CLI deploy and **no parallel git push**: `dpl_FBpRSiYHXaNM4QUuPRQGUvFwFitM` built clean and aliased to `workshop-five-gamma.vercel.app`. Live and verified READY. Reusable mechanism (now also in 06_tooling.md): run the CLI deploy from a one-line `.bat` that redirects to a log with a sentinel, launch it, and poll the log with `read_file` — the log carries the `Production:`/`Aliased:` URLs and the build tail, so you confirm READY and the live URL without the ~30s tool-timeout killing visibility and without the heavy `list_deployments` dumps. Scratch `.bat`/`.log` deleted after.
 
 #### Notes / watch
 - Per-axis is decided per **material**, not per sheet: if a rib material also has a short part, that short part gets factory ends on the length axis too (squaring suppressed for the whole material on that axis). Acceptable — you're ripping on that stock anyway. True per-part squaring (square + rough on the same sheet) remains the deferred backlog item.
