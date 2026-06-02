@@ -4,7 +4,8 @@
 //   1. QUOTE_JSON_SCHEMA  -> sent to the API as output_config.format (grammar-constrained).
 //   2. ExtractedQuote      -> the TypeScript shape the rest of the app consumes.
 //   3. extractedQuoteZod   -> server-side re-validation (shape is guaranteed by the API,
-//                             but we still sanity-check semantics: values >= 0, etc).
+//                             but we still sanity-check semantics: non-empty text, valid
+//                             date shape, enum category. Values may be negative (discounts).
 //
 // Schema design notes (from the structured-outputs docs):
 //   - EVERY property is listed in `required`; optionality is expressed with nullable
@@ -153,7 +154,10 @@ export const extractedQuoteZod = z.object({
     .array(
       z.object({
         line_text: z.string().min(1),
-        line_value: z.number().min(0),
+        // No .min(0): discount lines are legitimately negative (e.g. a "-£2,770" discount
+        // line that reconciles the sum of items to the printed Nett Total). reconcile()
+        // is the real semantic guard — a hallucinated sign won't match the printed total.
+        line_value: z.number(),
         event_zone: z.string().nullable(),
         line_sub_group: z.string().nullable(),
         category: z.enum(QUOTE_CATEGORIES),
