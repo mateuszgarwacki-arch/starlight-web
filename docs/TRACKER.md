@@ -103,6 +103,33 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S59 — Cut plan: per-axis squaring so full-span ribs auto-fit — 2 Jun 2026
+
+*(Numbering note: the code commit landed as `50a794d feat(S58)` — a concurrent S58 (quote-import discount, below) had already taken the number and I didn't re-read the tracker top before starting. Renumbered to S59 here; the commit message is left as-is.)*
+
+S57 shipped the `require_square` toggle, but it was all-or-nothing per WO and had to be turned off by hand for rips. Another rib job (300×2440) still produced no cutlist on default settings: squaring on → usable length 2435 → the 2440 rib doesn't fit. Made squaring **per-axis and automatic**. Frontend-only; no schema change; one deploy.
+
+#### The rule
+You can't trim a reference edge off an axis a part already fills. So squaring is decided per sheet axis: if any part's size lands in the squaring band just below the sheet dimension (`sheetDim - squaring < size <= sheetDim`), that axis can't be trimmed → squaring suppressed there, kept on the other axis. A 300×2440 rib keeps the full 2440 length (factory ends) while the 1220 width is still squared to 1215. The S57 kerf clamp already stops trailing kerf at the spanning edge, so the rib's far end consumes no kerf either. Net: kerf only *between* ribs (width), none on the length, full length retained — the "305 × still 2440" behaviour requested.
+
+#### Why automatic (not the toggle)
+The toggle stays as an override (`require_square:false` = full sheet both axes, for genuinely rough work), but the common case — a WO of full-length ribs — now works with the default ON, and squaring is still applied where it's real (the width reference edge), so accuracy isn't lost on the axis that needs it. This is the auto-detect floated and rejected in S57's design pass as "implicit magic"; doing it **per-axis** rather than whole-sheet is what makes it safe, and it was explicitly requested.
+
+#### What shipped
+- **`src/lib/cut-layout.ts`** — `sheetLayoutFields`: `claimsAxis(D)` tests both part dimensions against each sheet axis; `usableW/usableH` derive from per-axis `squareW/squareH`; anomaly note reflects per-axis. `timberLayoutFields`: a piece spanning the full stock length rides the factory end (no end-trim). `require_square:false` still forces squaring 0 on both axes.
+- **`src/components/cutlist-extractor.tsx`** — toggle helper text updated: full-span parts auto-use the factory edge; off is for rough work only.
+- **Traveller / catalogue-swap** — inherit via `sheetLayoutFields`. No change.
+
+#### Offline verification (real data — usable-area logic changed)
+- **Ribs (12× 300×2440) on DEFAULT settings:** 3 sheets / 1 pattern / 2 passes / 2% waste, 0 anomalies (was unplaceable with squaring on). Matches the squaring-off result.
+- **Full-length + full-width parts mixed:** 2 sheets, no anomalies — both axes' full-span parts place.
+- **doc 428 regression:** 18mm OSB **34**, 9mm ply **5** — identical to S57. The rule only fires for parts that reach the sheet edge; doc 428's max part is 2400, below the 2435 band, so usable stays 2435×1215.
+- `tsc --noEmit` clean.
+
+#### Notes / watch
+- Per-axis is decided per **material**, not per sheet: if a rib material also has a short part, that short part gets factory ends on the length axis too (squaring suppressed for the whole material on that axis). Acceptable — you're ripping on that stock anyway. True per-part squaring (square + rough on the same sheet) remains the deferred backlog item.
+- A part that genuinely exceeds the full sheet still anomalies and is skipped (no phantom sheet) — unchanged from S57.
+
 ### S58 — Quote import: allow negative line_value (discount lines) — 2 Jun 2026
 
 Importing the GemFest 2026 quote (job 13803) failed at the extract step with a Zod `too_small` error on `lines[21].line_value`. The quote carries a **Discount line of −£2,770**, and `extractedQuoteZod` gated `line_value` at `z.number().min(0)`. The error surfaced raw in the New Job → Import-from-quote modal before reaching the review screen.
