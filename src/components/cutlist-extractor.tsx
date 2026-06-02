@@ -568,7 +568,7 @@ export function CutListExtractor({
                     Parts need squaring (true factory edges)
                   </label>
                   <p className="text-[9px] text-faint mt-0.5">
-                    Off → use the full sheet / stock length, no {draftSettings.squaring_mm}mm trim. For rough work and full-sheet rips (e.g. 2440 strips).
+                    Full-length / full-width parts ride the factory edge automatically (squaring is skipped on the axis they span). Turn off only for rough work where no edge needs truing — skips the {draftSettings.squaring_mm}mm trim entirely.
                   </p>
                 </div>
 

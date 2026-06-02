@@ -396,12 +396,25 @@ export function sheetLayoutFields(
   settings: CutSettings,
 ): Partial<MaterialSummary> {
   const kerf = settings.kerf_mm ?? 4;
-  // Squaring trims two reference edges so parts come out square. When the WO
-  // doesn't need square parts (rough work / full-sheet rips), skip the trim
-  // and use the full sheet (factory edges as-is).
+  // Squaring trims two reference edges so parts come out square. require_square
+  // false skips it entirely (rough work). Otherwise it is applied PER-AXIS: you
+  // can't trim a reference edge off an axis a part already fills, so squaring is
+  // suppressed on any axis some part spans (its size lands within the squaring
+  // band just below the sheet dimension) and kept on the others. This
+  // auto-handles full-length rips — e.g. 300×2440 on a 2440 sheet keeps the full
+  // 2440 length while the width is still squared — without disabling squaring
+  // for the whole WO.
   const squaring = settings.require_square === false ? 0 : (settings.squaring_mm ?? 5);
-  const usableW = Math.max(1, sheetW - squaring);
-  const usableH = Math.max(1, sheetH - squaring);
+  const claimsAxis = (D: number) =>
+    squaring > 0 &&
+    matParts.some(p => {
+      const a = p.length_mm || 0, b = p.width_mm || 0;
+      return (a > D - squaring && a <= D) || (b > D - squaring && b <= D);
+    });
+  const squareW = claimsAxis(sheetW) ? 0 : squaring;
+  const squareH = claimsAxis(sheetH) ? 0 : squaring;
+  const usableW = Math.max(1, sheetW - squareW);
+  const usableH = Math.max(1, sheetH - squareH);
   const thickness = dominantThickness(
     matParts.map(p => p.thickness_mm || 0).filter(t => t > 0),
   );
@@ -411,7 +424,7 @@ export function sheetLayoutFields(
   // size to match the packer — trailing kerf at the sheet edge is harmless,
   // so it must not count against fit here either.
   const anomalies: string[] = [];
-  const usableNote = squaring > 0 ? `after ${squaring}mm squaring` : "full sheet, no squaring";
+  const usableNote = squareW === 0 && squareH === 0 ? "full sheet, no squaring" : `after ${squaring}mm squaring`;
   for (const p of matParts) {
     const l = p.length_mm || 0;
     const w = p.width_mm || 0;
@@ -479,7 +492,11 @@ export function timberLayoutFields(
     }
   }
   const totalLinearMm = pieces.reduce((a, b) => a + b.length, 0);
-  const usableLen = Math.max(1, standardLength - squaring); // end trim
+  // Same per-axis rule as sheets: a piece that spans the full stock length
+  // (within the squaring band) rides the factory end, so no end-trim then.
+  const spansFull = squaring > 0 &&
+    pieces.some(pc => pc.length > standardLength - squaring && pc.length <= standardLength);
+  const usableLen = Math.max(1, standardLength - (spansFull ? 0 : squaring)); // end trim
   const bins = pieces.length > 0 ? binPackLengths(pieces, usableLen, kerf) : [];
   const lengthsNeeded = bins.length > 0
     ? bins.length
