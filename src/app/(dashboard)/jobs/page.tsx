@@ -86,7 +86,17 @@ export default function JobsPage() {
       .single();
 
     if (jobErr || !jobData) {
-      toast.error("Failed to create job");
+      // Surface the real reason rather than a blanket failure. The most common
+      // cause is an RLS denial (42501) when the signed-in session isn't an
+      // Admin/PM — e.g. a freelancer-role token. Make that explicit.
+      const isPermission =
+        (jobErr as any)?.code === "42501" ||
+        /permission|row-level|rls/i.test(jobErr?.message || "");
+      toast.error(
+        isPermission
+          ? "Permission denied — this account isn't Admin/PM. Sign in with your staff login."
+          : `Failed to create job: ${jobErr?.message || "unknown error"}`
+      );
       setSaving(false);
       return;
     }

@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/sidebar";
 import { RecentJobsStrip } from "@/components/recent-jobs-strip";
 import { ViewSwitcher } from "@/components/view-switcher";
+import { RoleGuard } from "@/components/role-guard";
 
 export default function DashboardLayout({
   children,
@@ -9,6 +10,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen bg-base">
+      <RoleGuard />
       <Sidebar />
       {/* Main content — offset by sidebar width (removed on print) */}
       <main className="ml-56 min-h-screen print:ml-0">
