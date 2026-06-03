@@ -103,6 +103,25 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S60 — Block freelancer-role sessions from the PM/admin UI; truthful identity chip; real create errors — 3 Jun 2026
+
+A "Failed to create job" on the New Job modal turned out to be an auth/identity problem, not a data one. The desktop app and the `/m` crew app share one Supabase session in the browser (same project → same `sb-…-auth-token` key). The browser was carrying a **freelancer/test token** (`07700900001@starlight.local`, role `freelancer`, minted 18 Mar): `tbl_production_plan` SELECT is `using(true)` so the whole desktop UI rendered, but the RLS insert check (`get_my_role() ∈ {production_manager, admin}`) correctly **403'd every write**. Labels backed by `getUser()` showed "Admin" (live DB role) while the token RLS reads as freelancer — the mismatch that masked it. Frontend-only; no schema/RLS change. Two-commit session; code deployed clean via a single CLI deploy.
+
+#### Diagnosis trail (for next time)
+- Server-side test insert into `tbl_production_plan` succeeded (trigger `trg_create_job_overhead` + constraints all fine) → DB path clean, ruled out trigger/constraint.
+- The failing session's token decoded (browser console) to `app_role: undefined, user_role: freelancer, issued: 18/03/2026` → not the admin account at all.
+- The trap: `app_metadata.role` lives in the **token**; `getUser()` reads the **server** record. They diverge when the role changes after the token was minted, or — as here — when the session is simply a different (crew) account than the UI appears to show.
+
+#### What shipped
+- **`src/components/role-guard.tsx`** (new) — client guard: reads role via `getUser()`, redirects a *definitively* non-staff session (role present and not in `{admin, production_manager, Production-Manager, foreman}`) to `/m`. **Fail-open**: unknown/missing role, or any `getUser` error → no redirect, so a transient hiccup can never lock a real Admin/PM out of their own interface. Wired into `(dashboard)/layout.tsx` and `pm/layout.tsx`.
+- **`src/components/view-switcher.tsx`** — the "Admin / PM" toggle is a *view* preference, not a role, but it read like an identity badge (this is what misled the whole debug). Relabelled buttons to **"Admin view" / "PM view"**, and added an **identity chip** (real signed-in account local-part + token role short-label); a non-staff role renders **red** so a wrong login is impossible to miss.
+- **`src/app/(dashboard)/jobs/page.tsx`** — `handleCreateJob` surfaces the real PostgREST error instead of a blanket toast: `42501`/RLS → explicit "this account isn't Admin/PM, sign in with your staff login"; anything else → the raw message.
+
+#### Notes / watch
+- The guard is client-side (a brief flash of desktop UI before redirect for a freelancer). A server-side check in `src/proxy.ts` middleware would remove the flash but carries lock-out risk if role resolution misfires — deliberately not done; the fail-open client guard is the safe version.
+- The immediate operational fix was the user re-authenticating as `mateusz.garwacki@starlightdesign.co.uk`; the code changes stop the failure mode recurring silently.
+- Verified: `tsc --noEmit` clean; Vercel build compiled + TypeScript passed; aliased live to `workshop-five-gamma.vercel.app`. Single CLI deploy, no parallel push (heeding the S59 cancellation-cascade warning).
+
 ### S59 — Cut plan: per-axis squaring so full-span ribs auto-fit — 2 Jun 2026
 
 *(Numbering note: the code commit landed as `50a794d feat(S58)` — a concurrent S58 (quote-import discount, below) had already taken the number and I didn't re-read the tracker top before starting. Renumbered to S59 here; the commit message is left as-is.)*
