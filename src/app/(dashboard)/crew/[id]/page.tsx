@@ -12,6 +12,7 @@ import { notify } from "@/lib/notifications";
 import { ArrowLeft, Phone, Mail, Briefcase, Clock, Flag, Calendar, AlertTriangle, CheckCircle2, Pencil, Archive, X, Square, Users, CornerDownRight, Check, Search, ChevronDown, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { JobWorkOrderPicker, type WOOption as WOPick } from "@/components/job-work-order-picker";
 
 interface TimeEntryRow {
   entry_id: number;
@@ -113,9 +114,7 @@ export default function FreelancerDetailPage() {
   // Tasks state (all statuses)
   const [allTasks, setAllTasks] = useState<PendingTask[]>([]);
   const [routingTask, setRoutingTask] = useState<PendingTask | null>(null);
-  const [woOptions, setWoOptions] = useState<WOOption[]>([]);
-  const [woSearch, setWoSearch] = useState("");
-  const [selectedWo, setSelectedWo] = useState<number | null>(null);
+  const [routeSelectedWo, setRouteSelectedWo] = useState<WOPick | null>(null);
   const [routeHours, setRouteHours] = useState("");
   const [routeNote, setRouteNote] = useState("");
   const [routeSubmitting, setRouteSubmitting] = useState(false);
@@ -130,13 +129,11 @@ export default function FreelancerDetailPage() {
   const [addEntryType, setAddEntryType] = useState<"wo" | "adhoc">("wo");
   const [addEntryDate, setAddEntryDate] = useState("");
   const [addEntryHours, setAddEntryHours] = useState("1");
-  const [addEntryWoId, setAddEntryWoId] = useState<number | null>(null);
+  const [addSelectedWo, setAddSelectedWo] = useState<WOPick | null>(null);
   const [addEntryTitle, setAddEntryTitle] = useState("");
   const [addEntryCategory, setAddEntryCategory] = useState("job_work");
   const [addEntryNote, setAddEntryNote] = useState("");
   const [addEntrySubmitting, setAddEntrySubmitting] = useState(false);
-  const [addWoSearch, setAddWoSearch] = useState("");
-  const [addWoOptions, setAddWoOptions] = useState<WOOption[]>([]);
   const [stopReason, setStopReason] = useState("");
 
   const loadData = useCallback(async () => {
@@ -443,55 +440,35 @@ export default function FreelancerDetailPage() {
   // ============================================================
   // Task Actions (approve / reject / route to WO)
   // ============================================================
-  const openRouteModal = async (task: PendingTask) => {
-    setRoutingTask(task); setRouteHours(String(task.hours || "")); setRouteNote(""); setSelectedWo(task.routed_to_wo_id || null); setWoSearch("");
-    // Include Complete so PMs can route late-arriving time to finished WOs.
-    // Complete rows are sorted to the bottom (see sort below) and dimmed in render.
-    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started", "Complete"]);
-    if (!wos) { setWoOptions([]); return; }
-    const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
-    const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
-    const [scopeRes, jobRes] = await Promise.all([
-      scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
-      jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
-    ]);
-    const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
-    const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
-    const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
-    // Sort: task's job first; within each, active WOs before Complete.
-    enriched.sort((a, b) => {
-      const aIsTaskJob = task.job_id && a.job_id === task.job_id ? 0 : 1;
-      const bIsTaskJob = task.job_id && b.job_id === task.job_id ? 0 : 1;
-      if (aIsTaskJob !== bIsTaskJob) return aIsTaskJob - bIsTaskJob;
-      const ap = a.status === "Complete" ? 1 : 0;
-      const bp = b.status === "Complete" ? 1 : 0;
-      return ap - bp;
-    });
-    setWoOptions(enriched);
+  const openRouteModal = (task: PendingTask) => {
+    setRoutingTask(task);
+    setRouteHours(String(task.hours || ""));
+    setRouteNote("");
+    setRouteSelectedWo(null); // picker initial-selects from task.routed_to_wo_id
   };
 
   const handleRouteToWO = async () => {
-    if (!routingTask || !selectedWo) return;
+    if (!routingTask || !routeSelectedWo) return;
     const hrs = parseFloat(routeHours); if (!hrs || hrs <= 0) { toast.error("Enter valid hours"); return; }
     setRouteSubmitting(true);
     try {
       const ctx = await getAuditContext(supabase);
-      const wo = woOptions.find((w) => w.work_order_id === selectedWo);
+      const wo = routeSelectedWo;
       const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
       await auditedInsert(ctx, "tbl_wo_time_entries", {
-        work_order_id: selectedWo, freelancer_id: freelancerId,
+        work_order_id: wo.work_order_id, freelancer_id: freelancerId,
         actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: hrs * hourlyRate,
         system_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null,
         actual_start_timestamp: routingTask.worked_date ? routingTask.worked_date + "T09:00:00" : null,
         system_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null,
         actual_end_timestamp: routingTask.worked_date ? routingTask.worked_date + "T17:00:00" : null,
-        flag_note: routeNote.trim() ? `Routed: ${routeNote.trim()}` : "Routed from ad-hoc task",
-      }, wo?.job_id);
+        flag_note: routeNote.trim() ? `Routed: ${routeNote.trim()}` : wo.is_overhead ? "Routed to job overhead" : "Routed from ad-hoc task",
+      }, wo.job_id);
       await supabase.from("tbl_tasks").update({
-        status: "routed", routed_to_wo_id: selectedWo, routed_hours: hrs,
+        status: "routed", routed_to_wo_id: wo.work_order_id, routed_hours: hrs,
         reviewed_by: ctx.userId, reviewed_at: new Date().toISOString(), review_note: routeNote || null,
       }).eq("task_id", routingTask.task_id);
-      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${formatHours(hrs)} routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: selectedWo, jobId: wo?.job_id });
+      await notify({ supabase, type: "task_reviewed", title: `Task routed: ${routingTask.title}`, detail: `${formatHours(hrs)} routed to WO — ${routeNote || "No note"}`, severity: "info", freelancerId, woId: wo.work_order_id, jobId: wo.job_id });
       toast.success("Task routed to WO");
       setRoutingTask(null);
       setAllTasks(prev => prev.map(t => t.task_id === routingTask.task_id ? { ...t, status: "routed" } : t));
@@ -519,8 +496,6 @@ export default function FreelancerDetailPage() {
     setAllTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: "rejected" } : t));
   };
 
-  const filteredWos = woOptions.filter((w) => (w.description || "").toLowerCase().includes(woSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(woSearch.toLowerCase()) || w.job_number.toLowerCase().includes(woSearch.toLowerCase()));
-
   // Edit task hours/title
   const handleEditTask = async (taskId: number) => {
     const hrs = parseFloat(editTaskHours);
@@ -534,27 +509,11 @@ export default function FreelancerDetailPage() {
   };
 
   // Open add entry dialog
-  const openAddEntry = async () => {
+  const openAddEntry = () => {
     const d = new Date();
     setAddEntryDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    setAddEntryHours("1"); setAddEntryWoId(null); setAddEntryTitle(""); setAddEntryCategory("job_work"); setAddEntryNote(""); setAddWoSearch(""); setAddEntryType("wo");
+    setAddEntryHours("1"); setAddSelectedWo(null); setAddEntryTitle(""); setAddEntryCategory("job_work"); setAddEntryNote(""); setAddEntryType("wo");
     setShowAddEntry(true);
-    // Load WOs — include Complete so PM can manually log against finished work
-    // (sorted to bottom, dimmed in render).
-    const { data: wos } = await supabase.from("tbl_work_orders").select("work_order_id, description, scope_item_id, job_id, status").in("status", ["Ready", "In-Progress", "Not-Started", "Complete"]);
-    if (!wos) { setAddWoOptions([]); return; }
-    const scopeIds = [...new Set(wos.map((w: any) => w.scope_item_id).filter(Boolean))];
-    const jobIds = [...new Set(wos.map((w: any) => w.job_id).filter(Boolean))];
-    const [scopeRes, jobRes] = await Promise.all([
-      scopeIds.length > 0 ? supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds) : { data: [] },
-      jobIds.length > 0 ? supabase.from("tbl_production_plan").select("job_id, job_number").in("job_id", jobIds) : { data: [] },
-    ]);
-    const sMap: Record<number, string> = {}; ((scopeRes as any).data || []).forEach((s: any) => { sMap[s.scope_item_id] = s.item_name; });
-    const jMap: Record<number, string> = {}; ((jobRes as any).data || []).forEach((j: any) => { jMap[j.job_id] = j.job_number; });
-    const enriched: WOOption[] = wos.map((w: any) => ({ ...w, scope_name: sMap[w.scope_item_id] || "—", job_number: jMap[w.job_id] || "—" }));
-    // Sort: active WOs before Complete (within each, default order from DB).
-    enriched.sort((a, b) => (a.status === "Complete" ? 1 : 0) - (b.status === "Complete" ? 1 : 0));
-    setAddWoOptions(enriched);
   };
 
   const handleAddEntry = async () => {
@@ -565,18 +524,18 @@ export default function FreelancerDetailPage() {
     try {
       const ctx = await getAuditContext(supabase);
       if (addEntryType === "wo") {
-        if (!addEntryWoId) { toast.error("Pick a work order"); setAddEntrySubmitting(false); return; }
-        const wo = addWoOptions.find(w => w.work_order_id === addEntryWoId);
+        if (!addSelectedWo) { toast.error("Pick a work order"); setAddEntrySubmitting(false); return; }
+        const wo = addSelectedWo;
         const hourlyRate = person?.day_rate && person?.standard_day_hours && person.standard_day_hours > 0 ? person.day_rate / person.standard_day_hours : 0;
         await auditedInsert(ctx, "tbl_wo_time_entries", {
-          work_order_id: addEntryWoId, freelancer_id: freelancerId,
+          work_order_id: wo.work_order_id, freelancer_id: freelancerId,
           actual_hours: hrs, applied_hourly_rate: hourlyRate, entry_cost: Math.round(hrs * hourlyRate * 100) / 100,
           system_start_timestamp: addEntryDate + "T09:00:00",
           actual_start_timestamp: addEntryDate + "T09:00:00",
           system_end_timestamp: addEntryDate + "T17:00:00",
           actual_end_timestamp: addEntryDate + "T17:00:00",
           flag_note: addEntryNote.trim() ? `PM added: ${addEntryNote.trim()}` : "PM added manually",
-        }, wo?.job_id);
+        }, wo.job_id);
         toast.success(`${formatHours(hrs)} WO entry created`);
       } else {
         if (!addEntryTitle.trim()) { toast.error("Enter a title"); setAddEntrySubmitting(false); return; }
@@ -592,8 +551,6 @@ export default function FreelancerDetailPage() {
     } catch { toast.error("Failed to add entry"); }
     setAddEntrySubmitting(false);
   };
-
-  const filteredAddWos = addWoOptions.filter((w) => (w.description || "").toLowerCase().includes(addWoSearch.toLowerCase()) || w.scope_name.toLowerCase().includes(addWoSearch.toLowerCase()) || w.job_number.toLowerCase().includes(addWoSearch.toLowerCase()));
 
   // Derived: split tasks by status
   const pendingTasks = allTasks.filter(t => t.status === "pending");
@@ -1411,106 +1368,110 @@ export default function FreelancerDetailPage() {
 
       {/* Route to WO Modal */}
       {routingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setRoutingTask(null)} />
-          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-navy">Route Task to Work Order</h3>
-            <p className="text-sm text-muted">{routingTask.title} — {person?.freelancer_name}</p>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
-              <input type="text" value={woSearch} onChange={(e) => setWoSearch(e.target.value)} placeholder="Search work orders..."
-                className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRoutingTask(null)} />
+          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col border border-subtle overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-subtle flex items-start justify-between gap-4 shrink-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <CornerDownRight className="h-4 w-4 text-starlight-blue" />
+                  <h3 className="text-base font-semibold text-navy">Route task to work order</h3>
+                </div>
+                <div className="flex items-center gap-2 mt-1.5 text-xs text-muted flex-wrap">
+                  <span className="font-medium text-navy">{routingTask.title}</span>
+                  <span>&middot;</span>
+                  <span>{person?.freelancer_name}</span>
+                  {routingTask.hours != null && (<><span>&middot;</span><span className="font-semibold text-navy">{formatHours(routingTask.hours)}</span></>)}
+                  {routingTask.worked_date && (<><span>&middot;</span><span>{formatDate(routingTask.worked_date)}</span></>)}
+                </div>
+                {routingTask.description && (
+                  <div className="mt-2 px-3 py-2 bg-surface-dim border-l-2 border-starlight-blue/60 rounded-r text-xs text-navy whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                    <div className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-0.5">Freelancer&apos;s note</div>
+                    {routingTask.description}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setRoutingTask(null)} className="p-1.5 hover:bg-surface-mid rounded-lg text-muted hover:text-navy transition-colors shrink-0" aria-label="Close">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="border border-subtle rounded-lg max-h-48 overflow-y-auto divide-y divide-subtle">
-              {filteredWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
-                filteredWos.slice(0, 20).map((wo) => (
-                  <button key={wo.work_order_id} onClick={() => setSelectedWo(wo.work_order_id)}
-                    className={"w-full text-left px-4 py-3 hover:bg-surface-dim transition-colors " + (selectedWo === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "") + (wo.status === "Complete" && selectedWo !== wo.work_order_id ? " opacity-60" : "")}>
-                    <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
-                      <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
-                      <span className={"px-1.5 py-0.5 rounded-full font-medium " + statusClass(wo.status)}>{wo.status}</span>
-                    </div>
-                  </button>
-                ))
-              )}
+
+            {/* Two-pane job -> WO picker */}
+            <div className="flex-1 flex min-h-0">
+              <JobWorkOrderPicker
+                pinnedJobId={routingTask.job_id}
+                pinnedBadgeLabel="Task's job"
+                initialWoId={routingTask.routed_to_wo_id ?? null}
+                selectedWoId={routeSelectedWo?.work_order_id ?? null}
+                onSelect={setRouteSelectedWo}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-muted mb-1 block">Hours</label>
-                <input type="number" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} step="0.5"
-                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
-                {routingTask.hours && routeHours && parseFloat(routeHours) !== routingTask.hours && (
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-subtle bg-surface-dim flex items-end gap-3 shrink-0 flex-wrap">
+              <div className="w-full -mb-1">
+                {routeSelectedWo ? (
+                  <p className="text-xs text-navy">
+                    <CornerDownRight className="inline h-3 w-3 text-starlight-blue mr-1 -mt-0.5" />
+                    <span className="text-muted">Routing to: </span>
+                    <span className="font-semibold">{routeSelectedWo.is_overhead ? "Job Overhead" : routeSelectedWo.scope_name}</span>
+                    {routeSelectedWo.description ? <span className="text-muted"> — {routeSelectedWo.description}</span> : null}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted italic">Select a work order above to route this time</p>
+                )}
+              </div>
+              <div className="shrink-0">
+                <label className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1 flex items-center gap-1"><Clock className="h-3 w-3" /> Hours</label>
+                <input type="number" step="0.25" min="0" value={routeHours} onChange={(e) => setRouteHours(e.target.value)} className="w-24 px-3 py-2 bg-surface border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                {routingTask.hours != null && routeHours !== "" && parseFloat(routeHours) !== routingTask.hours && (
                   <p className="text-[10px] text-starlight-amber mt-1">Claimed: {formatHours(routingTask.hours)}</p>
                 )}
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label>
-                <input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..."
-                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Note to freelancer (optional)</label>
+                <input type="text" value={routeNote} onChange={(e) => setRouteNote(e.target.value)} placeholder="Note to freelancer..." className="w-full px-3 py-2 bg-surface border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
-              <button onClick={handleRouteToWO} disabled={!selectedWo || routeSubmitting}
-                className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">
-                {routeSubmitting ? "Routing..." : "Route & Create Entry"}
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <button onClick={() => setRoutingTask(null)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
+                <button onClick={handleRouteToWO} disabled={!routeSelectedWo || routeSubmitting} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                  {routeSubmitting ? "Routing\u2026" : (<><CornerDownRight className="h-4 w-4" />Route &amp; create entry</>)}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
       {/* Add Entry Modal */}
       {showAddEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddEntry(false)} />
-          <div className="relative bg-surface rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-navy">Add Entry for {person?.freelancer_name}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddEntry(false)} />
+          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col border border-subtle overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-subtle flex items-center justify-between gap-4 shrink-0">
+              <h3 className="text-base font-semibold text-navy">Add entry for {person?.freelancer_name}</h3>
+              <button onClick={() => setShowAddEntry(false)} className="p-1.5 hover:bg-surface-mid rounded-lg text-muted hover:text-navy transition-colors shrink-0" aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+
             {/* Type toggle */}
-            <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5">
-              <button onClick={() => setAddEntryType("wo")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "wo" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>WO Time Entry</button>
-              <button onClick={() => setAddEntryType("adhoc")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "adhoc" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>Ad-hoc Task</button>
-            </div>
-            {/* Date + Hours */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-muted mb-1 block">Date</label>
-                <input type="date" value={addEntryDate} onChange={e => setAddEntryDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted mb-1 block">Hours</label>
-                <input type="number" value={addEntryHours} onChange={e => setAddEntryHours(e.target.value)} step="0.5" min="0.5"
-                  className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+            <div className="px-6 py-3 border-b border-subtle shrink-0">
+              <div className="flex items-center gap-1 bg-surface-mid rounded-lg p-0.5 w-full max-w-sm">
+                <button onClick={() => setAddEntryType("wo")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "wo" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>WO Time Entry</button>
+                <button onClick={() => setAddEntryType("adhoc")} className={"flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors " + (addEntryType === "adhoc" ? "bg-surface text-navy shadow-sm" : "text-muted hover:text-navy")}>Ad-hoc Task</button>
               </div>
             </div>
-            {/* WO picker */}
-            {addEntryType === "wo" && (
-              <>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
-                  <input type="text" value={addWoSearch} onChange={e => setAddWoSearch(e.target.value)} placeholder="Search work orders..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
-                </div>
-                <div className="border border-subtle rounded-lg max-h-40 overflow-y-auto divide-y divide-subtle">
-                  {filteredAddWos.length === 0 ? (<p className="text-sm text-muted p-4 text-center">No matching work orders</p>) : (
-                    filteredAddWos.slice(0, 20).map(wo => (
-                      <button key={wo.work_order_id} onClick={() => setAddEntryWoId(wo.work_order_id)}
-                        className={"w-full text-left px-4 py-2.5 hover:bg-surface-dim transition-colors " + (addEntryWoId === wo.work_order_id ? "bg-starlight-blue/5 border-l-2 border-l-starlight-blue" : "") + (wo.status === "Complete" && addEntryWoId !== wo.work_order_id ? " opacity-60" : "")}>
-                        <p className="text-sm text-navy">{wo.description || wo.scope_name}</p>
-                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted">
-                          <span className="font-mono">{wo.job_number}</span><span>{wo.scope_name}</span>
-                          <span className={"px-1.5 py-0.5 rounded-full font-medium " + statusClass(wo.status)}>{wo.status}</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </>
-            )}
-            {/* Ad-hoc fields */}
-            {addEntryType === "adhoc" && (
-              <>
+
+            {/* Body — WO picker or ad-hoc fields */}
+            {addEntryType === "wo" ? (
+              <div className="flex-1 flex min-h-0">
+                <JobWorkOrderPicker
+                  selectedWoId={addSelectedWo?.work_order_id ?? null}
+                  onSelect={setAddSelectedWo}
+                />
+              </div>
+            ) : (
+              <div className="px-6 py-4 space-y-4 overflow-y-auto">
                 <div>
                   <label className="text-xs font-medium text-muted mb-1 block">Title</label>
                   <input type="text" value={addEntryTitle} onChange={e => setAddEntryTitle(e.target.value)} placeholder="What was done?"
@@ -1527,20 +1488,45 @@ export default function FreelancerDetailPage() {
                     ))}
                   </div>
                 </div>
-              </>
+              </div>
             )}
-            {/* Note */}
-            <div>
-              <label className="text-xs font-medium text-muted mb-1 block">Note (optional)</label>
-              <input type="text" value={addEntryNote} onChange={e => setAddEntryNote(e.target.value)} placeholder="e.g. Forgot to clock in, covering for sick leave..."
-                className="w-full px-3 py-2.5 border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowAddEntry(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
-              <button onClick={handleAddEntry} disabled={addEntrySubmitting}
-                className="px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40">
-                {addEntrySubmitting ? "Adding..." : "Add Entry"}
-              </button>
+
+            {/* Footer — date, hours, note, actions */}
+            <div className="px-6 py-4 border-t border-subtle bg-surface-dim shrink-0 space-y-3">
+              {addEntryType === "wo" && (
+                <div className="text-xs text-navy -mb-1">
+                  {addSelectedWo ? (
+                    <p>
+                      <CornerDownRight className="inline h-3 w-3 text-starlight-blue mr-1 -mt-0.5" />
+                      <span className="text-muted">Logging to: </span>
+                      <span className="font-semibold">{addSelectedWo.is_overhead ? "Job Overhead" : addSelectedWo.scope_name}</span>
+                      {addSelectedWo.description ? <span className="text-muted"> — {addSelectedWo.description}</span> : null}
+                    </p>
+                  ) : (
+                    <p className="text-muted italic">Select a work order above</p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="shrink-0">
+                  <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Date</label>
+                  <input type="date" value={addEntryDate} onChange={e => setAddEntryDate(e.target.value)} className="px-3 py-2 bg-surface border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <div className="shrink-0">
+                  <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Hours</label>
+                  <input type="number" value={addEntryHours} onChange={e => setAddEntryHours(e.target.value)} step="0.5" min="0.5" className="w-24 px-3 py-2 bg-surface border border-subtle rounded-lg text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Note (optional)</label>
+                  <input type="text" value={addEntryNote} onChange={e => setAddEntryNote(e.target.value)} placeholder="e.g. Forgot to clock in, covering for sick leave..." className="w-full px-3 py-2 bg-surface border border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-starlight-blue/30" />
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button onClick={() => setShowAddEntry(false)} className="px-4 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
+                  <button onClick={handleAddEntry} disabled={addEntrySubmitting || (addEntryType === "wo" && !addSelectedWo)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-starlight-blue text-white rounded-lg hover:bg-starlight-blue/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                    {addEntrySubmitting ? "Adding\u2026" : "Add Entry"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
