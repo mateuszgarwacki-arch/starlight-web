@@ -334,7 +334,7 @@ export function JobWorkOrderPicker({
   return (
     <div className="flex min-h-0 h-full w-full">
       {/* Job pane */}
-      <div className="w-[340px] border-r border-subtle flex flex-col bg-surface-dim/30">
+      <div className="w-[340px] border-r border-subtle flex flex-col bg-surface-dim/30 min-h-0">
         <div className="p-3 border-b border-subtle shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted pointer-events-none" />
@@ -440,7 +440,7 @@ export function JobWorkOrderPicker({
       </div>
 
       {/* WO pane */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {!selectedJobId ? (
           <div className="flex-1 flex items-center justify-center p-8 text-center">
             <div>
