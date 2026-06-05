@@ -103,6 +103,21 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S61 — Shared JobWorkOrderPicker + completed-job filter — 5 Jun 2026
+
+The two-pane job → work-order search that lived inside `RouteTaskModal` (the `/review/inbox` "Route task to work order" UI) is now a standalone component, `src/components/job-work-order-picker.tsx`, reused on every surface where a PM points time at a WO. Two asks drove it: (1) hide already-**completed** jobs from the list, and (2) replace the crew page's two worse flat-list pickers — especially the "Add Entry" one — with the good UI. Frontend-only; no schema/RLS/RPC change. Two code deploys (inbox parity first to protect the surface that already worked, then the crew rewire), each a single CLI deploy.
+
+#### What shipped
+- **`src/components/job-work-order-picker.tsx`** (new) — the job pane + scope-grouped WO pane, overhead bucket pinned top, Complete rows sorted last + dimmed. Self-fetches and enriches WOs (scope `is_general` → `is_overhead`, job, activity verb) so hosts don't. Selection is held internally and reported up via `onSelect(wo: WOOption | null)`; the host keeps its own hours/note/date footer + submit and reads `work_order_id`/`job_id`/`is_overhead`/`scope_name`/`description` straight off the `WOOption`. Props: `onSelect`, `selectedWoId`, `pinnedJobId?`, `pinnedBadgeLabel?`, `initialWoId?`.
+- **Completed-job filter** — the picker now selects `tbl_production_plan.job_status` and hides jobs with `job_status = 'Complete'` by default. A "Show completed (N)" checkbox reveals them; a **pinned** job (`pinnedJobId`) stays visible regardless, so a modal opened against a finished job never loses its own context. ("Inactive" = `Complete`; the live vocabulary is `Active`/`Planning`/`Complete` — no Cancelled/Voided — so everything that isn't Complete is treated as live.)
+- **`src/components/route-task-modal.tsx`** — gutted 833 → 299 lines; the body is now `<JobWorkOrderPicker pinnedJobId={task.job_id} pinnedBadgeLabel="Task's job" initialWoId={task.work_order_id} … />`. Behaviour on `/review/inbox` is unchanged (parity swap).
+- **`src/app/(dashboard)/crew/[id]/page.tsx`** — both modals rebuilt on the picker, widened to the two-pane layout. "Route to WO" pins the task's job and pre-selects any mobile-routed WO (`initialWoId={routed_to_wo_id}`). "Add Entry" WO mode uses the picker (ad-hoc mode unchanged). Deleted the two duplicate load-all-WOs-and-enrich blocks (`openRouteModal` / `openAddEntry`, both no longer `async`) and the `filteredWos` / `filteredAddWos` derivations — the picker owns all of that now.
+
+#### Notes / watch
+- The picker fetches WOs in statuses `Ready`/`In-Progress`/`Not-Started`/`Complete` — the same set the three old copies used, so a late time entry can still land on a finished WO (Complete rows just sort last + dim).
+- The crew file's local `interface WOOption` is now unused but left in place; the picker's type is imported aliased as `WOPick` to avoid the name clash. `Search`/`statusClass` likewise go unused there — harmless, the build (which doesn't fail on unused imports — cf. the pre-existing unused `Phone`/`Mail`/`Briefcase`) stays clean.
+- Verified: `tsc --noEmit` clean after each phase; both Vercel builds compiled + TypeScript passed. Deploys `dpl_6w1Xq8JU` (inbox, `3c4148e`) and `dpl_AEAZxw2i` (crew, `918e88f`), each a single CLI deploy with no parallel push (heeding the S59 cancellation-cascade warning).
+
 ### S60 — Block freelancer-role sessions from the PM/admin UI; truthful identity chip; real create errors — 3 Jun 2026
 
 A "Failed to create job" on the New Job modal turned out to be an auth/identity problem, not a data one. The desktop app and the `/m` crew app share one Supabase session in the browser (same project → same `sb-…-auth-token` key). The browser was carrying a **freelancer/test token** (`07700900001@starlight.local`, role `freelancer`, minted 18 Mar): `tbl_production_plan` SELECT is `using(true)` so the whole desktop UI rendered, but the RLS insert check (`get_my_role() ∈ {production_manager, admin}`) correctly **403'd every write**. Labels backed by `getUser()` showed "Admin" (live DB role) while the token RLS reads as freelancer — the mismatch that masked it. Frontend-only; no schema/RLS change. Two-commit session; code deployed clean via a single CLI deploy.

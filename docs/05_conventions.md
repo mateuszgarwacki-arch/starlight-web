@@ -1,6 +1,6 @@
 # Starlight Production System — Conventions & Patterns
 
-**Last updated:** 20 May 2026 (S46)
+**Last updated:** 5 Jun 2026 (S61)
 
 This is the "how we do things here" document. Patterns that have been promoted from single-session lessons to permanent convention. When in doubt, this file wins.
 
@@ -461,3 +461,23 @@ The action needs the `SUPABASE_DB_URL` repo secret (direct connection URI from S
 - **Keep a PDF fallback** (`jspdf`) at the seated 50×25 mm landscape size for machines without Browser Print; it relies on the printer driver's own Orientation setting to de-rotate.
 - **The print click must stay synchronous.** Pre-decode the QR to an `<img>`/data-URL on load — an `await` between the click and `window.open`/`send` trips the popup blocker.
 - **Label face content + the item Note (S54).** Each label prints `JOB# · WO#`, the item description (large), the item **Note**, and a QR to `/m/wo/{woId}`. The Note prints **whenever it is set, regardless of WO activity** — the original PAINT/COVER-only gate was removed in S54, so notes like "Set A — upstage flat" now print on cut/build WOs too (the floor's stated use case: which board belongs to which set part). The Note is stored in `tbl_job_items.finish_required` — a **legacy column name repurposed** as a free-text per-item note; no rename (the column is read by `rpc_job_handover_data`, `rpc_load_list`, `qry_jobitems_withcoverage` and ~10 frontend files, so the blast radius isn't worth a cosmetic rename). It is entered as **"Note"** on the scope card and the Add-Bespoke-Item form, and surfaces as a **"Note"** column on the traveller, handover, and load-list (all relabelled "Finish" → "Note" in S54 for consistency). **Do not confuse with `finish_relative`** — that is the WO/scope finish *state* (Raw/Primed/Painted), a separate field, untouched.
+
+
+## 22. Shared job → work-order picker (S61)
+
+The two-pane job → WO search is **one component** — `src/components/job-work-order-picker.tsx` (`<JobWorkOrderPicker>`). Anywhere a PM points time at a work order uses it; do not hand-roll another WO list. Current consumers: the `/review/inbox` route-task modal (`route-task-modal.tsx`) and both crew-page modals (Route to WO, Add Entry) in `(dashboard)/crew/[id]/page.tsx`. Before S61 the same fetch-and-enrich logic was copy-pasted in three places (one good, two worse flat lists) — extraction killed the drift.
+
+### 22.1 Contract
+
+- The picker **self-fetches and enriches** WOs (scope `is_general` → `is_overhead`, job number/name/date/**status**, activity verb). Hosts pass no data in.
+- Selection lives **inside** the picker and is reported up via `onSelect(wo: WOOption | null)`. The host stores the returned `WOOption` and reads `work_order_id` / `job_id` / `is_overhead` / `scope_name` / `description` straight off it for its footer + submit — no id-to-list lookup, because the host doesn't hold the list.
+- The host owns its own **footer and submit** (hours / note / date differ per surface — task routing vs. manual entry). The picker is the body only.
+- Props: `onSelect` (required), `selectedWoId` (required, for highlight), `pinnedJobId?`, `pinnedBadgeLabel?`, `initialWoId?` (pre-select + scroll-into-view, e.g. a mobile-routed WO).
+- The `WOOption` type is exported from the picker. If a host already has a local `WOOption`, import the picker's **aliased** (the crew page uses `WOPick`) rather than renaming the host's.
+
+### 22.2 Completed-job visibility ("inactive" = Complete)
+
+- Jobs with `tbl_production_plan.job_status = 'Complete'` are **hidden by default**. A "Show completed (N)" checkbox reveals them.
+- The live `job_status` vocabulary is `Active` / `Planning` / `Complete` — there is no Cancelled/Voided. So the rule is simply: **everything that isn't `Complete` is "active" and shown**; `Complete` is the only value filtered.
+- A **pinned** job (`pinnedJobId`) is always shown regardless of the toggle — a modal opened against a finished job (e.g. routing an old task) must never lose its own context.
+- Within a job's WO pane, **Complete WOs sort last and render dimmed** (`opacity-60`) but stay selectable — a late time entry can still be pointed at a finished WO. The WO fetch deliberately includes `Complete` alongside `Ready` / `In-Progress` / `Not-Started`.
