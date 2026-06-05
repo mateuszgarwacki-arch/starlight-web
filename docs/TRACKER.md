@@ -117,6 +117,7 @@ The two-pane job → work-order search that lived inside `RouteTaskModal` (the `
 - The picker fetches WOs in statuses `Ready`/`In-Progress`/`Not-Started`/`Complete` — the same set the three old copies used, so a late time entry can still land on a finished WO (Complete rows just sort last + dim).
 - The crew file's local `interface WOOption` is now unused but left in place; the picker's type is imported aliased as `WOPick` to avoid the name clash. `Search`/`statusClass` likewise go unused there — harmless, the build (which doesn't fail on unused imports — cf. the pre-existing unused `Phone`/`Mail`/`Briefcase`) stays clean.
 - Verified: `tsc --noEmit` clean after each phase; both Vercel builds compiled + TypeScript passed. Deploys `dpl_6w1Xq8JU` (inbox, `3c4148e`) and `dpl_AEAZxw2i` (crew, `918e88f`), each a single CLI deploy with no parallel push (heeding the S59 cancellation-cascade warning).
+- **Follow-up fix (`aede010` → `dpl_8jnCtLzU`):** the picker's job and WO panes were flex children missing `min-h-0`, so `min-height: auto` let each grow to its content height instead of clamping to the modal — the inner `overflow-y-auto` had nothing to scroll against, and a job with enough WOs (Summer Solstice, 61) overflowed and got clipped behind the footer with no way to reach the rest. Added `min-h-0` to both panes. Latent on `/review/inbox` too (same component); only surfaced once a job had enough WOs to overflow.
 
 ### S60 — Block freelancer-role sessions from the PM/admin UI; truthful identity chip; real create errors — 3 Jun 2026
 
