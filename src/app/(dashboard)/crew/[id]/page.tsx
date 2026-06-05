@@ -1370,7 +1370,7 @@ export default function FreelancerDetailPage() {
       {routingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRoutingTask(null)} />
-          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col border border-subtle overflow-hidden">
+          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl h-[88vh] flex flex-col border border-subtle overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-subtle flex items-start justify-between gap-4 shrink-0">
               <div className="min-w-0">
@@ -1447,7 +1447,7 @@ export default function FreelancerDetailPage() {
       {showAddEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddEntry(false)} />
-          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col border border-subtle overflow-hidden">
+          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl h-[88vh] flex flex-col border border-subtle overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-subtle flex items-center justify-between gap-4 shrink-0">
               <h3 className="text-base font-semibold text-navy">Add entry for {person?.freelancer_name}</h3>
@@ -1471,7 +1471,7 @@ export default function FreelancerDetailPage() {
                 />
               </div>
             ) : (
-              <div className="px-6 py-4 space-y-4 overflow-y-auto">
+              <div className="flex-1 min-h-0 px-6 py-4 space-y-4 overflow-y-auto">
                 <div>
                   <label className="text-xs font-medium text-muted mb-1 block">Title</label>
                   <input type="text" value={addEntryTitle} onChange={e => setAddEntryTitle(e.target.value)} placeholder="What was done?"

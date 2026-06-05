@@ -160,7 +160,7 @@ export function RouteTaskModal({ task, onClose, onSuccess }: Props) {
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col border border-subtle overflow-hidden">
+      <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-5xl h-[88vh] flex flex-col border border-subtle overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-subtle flex items-start justify-between gap-4 shrink-0">
           <div className="min-w-0">
