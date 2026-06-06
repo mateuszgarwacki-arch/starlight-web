@@ -7,6 +7,13 @@ import { useRouter } from "next/navigation";
 import { Clock, Play, UserPlus, CheckCircle2, Paintbrush, ChevronDown, ChevronRight, UserCheck, Search, X, Tag } from "lucide-react";
 import { TimesheetFlagsBanner } from "@/components/timesheet-flags";
 
+interface LinkedItem {
+  item_id: number;
+  description: string;
+  quantity: number | null;
+  unit: string | null;
+}
+
 interface TaskCard {
   work_order_id: number;
   scope_item_id: number;
@@ -24,6 +31,7 @@ interface TaskCard {
   paint_notes: string | null;
   assignee_ids: number[];
   my_last_entry_id: number | null;
+  items: LinkedItem[];
 }
 
 interface ScopeGroup {
@@ -130,13 +138,14 @@ export default function MobileTaskList() {
     const scopeIds = [...new Set(wos.map(w => w.scope_item_id).filter(Boolean))];
     const jobIds = [...new Set(wos.map(w => w.job_id).filter(Boolean))];
 
-    const [actRes, scopeRes, jobRes, timeRes, activeWorkersRes, assigneesRes] = await Promise.all([
+    const [actRes, scopeRes, jobRes, timeRes, activeWorkersRes, assigneesRes, linkRes] = await Promise.all([
       supabase.from("tbl_wo_activities").select("work_order_id, activity_id, sequence").in("work_order_id", woIds).order("sequence"),
       supabase.from("tbl_scope_items").select("scope_item_id, item_name").in("scope_item_id", scopeIds),
       supabase.from("tbl_production_plan").select("job_id, job_name, job_number").in("job_id", jobIds),
       supabase.from("tbl_wo_time_entries").select("entry_id, work_order_id, freelancer_id, system_end_timestamp").in("work_order_id", woIds).is("archived_at", null),
       supabase.rpc("rpc_active_workers"),
       supabase.from("tbl_wo_assignees").select("work_order_id, freelancer_id").in("work_order_id", woIds),
+      supabase.from("tbl_jobitem_workorder").select("work_order_id, job_item_id").in("work_order_id", woIds),
     ]);
 
     const allActIds = [
@@ -182,6 +191,22 @@ export default function MobileTaskList() {
       timeByWO[t.work_order_id].push(t);
     });
 
+    // Linked job items per WO (what physically gets built) — batch-resolved via the junction.
+    const links = (linkRes.data || []) as { work_order_id: number; job_item_id: number }[];
+    const linkedItemIds = [...new Set(links.map(l => l.job_item_id).filter(Boolean))] as number[];
+    const { data: itemRows } = linkedItemIds.length > 0
+      ? await supabase.from("tbl_job_items").select("item_id, description, quantity, unit").in("item_id", linkedItemIds)
+      : { data: [] };
+    const itemById: Record<number, LinkedItem> = {};
+    (itemRows || []).forEach((it: any) => {
+      itemById[it.item_id] = { item_id: it.item_id, description: it.description || "Item", quantity: it.quantity, unit: it.unit };
+    });
+    const itemsByWO: Record<number, LinkedItem[]> = {};
+    for (const l of links) {
+      const it = itemById[l.job_item_id];
+      if (it) (itemsByWO[l.work_order_id] ||= []).push(it);
+    }
+
     const cards: TaskCard[] = wos.map((wo: any) => {
       const acts = actByWO[wo.work_order_id];
       let label = "No Activity";
@@ -221,6 +246,7 @@ export default function MobileTaskList() {
         paint_notes: wo.paint_notes || null,
         assignee_ids: assigneesByWO[wo.work_order_id] || [],
         my_last_entry_id: myLastEntryId,
+        items: itemsByWO[wo.work_order_id] || [],
       };
     });
 
@@ -257,6 +283,7 @@ export default function MobileTaskList() {
           t.job_name,
           t.job_number,
           t.activity_label,
+          ...t.items.map(i => i.description),
         ].join(" ").toLowerCase();
         return haystack.includes(search);
       })
@@ -439,6 +466,14 @@ export default function MobileTaskList() {
                             {/* Description = headline, wraps if needed */}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-navy break-words">{task.description || task.activity_label}</p>
+                              {task.items.length > 0 && (
+                                <p className="text-[11px] italic text-muted leading-snug mt-0.5 line-clamp-2">
+                                  {task.items.map(it => {
+                                    const q = it.quantity != null ? (it.unit ? `${it.quantity} ${it.unit} ` : `${it.quantity}× `) : "";
+                                    return q + it.description;
+                                  }).join(" · ")}
+                                </p>
+                              )}
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 {task.workers.length > 0 && task.workers.map((w) => (
                                   <span key={w.freelancer_id} className="inline-flex items-center gap-1 text-[10px] font-medium text-starlight-blue bg-starlight-blue/10 px-1.5 py-0.5 rounded-full">
