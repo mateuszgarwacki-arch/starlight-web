@@ -103,6 +103,19 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S62 — Cut plan captions: prominent sheet count, drop pass/stack — 6 Jun 2026
+
+The suggested cut plan (live BOM preview + traveller print) showed a per-sheet caption `×N sheet · M pass · stack K · fill% used` and a material header `… in N patterns · M passes · stack K · waste%`. The pass/stack figures were noise to the floor ("no idea what that's for"). Recaptioned so the count leads: the per-sheet line is now a **bold 12pt `×N sheet(s)`** (the number that matters) with `fill% used` kept small; pass/stack dropped from both the per-sheet caption and the material header on both surfaces. Wastage kept. Frontend-only; no schema/algorithm change.
+
+#### What shipped
+- **`src/components/cut-layout-renderer.tsx`** — `PatternLayout` caption restyled (12pt bold sheet count + 7pt muted `% used`, pass/stack removed); `sheetDetail()` (live-preview header) drops the pass/stack segments.
+- **`src/lib/cut-layout.ts`** — `sheetDetailStr()` (the traveller's `materialDetail`) drops the pass/stack segments.
+- Stack-cut math untouched: `SheetPattern.passes`/`stackCount` and `MaterialSummary.total_passes`/`stack_count` are still computed (the packer still groups identical sheets into stackable runs) — just no longer printed.
+
+#### Notes
+- `tsc --noEmit` clean; Vercel build compiled. Single CLI deploy (`3abb130` → aliased to workshop-five-gamma).
+- The per-sheet figure is fill/utilisation (`% used`), kept as-is per request; if it should read offcut waste (e.g. `18% waste`) to match the header's `% waste`, it's a one-line flip in `PatternLayout` (`100 - pattern.fillPct`).
+
 ### S61 — Shared JobWorkOrderPicker + completed-job filter — 5 Jun 2026
 
 The two-pane job → work-order search that lived inside `RouteTaskModal` (the `/review/inbox` "Route task to work order" UI) is now a standalone component, `src/components/job-work-order-picker.tsx`, reused on every surface where a PM points time at a WO. Two asks drove it: (1) hide already-**completed** jobs from the list, and (2) replace the crew page's two worse flat-list pickers — especially the "Add Entry" one — with the good UI. Frontend-only; no schema/RLS/RPC change. Two code deploys (inbox parity first to protect the surface that already worked, then the crew rewire), each a single CLI deploy.
