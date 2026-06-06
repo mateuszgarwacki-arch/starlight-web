@@ -77,10 +77,11 @@ function PatternLayout({
           );
         })}
       </svg>
-      <p className="text-[7.5pt] text-muted mt-0.5 leading-tight">
-        ×{pattern.count} sheet{pattern.count === 1 ? "" : "s"} · {pattern.passes} pass{pattern.passes === 1 ? "" : "es"}
-        {pattern.stackCount > 1 ? ` · stack ${pattern.stackCount}` : ""}
-        {" · "}{pattern.fillPct}% used
+      <p className="mt-0.5 leading-tight">
+        <span className="text-[12pt] font-bold text-foreground">
+          ×{pattern.count} sheet{pattern.count === 1 ? "" : "s"}
+        </span>
+        <span className="text-[7pt] text-muted ml-1.5">{pattern.fillPct}% used</span>
       </p>
     </div>
   );
@@ -153,9 +154,7 @@ function LengthBinRow({ bin }: { bin: LengthBin }) {
 function sheetDetail(s: MaterialSummary): string {
   const n = s.patterns?.length || 0;
   const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
-  const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
-  const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
-  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${n} pattern${n === 1 ? "" : "s"}${passStr}${stackStr}${wasteStr}`;
+  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${n} pattern${n === 1 ? "" : "s"}${wasteStr}`;
 }
 
 /**

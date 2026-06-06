@@ -657,10 +657,8 @@ function rowUnitsFor(s: MaterialSummary): RowUnit[] {
 function sheetDetailStr(s: MaterialSummary): string {
   const n = s.patterns?.length || 0;
   const wasteStr = s.waste_pct != null ? ` · ${s.waste_pct}% waste` : "";
-  const stackStr = s.stack_count && s.stack_count > 1 ? ` · stack ${s.stack_count}` : "";
-  const passStr = s.total_passes != null ? ` · ${s.total_passes} pass${s.total_passes === 1 ? "" : "es"}` : "";
   const patStr = `${n} pattern${n === 1 ? "" : "s"}`;
-  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${patStr}${passStr}${stackStr}${wasteStr}`;
+  return `${s.sheets_needed} sheet${s.sheets_needed === 1 ? "" : "s"} in ${patStr}${wasteStr}`;
 }
 
 export function buildCutPlanPages(summaries: MaterialSummary[]): CutPlanPageChunk[] {
