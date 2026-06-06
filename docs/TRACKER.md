@@ -103,6 +103,21 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S64 — Linked job items on the mobile tasks list — 6 Jun 2026
+
+S63 put linked job items on the WO detail view; the general tasks list (`/m`) now carries them too, so the floor recognises what a task physically builds without opening it. Frontend-only; no schema/RLS change.
+
+#### What shipped
+- **`src/app/m/page.tsx`** — `loadTasks` gains a 7th batch query against `tbl_jobitem_workorder` for all loaded WOs, then one `tbl_job_items` query for the union of linked item IDs → an `itemsByWO` map (no per-row queries). Each `TaskCard` carries `items: LinkedItem[]`.
+- Under each WO row's description, a compact **italic** line: `qty× description` (or `qty unit description`) joined by `·` and `line-clamp-2`-truncated, so a row with many items stays short.
+- Item descriptions are also folded into the task **search** haystack — searching a part name now surfaces its task.
+
+#### Notes
+- No migration (both tables already have `rls_select USING (true)` for `authenticated`).
+- Read-only; no `notify`, no writes.
+- Finish notes (`finish_required`) are deliberately *not* shown here — the list stays lean; they remain on the WO detail view (S63).
+- `tsc --noEmit` clean; Vercel build compiled. Single CLI deploy (`6317875` → aliased to workshop-five-gamma).
+
 ### S63 — Mobile WO view shows linked job items under the task — 6 Jun 2026
 
 Freelancers read a work order as the thing they'll physically build, so the mobile WO page (`/m/wo/[woId]`) now lists the job items linked to that WO beneath the task description — the "what comes off this bench." Frontend-only; no schema/RLS change.
