@@ -103,6 +103,20 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S63 — Mobile WO view shows linked job items under the task — 6 Jun 2026
+
+Freelancers read a work order as the thing they'll physically build, so the mobile WO page (`/m/wo/[woId]`) now lists the job items linked to that WO beneath the task description — the "what comes off this bench." Frontend-only; no schema/RLS change.
+
+#### What shipped
+- **`src/app/m/wo/[woId]/page.tsx`** — `loadWO` gains a 6th parallel query against `tbl_jobitem_workorder` (the jobitem↔WO junction), then resolves the linked rows from `tbl_job_items` (`description`, `quantity`, `unit`, `finish_required`). Rendered as a compact **"Items (N)"** block under the description (above the steps panel): `qty× description` with the item's `finish_required` shown small + italic as the per-item note.
+- Quantity formats as `{qty}×` (Bespoke, no unit — the common case) or `{qty} {unit}` when a unit is set. `finish_required` is the note source — the junction's own `notes` column is unused in practice (all null in live data), and `finish_required` is the same field that prints on labels (S54), so the floor sees one consistent note.
+
+#### Notes
+- No migration: both `tbl_job_items` and `tbl_jobitem_workorder` already carry `rls_select USING (true)` for `authenticated`, so the freelancer session reads them fine.
+- Read-only display — no `notify`, no writes.
+- All linked items show regardless of `item_type` (Bespoke vs Stock); the junction is PM-curated, so the link itself is the filter. If Stock items ever read as noise here, filter on `item_type` — trivial.
+- `tsc --noEmit` clean; Vercel build compiled. Single CLI deploy (`e0cf536` → aliased to workshop-five-gamma).
+
 ### S62 — Cut plan captions: prominent sheet count, drop pass/stack — 6 Jun 2026
 
 The suggested cut plan (live BOM preview + traveller print) showed a per-sheet caption `×N sheet · M pass · stack K · fill% used` and a material header `… in N patterns · M passes · stack K · waste%`. The pass/stack figures were noise to the floor ("no idea what that's for"). Recaptioned so the count leads: the per-sheet line is now a **bold 12pt `×N sheet(s)`** (the number that matters) with `fill% used` kept small; pass/stack dropped from both the per-sheet caption and the material header on both surfaces. Wastage kept. Frontend-only; no schema/algorithm change.
