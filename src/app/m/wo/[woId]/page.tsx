@@ -30,6 +30,14 @@ interface WODetail {
   completion_photo_path: string | null;
 }
 
+interface LinkedItem {
+  item_id: number;
+  description: string;
+  quantity: number | null;
+  unit: string | null;
+  finish_required: string | null;
+}
+
 interface TimeEntryInfo {
   entry_id: number;
   freelancer_id: number;
@@ -59,6 +67,7 @@ export default function MobileWODetail() {
 
   const [wo, setWo] = useState<WODetail | null>(null);
   const [entries, setEntries] = useState<TimeEntryInfo[]>([]);
+  const [items, setItems] = useState<LinkedItem[]>([]);
   const [myId, setMyId] = useState(0);
   const [myName, setMyName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -97,13 +106,27 @@ export default function MobileWODetail() {
     if (!woData) { setLoading(false); return; }
 
     // Load context
-    const [scopeRes, jobRes, actRes, timeRes, propRes] = await Promise.all([
+    const [scopeRes, jobRes, actRes, timeRes, propRes, linkRes] = await Promise.all([
       supabase.from("tbl_scope_items").select("item_name").eq("scope_item_id", woData.scope_item_id).single(),
       supabase.from("tbl_production_plan").select("job_name, job_number").eq("job_id", woData.job_id).single(),
       supabase.from("tbl_wo_activities").select("activity_id, sequence").eq("work_order_id", woId).order("sequence"),
       supabase.from("tbl_wo_time_entries").select("entry_id, freelancer_id, system_start_timestamp, system_end_timestamp, actual_hours").eq("work_order_id", woId).is("archived_at", null).order("system_start_timestamp"),
       supabase.from("tbl_wo_completion_proposals").select("proposal_id, freelancer_id, completion_photo_path, proposed_note, status, review_note, reviewed_at, created_at").eq("work_order_id", woId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("tbl_jobitem_workorder").select("job_item_id").eq("work_order_id", woId),
     ]);
+
+    // Linked job items (what physically gets built) — via the jobitem↔WO junction.
+    const itemIds = [...new Set((linkRes.data || []).map((l: any) => l.job_item_id).filter(Boolean))] as number[];
+    const { data: itemRows } = itemIds.length > 0
+      ? await supabase.from("tbl_job_items").select("item_id, description, quantity, unit, finish_required").in("item_id", itemIds).order("item_id")
+      : { data: [] };
+    setItems((itemRows || []).map((it: any) => ({
+      item_id: it.item_id,
+      description: it.description || "Item",
+      quantity: it.quantity,
+      unit: it.unit,
+      finish_required: it.finish_required,
+    })));
 
     // Activity label
     const actIds = (actRes.data || []).map((a: any) => a.activity_id);
@@ -464,6 +487,32 @@ export default function MobileWODetail() {
         </div>
 
         {wo.description && <p className="text-sm text-muted mt-3 leading-relaxed">{wo.description}</p>}
+
+        {/* Linked job items — what physically gets built. Compact, under the task. */}
+        {items.length > 0 && (
+          <div className="mt-3 border-t border-subtle pt-3">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">
+              Items ({items.length})
+            </p>
+            <ul className="space-y-1.5">
+              {items.map(it => (
+                <li key={it.item_id} className="text-sm leading-snug">
+                  <span className="text-foreground">
+                    {it.quantity != null && (
+                      <span className="font-semibold text-navy">
+                        {it.unit ? `${it.quantity} ${it.unit}` : `${it.quantity}×`}{" "}
+                      </span>
+                    )}
+                    {it.description}
+                  </span>
+                  {it.finish_required && (
+                    <span className="block text-xs italic text-muted mt-0.5">{it.finish_required}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="mt-3">
           <WOStepsPanel workOrderId={wo.work_order_id} jobId={wo.job_id} readOnly />
