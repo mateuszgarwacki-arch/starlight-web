@@ -55,7 +55,7 @@ begin
      nullif(payload->'quote'->>'quote_reference',''),
      nullif(payload->'quote'->>'quote_version',''),
      nullif(payload->'quote'->>'quote_description',''),
-     coalesce(nullif(payload->'quote'->>'status',''), 'Draft'),
+     coalesce(nullif(payload->'quote'->>'status',''), 'Accepted'),
      p_uploaded_by,
      now())
   returning quote_id into v_quote_id;

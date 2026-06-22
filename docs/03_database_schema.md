@@ -37,7 +37,7 @@ tbl_wo_documents                tbl_wo_steps                    tbl_wo_time_entr
 tbl_wo_time_entry_edits         tbl_work_orders                 tbl_workshop_requests
 ```
 
-## Views (35)
+## Views (37)
 
 ```
 qry_bom_enriched                qry_bom_invariant_violations    qry_dash_quote_stats
@@ -52,7 +52,10 @@ qry_scope_breakdown             qry_scope_context               qry_scope_estima
 qry_scope_wo_stats              qry_stale_travellers            qry_supplier_summary
 qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ordered
 qry_wo_with_activities
+qry_job_financials              qry_financial_consistency_violations
 ```
+
+**Canonical financial layer (S65):** `qry_job_financials` is the single source of truth for every job-level money figure — quote, workshop-quote, labour, material plan/actual/committed, committed cost, and both workshop- and full-quote margin bases — with honest nulls (NULL, not £0, when no quote exists). `rpc_job_close_report`, `rpc_review_data`, and `rpc_job_detail_data` all read it; `qry_job_accepted_quote` is now a thin status-agnostic alias over it. `qry_financial_consistency_violations` flags misrepresentation risks (multiple quotes on one job, a live job with cost/scope but no quote, committed cost with no workshop basis). The quote `status` Draft/Issued/Accepted lifecycle is **retired** — `tbl_quotes.status` now defaults to `'Accepted'` and is no longer financially load-bearing (free to repurpose later as a version-supersession marker).
 
 ## Functions (20)
 
