@@ -92,6 +92,28 @@ interface MatDetail {
 
 type TabKey = "costs" | "time" | "flags" | "accuracy" | "materials" | "completed" | "learnings";
 
+interface Violation {
+  job_id: number;
+  job_number: string | null;
+  job_status: string | null;
+  violation: string;
+  detail: string;
+}
+
+// Short badge labels + colours for qry_financial_consistency_violations rows.
+// no_quote = most serious (red), cost-without-basis = amber, multiple_quotes = informational tripwire (blue).
+const VIOLATION_LABEL: Record<string, string> = {
+  multiple_quotes: "Multiple quotes",
+  no_quote_on_live_job: "No quote",
+  cost_without_workshop_quote: "No workshop basis",
+};
+
+const VIOLATION_STYLE: Record<string, string> = {
+  multiple_quotes: "bg-starlight-blue/10 text-starlight-blue",
+  no_quote_on_live_job: "bg-starlight-red/10 text-starlight-red",
+  cost_without_workshop_quote: "bg-starlight-amber/10 text-starlight-amber",
+};
+
 export default function ReviewPage() {
   const supabase = createClient();
   const [tab, setTab] = useState<TabKey>("costs");
@@ -118,6 +140,7 @@ export default function ReviewPage() {
   const [workshopMargins, setWorkshopMargins] = useState<Record<number, any>>({});
   const [expandedScope, setExpandedScope] = useState<number | null>(null);
   const [woDetails, setWoDetails] = useState<any[]>([]);
+  const [violations, setViolations] = useState<Violation[]>([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -205,6 +228,12 @@ export default function ReviewPage() {
       wmData.forEach((m: any) => { map[m.job_id] = m; });
       setWorkshopMargins(map);
     }
+    // Financial consistency guard — standing watcher for misrepresentation (S66).
+    // View returns rows only when something's off; empty on a healthy ledger.
+    const { data: violData } = await supabase
+      .from("qry_financial_consistency_violations")
+      .select("job_id, job_number, job_status, violation, detail");
+    setViolations(violData || []);
     setLoading(false);
   }, []);
 
@@ -298,6 +327,38 @@ export default function ReviewPage() {
 
       {/* Secondary nav — shared chip strip, realtime counts */}
       <ReviewNavChips />
+
+      {/* Financial consistency guard — surfaces qry_financial_consistency_violations (S66).
+          Renders only when the view returns rows; invisible on a healthy ledger. */}
+      {violations.length > 0 && (
+        <div className="card overflow-hidden border-l-4 border-l-starlight-amber bg-starlight-amber/5">
+          <div className="px-5 py-3 flex items-center gap-2.5 border-b border-subtle/70">
+            <AlertTriangle className="h-4 w-4 text-starlight-amber shrink-0" />
+            <p className="text-sm font-semibold text-navy">
+              {violations.length} financial consistency {violations.length === 1 ? "issue" : "issues"}
+            </p>
+            <span className="text-[11px] text-muted">— job figures may misrepresent until resolved</span>
+          </div>
+          <ul className="divide-y divide-subtle/60">
+            {violations.map((v, i) => (
+              <li key={`${v.job_id}-${v.violation}-${i}`} className="px-5 py-2.5 flex items-start gap-3">
+                <Link
+                  href={`/jobs/${v.job_id}`}
+                  className="text-[10px] font-mono text-muted bg-surface-mid px-1.5 py-0.5 rounded hover:bg-navy/10 transition-colors shrink-0 mt-0.5"
+                >
+                  {v.job_number || `#${v.job_id}`}
+                </Link>
+                <div className="min-w-0">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded mr-2 whitespace-nowrap ${VIOLATION_STYLE[v.violation] || "bg-surface-mid text-muted"}`}>
+                    {VIOLATION_LABEL[v.violation] || v.violation}
+                  </span>
+                  <span className="text-xs text-foreground">{v.detail}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
