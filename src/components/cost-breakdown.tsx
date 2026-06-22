@@ -219,17 +219,19 @@ export function CostBreakdown({ scopeItemId, jobId, quotedValue, refreshKey, hid
     const lineData: QuoteLine[] = [];
 
     if (jobId && !scopeItemId) {
-      const [qlRes, scopeRes, marginRes] = await Promise.all([
+      const [qlRes, scopeRes, marginRes, finRes] = await Promise.all([
         supabase.from("tbl_quote_lines").select("quote_line_id, line_number, line_text, line_value, event_zone, category, pm_est_cost, pm_est_labour_days, pm_est_material_cost").eq("job_id", jobId),
         supabase.from("tbl_scope_items").select("scope_item_id, quote_line_id").eq("job_id", jobId),
         supabase.from("qry_quoteline_margin").select("*").eq("job_id", jobId),
+        supabase.from("qry_job_financials").select("quote_value, workshop_quoted_value").eq("job_id", jobId).maybeSingle(),
       ]);
 
       const qlRows = qlRes.data || [];
-      quotedTotal = qlRows.reduce((s: number, l: any) => s + (l.line_value || 0), 0);
-      const workshopCats = ["workshop build", "workshop", "stock pick", "stock-and-hire"];
-      quotedWorkshop = qlRows.filter((l: any) => workshopCats.some(c => (l.category || "").toLowerCase().includes(c)))
-        .reduce((s: number, l: any) => s + (l.line_value || 0), 0);
+      // Canonical money basis — qry_job_financials is the single source of truth (S65/S66);
+      // its workshop slice already excludes the Overhead sub-group. Never re-derive it here.
+      // NULL = no quote captured → coerce to 0 so the existing `q > 0` guards render "—" honestly.
+      quotedTotal = Number(finRes.data?.quote_value) || 0;
+      quotedWorkshop = Number(finRes.data?.workshop_quoted_value) || 0;
 
       // Map scopes to quote lines for estimated cost aggregation
       const scopeToLine: Record<number, number> = {};
