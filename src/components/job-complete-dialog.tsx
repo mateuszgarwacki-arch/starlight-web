@@ -33,13 +33,17 @@ interface JobCompleteDialogProps {
 
 interface ReportSummary {
   commercial: {
-    quoted: number;            // full accepted quote — all non-overhead lines
-    quoted_workshop: number;   // workshop slice — excludes Subcontracted / Provisional
+    quoted: number | null;            // full quote — all non-overhead lines. NULL = no quote captured.
+    quoted_workshop: number | null;   // workshop slice — excludes Subcontracted / Provisional. NULL = no quote.
+    has_quote: boolean;               // false = no quote lines exist for this job
     labour_cost: number;
     labour_hours: number;
     material_cost_planned: number;   // BOM total — the plan
     material_cost_actual: number;    // invoice allocations — what's actually been spent
     material_cost_committed: number; // MAX(planned, actual) — drives margin
+    committed_cost: number;          // labour + material_committed (canonical)
+    workshop_margin_value: number | null; // NULL when there is no workshop quote basis
+    workshop_margin_pct: number | null;   // NULL when there is no workshop quote basis
     invoiced_total: number;
     unallocated_invoice_total: number;
   };
@@ -87,8 +91,10 @@ export function JobCompleteDialog({
       const data = reportRes.data as any;
       setSummary({
         commercial: data?.commercial || {
-          quoted: 0, quoted_workshop: 0, labour_cost: 0, labour_hours: 0,
+          quoted: null, quoted_workshop: null, has_quote: false,
+          labour_cost: 0, labour_hours: 0,
           material_cost_planned: 0, material_cost_actual: 0, material_cost_committed: 0,
+          committed_cost: 0, workshop_margin_value: null, workshop_margin_pct: null,
           invoiced_total: 0, unallocated_invoice_total: 0,
         },
         active_wo_count: activeWos.length,
@@ -159,10 +165,13 @@ export function JobCompleteDialog({
   // Total Committed = labour spent + materials at the worse of (plan, actual).
   // Matches the system-wide rule that margin is calculated against committed cost.
   const totalCommitted = c ? (c.labour_cost + c.material_cost_committed) : 0;
-  // Margin is computed against the WORKSHOP quote, not the full quote — the full
-  // figure includes subcontracted/provisional work that isn't ours to cost.
-  const marginBase = c ? c.quoted_workshop : 0;
-  const margin = marginBase > 0 ? ((marginBase - totalCommitted) / marginBase) * 100 : 0;
+  // Quote / margin come straight from the canonical financial layer. They are
+  // NULL when there is no quote to measure against — we render "—", never a
+  // confident £0 / 0%. Margin basis is the WORKSHOP quote (the full figure
+  // includes subcontracted / provisional work that isn't ours to cost).
+  const hasQuote = !!c && c.quoted != null;
+  const marginPct = c?.workshop_margin_pct ?? null;        // null = no basis
+  const marginValue = c?.workshop_margin_value ?? null;    // null = no basis
   const materialOverrun = c ? (c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0) : false;
 
   return (
@@ -212,9 +221,11 @@ export function JobCompleteDialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="px-3 py-2.5 bg-base rounded-lg">
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
-                    <p className="text-base font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
+                    <p className="text-base font-semibold text-navy mt-0.5">{hasQuote ? formatCurrency(c.quoted as number) : "—"}</p>
                     <p className="text-[10px] text-muted mt-0.5">
-                      Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+                      {c.quoted_workshop != null
+                        ? <>Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span></>
+                        : <span className="italic">No quote captured</span>}
                     </p>
                   </div>
                   <div className="px-3 py-2.5 bg-base rounded-lg">
@@ -247,21 +258,31 @@ export function JobCompleteDialog({
                   </div>
                   <div className={
                     "col-span-2 px-3 py-2.5 rounded-lg " +
-                    (margin >= 20 ? "bg-starlight-green/10" :
-                     margin >= 0 ? "bg-starlight-amber/10" : "bg-starlight-red/10")
+                    (marginPct == null ? "bg-base" :
+                     marginPct >= 20 ? "bg-starlight-green/10" :
+                     marginPct >= 0 ? "bg-starlight-amber/10" : "bg-starlight-red/10")
                   }>
                     <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Estimated Margin</p>
-                    <p className={
-                      "text-base font-semibold mt-0.5 " +
-                      (margin >= 20 ? "text-starlight-green" :
-                       margin >= 0 ? "text-starlight-amber" : "text-starlight-red")
-                    }>
-                      {margin.toFixed(1)}%
-                      <span className="text-xs text-muted font-normal ml-1.5">
-                        ({formatCurrency(marginBase - totalCommitted)})
-                      </span>
-                    </p>
-                    <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted {formatCurrency(c.quoted_workshop)}</p>
+                    {marginPct == null ? (
+                      <>
+                        <p className="text-base font-semibold mt-0.5 text-muted">—</p>
+                        <p className="text-[10px] text-muted mt-0.5">No workshop + stock quote captured to measure against</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className={
+                          "text-base font-semibold mt-0.5 " +
+                          (marginPct >= 20 ? "text-starlight-green" :
+                           marginPct >= 0 ? "text-starlight-amber" : "text-starlight-red")
+                        }>
+                          {marginPct.toFixed(1)}%
+                          <span className="text-xs text-muted font-normal ml-1.5">
+                            ({marginValue != null ? formatCurrency(marginValue) : "—"})
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted {formatCurrency(c.quoted_workshop as number)}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

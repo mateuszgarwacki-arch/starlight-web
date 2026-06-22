@@ -44,13 +44,17 @@ interface CloseReport {
     created_at: string | null;
   };
   commercial: {
-    quoted: number;
-    quoted_workshop: number;
+    quoted: number | null;
+    quoted_workshop: number | null;
+    has_quote: boolean;
     labour_cost: number;
     labour_hours: number;
     material_cost_planned: number;
     material_cost_actual: number;
     material_cost_committed: number;
+    committed_cost: number;
+    workshop_margin_value: number | null;
+    workshop_margin_pct: number | null;
     invoiced_total: number;
     unallocated_invoice_total: number;
   };
@@ -136,18 +140,23 @@ export default function JobCloseReport() {
   const { job, commercial: c, post_complete_edits: edits } = data;
   const isComplete = job.job_status === "Complete";
   const totalCommitted = c.labour_cost + c.material_cost_committed;
-  // Margin is computed against the WORKSHOP quote (excludes Subcontracted /
-  // Provisional) — the full quote total includes work that isn't ours to cost.
-  const marginBase = c.quoted_workshop;
-  const margin = marginBase > 0 ? marginBase - totalCommitted : 0;
-  const marginPct = marginBase > 0 ? (margin / marginBase) * 100 : 0;
+  // Quote / margin come straight from the canonical financial layer. They are
+  // NULL when there is no quote to measure against — we render "—", never a
+  // confident £0 / 0%. Margin basis is the WORKSHOP quote (excludes
+  // Subcontracted / Provisional — the full quote includes work that isn't
+  // ours to cost).
+  const hasQuote = c.quoted != null;
+  const marginPct = c.workshop_margin_pct;       // null = no basis
+  const marginValue = c.workshop_margin_value;   // null = no basis
   const materialOverrun = c.material_cost_actual > c.material_cost_planned && c.material_cost_planned > 0;
 
   const marginColor =
+    marginPct == null ? "text-muted" :
     marginPct >= 25 ? "text-starlight-green" :
     marginPct >= 10 ? "text-starlight-amber" :
     "text-starlight-red";
   const marginBg =
+    marginPct == null ? "bg-base border-subtle" :
     marginPct >= 25 ? "bg-starlight-green/10 border-starlight-green/30" :
     marginPct >= 10 ? "bg-starlight-amber/10 border-starlight-amber/30" :
     "bg-starlight-red/10 border-starlight-red/30";
@@ -222,9 +231,11 @@ export default function JobCloseReport() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="px-3 py-2.5 bg-base rounded-lg">
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Quoted</p>
-            <p className="text-lg font-semibold text-navy mt-0.5">{formatCurrency(c.quoted)}</p>
+            <p className="text-lg font-semibold text-navy mt-0.5">{hasQuote ? formatCurrency(c.quoted as number) : "—"}</p>
             <p className="text-[10px] text-muted mt-0.5">
-              Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span>
+              {c.quoted_workshop != null
+                ? <>Workshop + stock <span className="font-mono text-navy">{formatCurrency(c.quoted_workshop)}</span></>
+                : <span className="italic">No quote captured</span>}
             </p>
           </div>
           <div className="px-3 py-2.5 bg-base rounded-lg">
@@ -249,9 +260,18 @@ export default function JobCloseReport() {
           </div>
           <div className={"px-3 py-2.5 rounded-lg border " + marginBg}>
             <p className="text-[10px] uppercase tracking-wider text-muted font-medium">Margin</p>
-            <p className={"text-lg font-semibold mt-0.5 " + marginColor}>{marginPct.toFixed(1)}%</p>
-            <p className={"text-[10px] mt-0.5 " + marginColor}>{formatCurrency(margin)}</p>
-            <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted</p>
+            {marginPct == null ? (
+              <>
+                <p className={"text-lg font-semibold mt-0.5 " + marginColor}>—</p>
+                <p className="text-[10px] text-muted mt-0.5">No workshop + stock quote to measure against</p>
+              </>
+            ) : (
+              <>
+                <p className={"text-lg font-semibold mt-0.5 " + marginColor}>{marginPct.toFixed(1)}%</p>
+                <p className={"text-[10px] mt-0.5 " + marginColor}>{marginValue != null ? formatCurrency(marginValue) : "—"}</p>
+                <p className="text-[10px] text-muted mt-0.5">vs workshop + stock quoted</p>
+              </>
+            )}
           </div>
         </div>
 
