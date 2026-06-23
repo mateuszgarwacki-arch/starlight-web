@@ -10,6 +10,7 @@ import {
   AlertTriangle, Zap, Package, Pencil, Eye, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { InvoiceLineRouter, ScopeOption, WOOption } from "@/components/invoice-line-router";
 import { InvoiceAllocation } from "@/lib/invoice-routing";
 
@@ -248,6 +249,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-bold text-navy">Invoices</h1><p className="text-sm text-muted mt-0.5">Upload supplier invoices · auto-match materials · update prices</p></div>
         <div className="flex items-center gap-2">
+          <Link href="/invoices/import" className="inline-flex items-center gap-2 px-3 py-2 text-sm text-starlight-blue hover:bg-surface-mid rounded-lg transition-colors"><Upload className="h-4 w-4" /> Import from Expend</Link>
           <button onClick={startManualEntry} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors"><Plus className="h-4 w-4" /> Manual Entry</button>
           <label className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red transition-colors cursor-pointer"><Upload className="h-4 w-4" /> Upload Invoice<input type="file" accept=".pdf,image/*" onChange={handleFileUpload} className="hidden" /></label>
         </div>
