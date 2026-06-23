@@ -34,13 +34,13 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **`cancellation_reason` on `tbl_freelancer_schedule`** *(S49b, watcher)* — pass-2 spec originally called for this column to suppress no-show flags when a booking is cancelled. Deferred because existing affordances cover the cancellation case (Remove button on the dialog deletes the row entirely; flipping status to `Declined` or `Unavailable` excludes the row from the detector's candidate set). If real false-flag pressure shows up — i.e., PMs find themselves dismissing `timesheet_no_show` flags from `tbl_timesheet_flags` because the booking should have been cancelled but the row wasn't removed/restatused — add the column. One-line ALTER + a `WHERE cancellation_reason IS NULL` clause in the `booked` CTE of `rpc_detect_timesheet_gaps`. UI side: a small "Mark cancelled" affordance on the inline calendar dialog, separate from Remove (so the booking row stays as reliability data).
 
-- [ ] **Repoint `cost-breakdown.tsx` to canonical financials** *(S45c, half-done S65)* — the shared view now exists (`qry_job_financials`, surfaced on `rpc_job_detail_data` as `job.financials`) and `rpc_job_close_report` reads it. `cost-breakdown.tsx` still computes the workshop slice locally via its `workshopCats` filter — the last remaining duplicate of the "workshop + stock quoted" rule, and the only money math left on the job page. Swap it to consume `job.financials.workshop_quoted_value` / `quote_value` / the margin fields, and render NULL as "—". Closes both the S45c lockstep risk and any visible-vs-canonical drift on the job page.
+- [x] **Repoint `cost-breakdown.tsx` to canonical financials** *(S45c → done S66, `0849016`)* — the shared view now exists (`qry_job_financials`, surfaced on `rpc_job_detail_data` as `job.financials`) and `rpc_job_close_report` reads it. `cost-breakdown.tsx` still computes the workshop slice locally via its `workshopCats` filter — the last remaining duplicate of the "workshop + stock quoted" rule, and the only money math left on the job page. Swap it to consume `job.financials.workshop_quoted_value` / `quote_value` / the margin fields, and render NULL as "—". Closes both the S45c lockstep risk and any visible-vs-canonical drift on the job page.
 
 - [x] **"No Accepted quote" guard on Complete** *(S45a → done S65)* — superseded by the S65 canonical layer: the Draft/Accepted concept is retired at root (a quote in the system is accepted by definition), the Complete modal renders honest nulls ("—" / "No quote captured") instead of a confident £0/0%, and `qry_financial_consistency_violations` is the watcher view. No soft-warning needed.
 
 - [ ] **`/reports/job-financial/[jobId]` — workshop margin + honest nulls** *(S45b, + S65)* — this per-line report (`rpc_report_job_financial`) was *not* repointed in S65. It still (a) reads quote lines by `job_id` with no status filter (so not £0-broken, but not canonical either), (b) computes margin against the full quote total rather than `quoted_workshop`, and (c) carries the margin-defaults-to-zero antipattern (`CASE WHEN quoted>0 THEN … ELSE 0`) per line — should be `ELSE NULL`. Per-line granularity (different from the job-level view), so the fix is: apply the workshop-margin basis, switch `ELSE 0` → `ELSE NULL`, and reconcile its job-level rollup to `qry_job_financials`.
 
-- [ ] **Surface `qry_financial_consistency_violations` in the UI** *(S65)* — the guard view exists and returns empty today, but nothing reads it yet. Add a small banner/panel on the Review page (and/or the dashboard) listing any rows — multi-quote jobs, live jobs with no quote, cost-without-workshop-basis — so misrepresentation gets caught at a glance rather than waiting for someone to notice a wrong number. One `select * from qry_financial_consistency_violations` + a conditional card.
+- [x] **Surface `qry_financial_consistency_violations` in the UI** *(S65 → done S66, `c9ad5bc`)* — the guard view exists and returns empty today, but nothing reads it yet. Add a small banner/panel on the Review page (and/or the dashboard) listing any rows — multi-quote jobs, live jobs with no quote, cost-without-workshop-basis — so misrepresentation gets caught at a glance rather than waiting for someone to notice a wrong number. One `select * from qry_financial_consistency_violations` + a conditional card.
 
 - [ ] **Formal quote versioning** *(S65, strategic)* — Mateusz's model: a quote can change (items added/removed/changed) and that's guarded by **version**, not status. Today every job has exactly one quote and `qry_job_financials` sums its lines; the guard's `multiple_quotes` rule is the tripwire if a second ever appears. When revisions become real, build proper supersession: bump `quote_version`, mark one version current, and have the canonical view read only the current version's lines. `tbl_quotes.quote_version` (free text today) + the now-free `status` column are the materials. Decide additive-vs-supersede semantics when the first real case lands — don't pre-build.
 
@@ -106,6 +106,26 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S66 — Repoint cost-breakdown to canonical; surface the consistency guard on Review — 23 Jun 2026
+
+Closing the two frontend tails S65 left open. Both items frontend-only — no schema change; both consume existing S65 views.
+
+#### What shipped
+- **`src/components/cost-breakdown.tsx`** (`0849016`) — job-page Cost analysis no longer re-derives the workshop slice locally. `quotedTotal` / `quotedWorkshop` now read `qry_job_financials.quote_value` / `workshop_quoted_value` (canonical slice already excludes the Overhead sub-group); NULL → 0 so the existing `q > 0` guards render "—" honestly. The local `workshopCats` reduce — last duplicate of the workshop+stock rule, last money math on the frontend — is gone. **S45c fully closed.** Scope-level path (`quotedValue` prop) untouched. Verified numeric no-op across all 17 jobs (workshop/total delta 0.00).
+- **`src/app/(dashboard)/review/page.tsx`** (`c9ad5bc`) — conditional banner at the top of /review (under the nav chips, above the summary strip) listing any `qry_financial_consistency_violations` rows: job link + the view's plain-English `detail`, per-type badge severity (no_quote red / cost-without-basis amber / multiple_quotes blue). Renders nothing on a healthy ledger (view empty today). Closes the S65 "surface the guard view" item.
+
+#### Notes / blast radius
+- Both deploys via single CLI `npx vercel --prod` (hobby auto-deploy unreliable); `tsc --noEmit` clean on both.
+- cost-breakdown still reads `reconciled_line_cost` from `qry_bom_enriched` — S42a cleanup **not** touched here (workshop-quote repoint only).
+- Guard banner's populated render is visually unverified (view empty); the empty path is current-prod-safe.
+
+#### Discharged backlog
+- **S45c** (repoint cost-breakdown) — done.
+- **S65** (surface consistency-violations view) — done.
+
+#### In flight
+- **`rpc_report_job_financial`** (S45b) — under discussion, not yet shipped. Investigation revised the task: the report page already rolls up on the workshop slice (the "full quote total" note was stale). Real gaps: `ELSE 0`→`ELSE NULL` on per-line `est_margin_pct`; reconcile the "Internal Quoted" revenue base to canonical `workshop_quoted_value` (a third local copy of the slice rule today); honest-null treatment when no workshop quote (still shows a confident 0.0% / £0 verdict — the bug S65 killed on the close modal). Margin stays estimate-based (pre-build review), not canonical committed-margin.
 
 ### S65 — Canonical financial layer; retire the Draft quote concept — 22 Jun 2026
 
