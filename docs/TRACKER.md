@@ -117,6 +117,7 @@ Built the Expend card-spend batch importer and the routing UI to clear a backlog
 
 #### DB (migration `add_expend_txn_id_idempotency`, applied live)
 - `expend_txn_id text` + partial unique indexes (`uq_invoices_expend_txn`, `uq_overhead_expend_txn`) on `tbl_invoices` and `tbl_overhead_costs` — idempotency key (Expend `Transaction ID`), so re-running a CSV skips already-imported rows.
+- `add_imported_to_invoice_status_check` (applied live, post-deploy fix) — `tbl_invoices_status_check` extended to allow `'Imported'`. The first real import 500'd: the importer writes `status = 'Imported'` but the original CHECK allowed only `Pending`/`Processed`/`Archived`, rejecting the whole (atomic) bulk insert. DB-only fix — no redeploy, the route was already live.
 
 #### What shipped (code)
 - **`src/lib/expend-import.ts`** (`e55e4b4`) — pure classification (skip rules, `Project`-code routing, net ex-VAT amounts, receipt URL, idempotency) + a dependency-free CSV parser (dropped papaparse — not a dep here).
