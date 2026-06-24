@@ -1,6 +1,6 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 24 Jun 2026 (S67)
+**Last updated:** 24 Jun 2026 (S68)
 **Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change). S55: +1 DB function `import_quote` (SECURITY DEFINER, `service_role`-only) catalogued below; no new tables/views (function was deployed in a prior session, documented now).
 
 ## Counts
@@ -8,7 +8,7 @@
 | Category | Count |
 |---|---|
 | Tables (`tbl_*`) | 58 |
-| Views (`qry_*`) | 35 |
+| Views (`qry_*`) | 39 |
 | RPC functions (`rpc_*`) | 19 |
 | Other DB functions | 1 |
 | pg_cron jobs | 3 |
@@ -37,7 +37,7 @@ tbl_wo_documents                tbl_wo_steps                    tbl_wo_time_entr
 tbl_wo_time_entry_edits         tbl_work_orders                 tbl_workshop_requests
 ```
 
-## Views (37)
+## Views (39)
 
 ```
 qry_bom_enriched                qry_bom_invariant_violations    qry_dash_quote_stats
@@ -53,9 +53,12 @@ qry_scope_wo_stats              qry_stale_travellers            qry_supplier_sum
 qry_wo_cost_labour              qry_wo_estimated_cost           qry_wo_phase_ordered
 qry_wo_with_activities
 qry_job_financials              qry_financial_consistency_violations
+qry_scope_cost_position         qry_bom_actuals
 ```
 
 **Canonical financial layer (S65):** `qry_job_financials` is the single source of truth for every job-level money figure — quote, workshop-quote, labour, material plan/actual/committed, committed cost, and both workshop- and full-quote margin bases — with honest nulls (NULL, not £0, when no quote exists). `rpc_job_close_report`, `rpc_review_data`, and `rpc_job_detail_data` all read it; `qry_job_accepted_quote` is now a thin status-agnostic alias over it. `qry_financial_consistency_violations` flags misrepresentation risks (multiple quotes on one job, a live job with cost/scope but no quote, committed cost with no workshop basis). The quote `status` Draft/Issued/Accepted lifecycle is **retired** — `tbl_quotes.status` now defaults to `'Accepted'` and is no longer financially load-bearing (free to repurpose later as a version-supersession marker).
+
+**Scope cost attribution + BOM actuals (S68):** `qry_scope_cost_position` is one row per scope — quoted (from the scope's quote line, honest NULL if none), bom_planned, bom_rows, committed — and backs the invoice routing modal (you see what's already on a scope before adding more). `qry_bom_actuals` is one row per BOM row and **derives** actual unit cost (`actual_committed ÷ quantity`) plus variance from invoice allocations carrying that `bom_id`; it does **not** write the latent `tbl_wo_bom.actual_unit_cost` column (derive-not-store, same anti-drift rule that retired `quote_value`/`reconciled_line_cost`). Both aggregate BOM and allocation rows in separate CTEs to avoid fan-out. New column `tbl_invoice_allocations.bom_id` (nullable FK → `tbl_wo_bom`, ON DELETE SET NULL, CHECK `bom_id ⇒ scope_item_id`) is the rail: an allocation slice may optionally name the specific planned BOM row it realises, set human-side in the modal alongside `scope_item_id` (so the scope⊻wo XOR and scope-grouped views are unaffected).
 
 ## Functions (20)
 
@@ -109,6 +112,7 @@ qry_job_financials              qry_financial_consistency_violations
   tbl_tasks:            "task_id",
   tbl_wo_completion_proposals: "proposal_id",
   tbl_overhead_costs:   "overhead_cost_id",
+  tbl_invoice_allocations: "allocation_id",   // S68 — cost attribution traceable
 }
 ```
 

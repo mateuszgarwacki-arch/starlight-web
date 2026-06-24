@@ -58,7 +58,7 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 - [ ] **`reconciled_line_cost` field cleanup** *(S42a, partial S65)* — removed from `rpc_review_data` in S65 (now reads canonical `material_committed` from `qry_job_financials`). May still be read by `cost-breakdown.tsx`. Sweep the remaining reads, kill the field's view-side source, retire from UI.
 
-- [ ] **Invoice → BOM line linkage** *(S42a, strategic)* — the deep prerequisite for AI estimating: when an invoice is allocated to a scope, we should be able to map the line back to specific BOM rows and populate `tbl_wo_bom.actual_unit_cost`. Currently `actual_unit_cost` is a latent column (no write path). Building the link is non-trivial because allocations are percentage-split today, not item-level. Worth a design pass before implementation.
+- [~] **Invoice → BOM line linkage** *(S42a → rails done S68)* — the deep prerequisite for AI estimating. **S68 built the rails:** `tbl_invoice_allocations.bom_id` (an allocation slice can name a specific BOM row, human-asserted in the routing modal — no auto-matching), and `qry_bom_actuals` derives actual unit cost (committed ÷ BOM-qty) rather than writing the latent `tbl_wo_bom.actual_unit_cost` (derive-not-store, avoids drift). Resolved the "allocations are percentage-split, not item-level" tension by making the pin optional and amount-driven. **Remaining is data, not code:** BOM is populated on only 27 scopes / 12 jobs today, so item-level actuals stay near-empty until the workshop enters detailed BOMs. The capability lights up per-BOM-row the moment spend is pinned to it.
 
 - [ ] **Actual material breakdown by category/supplier on job-close** *(S42a)* — RPC now has the data; the close report still only shows category-level **planned** material breakdown. Should also show actual where allocations exist.
 
@@ -106,6 +106,41 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 ---
 
 ## Session log
+
+### S68 — Invoice line routing modal + scope cost attribution (v1) + invoice→BOM actuals rail (v2) — 24 Jun 2026
+
+Replaced the cramped inline `<select>` per-line router on `/invoices` (the one with the wall of 20+ scope sentences) with a proper modal, mirroring the time-entry job→WO picker. Per-line scope routing, £-driven split with even-split + live remainder, job-overhead pinning, and — where a scope carries BOM rows — a conditional step to pin spend to a specific planned BOM item. Built v1 (scope-level, the populated value) and v2 (item-level rail) together at Mateusz's call. Verified the financial layer against live data before any UI.
+
+#### Key discovery (reshaped what v2 can honestly be)
+- **BOM is sparse system-wide: 319 rows on just 27 scopes across 12 jobs, £24.7k planned material total.** Most scopes carry no BOM. Quoted values, by contrast, are rich and populated. So the meaningful, populated profitability axis today is **quoted vs committed at scope level** (what v1 surfaces); the **item-level BOM layer (v2) is correct but mostly empty** — it lights up only as BOMs get entered, which is a workshop-process change, not code. Shipped the v2 rails anyway so it works the instant a BOM row exists; the item step renders **only** on scopes that have BOM rows, so it's clean on the empty majority.
+- `qry_scope_cost_position` verified to reproduce hand-computed quoted/planned/committed for job 13585 (Summer Solstice) exactly before building on it.
+
+#### DB (migrations applied live, no deploy)
+- `s68_add_bom_id_to_invoice_allocations` — `bom_id integer` nullable FK → `tbl_wo_bom(bom_id)` **ON DELETE SET NULL** (a deleted BOM row degrades the allocation to scope-level, doesn't destroy the actual-cost record); CHECK `chk_alloc_bom_requires_scope` (bom_id ⇒ scope_item_id); partial index `idx_invoice_alloc_bom`; column comment. Additive + orthogonal to the existing scope⊻wo XOR — when bom_id is set, scope_item_id is set alongside, so scope-grouped views are untouched.
+- `s68_scope_cost_position_and_bom_actuals_views` — two SECURITY INVOKER views, REVOKE public / GRANT authenticated:
+  - **`qry_scope_cost_position`** — one row per scope: quoted (from quote line via `coalesce(modified_quote_line_id, quote_line_id)`, **honest NULL** when no quote line), bom_planned, bom_rows, committed. BOM and allocation aggregates kept in **separate CTEs** so they never fan out against each other.
+  - **`qry_bom_actuals`** — one row per BOM row: est_unit_cost / est_line_cost, actual_committed (Σ allocations carrying that bom_id), **actual_unit_cost = committed ÷ BOM-qty (derived)**, variance. NULL where nothing committed.
+
+#### Design decision (Mateusz's own SSOT principle)
+- **Derive actual unit cost, don't store it.** `tbl_wo_bom.actual_unit_cost` stays latent/unwritten; the actual is computed in `qry_bom_actuals` instead. A stored mirror would drift exactly the way `tbl_quotes.quote_value` and `reconciled_line_cost` did. Semantic that comes with it: actual-per-unit assumes the spend fully provisions the BOM quantity, so a partial or over-delivery shows as **visible variance**, never a silent wrong number.
+
+#### What shipped (code)
+- **`src/components/invoice-route-modal.tsx`** (NEW) — the modal. Loads `qry_scope_cost_position` (by job) + `qry_bom_actuals` (by scope ids) + the line's existing allocations; amount-driven draft allocations with live "£X left at job" remainder, even-split, clear, keep-at-job; each scope row shows quoted / committed / (planned) so you see what's already on it before adding more (double-entry guard); general scopes pinned amber as "Job overhead"; scopes with BOM rows get the conditional item-pin step. Saves via `setLineAllocations`.
+- **`src/lib/invoice-routing.ts`** — `setLineAllocations(lineId, lineTotal, jobId, items[])` — amount-driven atomic replace (clears existing, inserts the new set), percentage derived from amount/lineTotal, optional `bom_id` per slice. **Audited** (clears + inserts through the audit helpers). `bom_id` added to `InvoiceAllocation`.
+- **`src/lib/audit.ts`** — `tbl_invoice_allocations: "allocation_id"` added to `AUDITED_TABLES` — cost attribution is now traceable (it wasn't before).
+- **`src/app/(dashboard)/invoices/page.tsx`** — per-line dropdown replaced with a compact **trigger button** (shows JOB / ✓ / SPLIT / % tag + label via `summarizeRouting`, opens the modal); line-item table column widths + alignment fixed (the misalignment in the screenshots); modal rendered at component root, `onSaved` reloads allocations.
+
+#### Notifications
+- None. Routing is silent admin work — considered per the per-feature rule, not warranted.
+
+#### Notes / blast radius
+- `tsc --noEmit` clean; `npm run build` green (48/48 pages, `/invoices` included). Deploy via CLI `npx vercel --prod --yes`.
+- v1 needs **zero** schema change (runs on existing scope-level allocations); v2 = the bom_id rail + the two views.
+- Old `src/components/invoice-line-router.tsx` left **intact** — still used by `job-invoices-panel.tsx`; now dead on `/invoices`. Cleanup deferred (see backlog).
+
+#### Deferred (added to backlog)
+- **Wire the routing modal into `job-invoices-panel.tsx`** — the per-job surface still uses the old inline `InvoiceLineRouter` (works, no regression). Same swap as the `/invoices` page; jobId is already known there, no Job/Overhead toggle needed. Immediate next increment.
+- **Retire `invoice-line-router.tsx`** once the job panel is migrated — and the now-unused `routeLineToTarget` / `addPartialAllocation` / `splitProRataAcrossSiblings` helpers it carries.
 
 ### S67 — Expend batch-import + routing (receipt-view, inline assign, overhead-move) — 24 Jun 2026
 
