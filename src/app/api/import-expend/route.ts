@@ -69,8 +69,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ inserted: 0, skipped_existing: invoices.length, total: invoices.length });
   }
 
+  // Collapse split-transaction rows into one invoice. Expend's "Transaction ID" is
+  // per card payment, not per expense line — a single payment can appear as several
+  // rows (VAT splits, multi-item receipts) that share the ID. Those are the same
+  // payment, so we sum their net amounts into one invoice (and the unique index on
+  // expend_txn_id is satisfied: exactly one row per transaction). Within a group the
+  // Project/Job routing key is identical, so the merged invoice's job_id is unambiguous.
+  const byTxn = new Map<string, ImportInvoice>();
+  for (const r of fresh) {
+    const ex = byTxn.get(r.expend_txn_id);
+    if (ex) {
+      ex.total_value = Math.round(((ex.total_value || 0) + (r.total_value || 0)) * 100) / 100;
+      if (ex.job_id == null && r.job_id != null) ex.job_id = r.job_id;
+      if (!ex.receipt_url && r.receipt_url) ex.receipt_url = r.receipt_url;
+    } else {
+      byTxn.set(r.expend_txn_id, { ...r });
+    }
+  }
+  const grouped = [...byTxn.values()];
+
   // Bulk insert invoice headers.
-  const invoiceRows = fresh.map((i) => ({
+  const invoiceRows = grouped.map((i) => ({
     supplier: (i.supplier || "Unknown").trim(),
     supplier_id: null,
     invoice_number: null,
