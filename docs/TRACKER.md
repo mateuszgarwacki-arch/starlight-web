@@ -107,6 +107,38 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S67 — Expend batch-import + routing (receipt-view, inline assign, overhead-move) — 24 Jun 2026
+
+Built the Expend card-spend batch importer and the routing UI to clear a backlog of receipts into the cost layer. Discovery first: the spend/invoice/allocation/overhead spine (S42/S52) already existed, so the only genuinely-new piece was the CSV importer + routing affordances on the existing `/invoices` page. Validated the whole classification against the real Jan–Apr 2026 export (93 rows) before any code touched the DB.
+
+#### Key discovery (changed the design)
+- The export's job assignment lives in the **`Project`** column (populated 88/93), **not** `Job` (49 blank). `Project`'s leading code is either a real job_number or a quarterly overhead bucket (13093 Q1 / 13094 Q2) — so the quarterly code Mateusz thought was omitted *is* exported, just in `Project`. Routing key = leading code of `Project` (fallback `Job`), matched against `tbl_production_plan.job_number`.
+- Of 93: 6 skipped (5 OPEN/unapproved + 1 Personal), 87 imported — 21 matched a live job (auto-assigned), 66 unassigned (34 quarterly + 33 ghost jobs not in the system: 13506 Grosvenor ×26, 13799, 13716, 13606). Ghost rows are pre-system jobs — imported unassigned and left (last export with ghost expenses).
+
+#### DB (migration `add_expend_txn_id_idempotency`, applied live)
+- `expend_txn_id text` + partial unique indexes (`uq_invoices_expend_txn`, `uq_overhead_expend_txn`) on `tbl_invoices` and `tbl_overhead_costs` — idempotency key (Expend `Transaction ID`), so re-running a CSV skips already-imported rows.
+
+#### What shipped (code)
+- **`src/lib/expend-import.ts`** (`e55e4b4`) — pure classification (skip rules, `Project`-code routing, net ex-VAT amounts, receipt URL, idempotency) + a dependency-free CSV parser (dropped papaparse — not a dep here).
+- **`src/app/api/import-expend/route.ts`** (`e55e4b4`, idempotency widened `069ca56`) — bulk insert `tbl_invoices` (status `Imported`, receipt URL in `file_path`, no base64 fetch → pure insert, no Vercel timeout) + one whole-transaction `tbl_invoice_lines` row each; idempotency checks **both** `tbl_invoices` and `tbl_overhead_costs` so a moved-to-overhead row isn't re-imported.
+- **`src/app/(dashboard)/invoices/import/page.tsx`** (`e55e4b4`) — CSV upload, classification preview (auto-assigned / unassigned / skipped + per-row destination), commit.
+- **`src/app/(dashboard)/invoices/page.tsx`** (`069ca56`) — routing side: receipts render from `file_path` (Expend URL) when `file_data` is null, in both the edit-mode preview and a new inline panel in the expand row (see the receipt while routing). Expand row also gains inline **assign-to-job** (unlocks scope routing on the line) and **"→ Overhead"** with a category-tag picker, which books a `tbl_overhead_costs` spend row (carrying receipt URL + `expend_txn_id`) and clears the invoice.
+- Entry link "Import from Expend" on `/invoices`.
+
+#### Decisions (Mateusz)
+- Expend stays the accounting system of record; the production system is a pure consumer (no write-back/sync). CSV export is the recurring pull (no public Expend API found).
+- Receipts referenced by their Expend URL (public, stable) in `file_path`, not re-fetched into the DB — keeps import pure-insert. "Own the bytes" deferred as an optional chunked fast-follow.
+- Quarterly rows → inbox for manual assign + tag (the bucket mixes overhead with job consumables, so not auto-overhead). Ghost rows → unassigned, left.
+
+#### Notes / blast radius
+- All three deploys via CLI `npx vercel --prod --yes`; `tsc --noEmit` clean on each. Aliased to workshop-five-gamma.
+- `uploaded_by` set null on imported invoices (per-user attribution deferred, same as quote-import S55).
+- Overhead-move deletes the invoice + lines (relies on the same allocation cascade the existing list-delete uses); for a manual file_data-only invoice moved to overhead, the inline receipt isn't carried (overhead stores a URL only) — edge case, the feature targets the URL-backed imported rows.
+
+#### Deferred (added to backlog)
+- **Expend import — per-user attribution** — `uploaded_by` null on import; resolve the signed-in user (same fix as the S55 quote-import item).
+- **Expend receipts — pull bytes into DB** *(optional)* — chunked fetch of `file_path` → `file_data` so receipts are owned locally like the manual ones, rather than relying on the Expend URL.
+
 ### S66 — Repoint cost-breakdown to canonical; surface the consistency guard on Review — 23 Jun 2026
 
 Closing the two frontend tails S65 left open. Both items frontend-only — no schema change; both consume existing S65 views.

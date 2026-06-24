@@ -1,6 +1,6 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 29 May 2026 (S55)
+**Last updated:** 24 Jun 2026 (S67)
 **Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change). S55: +1 DB function `import_quote` (SECURITY DEFINER, `service_role`-only) catalogued below; no new tables/views (function was deployed in a prior session, documented now).
 
 ## Counts
@@ -142,7 +142,19 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S52)
+## Recent additions (S40 → S67)
+
+### S67 — Expend import idempotency (`expend_txn_id`)
+
+**No new tables/views/RPCs/cron — two existing tables gain one column + a partial unique index each.**
+
+The Expend CSV batch-importer (S67 — see TRACKER) needs to re-run the same export without double-importing. Both `tbl_invoices` and `tbl_overhead_costs` gain:
+- `expend_txn_id text` (nullable) — the Expend `Transaction ID`, the per-transaction idempotency key. NULL for every manually-entered row (so they're exempt); set only on rows that came from the importer or were moved to overhead.
+- Partial unique index — `uq_invoices_expend_txn` on `tbl_invoices(expend_txn_id) WHERE expend_txn_id IS NOT NULL`; `uq_overhead_expend_txn` on `tbl_overhead_costs(expend_txn_id) WHERE expend_txn_id IS NOT NULL`. Partial so the many NULL (manual) rows don't collide.
+
+The importer's pre-insert idempotency check unions seen `expend_txn_id`s from **both** tables, so a transaction already imported as an invoice — or already moved into the overhead pool — is skipped on the next run. Imported receipts are referenced by their Expend URL in `tbl_invoices.file_path` (not fetched into `file_data`), so the import is a pure insert. The "Move to Overhead" action on `/invoices` carries `receipt_url` + `expend_txn_id` onto the new `tbl_overhead_costs` row before deleting the invoice, preserving idempotency across the move. No new status enum — imported invoices use `status = 'Imported'` (distinct from manual `'Processed'`).
+
+Counts unchanged: 58 tables, 37 views, 19 RPCs, 3 cron jobs.
 
 ### S52 — Workshop overhead pool + timesheet-gap self-heal
 
