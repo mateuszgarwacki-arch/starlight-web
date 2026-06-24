@@ -126,6 +126,13 @@ Built the Expend card-spend batch importer and the routing UI to clear a backlog
 - **`src/app/(dashboard)/invoices/page.tsx`** (`069ca56`) — routing side: receipts render from `file_path` (Expend URL) when `file_data` is null, in both the edit-mode preview and a new inline panel in the expand row (see the receipt while routing). Expand row also gains inline **assign-to-job** (unlocks scope routing on the line) and **"→ Overhead"** with a category-tag picker, which books a `tbl_overhead_costs` spend row (carrying receipt URL + `expend_txn_id`) and clears the invoice.
 - Entry link "Import from Expend" on `/invoices`.
 
+#### Post-deploy fixes (first real import, 24 Jun)
+The first real import surfaced two issues the 93-row dry-run hadn't caught:
+1. **`status = 'Imported'` rejected** — `tbl_invoices_status_check` allowed only `Pending`/`Processed`/`Archived`. Extended via migration `add_imported_to_invoice_status_check` (DB-only, no redeploy — route was already live). See the DB section above.
+2. **Duplicate `expend_txn_id` within the batch** (`343266a`) — Expend's `Transaction ID` is **per card payment, not per expense line**: VAT splits and multi-item receipts emit several rows sharing one ID (the real CSV had 4 such groups across 9 rows). The unique index correctly rejected them, killing the atomic insert ("Invoice insert failed"). Fix: the route groups `fresh` rows by `expend_txn_id` and sums their net amounts into one invoice before insert (the Project/Job routing key is identical within a group, so `job_id` is unambiguous). 87 rows → 82 invoices; total £ preserved; re-import still idempotent.
+
+**Learning:** Expend `Transaction ID` ≠ row identity, and `Expense ID` also repeats across split siblings — neither column is a per-line key. The card payment is the natural invoice grain, so merging split rows into one invoice is both the fix and the correct model. (A future refinement could keep each split as its own invoice *line* using `Expense Note` as the description, for per-item routing within a payment — deferred; not worth it for the rare multi-item case.)
+
 #### Decisions (Mateusz)
 - Expend stays the accounting system of record; the production system is a pure consumer (no write-back/sync). CSV export is the recurring pull (no public Expend API found).
 - Receipts referenced by their Expend URL (public, stable) in `file_path`, not re-fetched into the DB — keeps import pure-insert. "Own the bytes" deferred as an optional chunked fast-follow.
