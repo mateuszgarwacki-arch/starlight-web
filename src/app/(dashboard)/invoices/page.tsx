@@ -14,7 +14,7 @@ import Link from "next/link";
 import { InvoiceLineRouter, ScopeOption, WOOption } from "@/components/invoice-line-router";
 import { InvoiceAllocation } from "@/lib/invoice-routing";
 
-interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_data: string | null; file_type: string | null; }
+interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_path: string | null; file_data: string | null; file_type: string | null; expend_txn_id?: string | null; }
 interface InvoiceLine { line_id?: number; invoice_id?: number; line_number: number; raw_description: string; quantity: number | null; unit: string | null; unit_cost: number | null; line_total: number | null; material_id: number | null; material_name?: string; match_confidence: string | null; match_status: string; work_order_id: number | null; job_id: number | null; alias_saved: boolean; notes: string | null; }
 interface MaterialOption { material_id: number; material_name: string; unit?: string; current_unit_cost?: number; }
 interface SupplierOption { supplier_id: number; supplier_name: string; }
@@ -38,6 +38,10 @@ export default function InvoicesPage() {
   const [extractError, setExtractError] = useState<string | null>(null);
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileType, setFileType] = useState<string | null>(null);
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const [overheadCats, setOverheadCats] = useState<{ lookup_id: number; lookup_value: string }[]>([]);
+  const [overheadFor, setOverheadFor] = useState<Invoice | null>(null);
+  const [overheadCatId, setOverheadCatId] = useState<string>("");
   const [showPreview, setShowPreview] = useState(true);
   const [searchingLine, setSearchingLine] = useState<number | null>(null);
   const [materialSearch, setMaterialSearch] = useState("");
@@ -55,17 +59,19 @@ export default function InvoicesPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [invRes, jobRes, matRes, supRes, aliasRes, unitRes] = await Promise.all([
+    const [invRes, jobRes, matRes, supRes, aliasRes, unitRes, ohcRes] = await Promise.all([
       supabase.from("tbl_invoices").select("*").order("uploaded_at", { ascending: false }),
       supabase.from("tbl_production_plan").select("job_id, job_number, job_name").order("event_date", { ascending: false }),
       supabase.from("tbl_materials").select("material_id, material_name, unit, current_unit_cost").eq("active", true).order("material_name"),
       supabase.from("tbl_suppliers").select("supplier_id, supplier_name").eq("active", true).order("supplier_name"),
       supabase.from("tbl_material_aliases").select("*"),
       supabase.from("tbl_master_lookups").select("lookup_value").eq("category", "UNIT").eq("active", true).order("display_order"),
+      supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").eq("category", "OVERHEAD_CATEGORY").eq("active", true).order("display_order"),
     ]);
     setInvoices(invRes.data || []); setJobs(jobRes.data || []); setMaterials(matRes.data || []);
     setSuppliers(supRes.data || []); setAliases(aliasRes.data || []);
     setUnitOptions((unitRes.data || []).map((u: any) => u.lookup_value).filter(Boolean));
+    setOverheadCats((ohcRes.data as any) || []);
     setLoading(false);
   }, []);
   useEffect(() => { loadData(); }, [loadData]);
@@ -120,7 +126,7 @@ export default function InvoicesPage() {
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
       const mediaType = file.type || "application/pdf";
-      setFileData(base64); setFileType(mediaType);
+      setFileData(base64); setFileType(mediaType); setFilePath(null);
       try {
         const authH = await getAuthHeaders();
         const res = await fetch("/api/extract-invoice", { method: "POST", headers: { "Content-Type": "application/json", ...authH }, body: JSON.stringify({ file_data: base64, media_type: mediaType }) });
@@ -146,12 +152,12 @@ export default function InvoicesPage() {
     reader.readAsDataURL(file); e.target.value = "";
   };
 
-  const startManualEntry = () => { setInvoiceForm({ supplier: "", supplier_id: "", invoice_number: "", invoice_date: new Date().toISOString().split("T")[0], total_value: "", job_id: "", notes: "", includes_vat: false }); setLines([]); setFileData(null); setFileType(null); setEditingInvoiceId(null); setMode("process"); };
+  const startManualEntry = () => { setInvoiceForm({ supplier: "", supplier_id: "", invoice_number: "", invoice_date: new Date().toISOString().split("T")[0], total_value: "", job_id: "", notes: "", includes_vat: false }); setLines([]); setFileData(null); setFileType(null); setFilePath(null); setEditingInvoiceId(null); setMode("process"); };
 
   const openEditInvoice = async (inv: Invoice) => {
     setEditingInvoiceId(inv.invoice_id);
     setInvoiceForm({ supplier: inv.supplier || "", supplier_id: inv.supplier_id ? String(inv.supplier_id) : "", invoice_number: inv.invoice_number || "", invoice_date: inv.invoice_date || "", total_value: inv.total_value ? String(inv.total_value) : "", job_id: inv.job_id ? String(inv.job_id) : "", notes: inv.notes || "", includes_vat: false });
-    setFileData(inv.file_data || null); setFileType(inv.file_type || null);
+    setFileData(inv.file_data || null); setFileType(inv.file_type || null); setFilePath(inv.file_path || null);
     const { data: existingLines } = await supabase.from("tbl_invoice_lines").select("*").eq("invoice_id", inv.invoice_id).order("line_number");
     if (existingLines) { setLines(existingLines.map((l: any) => { const mat = materials.find((m) => m.material_id === l.material_id); return { ...l, material_name: mat?.material_name || undefined }; })); }
     setMode("edit");
@@ -233,6 +239,52 @@ export default function InvoicesPage() {
     setAllocations(byLine);
   };
 
+  // Assign a job to an unassigned invoice, then load its scopes/WOs so the line can be routed.
+  const assignInvoiceJob = async (inv: Invoice, jobIdStr: string) => {
+    const jobId = jobIdStr ? Number(jobIdStr) : null;
+    if (jobId == null) return;
+    await supabase.from("tbl_invoices").update({ job_id: jobId }).eq("invoice_id", inv.invoice_id);
+    setInvoices((prev) => prev.map((i) => (i.invoice_id === inv.invoice_id ? { ...i, job_id: jobId } : i)));
+    const [scopeRes, woRes] = await Promise.all([
+      supabase.from("tbl_scope_items").select("scope_item_id, item_name").eq("job_id", jobId).order("scope_item_id"),
+      supabase.from("tbl_work_orders").select("work_order_id, scope_item_id, description, activity_verb").eq("job_id", jobId).neq("status", "Voided").order("work_order_id"),
+    ]);
+    setScopeItems(scopeRes.data || []);
+    const woRows = woRes.data || [];
+    const actIds = [...new Set(woRows.map((w: any) => w.activity_verb).filter(Boolean))] as number[];
+    const actMap: Record<number, string> = {};
+    if (actIds.length > 0) {
+      const { data: acts } = await supabase.from("tbl_master_lookups").select("lookup_id, lookup_value").in("lookup_id", actIds);
+      (acts || []).forEach((a: any) => (actMap[a.lookup_id] = a.lookup_value));
+    }
+    setWorkOrders(woRows.map((w: any) => ({ work_order_id: w.work_order_id, scope_item_id: w.scope_item_id, activity_label: w.activity_verb ? actMap[w.activity_verb] || null : null, description: w.description })));
+    toast.success("Job assigned — route the line below");
+  };
+
+  // Move an invoice into the overhead pool (tbl_overhead_costs) with a category tag, then clear it.
+  const confirmOverhead = async () => {
+    const inv = overheadFor;
+    if (!inv) return;
+    setSaving(true);
+    const { error } = await supabase.from("tbl_overhead_costs").insert({
+      cost_date: inv.invoice_date || new Date().toISOString().split("T")[0],
+      cost_type: "spend",
+      category_id: overheadCatId ? Number(overheadCatId) : null,
+      description: inv.supplier || "Imported overhead",
+      amount: inv.total_value ?? 0,
+      supplier_id: inv.supplier_id,
+      receipt_url: inv.file_path,
+      expend_txn_id: inv.expend_txn_id ?? null,
+      note: inv.notes,
+    });
+    if (error) { toast.error(error.message); setSaving(false); return; }
+    await supabase.from("tbl_invoice_lines").delete().eq("invoice_id", inv.invoice_id);
+    await supabase.from("tbl_invoices").delete().eq("invoice_id", inv.invoice_id);
+    toast.success(`Moved to overhead${overheadCatId ? "" : " (untagged)"}`);
+    setOverheadFor(null); setOverheadCatId(""); setExpandedInvId(null); setSaving(false);
+    loadData();
+  };
+
   const filteredMaterials = materialSearch ? materials.filter((m) => (m.material_name || "").toLowerCase().includes(materialSearch.toLowerCase())) : materials.slice(0, 15);
   const confirmedCount = lines.filter((l) => l.match_status === "confirmed").length;
   const unmatchedCount = lines.filter((l) => l.match_status === "unmatched" || l.match_status === "matched").length;
@@ -287,6 +339,35 @@ export default function InvoicesPage() {
             {isExp && (
               <tr key={`${inv.invoice_id}-detail`}><td colSpan={7} className="px-0 py-0 bg-surface-dim/50">
                 <div className="px-8 py-3">
+                  <div className="flex items-start gap-4">
+                    {(inv.file_path || inv.file_data) ? (
+                      <div className="rounded-lg border border-subtle overflow-hidden bg-base shrink-0" style={{ width: 320, height: 400 }}>
+                        {inv.file_data && inv.file_type?.startsWith("image/")
+                          ? <img src={`data:${inv.file_type};base64,${inv.file_data}`} alt="Receipt" className="w-full h-full object-contain" />
+                          : inv.file_data && inv.file_type === "application/pdf"
+                          ? <iframe src={`data:application/pdf;base64,${inv.file_data}#view=FitH&navpanes=0`} className="w-full h-full border-0" title="Receipt" />
+                          : inv.file_path
+                          ? <iframe src={inv.file_path} className="w-full h-full border-0" title="Receipt" />
+                          : null}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-subtle flex items-center justify-center text-[11px] text-faint shrink-0" style={{ width: 320, height: 120 }}>No receipt on this invoice</div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {!inv.job_id ? (<>
+                          <span className="text-[11px] text-starlight-amber font-medium">Unassigned</span>
+                          <select defaultValue="" onChange={(e) => assignInvoiceJob(inv, e.target.value)} className="px-2 py-1 border border-subtle rounded-lg text-xs bg-surface focus:outline-none focus:ring-1 focus:ring-starlight-blue max-w-[240px]">
+                            <option value="">Assign to job…</option>
+                            {jobs.map((j: any) => (<option key={j.job_id} value={j.job_id}>{j.job_number} — {j.job_name}</option>))}
+                          </select>
+                          <span className="text-[11px] text-faint">or</span>
+                        </>) : (
+                          <span className="text-[11px] text-muted">Job <span className="text-navy font-medium">{(jobs.find((j: any) => j.job_id === inv.job_id)?.job_number) || inv.job_id}</span></span>
+                        )}
+                        <button onClick={() => { setOverheadFor(inv); setOverheadCatId(""); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-navy/5 text-navy hover:bg-navy/10 transition-colors">→ Overhead</button>
+                        {inv.file_path && (<a href={inv.file_path} target="_blank" rel="noopener noreferrer" className="text-[11px] text-starlight-blue hover:underline ml-auto">Open receipt ↗</a>)}
+                      </div>
                   {previewLines.length === 0 ? <p className="text-xs text-muted py-2">No line items</p> : (
                     <table className="w-full text-xs">
                       <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider">
@@ -330,11 +411,42 @@ export default function InvoicesPage() {
                       })}</tbody>
                     </table>
                   )}
+                    </div>
+                  </div>
                 </div>
               </td></tr>
             )}
           </>); })}</tbody></table></div>)}
       </div>
+
+      {overheadFor && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl shadow-2xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-subtle flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-navy">Move to Overhead</h3>
+              <button onClick={() => setOverheadFor(null)} className="text-muted hover:text-muted"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="text-xs text-muted bg-surface-dim rounded-lg px-3 py-2">
+                <span className="text-navy font-medium">{overheadFor.supplier}</span>
+                <span className="float-right font-mono text-navy">{overheadFor.total_value != null ? formatCurrency(overheadFor.total_value) : "—"}</span>
+                <p className="text-[10px] mt-1 clear-both">Removes the invoice and books it as an overhead spend, keeping the receipt.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">Category tag</label>
+                <select value={overheadCatId} onChange={(e) => setOverheadCatId(e.target.value)} className="w-full px-3 py-2 border border-subtle rounded-lg text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-starlight-blue">
+                  <option value="">No category</option>
+                  {overheadCats.map((c) => (<option key={c.lookup_id} value={c.lookup_id}>{c.lookup_value}</option>))}
+                </select>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-subtle flex justify-end gap-2">
+              <button onClick={() => setOverheadFor(null)} className="px-3 py-2 text-sm text-muted hover:bg-surface-mid rounded-lg">Cancel</button>
+              <button onClick={confirmOverhead} disabled={saving} className="px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors">{saving ? "Moving..." : "Move to Overhead"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>); }
 
   // PROCESS / EDIT MODE
@@ -343,13 +455,13 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-bold text-navy">{editingInvoiceId ? "Edit Invoice" : "Process Invoice"}</h1><p className="text-sm text-muted mt-0.5">{confirmedCount} confirmed · {unmatchedCount} need matching · {lines.length} total lines</p></div>
         <div className="flex items-center gap-2">
-          {fileData && (<button onClick={() => setShowPreview(!showPreview)} className={"px-3 py-2 text-sm rounded-lg transition-colors " + (showPreview ? "text-starlight-blue bg-navy/10" : "text-muted hover:bg-surface-mid")}><Eye className="h-4 w-4" /></button>)}
+          {(fileData || filePath) && (<button onClick={() => setShowPreview(!showPreview)} className={"px-3 py-2 text-sm rounded-lg transition-colors " + (showPreview ? "text-starlight-blue bg-navy/10" : "text-muted hover:bg-surface-mid")}><Eye className="h-4 w-4" /></button>)}
           <button onClick={() => { setMode("list"); setEditingInvoiceId(null); }} className="px-3 py-2 text-sm text-muted hover:text-navy hover:bg-surface-mid rounded-lg transition-colors">Cancel</button>
           <button onClick={processInvoice} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-starlight-red text-white text-sm font-medium rounded-lg hover:bg-starlight-red disabled:opacity-50 transition-colors"><Check className="h-4 w-4" /> {saving ? "Saving..." : editingInvoiceId ? "Update Invoice" : "Process Invoice"}</button>
         </div>
       </div>
 
-      <div className={fileData && showPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : ""}>
+      <div className={(fileData || filePath) && showPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : ""}>
         <div className="space-y-5">
           {/* Invoice header */}
           <div className="card px-5 py-4">
@@ -445,12 +557,13 @@ export default function InvoicesPage() {
         </div>
 
         {/* RIGHT: Invoice preview */}
-        {fileData && showPreview && (
+        {(fileData || filePath) && showPreview && (
           <div className="card overflow-hidden sticky top-4 flex flex-col" style={{ maxHeight: "90vh" }}>
             <div className="px-4 py-2 border-b border-subtle flex items-center justify-between shrink-0"><h3 className="text-xs font-semibold text-navy">Invoice Preview</h3><button onClick={() => setShowPreview(false)} className="text-muted hover:text-muted"><X className="h-4 w-4" /></button></div>
             <div className="flex-1 min-h-0">
-              {fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full h-full object-contain" />) :
-               fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}#navpanes=0&view=FitH`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
+              {fileData && fileType?.startsWith("image/") ? (<img src={`data:${fileType};base64,${fileData}`} alt="Invoice" className="w-full h-full object-contain" />) :
+               fileData && fileType === "application/pdf" ? (<iframe src={`data:application/pdf;base64,${fileData}#navpanes=0&view=FitH`} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Invoice PDF" />) :
+               filePath ? (<iframe src={filePath} className="w-full h-full border-0" style={{ minHeight: "80vh" }} title="Receipt" />) :
                (<p className="p-4 text-sm text-muted">Preview not available</p>)}
             </div>
           </div>

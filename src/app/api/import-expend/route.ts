@@ -47,16 +47,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No rows to import" }, { status: 400 });
   }
 
-  // Idempotency: skip transactions already imported.
+  // Idempotency: skip transactions already imported — as an invoice OR already moved to overhead.
   const txnIds = invoices.map((i) => i.expend_txn_id).filter(Boolean);
-  const { data: existing, error: exErr } = await supabase
-    .from("tbl_invoices")
-    .select("expend_txn_id")
-    .in("expend_txn_id", txnIds);
-  if (exErr) {
-    return NextResponse.json({ error: "Idempotency check failed", detail: exErr.message }, { status: 500 });
+  const [invExisting, ohExisting] = await Promise.all([
+    supabase.from("tbl_invoices").select("expend_txn_id").in("expend_txn_id", txnIds),
+    supabase.from("tbl_overhead_costs").select("expend_txn_id").in("expend_txn_id", txnIds),
+  ]);
+  if (invExisting.error || ohExisting.error) {
+    return NextResponse.json(
+      { error: "Idempotency check failed", detail: invExisting.error?.message || ohExisting.error?.message },
+      { status: 500 },
+    );
   }
-  const seen = new Set((existing || []).map((e: any) => e.expend_txn_id));
+  const seen = new Set<string>([
+    ...(invExisting.data || []).map((e: any) => e.expend_txn_id),
+    ...(ohExisting.data || []).map((e: any) => e.expend_txn_id),
+  ]);
   const fresh = invoices.filter((i) => i.expend_txn_id && !seen.has(i.expend_txn_id));
 
   if (fresh.length === 0) {
