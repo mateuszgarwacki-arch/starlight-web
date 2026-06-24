@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isTruthy } from "@/lib/types";
@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { InvoiceLineRouter, ScopeOption, WOOption } from "@/components/invoice-line-router";
-import { InvoiceAllocation } from "@/lib/invoice-routing";
+import { ScopeOption, WOOption } from "@/components/invoice-line-router";
+import { InvoiceRouteModal } from "@/components/invoice-route-modal";
+import { InvoiceAllocation, summarizeRouting } from "@/lib/invoice-routing";
 
 interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_path: string | null; file_data: string | null; file_type: string | null; expend_txn_id?: string | null; }
 interface InvoiceLine { line_id?: number; invoice_id?: number; line_number: number; raw_description: string; quantity: number | null; unit: string | null; unit_cost: number | null; line_total: number | null; material_id: number | null; material_name?: string; match_confidence: string | null; match_status: string; work_order_id: number | null; job_id: number | null; alias_saved: boolean; notes: string | null; }
@@ -56,6 +57,12 @@ export default function InvoicesPage() {
   const [scopeItems, setScopeItems] = useState<ScopeOption[]>([]);
   const [workOrders, setWorkOrders] = useState<WOOption[]>([]);
   const [allocations, setAllocations] = useState<Record<number, InvoiceAllocation[]>>({});
+  const [routeCtx, setRouteCtx] = useState<{ line: { line_id: number; raw_description: string; line_total: number | null }; jobId: number } | null>(null);
+  const scopeNamesMap = useMemo(() => {
+    const m: Record<number, string> = {};
+    scopeItems.forEach((s) => { m[s.scope_item_id] = s.item_name || `Scope #${s.scope_item_id}`; });
+    return m;
+  }, [scopeItems]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -370,39 +377,40 @@ export default function InvoicesPage() {
                       </div>
                   {previewLines.length === 0 ? <p className="text-xs text-muted py-2">No line items</p> : (
                     <table className="w-full text-xs">
-                      <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider">
-                        <th className="py-1 font-medium w-8">#</th>
-                        <th className="py-1 font-medium">Description</th>
-                        <th className="py-1 font-medium">Material</th>
-                        <th className="py-1 font-medium text-right">Qty</th>
-                        <th className="py-1 font-medium">Unit</th>
-                        <th className="py-1 font-medium text-right">Cost</th>
-                        <th className="py-1 font-medium text-right">Total</th>
-                        <th className="py-1 font-medium w-60">Route to</th>
+                      <thead><tr className="text-left text-[10px] text-muted uppercase tracking-wider border-b border-subtle">
+                        <th className="py-1.5 font-medium w-8">#</th>
+                        <th className="py-1.5 font-medium">Description</th>
+                        <th className="py-1.5 font-medium w-32">Material</th>
+                        <th className="py-1.5 font-medium text-right w-12">Qty</th>
+                        <th className="py-1.5 font-medium w-14">Unit</th>
+                        <th className="py-1.5 font-medium text-right w-20">Cost</th>
+                        <th className="py-1.5 font-medium text-right w-20">Total</th>
+                        <th className="py-1.5 font-medium w-48 pl-3">Route to</th>
                       </tr></thead>
                       <tbody>{previewLines.map((l: any) => {
                         const lineAllocs = allocations[l.line_id] || [];
-                        const allSiblingAllocs: InvoiceAllocation[] = Object.values(allocations).flat();
                         return (
                           <tr key={l.line_id || l.line_number} className="border-t border-subtle align-top">
-                            <td className="py-1.5 text-muted font-mono">{l.line_number}</td>
-                            <td className="py-1.5 text-muted max-w-[260px]">{l.raw_description}</td>
-                            <td className="py-1.5">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-faint">—</span>}</td>
-                            <td className="py-1.5 text-right font-mono text-muted">{l.quantity || "—"}</td>
-                            <td className="py-1.5 text-muted">{l.unit || "—"}</td>
-                            <td className="py-1.5 text-right font-mono text-muted">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
-                            <td className="py-1.5 text-right font-mono text-navy font-medium">{l.line_total ? formatCurrency(l.line_total) : "—"}</td>
-                            <td className="py-1.5 pl-2">
-                              {l.line_id && (scopeItems.length > 0 || workOrders.length > 0) ? (
-                                <InvoiceLineRouter
-                                  line={{ line_id: l.line_id, raw_description: l.raw_description, line_total: l.line_total }}
-                                  allocations={lineAllocs}
-                                  scopeItems={scopeItems}
-                                  workOrders={workOrders}
-                                  siblingAllocations={allSiblingAllocs}
-                                  onChanged={reloadAllocationsForExpanded}
-                                />
-                              ) : (
+                            <td className="py-2 text-muted font-mono">{l.line_number}</td>
+                            <td className="py-2 text-navy pr-3"><div className="max-w-[280px] leading-snug">{l.raw_description}</div></td>
+                            <td className="py-2">{l.material_name ? <span className="text-starlight-green font-medium">{l.material_name}</span> : <span className="text-faint">—</span>}</td>
+                            <td className="py-2 text-right font-mono text-muted">{l.quantity || "—"}</td>
+                            <td className="py-2 text-muted">{l.unit || "—"}</td>
+                            <td className="py-2 text-right font-mono text-muted">{l.unit_cost ? formatCurrency(l.unit_cost) : "—"}</td>
+                            <td className="py-2 text-right font-mono text-navy font-medium">{l.line_total ? formatCurrency(l.line_total) : "—"}</td>
+                            <td className="py-2 pl-3">
+                              {l.line_id && inv.job_id ? (() => {
+                                const r = summarizeRouting(lineAllocs, scopeNamesMap, {});
+                                const tag = lineAllocs.length === 0 ? "JOB" : r.isFullyRouted ? (lineAllocs.length === 1 ? "✓" : "SPLIT") : `${r.totalPct}%`;
+                                return (
+                                  <button onClick={() => setRouteCtx({ line: { line_id: l.line_id, raw_description: l.raw_description, line_total: l.line_total }, jobId: inv.job_id! })}
+                                    className="inline-flex items-center gap-1.5 w-full max-w-[190px] px-2 py-1.5 rounded-lg border border-subtle bg-surface hover:border-starlight-blue/40 hover:bg-surface-dim transition-colors text-left">
+                                    <span className={"text-[9px] px-1.5 py-0.5 rounded font-mono shrink-0 " + (lineAllocs.length === 0 ? "bg-slate-100 text-slate-600" : r.badgeClass)}>{tag}</span>
+                                    <span className="text-[11px] text-navy truncate flex-1">{lineAllocs.length === 0 ? "Keep at job" : r.label}</span>
+                                    <ChevronRight className="h-3 w-3 text-muted shrink-0" />
+                                  </button>
+                                );
+                              })() : (
                                 <span className="text-faint text-[9px]">{!l.line_id ? "" : "No job linked"}</span>
                               )}
                             </td>
@@ -635,6 +643,16 @@ export default function InvoicesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {routeCtx && (
+        <InvoiceRouteModal
+          open={!!routeCtx}
+          onClose={() => setRouteCtx(null)}
+          line={routeCtx.line}
+          jobId={routeCtx.jobId}
+          onSaved={reloadAllocationsForExpanded}
+        />
       )}
     </div>
   );

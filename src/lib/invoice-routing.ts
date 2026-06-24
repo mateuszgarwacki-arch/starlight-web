@@ -8,12 +8,14 @@
  */
 
 import { createClient } from "@/lib/supabase-browser";
+import { getAuditContext, auditedInsert, auditedDelete } from "@/lib/audit";
 
 export interface InvoiceAllocation {
   allocation_id?: number;
   invoice_line_id: number;
   scope_item_id: number | null;
   work_order_id: number | null;
+  bom_id?: number | null;
   percentage: number;
   allocated_amount: number;
   target_label?: string;
@@ -222,4 +224,64 @@ export function summarizeRouting(
     isFullyRouted,
     totalPct,
   };
+}
+
+/**
+ * Set a line's complete allocation set in one atomic-ish operation (S68).
+ *
+ * Amount-driven: each item carries an absolute £ amount; percentage (the DB
+ * canonical) is derived as amount/lineTotal. Optional `bom_id` pins the slice
+ * to a specific planned BOM row so qry_bom_actuals can derive its actual unit
+ * cost (scope_item_id is always set alongside — the XOR constraint stays
+ * satisfied and scope-grouped views keep working).
+ *
+ * Empty `items` = clear all allocations → line stays at job level.
+ * Sum of amounts < lineTotal is allowed: the remainder stays unallocated.
+ *
+ * Audited: clears existing rows and inserts the new set through the audit
+ * helpers so cost-attribution changes are traceable.
+ */
+export async function setLineAllocations(
+  lineId: number,
+  lineTotal: number,
+  jobId: number | null,
+  items: { scope_item_id: number; bom_id?: number | null; amount: number }[],
+): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const ctx = await getAuditContext(supabase);
+
+  // Build the new rows first so we can validate before deleting anything.
+  const rows = items.map((it) => ({
+    invoice_line_id: lineId,
+    scope_item_id: it.scope_item_id,
+    work_order_id: null as number | null,
+    bom_id: it.bom_id ?? null,
+    percentage:
+      lineTotal > 0 ? Math.round((it.amount / lineTotal) * 10000) / 100 : 100,
+    allocated_amount: Math.round(it.amount * 100) / 100,
+  }));
+  for (const r of rows) {
+    if (r.percentage <= 0) return { error: "Each allocation must be above £0." };
+    if (r.percentage > 100) return { error: "An allocation exceeds 100% of the line." };
+  }
+
+  // Clear existing allocations for this line (audited, per row).
+  const { data: existing, error: selErr } = await supabase
+    .from("tbl_invoice_allocations")
+    .select("allocation_id")
+    .eq("invoice_line_id", lineId);
+  if (selErr) return { error: selErr.message };
+  for (const e of existing || []) {
+    const { error } = await auditedDelete(
+      ctx, "tbl_invoice_allocations", e.allocation_id, jobId,
+    );
+    if (error) return { error: error.message };
+  }
+
+  // Insert the new set (audited).
+  for (const r of rows) {
+    const { error } = await auditedInsert(ctx, "tbl_invoice_allocations", r, jobId);
+    if (error) return { error: error.message };
+  }
+  return {};
 }
