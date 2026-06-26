@@ -107,6 +107,28 @@ Running list of known debt, deferred work, and small follow-ups. Reviewed at the
 
 ## Session log
 
+### S69 — VAT exception on imported invoices (overseas / no-UK-VAT purchases) — 24 Jun 2026
+
+Fixed a VAT-exception bug in job costing. An Etsy invoice for an overseas prop (order #4033295015, "Golden Mayan Calendar Sculpture", receipt **£439.23**) imported as **£366.02** because Expend's mechanical 20% tax split was applied to a purchase that carried no UK VAT (439.23 ÷ 1.20 = 366.02). Root cause: the importer parsed Expend's net **and** tax, but the writer stored only net and discarded the VAT — wrong for any non-standard-rated purchase (overseas / zero-rated / non-VAT-registered sellers). The gross never reached the DB at all, so even the displayed total was understated.
+
+#### Design — capture VAT, decide reclaimability at routing
+Followed the real S68 cost path (`tbl_invoices` → `tbl_invoice_lines` net → `tbl_invoice_allocations` % slices → `qry_invoice_job_rollup.allocated_total` → `qry_job_financials.material_actual`). Cost only lands when a line is *allocated* (routed) — exactly where a human sees the receipt and can judge the VAT.
+- **Schema:** `tbl_invoice_lines.line_vat` (numeric; the figure Expend reports; NULL on pre-S69 rows) + `tbl_invoices.vat_reclaimable` (bool NOT NULL DEFAULT true). Default true = standard reclaimable UK VAT, cost = net — every existing row unchanged.
+- **Financial layer:** `qry_invoice_job_rollup` gains `allocated_committed` = `sum(allocated_amount + proportional line_vat WHERE NOT vat_reclaimable)`, guarded against `line_total = 0`. `qry_job_financials.material_actual` now reads `allocated_committed` instead of `allocated_total`. Allocations stay **net** (% of net `line_total`); the view grosses up — flip-safe, no allocation recompute on a later toggle. Both views kept `SECURITY INVOKER`. `allocated_committed` is **appended** (existing rollup columns untouched), and `qry_job_financials` is the rollup's only consumer (pg_depend-verified).
+- **No-op proven:** committed cost across all 19 jobs byte-identical before/after — £402.31 / £25,089.68 / £94,907.72. The gross-up activates only once a non-reclaimable invoice is routed.
+- **Live exception fixed:** invoice 158, line 125 → `line_vat = 73.21`, `vat_reclaimable = false`. A full allocation now computes to **£439.23** (the receipt), not £366.02. Still £0 against job 13585 until it's routed (it's unrouted in the inbox) — correct.
+
+#### Importer now captures VAT (no more silent loss)
+- `api/import-expend/route.ts`: `ImportInvoice` gains `vat`; the split-transaction collapse sums VAT alongside net (multi-row receipts keep it); the line insert writes `line_vat`, mapped by `expend_txn_id` (the header read-back doesn't carry it).
+- `invoices/import/page.tsx`: payload now includes `vat: r.vat` (`ClassifiedRow` already parsed it).
+
+#### Routing inbox — the human control
+- `/invoices` expanded invoice header: a **"VAT not reclaimable (overseas / no UK VAT)"** checkbox bound to `vat_reclaimable`, plus a green **"Cost to job £X (incl. VAT)"** readout when set. Marking non-reclaimable seeds `line_vat = 20% of net` on any line that has none (pre-S69 rows), editable; new imports already carry the real figure.
+- **Auto-flag:** an amber **"Check VAT — looks overseas"** badge on still-reclaimable invoices whose supplier matches a marketplace/foreign pattern (Etsy, AliExpress, Temu, "X.com\*Y", PayPal \*, …) — surfaces candidates without auto-changing the money.
+- New helper `setInvoiceVatReclaimable()` (audited) + `tbl_invoices` added to `AUDITED_TABLES` (PK `invoice_id`) — the flip is traceable, and the latent `.eq("id", …)` footgun for `tbl_invoices` is closed.
+
+**Deferred:** list-level "Total" column still shows net (gross shows in the expanded view and flows through cost reports). Historical exceptions beyond invoice 158 aren't auto-fixed — the auto-flag badge surfaces them for manual toggling (their original VAT was discarded on import, so the toggle seeds 20%). FedEx-style separately-billed import duty/VAT would land as its own Expend row, routed to the same job.
+
 ### S68 — Invoice line routing modal + scope cost attribution (v1) + invoice→BOM actuals rail (v2) — 24 Jun 2026
 
 Replaced the cramped inline `<select>` per-line router on `/invoices` (the one with the wall of 20+ scope sentences) with a proper modal, mirroring the time-entry job→WO picker. Per-line scope routing, £-driven split with even-split + live remainder, job-overhead pinning, and — where a scope carries BOM rows — a conditional step to pin spend to a specific planned BOM item. Built v1 (scope-level, the populated value) and v2 (item-level rail) together at Mateusz's call. Verified the financial layer against live data before any UI.

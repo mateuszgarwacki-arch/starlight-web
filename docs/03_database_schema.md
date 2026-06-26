@@ -1,6 +1,6 @@
 # Starlight Production System — Database Schema
 
-**Last updated:** 24 Jun 2026 (S68)
+**Last updated:** 24 Jun 2026 (S69)
 **Verified live:** Counts queried from `information_schema` and `pg_proc` at S47 close — 57 tables, 34 views, 19 RPCs, 3 cron jobs, 217 RLS policies. +1 RPC (`rpc_close_phantom_timers`) and +1 cron job (`phantom-timer-patrol-daily`) vs S46. S52: +1 table (`tbl_overhead_costs`), +1 view (`qry_overhead_monthly`), +4 RLS policies on the new table; `rpc_detect_timesheet_gaps` modified (self-heal) and cron job 6 widened to a 7-day window (no count change). S55: +1 DB function `import_quote` (SECURITY DEFINER, `service_role`-only) catalogued below; no new tables/views (function was deployed in a prior session, documented now).
 
 ## Counts
@@ -113,6 +113,7 @@ qry_scope_cost_position         qry_bom_actuals
   tbl_wo_completion_proposals: "proposal_id",
   tbl_overhead_costs:   "overhead_cost_id",
   tbl_invoice_allocations: "allocation_id",   // S68 — cost attribution traceable
+  tbl_invoices:         "invoice_id",         // S69 — VAT-reclaimable flip traceable
 }
 ```
 
@@ -146,7 +147,17 @@ Partial unique index `uq_one_awaiting_per_wo WHERE status='awaiting_confirmation
 
 `previous_wo_status VARCHAR NOT NULL` snapshots the WO's status at mark-time so `rpc_undo_wo_completion` can restore it. Without this, the system would have to invent a default revert status — wrong if the WO was `Not-Started` or `Ready` at the time of marking.
 
-## Recent additions (S40 → S67)
+## Recent additions (S40 → S69)
+
+### S69 — Invoice VAT exception (non-reclaimable VAT on overseas purchases)
+
+**Two columns added to existing tables; two views modified. No new tables/views/RPCs/cron — counts unchanged (58 tables, 39 views).**
+
+- `tbl_invoice_lines.line_vat` (numeric, nullable) — the VAT figure from Expend's `Tax Amount`, captured per line. NULL on every pre-S69 row (the importer used to discard it). Cost basis for a line = `line_total` when the parent invoice is reclaimable, else `line_total + line_vat`.
+- `tbl_invoices.vat_reclaimable` (boolean NOT NULL DEFAULT true) — false when the VAT on the purchase is not reclaimable (overseas / zero-rated / non-VAT-registered seller, no valid UK VAT invoice). Set by a human in the `/invoices` routing inbox.
+- **`qry_invoice_job_rollup`** gains a trailing `allocated_committed` column = `sum(allocated_amount + CASE WHEN NOT vat_reclaimable AND line_total <> 0 THEN line_vat × (allocated_amount / line_total) ELSE 0 END)` — net allocations grossed up by their proportional non-reclaimable VAT. Existing columns (`allocated_total`, `unallocated_total`, …) unchanged; `allocated_total` stays the raw net allocation sum.
+- **`qry_job_financials.material_actual`** now reads `qry_invoice_job_rollup.allocated_committed` (was `allocated_total`). Identical while every invoice is reclaimable; grosses up only for routed non-reclaimable invoices. Both views remain `SECURITY INVOKER`. No-op verified across all 19 jobs at S69 close (committed cost £94,907.72 unchanged).
+- `tbl_invoices` added to `AUDITED_TABLES` (PK `invoice_id`) so the reclaimable flip is audited via `setInvoiceVatReclaimable()`. **Note:** pre-existing raw `tbl_invoices` writes (job assignment, manual process/edit, overhead-move delete) are now technically un-audited writes on a registered table — migrate to `auditedUpdate/Delete` when convenient. Out of scope for S69; no behaviour change (raw ops don't consult the map).
 
 ### S67 — Expend import idempotency (`expend_txn_id`)
 
