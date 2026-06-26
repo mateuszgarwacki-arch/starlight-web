@@ -24,6 +24,7 @@ interface ImportInvoice {
   job_id: number | null;
   receipt_url: string | null;
   category: string;
+  vat: number | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -80,6 +81,9 @@ export async function POST(request: NextRequest) {
     const ex = byTxn.get(r.expend_txn_id);
     if (ex) {
       ex.total_value = Math.round(((ex.total_value || 0) + (r.total_value || 0)) * 100) / 100;
+      ex.vat = (ex.vat == null && r.vat == null)
+        ? null
+        : Math.round(((ex.vat || 0) + (r.vat || 0)) * 100) / 100;
       if (ex.job_id == null && r.job_id != null) ex.job_id = r.job_id;
       if (!ex.receipt_url && r.receipt_url) ex.receipt_url = r.receipt_url;
     } else {
@@ -114,6 +118,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invoice insert failed", detail: invErr?.message }, { status: 500 });
   }
 
+  // VAT per transaction (Expend "Tax Amount", summed across split rows) keyed by
+  // txn id — mapped onto the line below. The header read-back doesn't carry it
+  // (tbl_invoices has no VAT column; the figure lives on the line as line_vat,
+  // and grosses up committed cost only when vat_reclaimable is set false).
+  const vatByTxn = new Map<string, number | null>();
+  for (const g of grouped) vatByTxn.set(g.expend_txn_id, g.vat ?? null);
+
   // One whole-transaction line per invoice (unallocated -> routed in the inbox).
   const lineRows = inserted.map((inv: any) => ({
     invoice_id: inv.invoice_id,
@@ -123,6 +134,7 @@ export async function POST(request: NextRequest) {
     unit: null,
     unit_cost: null,
     line_total: inv.total_value,
+    line_vat: vatByTxn.get(inv.expend_txn_id) ?? null,
     material_id: null,
     match_confidence: null,
     match_status: "unmatched",

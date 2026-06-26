@@ -13,14 +13,22 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { ScopeOption, WOOption } from "@/components/invoice-line-router";
 import { InvoiceRouteModal } from "@/components/invoice-route-modal";
-import { InvoiceAllocation, summarizeRouting } from "@/lib/invoice-routing";
+import { InvoiceAllocation, summarizeRouting, setInvoiceVatReclaimable } from "@/lib/invoice-routing";
 
-interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_path: string | null; file_data: string | null; file_type: string | null; expend_txn_id?: string | null; }
-interface InvoiceLine { line_id?: number; invoice_id?: number; line_number: number; raw_description: string; quantity: number | null; unit: string | null; unit_cost: number | null; line_total: number | null; material_id: number | null; material_name?: string; match_confidence: string | null; match_status: string; work_order_id: number | null; job_id: number | null; alias_saved: boolean; notes: string | null; }
+interface Invoice { invoice_id: number; supplier: string; supplier_id: number | null; invoice_number: string | null; invoice_date: string | null; total_value: number | null; job_id: number | null; status: string; notes: string | null; uploaded_at: string; processed_at: string | null; file_path: string | null; file_data: string | null; file_type: string | null; expend_txn_id?: string | null; vat_reclaimable?: boolean; }
+interface InvoiceLine { line_id?: number; invoice_id?: number; line_number: number; raw_description: string; quantity: number | null; unit: string | null; unit_cost: number | null; line_total: number | null; line_vat?: number | null; material_id: number | null; material_name?: string; match_confidence: string | null; match_status: string; work_order_id: number | null; job_id: number | null; alias_saved: boolean; notes: string | null; }
 interface MaterialOption { material_id: number; material_name: string; unit?: string; current_unit_cost?: number; }
 interface SupplierOption { supplier_id: number; supplier_name: string; }
 interface Alias { alias_id: number; material_id: number; alias_text: string; supplier: string | null; }
 type Mode = "list" | "process" | "edit";
+
+// S69: heuristic flag for invoices whose supplier looks overseas / marketplace —
+// candidates where Expend's mechanical 20% VAT split is likely wrong (no UK VAT).
+// Surfaces a "check VAT" badge; the human still decides via the toggle.
+function looksForeign(supplier: string | null): boolean {
+  if (!supplier) return false;
+  return /(etsy|aliexpress|alibaba|wish\.com|temu|banggood|dhgate|shein|paypal \*|\.com\*)/i.test(supplier);
+}
 
 export default function InvoicesPage() {
   const supabase = createClient();
@@ -246,6 +254,39 @@ export default function InvoicesPage() {
     setAllocations(byLine);
   };
 
+  // S69: flip whether this invoice's VAT is reclaimable. When marking it
+  // non-reclaimable, make sure every line carries a VAT figure so committed cost
+  // can gross up — new Expend imports already store line_vat; older rows (pre-S69)
+  // get seeded with 20% of net as an editable default.
+  const toggleVatReclaimable = async (inv: Invoice) => {
+    const next = !(inv.vat_reclaimable ?? true); // new reclaimable value
+    const { error } = await setInvoiceVatReclaimable(inv.invoice_id, next, inv.job_id);
+    if (error) { toast.error(error); return; }
+    if (!next) {
+      const { data: ls } = await supabase
+        .from("tbl_invoice_lines")
+        .select("line_id, line_total, line_vat")
+        .eq("invoice_id", inv.invoice_id);
+      for (const l of (ls || [])) {
+        if (l.line_vat == null && l.line_total != null) {
+          await supabase.from("tbl_invoice_lines")
+            .update({ line_vat: Math.round(l.line_total * 0.2 * 100) / 100 })
+            .eq("line_id", l.line_id);
+        }
+      }
+      if (expandedInvId === inv.invoice_id) {
+        setPreviewLines((prev) => prev.map((l: any) =>
+          l.line_vat == null && l.line_total != null
+            ? { ...l, line_vat: Math.round(l.line_total * 0.2 * 100) / 100 } : l));
+      }
+    }
+    setInvoices((prev) => prev.map((i) =>
+      i.invoice_id === inv.invoice_id ? { ...i, vat_reclaimable: next } : i));
+    toast.success(next
+      ? "VAT reclaimable — cost to job is net"
+      : "Marked VAT non-reclaimable — cost grosses to incl. VAT");
+  };
+
   // Assign a job to an unassigned invoice, then load its scopes/WOs so the line can be routed.
   const assignInvoiceJob = async (inv: Invoice, jobIdStr: string) => {
     const jobId = jobIdStr ? Number(jobIdStr) : null;
@@ -374,6 +415,27 @@ export default function InvoicesPage() {
                         )}
                         <button onClick={() => { setOverheadFor(inv); setOverheadCatId(""); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-navy/5 text-navy hover:bg-navy/10 transition-colors">→ Overhead</button>
                         {inv.file_path && (<a href={inv.file_path} target="_blank" rel="noopener noreferrer" className="text-[11px] text-starlight-blue hover:underline ml-auto">Open receipt ↗</a>)}
+                      </div>
+                      {/* S69: VAT reclaimability — overseas/zero-rated purchases cost the gross */}
+                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-muted">
+                          <input type="checkbox" checked={inv.vat_reclaimable === false} onChange={() => toggleVatReclaimable(inv)} className="rounded border-subtle" />
+                          VAT not reclaimable (overseas / no UK VAT)
+                        </label>
+                        {looksForeign(inv.supplier) && inv.vat_reclaimable !== false && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-starlight-amber/10 text-starlight-amber font-medium">
+                            <AlertTriangle className="h-3 w-3" /> Check VAT — looks overseas
+                          </span>
+                        )}
+                        {inv.vat_reclaimable === false && (() => {
+                          const vatSum = previewLines.reduce((s: number, l: any) => s + (Number(l.line_vat) || 0), 0);
+                          const net = inv.total_value || 0;
+                          return (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-starlight-green/10 text-starlight-green font-mono">
+                              Cost to job {formatCurrency(net + vatSum)}{vatSum > 0 ? ` (incl. VAT ${formatCurrency(vatSum)})` : " (incl. VAT)"}
+                            </span>
+                          );
+                        })()}
                       </div>
                   {previewLines.length === 0 ? <p className="text-xs text-muted py-2">No line items</p> : (
                     <table className="w-full text-xs">

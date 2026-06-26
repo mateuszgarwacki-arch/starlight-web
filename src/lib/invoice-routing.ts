@@ -8,7 +8,7 @@
  */
 
 import { createClient } from "@/lib/supabase-browser";
-import { getAuditContext, auditedInsert, auditedDelete } from "@/lib/audit";
+import { getAuditContext, auditedInsert, auditedDelete, auditedUpdate } from "@/lib/audit";
 
 export interface InvoiceAllocation {
   allocation_id?: number;
@@ -284,4 +284,28 @@ export async function setLineAllocations(
     if (error) return { error: error.message };
   }
   return {};
+}
+
+/**
+ * Set whether an invoice's VAT is reclaimable (S69).
+ *
+ * Default is true — standard UK reclaimable VAT, so cost to the job is the net
+ * (line_total). Set false for overseas / zero-rated / non-VAT-registered sellers
+ * with no valid UK VAT invoice: committed cost then grosses up to
+ * line_total + line_vat via qry_invoice_job_rollup.allocated_committed.
+ *
+ * Audited — tbl_invoices is in AUDITED_TABLES (PK invoice_id), so this
+ * cost-affecting flip is captured in tbl_audit_log.
+ */
+export async function setInvoiceVatReclaimable(
+  invoiceId: number,
+  reclaimable: boolean,
+  jobId: number | null,
+): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const ctx = await getAuditContext(supabase);
+  const { error } = await auditedUpdate(
+    ctx, "tbl_invoices", invoiceId, { vat_reclaimable: reclaimable }, jobId,
+  );
+  return error ? { error: error.message } : {};
 }

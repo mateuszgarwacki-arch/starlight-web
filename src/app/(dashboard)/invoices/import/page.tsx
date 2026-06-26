@@ -70,6 +70,7 @@ export default function ImportExpendPage() {
         supplier: r.merchant,
         invoice_date: r.date,
         total_value: r.net,
+        vat: r.vat,
         job_id: r.jobId,
         receipt_url: r.receiptUrl,
         category: r.category,

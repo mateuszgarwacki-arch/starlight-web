@@ -40,6 +40,7 @@ const AUDITED_TABLES: Record<string, string> = {
   tbl_wo_completion_proposals: "proposal_id",
   tbl_overhead_costs: "overhead_cost_id",
   tbl_invoice_allocations: "allocation_id",
+  tbl_invoices: "invoice_id",
 };
 
 // Fields to skip auditing (noisy, system-managed)
